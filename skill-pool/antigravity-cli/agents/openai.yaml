@@ -1,0 +1,4 @@
+agent:
+  display_name: "Antigravity CLI"
+  short_description: "Use Antigravity CLI effectively from agents"
+  default_prompt: "Use Antigravity CLI for this review or drafting task."
