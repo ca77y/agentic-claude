@@ -1,41 +1,20 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "ca77y-agentic",
-  "description": "Personal agentic toolkit: a Claude Code + Antigravity (agy) development pipeline and research-library crew, shared from one repo. Two plugins over one content pool, scoped via marketplace config.",
+  "description": "Personal agentic toolkit: a Claude Code + Antigravity (agy) development pipeline and research-library crew, shared from one repo as two plugins.",
   "owner": {
     "name": "ca77y"
   },
   "plugins": [
     {
       "name": "ca77y-engineering",
-      "description": "Idea-to-shipped development pipeline as Claude Code subagents + skills: researcher, analyst, linear-story, planner, stack-planner, engineer, qa, and the gemini dispatcher (delegates to agy). Skills: analyst, planner, antigravity-cli, gh-stack.",
-      "source": "./",
-      "version": "0.1.0",
-      "agents": [
-        "./agents/engineer.md",
-        "./agents/gemini.md",
-        "./agents/linear-story.md",
-        "./agents/qa.md",
-        "./agents/researcher.md",
-        "./agents/stack-planner.md"
-      ],
-      "skills": [
-        "./skill-pool/analyst",
-        "./skill-pool/planner",
-        "./skill-pool/antigravity-cli",
-        "./skill-pool/gh-stack"
-      ]
+      "source": "./plugins/ca77y-engineering",
+      "description": "Idea-to-shipped development pipeline: researcher, analyst, linear-story, planner, stack-planner, engineer, qa, gemini dispatcher + skills."
     },
     {
       "name": "ca77y-library",
-      "description": "Markdown research-library crew executed on Antigravity (agy): librarian (cited answers), scribe (ingest/synthesis), clerk (health/audit). Invoked by the engineering pipeline's gemini dispatcher.",
-      "source": "./",
-      "version": "0.1.0",
-      "agents": [
-        "./agents/librarian.md",
-        "./agents/scribe.md",
-        "./agents/clerk.md"
-      ]
+      "source": "./plugins/ca77y-library",
+      "description": "Markdown research-library crew run on agy: librarian, scribe, clerk."
     }
   ]
 }

@@ -49,12 +49,12 @@ Do not create multiple Linear issues from an unapproved rough idea in one pass. 
 
 ## Templates
 
-Use the template for the selected primary workflow label unless the user or active project explicitly provides a stronger template. Load only the template you need from the `references/templates/` directory beside this agent:
+Use the template for the selected primary workflow label unless the user or active project explicitly provides a stronger template. Load only the template you need from the plugin's `references/templates/` directory (`${CLAUDE_PLUGIN_ROOT}/references/templates/`):
 
-- `references/templates/epic.md`
-- `references/templates/feature.md`
-- `references/templates/improvement.md`
-- `references/templates/bug.md`
+- `${CLAUDE_PLUGIN_ROOT}/references/templates/epic.md`
+- `${CLAUDE_PLUGIN_ROOT}/references/templates/feature.md`
+- `${CLAUDE_PLUGIN_ROOT}/references/templates/improvement.md`
+- `${CLAUDE_PLUGIN_ROOT}/references/templates/bug.md`
 
 For `Research`, `Marketing`, and `Support`, use the closest existing template shape and keep acceptance criteria or next steps concrete enough for the issue type. If the artifact is expected to go to `planner`, it must be refined into `Feature`, `Improvement`, or `Bug` before OpenSpec.
 

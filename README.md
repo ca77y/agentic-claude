@@ -42,25 +42,36 @@ agy plugin install ca77y-library@ca77y-agentic
 ```
 ca77y-agentic/
 ├── .claude-plugin/
-│   └── marketplace.json        # both plugins; scopes each roster via config
-├── agents/                     # shared pool — both plugins whitelist a subset
-│   ├── engineer.md gemini.md linear-story.md qa.md researcher.md stack-planner.md
-│   ├── librarian.md scribe.md clerk.md
-│   └── references/templates/   # Linear issue templates used by linear-story
-└── skill-pool/                 # engineering skills (deliberately NOT named skills/)
-    ├── analyst/ planner/ antigravity-cli/ gh-stack/
+│   └── marketplace.json                  # lists both plugins
+└── plugins/
+    ├── ca77y-engineering/
+    │   ├── .claude-plugin/plugin.json     # Claude manifest (agents whitelist)
+    │   ├── plugin.json                    # agy-native manifest (root)
+    │   ├── agents/                        # engineer gemini linear-story qa researcher stack-planner
+    │   ├── references/templates/          # Linear issue templates used by linear-story
+    │   └── skills/                        # analyst planner antigravity-cli gh-stack
+    └── ca77y-library/
+        ├── .claude-plugin/plugin.json     # Claude manifest
+        ├── plugin.json                    # agy-native manifest (root)
+        └── agents/                        # librarian scribe clerk
 ```
+
+Each plugin carries two manifests: Claude reads `.claude-plugin/plugin.json`; agy reads
+`plugin.json` at the plugin root. They live in different locations, so neither harness
+trips over the other's.
 
 ## How scoping works
 
-Both plugins share `source: "./"`, so the content lives in one pool and each plugin
-selects what it exposes from the marketplace entry:
+Each plugin is its **own root with its own `plugin.json`**. Scoping must live in
+`plugin.json` — a marketplace entry's component fields are *not* honored as an
+override, so a shared pool with marketplace-level whitelists silently loads
+everything. With separate roots:
 
-- **Agents** — the `agents` whitelist *replaces* the default `agents/` scan, so each
-  plugin loads only the files it lists. The other agents in the same folder are ignored.
-- **Skills** — Claude *always* scans a folder named `skills/` and the `skills` field
-  only *adds* to it. To keep skills scopable they live in **`skill-pool/`** instead;
-  only `ca77y-engineering` lists them, so `ca77y-library` ships zero skills.
+- **Agents** — each `plugin.json` whitelists its agents. The whitelist *replaces*
+  the default `agents/` scan, which also keeps the `linear-story` templates under
+  `references/templates/` from being picked up as phantom agents.
+- **Skills** — auto-discovered from each plugin's own `skills/`. No pool trick needed,
+  because the rosters are disjoint and each plugin only sees its own directory.
 
 ## The pipeline
 
