@@ -1,5 +1,5 @@
 {
   "name": "ca77y-library",
   "description": "Markdown research-library crew run on agy: librarian, scribe, clerk. agy-native manifest; Claude reads .claude-plugin/plugin.json.",
-  "version": "0.2.0"
+  "version": "0.3.0"
 }

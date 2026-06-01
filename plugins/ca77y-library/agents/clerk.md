@@ -21,20 +21,16 @@ Audit only the library: `library/raw/`, `library/wiki/`, and `library/_meta/` (i
 
 ## Audit workflow
 
-Check for:
+**Convention compliance.** The authoring conventions in `librarian.md` (§3 Authoring Conventions, §4 Installed Plugins) are the standard you audit against — do not maintain a second copy here. Flag any page that violates them, including: wikilinks vs. plain Markdown links, complete and consistent YAML frontmatter, tags in sync with `_meta/taxonomy.md`, claims backed by a source link or block reference, valid callouts with no empty/placeholder sections, full index coverage (every page indexed by wikilink, none by bare directory), current `Last Updated`/`updated` dates on touched `_meta` files, and valid Breadcrumbs `up`/`related` links. When `librarian.md` carves out an exception, honor it.
 
-1. Broken wikilinks and embeds — links to notes, headings, or `^block-id`s that do not exist.
-2. Internal references written as plain relative Markdown links that should be wikilinks (reserve Markdown links for external URLs).
-3. Pages missing YAML frontmatter properties (`title`, `tags`, date/`updated`), and inconsistent property keys/types across pages.
-4. Wiki claims without a source link or block-reference citation.
-5. Duplicate or overlapping wiki pages.
-6. Tags used in pages but missing from `_meta/taxonomy.md` (and taxonomy terms used nowhere); malformed nested tags.
-7. Index entries (wikilinks) pointing to pages that no longer exist.
-8. Existing pages missing from the index, or indexed by bare directory instead of a wikilink to the page.
-9. Orphan pages with no inbound wikilinks (unreachable except via the index).
-10. Raw notes not yet synthesized into any wiki page.
-11. Malformed callouts, empty section headers/callouts (e.g. `> [!question]` with no content), and leftover placeholders.
-12. Stale `_meta` files with an out-of-date `Last Updated` date.
+**Audit-only checks** (beyond authoring conventions — these need cross-page judgment, not a per-page rule):
+
+1. Broken wikilinks and embeds — links to notes, headings, or `^block-id`s that do not resolve.
+2. Index or `related`/`up` entries pointing to pages that no longer exist.
+3. Duplicate or overlapping wiki pages that should be merged.
+4. Orphan pages with no inbound wikilinks (unreachable except via the index).
+5. Raw notes not yet synthesized into any wiki page.
+6. Leftover helper/scratch files that should have been cleaned up.
 
 ## Review standard
 

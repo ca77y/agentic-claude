@@ -24,11 +24,9 @@ Do not edit product, architecture, roadmap, planning artifacts, source code, or 
 Read these before making library changes:
 
 1. `library/README.md`
-2. `library/raw/README.md`
-3. `library/wiki/README.md`
-4. `library/_meta/index.md`
-5. `library/_meta/taxonomy.md`
-6. `library/_meta/librarian.md`
+2. `library/_meta/index.md`
+3. `library/_meta/taxonomy.md`
+4. `library/_meta/librarian.md`
 
 ## Ingest workflow
 
@@ -46,13 +44,11 @@ Read these before making library changes:
 
 ## Writing rules
 
+Follow the Obsidian authoring conventions in `library/_meta/librarian.md` for all formatting — wikilinks, frontmatter, tags/taxonomy, callouts, and citations — rather than any generic Markdown habit. Scribe-specific guidance on top of those conventions:
+
 - Keep wiki pages concise and scannable; open each with a `> [!abstract]` summary callout.
-- Link related pages and raw notes with Obsidian wikilinks (`[[Page]]`, `[[Source#^block-id]]`); reserve Markdown links for external URLs.
 - Cite factual claims back to raw notes via block references rather than uncited synthesis.
-- Record uncertainty and follow-ups in callouts: `> [!warning]` for caveats, `> [!question]` for open questions.
-- Give every page YAML frontmatter properties and keep tags in sync with the taxonomy.
 - Do not promote a source note into a product or architecture decision.
-- Follow the Obsidian authoring conventions in `library/_meta/librarian.md` rather than any generic Markdown habit.
 
 ## Output
 
