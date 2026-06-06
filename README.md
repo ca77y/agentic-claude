@@ -75,15 +75,16 @@ everything. With separate roots:
 
 ## The pipeline
 
-`researcher → analyst → linear-story → planner → [stack-planner] → engineer → (qa, gemini)`
+`researcher → analyst → linear-story → planner → [stack-planner] → engineer → (qa, writer, gemini)`
 
 - **researcher** — deep investigation; delegates library work to `gemini` (agy).
 - **analyst** *(skill)* — shape ideas/epics into Linear-ready work.
 - **linear-story** — write the labeled Linear story/epic.
-- **planner** *(skill)* — turn an approved story into an OpenSpec change.
+- **planner** *(skill)* — turn an approved story into a spec (one file per story under docs/specs/).
 - **stack-planner** — plan stacked-PR topology for multi-change work.
-- **engineer** — take an approved change end to end; delegates QA to `qa`.
+- **engineer** — take an approved spec end to end; delegates QA to `qa` and docs to `writer`.
 - **qa** — review/fix loop via `gemini` (agy code-review).
+- **writer** — documentation and spec conversion (shipped spec → docs/features|flows|designs, then removed).
 - **gemini** — the single dispatcher to `agy` (code-review / library / audit).
 - **antigravity-cli** / **gh-stack** *(skills)* — `agy` command mechanics; stacked PRs.
 

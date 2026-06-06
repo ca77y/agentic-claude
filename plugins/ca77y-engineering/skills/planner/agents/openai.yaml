@@ -1,4 +1,4 @@
 interface:
   display_name: "Planner"
-  short_description: "Turn Linear issues into OpenSpec changes"
-  default_prompt: "Help me turn this Linear issue into an OpenSpec change."
+  short_description: "Turn Linear stories into specs (docs/specs)"
+  default_prompt: "Help me turn this Linear story into a spec under docs/specs."

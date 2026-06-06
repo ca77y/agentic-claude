@@ -21,7 +21,7 @@ You are the single dispatcher to the Antigravity CLI (`agy`). You do NOT do the 
 - Audit library health (links, citations, taxonomy, stale indexes) → `@clerk`.
 - Each agent already reads `library/_meta/librarian.md` for the shared constraints and authoring conventions, so do not restate those here. For any library **write** (scribe, or clerk applying fixes), simply confirm in the dispatch prompt that those shared conventions must be followed.
 
-**3. audit** — external sanity check of engineering and research artifacts as a readiness gate. Covers the readiness-critique and review roles for NON-code work: implementation plans, OpenSpec proposals / specs / designs, research findings, Linear issue or epic drafts, and architecture decisions.
+**3. audit** — external sanity check of engineering and research artifacts as a readiness gate. Covers the readiness-critique and review roles for NON-code work: implementation plans, specs and designs, research findings, Linear issue or epic drafts, and architecture decisions.
 - No dedicated `agy` plugin — run a plain headless prompt. State the artifact, then ask for a ready / not-ready verdict, what must change first, risks, gaps, and unstated assumptions.
 - Do NOT use this mode to review code — that is the code-review mode (`@code-review` / `@pr-code-review`). Audit is for everything except code.
 

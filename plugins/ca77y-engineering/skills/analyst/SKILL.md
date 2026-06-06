@@ -7,7 +7,7 @@ description: Interactive product analysis workflow for turning rough ideas or ap
 
 ## Overview
 
-Turn a rough idea into a clear, approved Linear issue through interactive discovery, or turn an approved epic into small child stories that can later become readable, verifiable OpenSpec changes and PRs. Keep the main agent in the conversation because this stage depends on user feedback, research, challenge, and frequent course correction.
+Turn a rough idea into a clear, approved Linear issue through interactive discovery, or turn an approved epic into small child stories that can later become readable, verifiable specs and PRs. Keep the main agent in the conversation because this stage depends on user feedback, research, challenge, and frequent course correction.
 
 The analyst drives the conversation. Do not passively collect requirements. Research the product context, test the idea against what exists, challenge weak assumptions, and narrow the proposal until it is clear what should be built and how it should fit the app.
 
@@ -52,7 +52,7 @@ The analyst drives the conversation. Do not passively collect requirements. Rese
 7. Shape the issue:
    - Use the `linear-story` subagent to choose and draft Linear artifacts with one primary workflow label each: `Epic`, `Feature`, `Improvement`, `Bug`, `Research`, `Marketing`, or `Support`.
    - Draft a concise action-verb title.
-   - Draft enough goal, background, scope, references, and acceptance criteria for `planner` to create OpenSpec in the next step.
+   - Draft enough goal, background, scope, references, and acceptance criteria for `planner` to write the spec in the next step.
    - Recommend primary workflow label, priority, project, parent epic, and dependency relationships when known.
    - Use `Feature`, `Improvement`, or `Bug` for implementation work that should move to `planner`.
    - Use `Research` when the work is worth tracking but needs product, domain, provider, feasibility, or opportunity research before planner.
@@ -86,7 +86,7 @@ Use this mode when the user starts from an existing epic and wants tasks, storie
 2. Identify the smallest useful implementation slices:
    - each story should have one user/operator outcome or one technical contract,
    - acceptance criteria should be observable,
-   - the likely OpenSpec change should be easy to review,
+   - the likely spec should be easy to review,
    - the future PR should be readable without understanding the entire epic.
 3. Classify each candidate child story:
    - **Foundation:** contracts, schemas, taxonomy, migrations, shared helpers, or architecture needed by multiple stories.
@@ -110,11 +110,11 @@ Do not use stacked PRs as a reason to make stories large. Stacking is for real d
 
 ## Output Shape
 
-Use the `linear-story` subagent's template for each final Linear draft. Planner-bound artifacts must contain enough researched context, references, scope boundaries, observable acceptance criteria, and sequencing/dependency notes for `planner` to create OpenSpec.
+Use the `linear-story` subagent's template for each final Linear draft. Planner-bound artifacts must contain enough researched context, references, scope boundaries, observable acceptance criteria, and sequencing/dependency notes for `planner` to write the spec.
 
 ## Boundaries
 
-- Do not create OpenSpec artifacts. That belongs to `planner`.
+- Do not write specs. That belongs to `planner`.
 - Do not implement code. That belongs to `engineer` and `coder`.
 - Do not create Linear until the user approves the final issue draft.
 - Do not create multiple Linear issues from a rough idea in one analyst pass.
