@@ -1,88 +1,98 @@
 ---
 name: planner
-description: Interactive planning workflow for turning an approved Linear story into a spec — one spec file per story under docs/specs/. Use when the user has a Linear story or approved story draft and wants the goal, design, requirements/scenarios, and tasks prepared, reviewed, critiqued, and corrected before implementation.
+description: Interactive planning workflow that records an approved task as a local board card and, for bigger work, writes its spec under docs/specs/. Use when the user has a shaped idea, an approved task, an epic child, or an existing card and wants it captured in docs/tasks/ — and a goal/design/requirements/scenarios/tasks spec prepared when the work is large enough to need one.
 ---
 
 # Planner
 
 ## Overview
 
-Turn an approved planner-ready Linear story into a single spec file through an interactive review loop. Keep the main agent in the conversation because the user should validate scope, scenarios, and tasks before execution.
+Turn an approved, shaped task into tracked work. Planner owns two artifacts:
 
-One story produces one spec file at `docs/specs/<story-id>-<slug>.md`. The spec is the implementation contract: `goal -> design -> requirements/scenarios -> tasks`. Adapt the planning emphasis based on whether the Linear story is a `Feature`, `Improvement`, or `Bug`; do not invent separate workflows per story type. See `docs/specs/README.md` for the file format and lifecycle.
+1. **Task card** — always. One checkbox in a board file under `docs/tasks/`, in the Obsidian Tasks format. This is the unit of work tracking.
+2. **Spec** — only for bigger work. One file at `docs/specs/<slug>.md` (`goal -> design -> requirements/scenarios -> tasks`). Small, self-contained tasks ship from the card alone with no spec.
+
+Keep the main agent in the conversation: the user validates the card (type, scope, priority, dependencies) and, when a spec is warranted, its scenarios and tasks before execution.
+
+Read `docs/tasks/CLAUDE.md` and `docs/specs/README.md` in the target repo for the board format, status model, and spec lifecycle before writing.
+
+## Task cards
+
+Cards live in board files under `docs/tasks/`:
+
+- One file per epic: `docs/tasks/<epic-slug>.md`.
+- Standalone work that is not under an epic: `docs/tasks/backlog.md`.
+
+Each card is a single Tasks-format checkbox. The slug is the stable id used for the branch (`feat/<slug>`) and the spec filename (`docs/specs/<slug>.md`).
+
+```markdown
+- [ ] <action-verb title> #<type> <priority> 🆔 <slug> [⛔ <dep-slug>] [📅 <due>]
+```
+
+- **Status** is the checkbox symbol (status-based workflow): `[ ]` Todo · `[<]` Ready to start · `[/]` In Progress · `[?]` In Review · `[x]` Done · `[-]` Cancelled. New cards start at `[ ]`.
+- **Type** is exactly one tag — the primary workflow label: `#feature`, `#improvement`, `#bug`, `#research`, `#marketing`, or `#support`.
+- **Priority** is a Tasks emoji when known: `🔺` highest, `⏫` high, `🔼` medium, `🔽` low.
+- **Id** is `🆔 <slug>` (lowercase kebab-case); other cards depend on it via `⛔ <slug>`.
+- Put planner-ready context (background, scope, acceptance criteria, references) in the card's body lines or, for bigger work, in the spec it links to. Do not paste long research into the card; link `docs/library/`, docs, and code paths.
+
+### Primary type, by central outcome
+
+- `#bug` if the central problem is broken behavior.
+- `#feature` if the central outcome is a new capability.
+- `#improvement` if the central outcome improves existing behavior.
+- `#research` if the work needs product, domain, provider, or feasibility research before it can become implementation work.
+- `#marketing` / `#support` only when the work is primarily non-product-implementation work; if such work needs product changes, record a separate `#feature`/`#improvement`/`#bug`.
+
+Epics are a board file (frontmatter `type: epic`) that holds child cards, not a single checkbox. Analyst decomposes epics; planner records each approved child card under the epic file with native `⛔` dependencies for sequencing.
+
+## When to also write a spec
+
+Write a spec when the work is large or uncertain enough that the engineer benefits from a contract: multiple requirements, non-trivial design or data-flow decisions, several scenarios, cross-area changes, migrations, or real regression risk. Skip the spec for small, self-contained changes whose acceptance criteria fit cleanly in the card. When in doubt, ask the user. When a spec exists, link it from the card body (`[spec](../specs/<slug>.md)`).
 
 ## Workflow
 
-1. Load project context:
-   - root `CLAUDE.md` / `AGENTS.md` if present
-   - relevant area `CLAUDE.md` files
-   - the Linear story or approved story draft
-   - related docs and code paths — especially settled capability specs in `docs/features/` and any in-flight specs in `docs/specs/`
+1. Load context: root and area `CLAUDE.md`/`AGENTS.md`; `docs/tasks/CLAUDE.md`; `docs/specs/README.md`; the shaped task or existing card; related docs and code — especially settled capability specs in `docs/features/` and in-flight specs in `docs/specs/`.
 2. Confirm the planning workspace:
-   - Planner works in the current repository workspace on the base planning branch, normally `master`.
-   - Do not create or switch to a story branch.
-   - Do not create or select a git worktree for planning.
-   - If the current branch is not the project base branch, ask the user before continuing unless project instructions explicitly allow planning on the current branch.
-   - Keep the spec file in `docs/specs/` in the current workspace.
-   - In the final approval handoff, state that `engineer` owns branch/worktree setup for implementation.
-3. Confirm the Linear story is planner-ready:
-   - It must have exactly one primary workflow label.
-   - Planner-ready labels are `Feature`, `Improvement`, and `Bug`.
-   - If the story is `Epic`, `Research`, `Marketing`, or `Support`, do not write a spec until the user converts or refines it into a concrete `Feature`, `Improvement`, or `Bug`.
-   - If the story has no primary workflow label, or conflicting primary labels, stop and ask for the Linear story to be corrected with the `linear-story` subagent.
-4. Resolve the spec file:
-   - Name it `docs/specs/<story-id>-<slug>.md` using the Linear story id and a lowercase kebab-case slug.
-   - If no Linear story exists, set `**Story**: none` in the spec and make that explicit in the final summary.
-   - Avoid creating a duplicate spec for a story that already has one in `docs/specs/`; update the existing file instead.
-5. Draft the single spec file with these sections (per `docs/specs/README.md`):
-   - metadata block: `**Status**`, `**Story**`, `**Last Updated**`
+   - Plan in the current repository workspace on the base branch, normally `master`. Do not create or switch to a story branch, and do not create or select a worktree for planning.
+   - If the current branch is not the base branch, ask before continuing unless project instructions allow planning on the current branch.
+   - In the final handoff, state that `engineer` owns branch/worktree setup.
+3. Resolve the slug and target board file:
+   - Choose a lowercase kebab-case slug; reuse the existing one if the card already exists.
+   - Standalone work → `docs/tasks/backlog.md`; epic child → `docs/tasks/<epic-slug>.md`. Avoid duplicate cards — update the existing card instead.
+4. Draft or update the card with exactly one type tag, status `[ ]`, priority, `🆔 <slug>`, and `⛔` dependencies. Keep scope and acceptance criteria observable.
+5. Decide spec-worthiness (see above). If a spec is warranted, draft `docs/specs/<slug>.md` per `docs/specs/README.md`:
+   - metadata block: `**Status**`, `**Task**` (the card slug, or `none`), `**Last Updated**`
    - `## Goal`: problem, proposed change, user value, out of scope
    - `## Design`: architecture, data flow, dependencies, risks, alternatives — brief and inline
-   - `## Requirements`: requirements with scenarios that are observable and testable
+   - `## Requirements`: requirements with observable, testable scenarios
    - `## Tasks`: implementation checklist ordered for execution
-6. Apply the type-specific emphasis:
-   - `Feature`: specify the new capability, user value, integration with existing architecture, new behavior scenarios, tests, and documentation hooks.
-   - `Improvement`: specify current state, desired state, changed behavior, migration or compatibility concerns, regression risk, and regression scenarios around existing behavior.
-   - `Bug`: specify expected vs actual behavior, evidence or reproduction steps, impact, corrected behavior, a failing regression scenario, fix tasks, and validation.
-7. Run advisor critique:
-   - Ask `gemini` to critique the spec before final approval.
-   - Ask whether the spec is ready for the next step, simple enough, aligned with the product, and free of underspecified requirements or missing context.
-   - Treat advisor critique as a required gate, not a best-effort check.
-   - If `gemini` cannot start because of agent limits, timeouts, tool errors, or temporary unavailability, do not mark the spec ready. Free completed agents when possible, retry the critique, and only continue after it completes.
-   - If the critique still cannot run after a retry, stop and report the blocked advisor gate to the main agent or user. The main agent must either rerun the missing critique later or get an explicit user waiver before presenting the spec as ready for approval.
-   - Validate critique points with evidence before applying changes.
-   - Discard critique points that are unsupported or out of scope.
-   - If changes are large, update the full spec coherently and rerun critique.
-   - If any critique-triggered edits are made after a successful critique, rerun advisor critique unless the edits are strictly mechanical typo, formatting, or metadata fixes.
-8. Review with the user as the final approval gate:
-   - Present the spec summary and important scenario/task choices only after advisor critique has been handled.
-   - Include advisor status in the review handoff: completed, rerun after edits, waived by explicit user instruction, or blocked.
-   - Never hide or downgrade a skipped advisor check as an ordinary uncertainty.
-   - Apply small user corrections directly.
-   - For large scope, behavior, architecture, or scenario changes, update goal/design/requirements/tasks coherently and rerun advisor critique before returning to user review.
-9. Finish only when the user approves the spec:
-   - Return the spec path.
-   - List the sections created or updated.
-   - State the planning workspace and branch that contain the approved spec.
-   - State advisor status and remaining uncertainties.
-   - Hand off to `engineer` only after approval, and tell it to create or reuse an implementation worktree/branch from the approved spec.
+   - Apply type emphasis: `#feature` (new capability, integration, new-behavior scenarios, docs hooks); `#improvement` (current vs desired state, migration/compatibility, regression scenarios); `#bug` (expected vs actual, reproduction, failing regression scenario, fix tasks, validation).
+6. Run advisor critique:
+   - Ask `gemini` (audit mode) to critique the card and any spec before final approval. Treat it as a required gate, not best-effort.
+   - If `gemini` cannot run (limits, timeouts, tool errors), do not mark the work ready: free completed agents, retry, and only continue after it completes. If it still cannot run, stop and report the blocked advisor gate; the main agent reruns it later or gets an explicit user waiver.
+   - Validate critique with evidence; apply valid points; discard unsupported ones. Rerun critique after non-mechanical edits.
+7. Review with the user as the final approval gate:
+   - Present the card (and spec summary / key scenarios) only after advisor critique is handled.
+   - Include advisor status: completed, rerun after edits, waived by explicit user instruction, or blocked. Never downgrade a skipped gate to an ordinary uncertainty.
+   - Apply small corrections directly; for large scope/behavior/scenario changes, update card and spec coherently and rerun critique.
+8. Finish only when the user approves:
+   - Write/update the card in `docs/tasks/`, and the spec in `docs/specs/` when one was warranted.
+   - Return the card slug and board file, the spec path (or "no spec — card only"), the sections created/updated, the planning branch, advisor status, and remaining uncertainties.
+   - Hand off to `engineer` only after approval; tell it to create or reuse an implementation worktree/branch (`feat/<slug>`) from the card and spec.
 
-## Scenario Standards
+## Templates
 
-Write each scenario so `engineer` can create one scenario test from it:
+Use the template for the chosen primary type to shape card body / spec content; load only the one you need from `${CLAUDE_PLUGIN_ROOT}/references/templates/` (`feature.md`, `improvement.md`, `bug.md`, `epic.md`). The repo may provide stronger Templater scaffolds under `docs/_templates/`; prefer those when present.
 
-- Describe observable behavior.
-- Include trigger, action, and expected result.
-- Avoid private implementation details.
-- Keep each scenario focused on one requirement.
-- Separate different actors, failure modes, and edge cases into distinct scenarios.
+## Scenario standards
+
+Write each scenario so `engineer` can create one scenario test from it: observable behavior; trigger, action, expected result; no private implementation details; one requirement per scenario; separate actors, failure modes, and edge cases.
 
 ## Boundaries
 
-- Do not implement code. That belongs to `engineer`.
-- Do not create a PR. That belongs to `engineer` or PR-specific skills.
-- Do not create branches or worktrees. Planning stays in the current base-branch workspace.
-- Do not silently change Linear story scope; call out significant changes and ask for approval.
-- Do not turn `Epic`, `Research`, `Marketing`, or `Support` stories directly into implementation specs unless the user first refines the work into a `Feature`, `Improvement`, or `Bug`.
-- Do not proceed to execution until the user approves the spec.
-- Do not claim a spec is ready for approval when advisor critique was skipped, failed, timed out, or blocked, unless the user explicitly waives that gate.
+- Do not implement code, create branches/worktrees, or open PRs. Those belong to `engineer`.
+- Do not silently change scope; call out significant changes and ask for approval.
+- Do not write a spec for `research`, `marketing`, or `support` work, or for an epic, until it is refined into a concrete `#feature`/`#improvement`/`#bug` card.
+- Do not force a spec onto small, self-contained work; the card is enough.
+- Do not proceed to execution until the user approves.
+- Do not claim work is ready when advisor critique was skipped, failed, timed out, or blocked, unless the user explicitly waives that gate.

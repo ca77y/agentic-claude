@@ -43,7 +43,7 @@ Use for large, uncertain, or multi-story work. An epic frames the work area and 
 
 ## Dependencies
 
-- [Related epics, Linear issues, systems, providers, migrations, design decisions, or docs needed before/during child stories]
+- [Related epics, tasks, systems, providers, migrations, design decisions, or docs needed before/during child stories]
 
 ## Risks
 
@@ -56,7 +56,7 @@ Use for large, uncertain, or multi-story work. An epic frames the work area and 
 
 ## References
 
-- [docs/library/... or other docs/code/Linear/web references needed for planning]
+- [docs/library/... or other docs/code/task/web references needed for planning]
 
 ## Verification Strategy
 

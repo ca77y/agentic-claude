@@ -36,7 +36,7 @@ Minimal Input:
 
 ## Evidence
 
-- [Logs, Sentry, screenshots, console output, failing test, Linear/customer report]
+- [Logs, Sentry, screenshots, console output, failing test, task/customer report]
 - [Exact commands or prompts already used to validate/reproduce]
 
 ## Suspected Area
@@ -58,7 +58,7 @@ Minimal Input:
 
 ## References
 
-- [docs/code/Linear/Sentry/log/web references needed for planning]
+- [docs/code/task/Sentry/log/web references needed for planning]
 
 ## Verification
 

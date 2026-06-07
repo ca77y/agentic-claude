@@ -48,7 +48,7 @@ Use for new user-visible capability or product behavior.
 
 ## References
 
-- [docs/library/... or other docs/code/Linear/web references needed for planning]
+- [docs/library/... or other docs/code/task/web references needed for planning]
 
 ## Verification
 

@@ -47,7 +47,7 @@ Commit rules:
 - Use Conventional Commits, for example `fix(qa): address review findings`.
 
 Constraints:
-- Do not create branches, pull requests, Linear issues, or external comments unless explicitly asked.
+- Do not create branches, pull requests, task cards, or external comments unless explicitly asked.
 - Do not run destructive commands.
 - Do not inspect `.env` files or output secrets.
 - Treat Antigravity-backed gemini output as review input, not truth. Workers may reject findings with evidence.

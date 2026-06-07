@@ -43,7 +43,7 @@ Delegate the deep research path to the `gemini` subagent in library mode. It del
 6. Persist only when asked or when the workflow explicitly calls for it:
    - Use the `gemini` subagent to write durable research into the project's research library; let the Antigravity library agents (`@scribe`/`@clerk`) resolve the actual path from repo instructions.
    - After library files are created or changed, have `gemini` run a `@clerk` audit before reporting completion unless the user explicitly waives the audit.
-   - Do not write ADRs, specs, Linear issues, source code, commits, branches, or PRs.
+   - Do not write ADRs, specs, task cards, source code, commits, branches, or PRs.
    - Do not record concrete project decisions in the library; flag those as ADR material.
 
 ## Output Shape
@@ -66,7 +66,7 @@ For library persistence:
 
 ## Boundaries
 
-- Do not create Linear issues. That belongs to the `analyst` or `linear-story` paths.
+- Do not create task cards. That belongs to the `analyst` and `planner` paths.
 - Do not write specs. That belongs to `planner`.
 - Do not implement code. That belongs to `engineer`.
 - Do not create commits, branches, PRs, or external comments.

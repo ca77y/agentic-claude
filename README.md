@@ -47,8 +47,8 @@ ca77y-agentic/
     ├── ca77y-engineering/
     │   ├── .claude-plugin/plugin.json     # Claude manifest (agents whitelist)
     │   ├── plugin.json                    # agy-native manifest (root)
-    │   ├── agents/                        # engineer gemini linear-story qa researcher stack-planner
-    │   ├── references/templates/          # Linear issue templates used by linear-story
+    │   ├── agents/                        # engineer gemini qa researcher stack-planner writer
+    │   ├── references/templates/          # card/spec templates used by planner
     │   └── skills/                        # analyst planner antigravity-cli gh-stack
     └── ca77y-library/
         ├── .claude-plugin/plugin.json     # Claude manifest
@@ -68,19 +68,18 @@ override, so a shared pool with marketplace-level whitelists silently loads
 everything. With separate roots:
 
 - **Agents** — each `plugin.json` whitelists its agents. The whitelist *replaces*
-  the default `agents/` scan, which also keeps the `linear-story` templates under
-  `references/templates/` from being picked up as phantom agents.
+  the default `agents/` scan, which also keeps non-agent Markdown (such as the
+  `references/templates/` files) from being picked up as phantom agents.
 - **Skills** — auto-discovered from each plugin's own `skills/`. No pool trick needed,
   because the rosters are disjoint and each plugin only sees its own directory.
 
 ## The pipeline
 
-`researcher → analyst → linear-story → planner → [stack-planner] → engineer → (qa, writer, gemini)`
+`researcher → analyst → planner → [stack-planner] → engineer → (qa, writer, gemini)`
 
 - **researcher** — deep investigation; delegates library work to `gemini` (agy).
-- **analyst** *(skill)* — shape ideas/epics into Linear-ready work.
-- **linear-story** — write the labeled Linear story/epic.
-- **planner** *(skill)* — turn an approved story into a spec (one file per story under docs/specs/).
+- **analyst** *(skill)* — shape ideas/epics into planner-ready work.
+- **planner** *(skill)* — record an approved task as a board card under `docs/tasks/` and, for bigger work, write its spec under `docs/specs/`.
 - **stack-planner** — plan stacked-PR topology for multi-change work.
 - **engineer** — take an approved spec end to end; delegates QA to `qa` and docs to `writer`.
 - **qa** — review/fix loop via `gemini` (agy code-review).

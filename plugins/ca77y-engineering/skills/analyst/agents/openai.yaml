@@ -1,4 +1,4 @@
 interface:
   display_name: "Analyst"
-  short_description: "Shape ideas into Linear-ready issues"
-  default_prompt: "Help me turn this rough idea into a clear Linear issue."
+  short_description: "Shape ideas into planner-ready tasks"
+  default_prompt: "Help me turn this rough idea into a clear task for docs/tasks."

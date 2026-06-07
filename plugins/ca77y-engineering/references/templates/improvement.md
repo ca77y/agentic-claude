@@ -21,7 +21,7 @@ Use for enhancements to existing behavior, UX, performance, quality, reliability
 
 ## Evidence
 
-- [User feedback, analytics, logs, screenshots, support reports, prior Linear issues, or code observations]
+- [User feedback, analytics, logs, screenshots, support reports, prior tasks, or code observations]
 - [Exact examples, routes, prompts, payloads, workflows, or commands that show the current limitation]
 
 ## Impact
@@ -52,7 +52,7 @@ Use for enhancements to existing behavior, UX, performance, quality, reliability
 
 ## References
 
-- [docs/library/... or other docs/code/Linear/web references needed for planning]
+- [docs/library/... or other docs/code/task/web references needed for planning]
 
 ## Verification
 
