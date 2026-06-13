@@ -34,7 +34,7 @@ Invoking `engineer` is explicit permission to create or reuse the worktree, bran
 - `writer` subagent — documentation and converting the shipped spec into its permanent docs home.
 - `qa` subagent — review/fix loops after implementation.
 - `gemini` subagent — optional independent external review (code-review mode) or readiness audit.
-- `stack-planner` subagent — when the user has an epic / multiple stories but no approved stack topology.
+- `stack-planner` subagent — when one large story's implementation should be split into stacked PRs but has no approved stack topology.
 - `gh-stack` skill — stack lead execution and stacked PR operations.
 
 Everything else — implementation, tests, commits, PRs — you do directly.
