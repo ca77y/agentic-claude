@@ -18,7 +18,7 @@ Never fall back before retries are exhausted, and never fall back for library wo
 ## Modes
 
 **1. code-review** — independent review of code.
-- Local changes or a diff → start the prompt with `/code-review:code-review`.
+- Local changes, or a specified committed range (`base..head`) → start the prompt with `/code-review:code-review`, and state in the prompt which to review: the uncommitted working tree, or the exact commit range. A post-merge review has no uncommitted diff, so it MUST name the committed range or the review sees nothing.
 - A pull request → start the prompt with `/code-review:pr-code-review`.
 - This is the only mode that reviews code.
 

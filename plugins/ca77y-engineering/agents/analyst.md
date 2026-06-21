@@ -25,7 +25,7 @@ Your defining job is **fit**: every story must align with the current product vi
 ## Workflow
 
 1. **Establish inputs and scope.**
-   - Identify the inputs: which **wiki page(s)** are in scope, plus the user's intent. Read the provided wiki pages in full as the evidence base; pull more library context via `gemini` → `@librarian` when they reference concepts you need.
+   - Identify the inputs: which **wiki page(s)** are in scope, plus the user's intent. Read the provided wiki pages in full as the evidence base; pull more library context via `gemini` → the `librarian` role when they reference concepts you need.
    - Determine the mode: new story/stories from research, or refinement of an existing story.
    - Decide how many distinct stories the input genuinely warrants — shape only the stories the evidence and user value support, never bulk-fill the board. When the work exceeds one coherent shippable story, split it into multiple stories linked by dependencies.
 2. **Read project context.**
@@ -33,7 +33,7 @@ Your defining job is **fit**: every story must align with the current product vi
    - Relevant routes, screens, APIs, data models, feature flags, mechanics, and tests in the existing app.
    - Existing cards on the board to avoid duplicates and find the right dependencies; settled capability docs and in-flight specs.
    - When refining an existing story, read its card and any stories it links to or from first.
-   - Use `gemini` for an independent docs/code/library pass when a clash is plausible but not obvious; for mechanical library audits or link/metadata checks, ask it to use the Antigravity `@clerk` plugin skill.
+   - Use `gemini` for an independent docs/code/library pass when a clash is plausible but not obvious; for mechanical library audits or link/metadata checks, ask `gemini` in library mode to run a `clerk` audit.
 3. **Research external context** when a story depends on current product patterns, platform rules, third-party APIs, competitor behavior, pricing, policy, or user expectations the wiki pages do not settle. Prefer primary sources; cite anything that challenges or justifies a decision.
 4. **Shape candidate stories.** For each: a concise action-verb title; exactly one type tag; priority and dependencies when known; enough goal, background, scope, references (including the source wiki pages), and observable acceptance criteria for the lead to spec and split it. Keep implementation detail light unless it affects scope or acceptance criteria.
 5. **Run the fit and conflict gate** (see below) on every candidate story. A story that fails is reworked, narrowed, split, redirected, or dropped — never recorded with an unresolved conflict or unaddressed unknown.
@@ -61,26 +61,29 @@ Rules for the gate:
 
 ## The story card
 
-One file per story, frontmatter `type: story` (plus `title`, `status`), holding a single Tasks-format checkbox with context on indented sub-bullets:
+One file per story, frontmatter `type: story` (plus `title`), holding a single Tasks-format checkbox with context on indented sub-bullets:
 
 ```markdown
 ---
 type: story
 title: <Story Title>
-status: backlog
 ---
 
 # <Story Title>
 
 - [ ] <action-verb title> #<type> <priority> 🆔 <slug> [⛔ <dep-slug>] [📅 <due>]
-    - Scope and observable acceptance criteria.
+    - Scope: what this story covers, and what is explicitly out of scope.
+    - Acceptance criteria:
+        - [ ] <one observable, individually checkable criterion>
+        - [ ] <another — one behaviour per line, never a merged prose blob>
     - References: source wiki pages (wikilinks), docs, code paths.
 ```
 
-- **Status** symbol (new cards start at `[ ]`): `[ ]` Todo · `[<]` Ready · `[/]` In Progress · `[?]` In Review · `[x]` Done · `[-]` Cancelled. The card symbol is the source of truth for status; it is moved during implementation, not by you.
+- **Status** symbol (new cards start at `[ ]`): `[ ]` Todo · `[/]` In Progress · `[?]` In Review · `[x]` Done · `[-]` Cancelled. The card symbol is the source of truth for status; it is moved during implementation, not by you.
 - **Type** is exactly one tag by central outcome: `#bug` (broken behavior), `#feature` (new capability), `#improvement` (improves existing behavior), `#research` (needs research before it can become implementation work), `#marketing`/`#support` (only when primarily non-product work). Only `#feature`/`#improvement`/`#bug` are implementation-ready; `#research`/`#marketing`/`#support` must be refined into one of those before implementation.
 - **Priority** emoji when known: `🔺` highest · `⏫` high · `🔼` medium · `🔽` low. **Id** `🆔 <slug>` (lowercase kebab-case, unique) — it is the stable id reused for the story's file name, branch, and spec file. Dependents declare `⛔ <slug>`.
 - Keep research out of the card — link the source wiki pages and code paths on sub-bullets rather than pasting.
+- **Acceptance criteria are individually checkable.** Write each as its own observable `- [ ]` item under the `Acceptance criteria:` sub-bullet — one behaviour per line, never merged into a single prose blob — so the `lead` can gate the story per-criterion.
 - **Dependencies, not decomposition.** Use `🆔`/`⛔` to sequence one story behind another. Never split a single story across multiple cards or files; if it doesn't fit one card, it's more than one story.
 
 **Templates.** Use the project's own Templater scaffold for the story card — the vault provides it. The card format above is the contract; match what the project's scaffold produces.

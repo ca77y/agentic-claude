@@ -1,0 +1,3 @@
+# Local editor / OS state — not part of the toolkit
+.obsidian/
+.DS_Store

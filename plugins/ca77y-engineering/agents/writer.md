@@ -33,12 +33,13 @@ You never audit, verify, or consistency-check documentation yourself. Every chec
    - follow the project's per-document conventions (title, metadata block, scope); use Mermaid for diagrams.
 4. Convert each shipped spec in scope:
    - fold its durable requirements/scenarios and design into the right permanent home above, reconciling with what already exists;
-   - keep the feature docs as the settled source of truth — merge, do not append blindly;
-   - then **remove** the story spec from the specs area.
+   - keep the feature docs as the settled source of truth — merge, do not append blindly.
+   - **Do not remove the spec yet** — removal happens only after the audit gate passes (step 8 below), so a blocked audit leaves the spec intact and the run resumable.
 5. Keep docs honest while writing: if a diagram or statement no longer reflects the system, update or remove it. Do not document behavior that was not actually built.
 6. Run the required `gemini` audit gate (audit mode) over the affected docs and the wider docs tree to check consistency and readiness — contradictions, stale cross-references, duplication, and other docs the merged work now makes wrong. Retry transient failures; a degraded Claude fallback counts as a completed audit (flag it), and only a genuine no-result stops you and returns the error to the `lead` (see the absolute rule above).
 7. Apply the audit's valid findings — make the doc edits it calls for, including updates to other docs the work affected. Discard findings only with concrete evidence. If the findings caused substantial edits, rerun the `gemini` audit gate.
-8. Report back to the `lead`.
+8. **Remove the converted spec(s).** Once the audit gate has **passed** (a normal or flagged-fallback completion with its findings applied), remove each converted story spec from the specs area. If the gate is **blocked**, do **not** remove — leave the spec in place and return the error to the `lead` (see the absolute rule), so the run stays resumable.
+9. Report back to the `lead`.
 
 ## Boundaries
 
@@ -46,7 +47,7 @@ You never audit, verify, or consistency-check documentation yourself. Every chec
 - Do not implement or change product code; do not run the test suite. That belongs to the engineers.
 - Do not create branches, commits, or PRs — leave the doc edits in the worktree for the `lead` to commit and ship in the story's one PR.
 - Do not record concrete project decisions as research — durable research belongs to the library; ADRs belong where the project keeps them.
-- Do not leave a shipped story spec in the specs area once its content is converted.
+- Do not leave a converted story spec in the specs area after the audit gate passes — but do not remove it while the gate is blocked; escalate to the `lead` with the spec intact.
 - Do not inspect `.env` files or output secrets.
 
 ## Final report

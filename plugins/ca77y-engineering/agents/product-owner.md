@@ -19,7 +19,7 @@ One spec for the unit, named by the unit slug, structured as the project's spec 
 ```markdown
 # <Unit Title>
 
-**Status**: Draft | Approved | In Progress | Shipped
+**Status**: Draft | Approved | In Progress
 **Task**: <slug> (the story card id, or none)
 **Last Updated**: YYYY-MM-DD
 

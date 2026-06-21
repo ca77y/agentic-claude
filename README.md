@@ -129,17 +129,17 @@ Takes a research topic and runs an agent-steered deep dive, ending in durable
 library knowledge — not tickets or code.
 
 1. **Frames** the topic and decides if it's simple or needs subquestions.
-2. **Searches the library first** (via `gemini` → `@librarian`) to establish a
+2. **Searches the library first** (via `gemini` → the `librarian`) to establish a
    baseline and let gaps steer the web dive.
 3. **Decomposes** complex topics into subquestions, dispatching **one child
    `researcher` per subquestion** (sequential fallback if nesting is unavailable).
 4. **Runs the deep dive**: spawns explore subagents, follows leads recursively,
    prefers primary sources, and keeps going until leads stop producing new signal.
-5. **Persists** anything of durable value as raw source notes (via `@scribe`),
+5. **Persists** anything of durable value as raw source notes (via the `scribe`),
    eagerly and in parallel-safe distinct files.
 6. **Synthesizes** one new/updated wiki entry — *parent only*, serialized — citing
    the raw notes, and updates the index/taxonomy/log.
-7. **Verifies library health** (`@clerk` audit) and fixes issues before reporting.
+7. **Verifies library health** (`clerk` audit) and fixes issues before reporting.
 
 Output: a cited synthesis, the new wiki entry + raw-source paths, contradictions and
 uncertainty, and the audit result. **Does not** write cards, specs, or code.
@@ -255,10 +255,11 @@ The one bridge to Antigravity. It does **not** do the work itself; it builds a p
 dispatches to `agy`, retries transient failures (up to 10 attempts with backoff, per
 the `antigravity-cli` skill), and relays a clean result. Three modes:
 
-- **code-review** — independent review of local changes (`@code-review`) or a PR
-  (`@pr-code-review`). The only mode that reviews code.
-- **library** — Markdown library work via the agy library agents: `@librarian`
-  (cited answers), `@scribe` (ingest/synthesize), `@clerk` (health audit).
+- **code-review** — independent review of local changes (`/code-review:code-review`)
+  or a PR (`/code-review:pr-code-review`). The only mode that reviews code.
+- **library** — Markdown library work via the agy library agents:
+  `/ca77y-library:librarian` (cited answers), `/ca77y-library:scribe`
+  (ingest/synthesize), `/ca77y-library:clerk` (health audit).
 - **audit** — readiness gate for *non-code* artifacts: specs, plans, designs,
   research findings.
 
@@ -295,9 +296,10 @@ dependencies — never a stack of PRs.
 
 **Story cards** (`type: story` frontmatter) are Obsidian Tasks-format checkboxes:
 
-- **Status** `[ ]` Todo · `[<]` Ready · `[/]` In Progress · `[?]` In Review ·
+- **Status** `[ ]` Todo · `[/]` In Progress · `[?]` In Review ·
   `[x]` Done · `[-]` Cancelled. The card symbol is the source of truth; the `lead`
-  moves it through In Progress and In Review, and **you** move it to Done.
+  moves it through In Progress and In Review, and **you** move it to Done. The `lead`
+  starts an invoked story from whatever state it's in — invoking it is the go-ahead.
 - **Type** (exactly one): `#feature` · `#improvement` · `#bug` (implementation-ready)
   · `#research` · `#marketing` · `#support` (must be refined first).
 - **Priority** `🔺` highest · `⏫` high · `🔼` medium · `🔽` low.
@@ -341,7 +343,7 @@ ca77y-agentic/
     ├── ca77y-engineering/
     │   ├── .claude-plugin/plugin.json     # Claude manifest (agents whitelist)
     │   ├── plugin.json                    # agy-native manifest (root)
-    │   ├── agents/                        # researcher analyst lead engineer product-owner coder qa writer gemini
+    │   ├── agents/                        # subagent definitions
     │   └── skills/                        # antigravity-cli
     └── ca77y-library/
         ├── .claude-plugin/plugin.json     # Claude manifest

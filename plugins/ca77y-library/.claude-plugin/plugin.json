@@ -2,7 +2,7 @@
   "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
   "name": "ca77y-library",
   "description": "Markdown research-library crew executed on Antigravity (agy): librarian (cited answers), scribe (ingest/synthesis), clerk (health/audit). Invoked by the engineering pipeline's gemini dispatcher.",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "author": {
     "name": "ca77y"
   },

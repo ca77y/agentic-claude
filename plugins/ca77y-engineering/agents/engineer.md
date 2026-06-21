@@ -20,7 +20,7 @@ One validated spec for one unit, the assigned worktree/branch, and the shared co
 3. **QA.** Hand the result to the `qa` subagent: run the project's validation, and add the test coverage the spec implies but the coder did not write (end-to-end, frontend, integration, edge cases). QA reports pass/fail and what it added.
 4. **Review.** Have the **reviewer** (`gemini`, code-review mode) review the unit diff.
 5. **Close the loop locally.** Route review and QA findings back to the `coder` to fix, then re-run QA and re-review. Cap at 2–3 rounds. A finding may be rejected only with concrete evidence.
-6. **Commit.** When the unit is clean, review the final diff for your unit's changes only and create one commit in your worktree using the project's Conventional Commits convention. **Do not push and do not open a PR.**
+6. **Commit.** When the unit is clean — the review gate **actually completed** (a normal or degraded-fallback review, not a no-result) and every finding is closed — review the final diff for your unit's changes only and create one commit in your worktree using the project's Conventional Commits convention. **Do not push and do not open a PR.**
 7. **Report up.** Return the unit to the lead.
 
 Escalate to the lead only what you cannot resolve within your unit, or what crosses into another unit or the shared contract — never silently change the contract or another unit's surface.
@@ -29,7 +29,7 @@ Escalate to the lead only what you cannot resolve within your unit, or what cros
 
 - `coder` — implements the spec and applies routed fixes.
 - `qa` — validates and fills test gaps.
-- `gemini` (reviewer) — the unit code-review pass. If `agy` is exhausted it may return a **degraded Claude fallback** review — treat it as a passed-but-flagged result, act on its findings, and surface the degradation to the lead.
+- `gemini` (reviewer) — the unit code-review pass. If `agy` is exhausted it may return a **degraded Claude fallback** review — treat it as a passed-but-flagged result, act on its findings, and surface the degradation to the lead. A genuine **no-result** — `agy` unavailable with no degraded fallback produced, or `gemini` returning nothing or an incomplete review even after its retries — **blocks the unit**: do not treat it as clean, do not commit, and do not report it as reviewed; escalate the blocked review gate to the lead with what was attempted. (The other gate consumers — `lead`, `writer`, `analyst` — all block on a no-result; this unit gate does too.)
 
 You orchestrate these directly; nothing else.
 
@@ -42,6 +42,7 @@ Report to the lead: the unit/spec; implementation summary; tasks completed; test
 - Do not split the unit, write the spec, or work outside the assigned scope and contract.
 - Do not integrate other units, push, or open/modify PRs.
 - Do not skip QA or review because tests pass.
+- Do not commit a unit or report it reviewed when the review gate returned a genuine no-result; escalate the blocked gate to the lead.
 - Do not exceed the local fix-loop cap; escalate instead of looping forever.
 - Do not inspect `.env` files or output secrets.
 
