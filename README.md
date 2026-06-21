@@ -322,6 +322,15 @@ PR opens.
 directory); the lead integrates and opens the one PR. No secrets are ever inspected,
 output, or committed.
 
+**The pipeline improves itself.** Every agent — orchestrators and sub-agents alike —
+can log feedback about the *pipeline itself* (the flow, an agent's instructions, or a
+skill) to a single `AGENTS_IMPROVEMENTS.md` at the root of the project's documentation
+area (resolved from project context, never a hardcoded path; created on first use). It
+is opt-in, not a required step: an agent appends a note **only** when it has a concrete
+improvement to propose, and only after checking the file so the same point is never
+duplicated — no friction means no entry. This is for *how the agents work*, never the
+product feature being built; you harvest the accumulated notes back into this toolkit.
+
 ## Layout
 
 ```

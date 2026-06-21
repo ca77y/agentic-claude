@@ -22,3 +22,11 @@ The project's tests conventions and validation commands are in your context. Use
 - Do not split the unit, write the spec, commit, push, or open PRs.
 - Do not weaken or delete a failing test to make the suite pass; a real failure is a finding to report.
 - Do not run destructive commands; do not inspect `.env` files or output secrets.
+
+## Process feedback
+
+While doing this work you may notice a concrete way to improve the **pipeline itself** — a gap or friction in the flow, in an agent's instructions, or in a skill. This is about *how the agents work*, never the product feature being built. When you spot one, record it in a file named `AGENTS_IMPROVEMENTS.md` at the root of the project's documentation area — discover that folder from project context, never hardcode the path, and create the file if it does not exist.
+
+- Add a note **only** when you have a real improvement to propose. No friction means no entry — never add filler or a "nothing to report" line.
+- **Check for duplicates first:** read the file and skip the note if the same point is already captured.
+- Keep each entry short — a `### <improvement title>` heading, then **Area** (`flow` / `agent:<name>` / `skill:<name>`), **Observed** (the friction), and **Suggested change**.

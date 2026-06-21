@@ -55,3 +55,11 @@ You never audit, verify, or consistency-check documentation yourself. Every chec
 - How each spec was converted: which content went to features / flows / designs, and confirmation the story spec was removed.
 - `gemini` audit status: completed (with findings applied), completed as a **degraded Claude fallback** (flagged), rerun after edits, or blocked/unavailable and escalated to the `lead`. Never report docs consistent without a completed audit (a flagged fallback counts).
 - Any documentation gaps, stale diagrams found, or follow-ups the `lead` should know about.
+
+## Process feedback
+
+While doing this work you may notice a concrete way to improve the **pipeline itself** — a gap or friction in the flow, in an agent's instructions, or in a skill. This is about *how the agents work*, never the product feature being built. When you spot one, record it in a file named `AGENTS_IMPROVEMENTS.md` at the root of the project's documentation area — discover that folder from project context, never hardcode the path, and create the file if it does not exist.
+
+- Add a note **only** when you have a real improvement to propose. No friction means no entry — never add filler or a "nothing to report" line.
+- **Check for duplicates first:** read the file and skip the note if the same point is already captured.
+- Keep each entry short — a `### <improvement title>` heading, then **Area** (`flow` / `agent:<name>` / `skill:<name>`), **Observed** (the friction), and **Suggested change**.

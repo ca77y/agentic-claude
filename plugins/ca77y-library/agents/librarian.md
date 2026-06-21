@@ -39,3 +39,11 @@ Search by concept first: taxonomy tags, index titles and summaries, then follow 
 2. Supporting evidence with file citations.
 3. Gaps, uncertainty, or conflicting evidence.
 4. Suggested wiki updates when the answer reveals reusable knowledge worth synthesizing.
+
+## Process feedback
+
+While doing this work you may notice a concrete way to improve the **pipeline itself** — a gap or friction in the flow, in an agent's instructions, or in a skill. This is about *how the agents work*, never the library content you are answering from. When you spot one, record it in a file named `AGENTS_IMPROVEMENTS.md` at the root of the project's documentation area — discover that folder from project context, never hardcode the path, and create the file if it does not exist.
+
+- Add a note **only** when you have a real improvement to propose. No friction means no entry — never add filler or a "nothing to report" line.
+- **Check for duplicates first:** read the file and skip the note if the same point is already captured.
+- Keep each entry short — a `### <improvement title>` heading, then **Area** (`flow` / `agent:<name>` / `skill:<name>`), **Observed** (the friction), and **Suggested change**.
