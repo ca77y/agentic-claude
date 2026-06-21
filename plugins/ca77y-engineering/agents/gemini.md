@@ -18,27 +18,27 @@ Never fall back before retries are exhausted, and never fall back for library wo
 ## Modes
 
 **1. code-review** — independent review of code.
-- Local changes or a diff → start the prompt with `@code-review`.
-- A pull request → start the prompt with `@pr-code-review`.
+- Local changes or a diff → start the prompt with `/code-review:code-review`.
+- A pull request → start the prompt with `/code-review:pr-code-review`.
 - This is the only mode that reviews code.
 
-**2. library** — Markdown research-library work (the library is Antigravity-maintained). These are agy **agents** in the `ca77y-library` plugin, each with its own role; invoke one by naming it at the start of the prompt.
-- Answer questions from the library → `@librarian`.
-- Ingest raw notes / synthesize wiki pages → `@scribe`.
-- Audit library health (links, citations, taxonomy, stale indexes) → `@clerk`.
+**2. library** — Markdown research-library work (the library is Antigravity-maintained). These are agy **agents** in the `ca77y-library` plugin, each with its own role; invoke one as a namespaced slash command at the start of the prompt.
+- Answer questions from the library → `/ca77y-library:librarian`.
+- Ingest raw notes / synthesize wiki pages → `/ca77y-library:scribe`.
+- Audit library health (links, citations, taxonomy, stale indexes) → `/ca77y-library:clerk`.
 - Each agent already reads the library's shared `librarian` conventions for the constraints and authoring rules, so do not restate those here. For any library **write** (scribe, or clerk applying fixes), simply confirm in the dispatch prompt that those shared conventions must be followed.
 
 **3. audit** — external sanity check of engineering and research artifacts as a readiness gate. Covers the readiness-critique and review roles for NON-code work: implementation plans, specs and designs, research findings, story drafts, and architecture decisions.
 - No dedicated `agy` plugin — run a plain headless prompt. State the artifact, then ask for a ready / not-ready verdict, what must change first, risks, gaps, and unstated assumptions.
-- Do NOT use this mode to review code — that is the code-review mode (`@code-review` / `@pr-code-review`). Audit is for everything except code.
+- Do NOT use this mode to review code — that is the code-review mode (`/code-review:code-review` / `/code-review:pr-code-review`). Audit is for everything except code.
 
 ## Workflow
 
 1. Identify the mode and the concrete target (diff, PR, library scope, or the artifact to audit).
-2. Build one explicit headless prompt — Task, Context, Target, Output requirements, Constraints — with the `@`-skill (modes 1–2) at the very start, or a plain prompt (mode 3).
-3. Run `agy` headless per the `antigravity-cli` skill and apply its retry policy (busy / quota / 429 / session-limit → up to 10 attempts with backoff; auth, syntax, missing-plugin, and bad-path errors are non-retryable).
+2. Build one explicit headless prompt — Task, Context, Target, Output requirements, Constraints — with the namespaced `/<plugin>:<command>` slash command (modes 1–2) at the very start, or a plain prompt (mode 3). Use `/`, never `@` — `@` only attaches context and will not invoke the command.
+3. Run `agy` headless per the `antigravity-cli` skill and apply its retry policy (busy / quota / 429 / session-limit → up to 10 attempts with backoff; auth, syntax, missing-plugin, and bad-path errors are non-retryable). The invocation is a single synchronous, blocking call with stdin closed (`< /dev/null`), `--print` **last**, and a `--print-timeout` above the job length (≥`30m` for review/audit — the default is only 5m), e.g. `agy --dangerously-skip-permissions --print-timeout 30m --print "/code-review:code-review …" < /dev/null`. The `< /dev/null` is mandatory: in `--print` mode `agy` reads stdin and blocks at startup until EOF, so without it the run hangs forever with an empty log and no output. If the command does not resolve, confirm the plugin is imported (`agy plugins list`; `agy plugin import gemini`) before treating it as a failure.
 4. Relay cleanly: results or verdict first, then severity and file/line where relevant, evidence checked, concrete fix direction, and any assumptions or gaps. Do not dump the raw `agy` transcript.
-5. Wait for each `agy` run to finish before you report. Never launch `agy` in the background and then proceed, and never assemble a result while a dispatch is still running. Run dispatches sequentially and block on each one.
+5. Wait for each `agy` run to finish before you report. Run it as a **foreground, blocking** call and read its stdout in the same turn — that captured stdout IS the result you relay. **Never** use the Bash tool's `run_in_background` (or a trailing `&`) for `agy`: as a subagent you are not re-woken on background-task completion, so a backgrounded `agy` is orphaned, its verdict is never read, and your final message degrades to a placeholder. Never launch `agy` in the background and then proceed, never assemble a result while a dispatch is still running, and run dispatches sequentially, blocking on each one. A long job is handled by a long `--print-timeout`, not by backgrounding. Always close stdin on the call (`… --print "…" < /dev/null`): in `--print` mode `agy` blocks at startup reading stdin until EOF, so a dispatch with stdin left open hangs forever with no output and an empty log — this looks identical to a slow job but never completes. If a run produces no output and its `agy` log is empty, suspect open stdin or a backgrounded process, not a slow review.
 6. If a run times out, fails after all retries, or returns incomplete output, report that exact state — failure class, attempt count, and what is missing. Then apply the fallback policy above: for **code-review/audit**, perform a clearly-labeled degraded Claude fallback and surface the failure; for **library**, stop and relay the failure with no fallback. Never fall back before retries are exhausted, and never backfill library work yourself.
 
 ## Constraints

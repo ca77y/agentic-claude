@@ -20,8 +20,16 @@ agy \
   --sandbox \
   --dangerously-skip-permissions \
   --print-timeout 30m \
-  --print "Your task-specific prompt."
+  --print "Your task-specific prompt." < /dev/null
 ```
+
+**Always redirect stdin from `/dev/null` (`< /dev/null`).** In `--print` mode `agy` reads stdin and blocks *at startup* — before it boots its language server or writes a single log line — until stdin reaches EOF. When launched detached, in the background, or from a tool/agent that leaves stdin open (a pipe that never closes), it hangs indefinitely with **zero output and an empty log file**. Closing stdin lets it boot in seconds. This is the most common cause of an `agy` run that "hangs forever and prints nothing."
+
+**`--print` must be the last flag.** `--print`/`--prompt`/`-p` consume the next argument as the prompt value, so any other flag placed after `--print` is swallowed *into* the prompt (e.g. `--print --print-timeout 30m "…"` sends the model the literal text `--print-timeout`). Always put every other flag first and `--print "<prompt>"` last.
+
+**Default `--print-timeout` is only 5m.** Print mode aborts at 5 minutes unless you raise it. For long jobs (reviews run ~10–25 min) you MUST pass an explicit `--print-timeout` above the expected job length, e.g. `--print-timeout 30m`. Omitting it silently kills long jobs mid-run.
+
+**To run a plugin command or subagent, make it the start of the prompt as a slash command** — e.g. `--print "/code-review:code-review …"`. Headless `--print` expands slash commands (verified). See the Plugins section for the exact form and the import prerequisite.
 
 For long prompts, pass clear sections in the prompt:
 
@@ -35,9 +43,9 @@ Constraints:
 
 ## Core Options
 
-- `--print`, `--prompt`, `-p`: run one non-interactive prompt and print the response.
+- `--print`, `--prompt`, `-p`: run one non-interactive prompt and print the response. Consumes the next argument as the prompt, so it must be the **last** flag. Expands a leading slash command (`/<plugin>:<command>`) when the plugin is imported. Also reads stdin and blocks at startup until EOF — redirect from `/dev/null` (`< /dev/null`) in any detached or automated context or the run hangs before it begins, with an empty log and no output.
 - `--prompt-interactive`, `-i`: run an initial prompt and continue interactively.
-- `--print-timeout`: set the maximum wait for print mode, for example `30m`.
+- `--print-timeout`: set the maximum wait for print mode, for example `30m`. **Default is 5m** — raise it above the job length or long jobs are killed mid-run.
 - `--sandbox`: run with terminal restrictions enabled.
 - `--dangerously-skip-permissions`: auto-approve tool permission prompts. Use only with explicit task constraints.
 - `--add-dir`: add a directory to the workspace. Repeat when multiple workspace roots are required.
@@ -53,8 +61,8 @@ Constraints:
 | `--approval-mode yolo` | `--dangerously-skip-permissions` |
 | `--sandbox` | `--sandbox` |
 | `--include-directories` | `--add-dir` |
-| `-e <skill>` | mention the plugin skill in the prompt, for example `@<skill>` |
-| `/<skill>` | `@<skill>` |
+| `-e <skill>` | invoke the plugin command as a slash command at the very start of the prompt, namespaced: `/<plugin>:<command>` |
+| `/<skill>` | `/<plugin>:<command>` (same `/`; `@` is for attaching context only, never for invocation) |
 | `--output-format json` | no CLI parity; require strict JSON in the prompt and parse stdout defensively |
 | `-m` or `--model` | no CLI parity; use configured Antigravity model/settings |
 
@@ -71,7 +79,9 @@ agy plugin disable <name>
 agy plugin validate <path>
 ```
 
-An installed plugin skill is invoked by putting `@skill-name` at the very start of the `--print` prompt. Which skill to target for a given job is the caller's concern, not this skill's.
+A plugin command or subagent is invoked by putting it as a **slash command** at the very start of the `--print` prompt, **namespaced** as `/<plugin>:<command>` — for example `/code-review:code-review` or `/ca77y-library:librarian`. Use `/`, never `@`: per the Antigravity guide, `/` invokes workflows and launches subagents while `@` only attaches context (files, conversations, MCP tools). Bare names can be ambiguous; prefer the namespaced form. Which command to target for a given job is the caller's concern, not this skill's.
+
+**Import is a prerequisite.** `agy` only sees *imported* plugins, not raw Gemini CLI extensions. A command that exists as a `~/.gemini/extensions/<name>` extension will not resolve until imported — verify with `agy plugins list`, and import with `agy plugin import gemini` if missing. An un-imported command is silently treated as literal prompt text, not executed.
 
 ## Retry Policy
 
