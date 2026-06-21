@@ -54,11 +54,14 @@ and **Antigravity CLI** (`agy`). They are not standalone:
 - The **`ca77y-library`** agents (`librarian`, `scribe`, `clerk`) *execute on agy*;
   the pipeline reaches them through that dispatcher.
 
-Because the engineering pipeline calls into the library crew, **both plugins should
-be installed**, and both harnesses must be configured. Installing only one plugin, or
-only one harness, leaves the cross-delegation broken. One fallback exists: if `agy`
-is exhausted, `gemini` will perform code-review and audit work with Claude (clearly
-labeled as degraded) — but **library work has no fallback** and requires `agy`.
+The two plugins live on **different harnesses**, not both on each: install
+**`ca77y-engineering` in Claude Code** (where the pipeline runs) and
+**`ca77y-library` on `agy`** (where the library crew executes). `agy` additionally
+needs Google's **code-review** Gemini CLI extension, because `gemini` dispatches its
+code-review pass there. Skipping the `agy` side — the library plugin or the
+code-review extension — leaves the cross-delegation broken. One fallback exists: if
+`agy` is exhausted, `gemini` will perform code-review and audit work with Claude
+(clearly labeled as degraded) — but **library work has no fallback** and requires `agy`.
 
 ## Requires the target repo to be an Obsidian vault
 
@@ -86,20 +89,30 @@ discover these locations from the project's own context — they do not hardcode
 
 ## Install
 
-### Claude Code
+Each plugin goes on the harness that runs it — `ca77y-engineering` in Claude Code,
+`ca77y-library` on `agy` — and `agy` also needs the code-review extension `gemini`
+dispatches to.
+
+### Claude Code — `ca77y-engineering`
 
 ```bash
 claude plugin marketplace add ca77y/agents
 claude plugin install ca77y-engineering@ca77y-agentic
-claude plugin install ca77y-library@ca77y-agentic
 ```
 
-### Antigravity (agy)
+### Antigravity (agy) — `ca77y-library` + code-review
 
 ```bash
-agy plugin import claude            # picks up the Claude marketplace + plugins
-agy plugin install ca77y-engineering@ca77y-agentic
+# the research-library crew
+agy plugin import claude            # picks up the Claude marketplace
 agy plugin install ca77y-library@ca77y-agentic
+
+# the code-review extension gemini dispatches to (Google's gemini-cli extension).
+# agy imports extensions from ~/.gemini/extensions/ by reading their manifests —
+# the gemini CLI itself is not needed (it's deprecated), so just clone the repo
+# into that directory and import.
+git clone https://github.com/gemini-cli-extensions/code-review ~/.gemini/extensions/code-review
+agy plugin import gemini            # imports any extension under ~/.gemini/extensions/
 ```
 
 ## The pipeline at a glance
