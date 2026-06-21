@@ -1,17 +1,20 @@
 {
   "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
   "name": "ca77y-engineering",
-  "description": "Idea-to-shipped development pipeline as Claude Code subagents + skills: researcher, analyst, planner, stack-planner, engineer, qa, writer, and the gemini dispatcher (delegates to agy). Skills: analyst, planner, antigravity-cli, gh-stack.",
-  "version": "0.5.0",
+  "description": "Idea-to-shipped development pipeline as Claude Code subagents + skills: researcher, analyst (shapes stories + records cards), lead (orchestrates a story across units), engineer (builds one unit via coder/qa/reviewer), product-owner (per-unit specs), coder, qa, writer, and the gemini dispatcher (delegates to agy). Skills: antigravity-cli.",
+  "version": "0.7.1",
   "author": {
     "name": "ca77y"
   },
   "agents": [
+    "./agents/analyst.md",
+    "./agents/coder.md",
     "./agents/engineer.md",
     "./agents/gemini.md",
+    "./agents/lead.md",
+    "./agents/product-owner.md",
     "./agents/qa.md",
     "./agents/researcher.md",
-    "./agents/stack-planner.md",
     "./agents/writer.md"
   ]
 }

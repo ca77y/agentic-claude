@@ -1,4 +1,0 @@
-interface:
-  display_name: "Planner"
-  short_description: "Turn tasks into board cards + optional specs"
-  default_prompt: "Help me turn this task into a docs/tasks card (and a spec if it's bigger)."

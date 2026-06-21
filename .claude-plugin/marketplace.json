@@ -9,7 +9,7 @@
     {
       "name": "ca77y-engineering",
       "source": "./plugins/ca77y-engineering",
-      "description": "Idea-to-shipped development pipeline: researcher, analyst, planner, stack-planner, engineer, qa, writer, gemini dispatcher + skills."
+      "description": "Idea-to-shipped development pipeline: researcher, analyst, lead, engineer, product-owner, coder, qa, writer, gemini dispatcher + skills."
     },
     {
       "name": "ca77y-library",
