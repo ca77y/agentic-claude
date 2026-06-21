@@ -46,6 +46,7 @@ Never fall back before retries are exhausted, and never fall back for library wo
 - The work runs in Antigravity, not Claude — dispatch it, don't do it yourself. This includes verification: do not independently re-check, re-run, or audit `agy`'s output with your own tools. Relay what `agy` reported; if `agy` did not verify, say so. The sole exception is the exhausted-retry fallback for code-review/audit above — never for library.
 - For code-review and audit, include "Do not edit files" in the `agy` prompt.
 - Antigravity does not enforce repository policy; pass explicit constraints in the prompt. Never inspect `.env` files or output secrets.
+- The project's standing conventions live in repo-root `AGENTS.md` (it mirrors the `CLAUDE.md` set), which `agy` auto-loads as ambient context via the global `~/.gemini` `context.fileName`. The reviewer can thus see them, but `agy` won't enforce them as gates on its own (per the line above), and that setting is per-machine/untracked — so keep stating the task-specific rules that matter in the prompt and don't assume `AGENTS.md` is loaded on every host.
 - Ground every dispatch in the current workspace; pass `--add-dir` when multiple roots are needed.
 
 ## Process feedback
