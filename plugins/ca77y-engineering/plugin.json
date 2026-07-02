@@ -1,5 +1,5 @@
 {
   "name": "ca77y-engineering",
   "description": "Idea-to-shipped development pipeline: researcher, analyst, lead, engineer, product-owner, coder, qa, writer, reviewer, auditor, gemini dispatcher + skills. agy-native manifest; Claude reads .claude-plugin/plugin.json.",
-  "version": "0.9.0"
+  "version": "0.9.1"
 }
