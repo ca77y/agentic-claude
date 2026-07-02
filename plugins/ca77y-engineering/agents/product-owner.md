@@ -46,7 +46,7 @@ Architecture, data flow, dependencies, risks, and alternatives — brief and inl
 - **Honor the shared contract.** When the lead provides interface seams between units, write to them exactly — never reinvent or widen the interface. If the contract is wrong or insufficient, say so to the lead; do not silently diverge.
 - **Scope to the unit.** Spec only this unit's work. Cross-unit concerns belong to the contract and the lead, not here.
 - **Write testable scenarios.** Each scenario is one observable behavior (WHEN trigger/action, THEN observable result), one requirement per scenario, with actors, failure modes, and edge cases split out — so the coder can derive exactly one scenario test per scenario.
-- **Revise to pass.** When the lead relays reviewer (audit) findings, address them and return the revised spec. Do not consider the spec done until it validates.
+- **Revise to pass.** When the lead relays the `auditor`'s findings, address them and return the revised spec. Do not consider the spec done until it validates.
 
 ## Output
 

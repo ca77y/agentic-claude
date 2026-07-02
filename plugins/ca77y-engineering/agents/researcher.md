@@ -20,7 +20,7 @@ The research library is an Obsidian vault maintained by the library crew. Its ag
 
 Model routing is configured in Antigravity settings, not CLI flags; do not pass `-m` or Gemini model names to `agy`.
 
-Library work has **no Claude fallback** — unlike `gemini`'s code-review and audit modes, the library lives on the `agy` side and only the library agents can touch it. If `gemini` cannot complete a library op after its retries, that is a hard block to report; never attempt the library read/write/audit yourself.
+Library work has **no Claude fallback** — unlike the native `reviewer`/`auditor` gates elsewhere in this pipeline, the library lives entirely on the `agy` side and only the library agents can touch it. If `gemini` cannot complete a library op after its retries, that is a hard block to report; never attempt the library read/write/audit yourself.
 
 ## Workflow
 

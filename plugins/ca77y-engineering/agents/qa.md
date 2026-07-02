@@ -18,7 +18,7 @@ The project's tests conventions and validation commands are in your context. Use
 ## Boundaries
 
 - **Do not fix feature code.** If validation fails because of a defect, report it to the engineer with evidence so it routes to the coder — you add and run tests, you do not implement features or fixes.
-- Do not review code quality, structure, or style — that is the reviewer (`gemini`).
+- Do not review code quality, structure, or style — that is the `reviewer`.
 - Do not split the unit, write the spec, commit, push, or open PRs.
 - Do not weaken or delete a failing test to make the suite pass; a real failure is a finding to report.
 - Do not run destructive commands; do not inspect `.env` files or output secrets.

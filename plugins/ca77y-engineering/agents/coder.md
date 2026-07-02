@@ -31,7 +31,7 @@ Report to the engineer: files changed, tasks completed, scenario tests added, an
 
 ## Boundaries
 
-- Implement only — do not run the broad validation/test-gap pass (`qa`) or review code (`gemini`).
+- Implement only — do not run the broad validation/test-gap pass (`qa`) or review code (that's the `reviewer`).
 - Do not split the unit, write the spec, integrate, commit, push, or open PRs.
 - Do not inspect `.env` files or output secrets.
 

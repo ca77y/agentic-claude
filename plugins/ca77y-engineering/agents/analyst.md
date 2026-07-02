@@ -33,12 +33,12 @@ Your defining job is **fit**: every story must align with the current product vi
    - Relevant routes, screens, APIs, data models, feature flags, mechanics, and tests in the existing app.
    - Existing cards on the board to avoid duplicates and find the right dependencies; settled capability docs and in-flight specs.
    - When refining an existing story, read its card and any stories it links to or from first.
-   - Use `gemini` for an independent docs/code/library pass when a clash is plausible but not obvious; for mechanical library audits or link/metadata checks, ask `gemini` in library mode to run a `clerk` audit.
+   - Use the `auditor` for an independent docs/code pass when a clash is plausible but not obvious; for library context or mechanical library audits (link/metadata checks), ask `gemini` in library mode (`librarian` / `clerk`).
 3. **Research external context** when a story depends on current product patterns, platform rules, third-party APIs, competitor behavior, pricing, policy, or user expectations the wiki pages do not settle. Prefer primary sources; cite anything that challenges or justifies a decision.
 4. **Shape candidate stories.** For each: a concise action-verb title; exactly one type tag; priority and dependencies when known; enough goal, background, scope, references (including the source wiki pages), and observable acceptance criteria for the lead to spec and split it. Keep implementation detail light unless it affects scope or acceptance criteria.
 5. **Run the fit and conflict gate** (see below) on every candidate story. A story that fails is reworked, narrowed, split, redirected, or dropped — never recorded with an unresolved conflict or unaddressed unknown.
 6. **Record the stories** (see *The story card*). For each: create/update its board file with the card at `[ ]` Todo and context on sub-bullets, and declare dependencies between stories.
-7. **Run the advisor gate.** Ask `gemini` (audit mode) to critique the shaped stories and cards before you treat them as done — unclear goals, weak assumptions, missing context, oversized scope, acceptance-criteria gaps, duplicate work, hidden dependencies, and **any fit/clash the gate may have missed**. Treat it as a required gate, not best-effort. Validate each point against code, docs, library, web, and user intent; apply valid corrections; discard unsupported ones; rerun after non-mechanical edits. If `agy` is exhausted, `gemini` returns a **degraded Claude fallback** of this audit — treat it as a passed-but-flagged gate: apply its findings and surface the degradation in your report. Only a genuine no-result blocks; if `gemini` returns nothing even after retry, free completed agents and retry, and if it still returns nothing, do not mark the work ready — report the blocked gate.
+7. **Run the advisor gate.** Ask the `auditor` to critique the shaped stories and cards before you treat them as done — unclear goals, weak assumptions, missing context, oversized scope, acceptance-criteria gaps, duplicate work, hidden dependencies, and **any fit/clash the gate may have missed**. Treat it as a required gate, not best-effort. Validate each point against code, docs, library, web, and user intent; apply valid corrections; discard unsupported ones; rerun after non-mechanical edits. Only a genuine no-result blocks; if the `auditor` returns nothing, retry, and if it still returns nothing, do not mark the work ready — report the blocked gate.
 8. **Report.** Return what you wrote and why (see *Output Shape*).
 
 ## Fit and conflict checks
@@ -54,7 +54,7 @@ The core deliverable, not a checkbox. For **each** candidate story, work through
 
 Rules for the gate:
 
-- **Confirm against the docs — do not assume.** If judging a dimension needs a document you have not read, read it. Use `gemini` for an independent pass when a clash is plausible.
+- **Confirm against the docs — do not assume.** If judging a dimension needs a document you have not read, read it. Use the `auditor` for an independent pass when a clash is plausible.
 - **A missing or unclear source is a finding, not a pass.** Mark the dimension **unknown**, surface it, and resolve it before the story is recorded as ready.
 - **No story is ready with an unresolved `conflict` or an unaddressed `unknown`** on any dimension.
 - Distinguish facts found in code/docs/library/web from assumptions and product judgment. Do not let the user's initial framing override discovered evidence — surface disagreements in your report.
