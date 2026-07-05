@@ -1,6 +1,6 @@
 ---
 name: auditor
-description: Independent readiness auditor — external sanity check for non-code engineering/research artifacts (specs, spec sets, plans, designs, docs, story cards) as a readiness gate. Reads the artifact plus enough surrounding context to judge it on its own terms, then returns a ready/not-ready verdict. Used by product-owner (spec validation), lead (spec-set integration review), writer (docs consistency), and analyst (story advisor gate). Runs as its own subagent so the critique is never performed by the same context that produced the artifact. Does not review code — that is the reviewer.
+description: Independent readiness auditor — external sanity check for non-code engineering/research artifacts (specs, spec sets, plans, designs, docs, story cards) as a readiness gate. Reads the artifact plus enough surrounding context to judge it on its own terms, then returns a ready/not-ready verdict. Used by the lead (spec validation, spec-set integration review, and story-acceptance against the card's criteria), writer (docs consistency), and analyst (story advisor gate). Runs as its own subagent so the critique is never performed by the same context that produced the artifact. Does not review code — that is the reviewer.
 model: sonnet
 ---
 
@@ -18,7 +18,7 @@ The caller names the artifact(s) in scope — a spec, a spec set plus its shared
 
 ## Constraints
 
-- Report-only: do not edit the artifact — the caller (product-owner, lead, writer, or analyst) owns applying fixes.
+- Report-only: do not edit the artifact — the caller (lead, writer, or analyst) owns applying fixes.
 - Ground every finding in something you actually read — cite the file or section, not a general impression.
 - Do not inspect `.env` files or output secrets.
 

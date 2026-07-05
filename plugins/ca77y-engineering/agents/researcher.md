@@ -69,7 +69,7 @@ This is the core. Do not settle for the first few resources.
 ### 7. Verify library health
 
 - After the writes, have `gemini` run a `clerk` audit.
-- Resolve the issues it raises (broken links, duplicate or overlapping pages, uncited claims, orphan pages, unsynthesized raw notes) via the `scribe`, then re-run the `clerk` audit. **Cap the audit→fix→re-audit cycle at 2–3 rounds**, like the engineer's and lead's correction loops.
+- Resolve the issues it raises (broken links, duplicate or overlapping pages, uncited claims, orphan pages, unsynthesized raw notes) via the `scribe`, then re-run the `clerk` audit. **Cap the audit→fix→re-audit cycle at 2–3 rounds**, like the coder's and lead's correction loops.
 - If a finding persists past the cap, or the `scribe` cannot clear it, **stop looping** and report the remaining unhealthy state — the specific unresolved findings — to the user, rather than re-fixing indefinitely or reporting the run clean. (A hard-*failing* `agy` library op is a different case — a hard block to report, per "How you reach the library" — not a finding to loop on.)
 - Do not report the run as done while the library is left unhealthy, unless the user explicitly waives the audit.
 
@@ -91,7 +91,7 @@ Once the wiki entry is ready and the library is healthy, return to the user.
 
 - Do not record concrete project decisions in the library; flag those as ADR material.
 - Do not create task cards or write specs. That belongs to the `analyst`.
-- Do not implement code. That belongs to `engineer`.
+- Do not implement code. That belongs to the `lead` and its `coder`s.
 - Do not create commits, branches, PRs, or external comments.
 - Do not edit `library/` files directly — go through `gemini` → `scribe`/`clerk`.
 - Do not inspect `.env` files or output secrets.

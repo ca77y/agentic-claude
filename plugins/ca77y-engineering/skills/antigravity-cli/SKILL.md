@@ -27,9 +27,9 @@ agy \
 
 **`--print` must be the last flag.** `--print`/`--prompt`/`-p` consume the next argument as the prompt value, so any other flag placed after `--print` is swallowed *into* the prompt (e.g. `--print --print-timeout 30m "…"` sends the model the literal text `--print-timeout`). Always put every other flag first and `--print "<prompt>"` last.
 
-**Default `--print-timeout` is only 5m.** Print mode aborts at 5 minutes unless you raise it. For long jobs (reviews run ~10–25 min) you MUST pass an explicit `--print-timeout` above the expected job length, e.g. `--print-timeout 30m`. Omitting it silently kills long jobs mid-run.
+**Default `--print-timeout` is only 5m.** Print mode aborts at 5 minutes unless you raise it. For long jobs (a library synthesis or health audit can run many minutes) you MUST pass an explicit `--print-timeout` above the expected job length, e.g. `--print-timeout 30m`. Omitting it silently kills long jobs mid-run.
 
-**To run a plugin command or subagent, make it the start of the prompt as a slash command** — e.g. `--print "/code-review:code-review …"`. Headless `--print` expands slash commands (verified). See the Plugins section for the exact form and the import prerequisite.
+**To run a plugin command or subagent, make it the start of the prompt as a slash command** — e.g. `--print "/ca77y-library:scribe …"`. Headless `--print` expands slash commands (verified). See the Plugins section for the exact form and the import prerequisite.
 
 For long prompts, pass clear sections in the prompt:
 
@@ -79,7 +79,7 @@ agy plugin disable <name>
 agy plugin validate <path>
 ```
 
-A plugin command or subagent is invoked by putting it as a **slash command** at the very start of the `--print` prompt, **namespaced** as `/<plugin>:<command>` — for example `/code-review:code-review` or `/ca77y-library:librarian`. Use `/`, never `@`: per the Antigravity guide, `/` invokes workflows and launches subagents while `@` only attaches context (files, conversations, MCP tools). Bare names can be ambiguous; prefer the namespaced form. Which command to target for a given job is the caller's concern, not this skill's.
+A plugin command or subagent is invoked by putting it as a **slash command** at the very start of the `--print` prompt, **namespaced** as `/<plugin>:<command>` — for example `/ca77y-library:librarian` or `/ca77y-library:scribe`. Use `/`, never `@`: per the Antigravity guide, `/` invokes workflows and launches subagents while `@` only attaches context (files, conversations, MCP tools). Bare names can be ambiguous; prefer the namespaced form. Which command to target for a given job is the caller's concern, not this skill's.
 
 **Import is a prerequisite.** `agy` only sees *imported* plugins, not raw Gemini CLI extensions. A command that exists as a `~/.gemini/extensions/<name>` extension will not resolve until imported — verify with `agy plugins list`, and import with `agy plugin import gemini` if missing. An un-imported command is silently treated as literal prompt text, not executed.
 

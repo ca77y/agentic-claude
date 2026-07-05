@@ -16,27 +16,30 @@ and the knowledge base are versioned alongside the code.
 The toolkit is split into two plugins:
 
 - **`ca77y-engineering`** — the idea-to-shipped pipeline (research → analysis →
-  build → ship) plus the `gemini` dispatcher that delegates external work.
+  build → ship) plus the `gemini` dispatcher for the one job that still lives on the
+  agy side: the research library.
 - **`ca77y-library`** — a research-library crew (`librarian`, `scribe`, `clerk`)
   that maintains the Markdown knowledge base. These run on Antigravity (`agy`) and
   are reached from the pipeline through `gemini`.
 
+Code review and readiness audits run **natively in Claude** — the `reviewer` and
+`auditor` subagents — so `gemini` is purely the bridge to the agy-side library.
+
 The end-to-end flow:
 
 ```
- idea / topic                                                      shipped PR
-      │                                                                 ▲
-      ▼                                                                 │
-┌───────────┐   wiki    ┌──────────┐  story   ┌──────┐  units  ┌──────────┐
-│ researcher │ ───────▶ │ analyst  │ ───────▶ │ lead │ ──────▶ │ engineer │
+ idea / topic                                                       shipped PR
+      │                                                                  ▲
+      ▼                                                                  │
+┌───────────┐   wiki    ┌──────────┐  story   ┌──────┐  specs  ┌──────────┐
+│ researcher │ ───────▶ │ analyst  │ ───────▶ │ lead │ ──────▶ │  coder   │
 └───────────┘   pages   └──────────┘  cards   └──────┘         │  (×N)    │
       │                      │                    │            └──────────┘
-      │ library              │ fit gate           │ specs ▲ docs    │ coder→qa→reviewer
-      ▼                      ▼                    ▼       │         (self-contained loop)
-   ┌───────────────────┐   human            product-owner, writer
-   │  gemini (→ agy)    │   approval
-   │ library · review · │   gate
-   │ audit (+fallback)  │
+      │ library              │ fit gate           │ specs ▲ docs   │ qa · reviewer
+      ▼                      ▼                    ▼       │       (owns its own loop)
+   ┌───────────────────┐   human          reviewer · auditor · writer
+   │  gemini (→ agy)    │   approval          (native, in Claude)
+   │  library only      │   gate
    └───────────────────┘
 ```
 
@@ -49,19 +52,19 @@ finished card to **Done** after merge is also yours — the agents never close i
 These tools are designed to run as a pair — **Claude Code** ([code.claude.com](https://code.claude.com))
 and **Antigravity CLI** (`agy`). They are not standalone:
 
-- The **`gemini`** agent in `ca77y-engineering` is a *dispatcher* — it hands code
-  review, library work, and readiness audits to `agy` and relays the result.
+- The **`gemini`** agent in `ca77y-engineering` is a *dispatcher* for **library work
+  only** — it hands research-library lookups, synthesis, and audits to `agy` and relays
+  the result. Code review and readiness audits do **not** go through it; they run
+  natively in Claude (`reviewer` / `auditor`).
 - The **`ca77y-library`** agents (`librarian`, `scribe`, `clerk`) *execute on agy*;
   the pipeline reaches them through that dispatcher.
 
 The two plugins live on **different harnesses**, not both on each: install
 **`ca77y-engineering` in Claude Code** (where the pipeline runs) and
-**`ca77y-library` on `agy`** (where the library crew executes). `agy` additionally
-needs Google's **code-review** Gemini CLI extension, because `gemini` dispatches its
-code-review pass there. Skipping the `agy` side — the library plugin or the
-code-review extension — leaves the cross-delegation broken. One fallback exists: if
-`agy` is exhausted, `gemini` will perform code-review and audit work with Claude
-(clearly labeled as degraded) — but **library work has no fallback** and requires `agy`.
+**`ca77y-library` on `agy`** (where the library crew executes). Skipping the `agy`
+side — the library plugin — leaves the pipeline unable to read or grow the research
+library. **Library work has no Claude fallback** and requires `agy`; everything else
+(code review, audits) is native to Claude and needs no agy at all.
 
 ## Requires the target repo to be an Obsidian vault
 
@@ -90,8 +93,7 @@ discover these locations from the project's own context — they do not hardcode
 ## Install
 
 Each plugin goes on the harness that runs it — `ca77y-engineering` in Claude Code,
-`ca77y-library` on `agy` — and `agy` also needs the code-review extension `gemini`
-dispatches to.
+`ca77y-library` on `agy`.
 
 ### Claude Code — `ca77y-engineering`
 
@@ -100,37 +102,30 @@ claude plugin marketplace add ca77y/agents
 claude plugin install ca77y-engineering@ca77y-agentic
 ```
 
-### Antigravity (agy) — `ca77y-library` + code-review
+### Antigravity (agy) — `ca77y-library`
 
 ```bash
-# the research-library crew
+# the research-library crew (the only agy-side dependency)
 agy plugin import claude            # picks up the Claude marketplace
 agy plugin install ca77y-library@ca77y-agentic
-
-# the code-review extension gemini dispatches to (Google's gemini-cli extension).
-# agy imports extensions from ~/.gemini/extensions/ by reading their manifests —
-# the gemini CLI itself is not needed (it's deprecated), so just clone the repo
-# into that directory and import.
-git clone https://github.com/gemini-cli-extensions/code-review ~/.gemini/extensions/code-review
-agy plugin import gemini            # imports any extension under ~/.gemini/extensions/
 ```
 
 ## The pipeline at a glance
 
-`researcher → analyst → lead → engineer(s) → writer`, with `gemini` providing every
-external review/audit/library call along the way.
+`researcher → analyst → lead → coder(s) → writer`, with `reviewer` and `auditor`
+gating natively in Claude and `gemini` bridging to the agy-side library.
 
 | Stage | Agent | In | Out |
 | --- | --- | --- | --- |
 | Research | `researcher` | a topic | a cited wiki entry + raw sources in the library |
 | Analysis | `analyst` | wiki pages + your input | board-ready **story cards** (fit-proven) |
-| Orchestration | `lead` | one approved story | a single merged-ready PR |
-| Build | `engineer` (×N) | one validated unit spec | one committed unit |
-| Spec | `product-owner` | a unit's scope | a validated spec |
-| Implementation | `coder` | a validated spec | code + scenario tests |
+| Orchestration | `lead` | one approved story | validated specs + a single merged-ready PR |
+| Build | `coder` (×N) | a validated unit spec | one committed, tested, reviewed unit |
 | Validation | `qa` | a built unit | pass/fail + filled test gaps |
+| Code review | `reviewer` | a unit or story diff | findings (low for a unit, medium for the story) |
+| Readiness | `auditor` | a spec, spec set, or the story vs its criteria | ready / not-ready verdict |
 | Docs | `writer` | a shipped story | durable docs; spec converted & removed |
-| External pass | `gemini` | any review/audit/library job | the result, via `agy` |
+| Library | `gemini` | a library lookup / synthesis / audit | the result, via `agy` |
 
 ---
 
@@ -174,111 +169,120 @@ each with a *fits / conflicts / unknown* verdict backed by concrete evidence:
 6. **Data & contract impact** — does it touch shared schemas/contracts/migrations?
 
 A story with an unresolved conflict or an unaddressed unknown is **never recorded as
-ready**. After shaping, a `gemini` audit gate critiques the cards. Cards land at
+ready**. After shaping, the native `auditor` gate critiques the cards. Cards land at
 `[ ]` Todo as proposals; nothing executes until you approve and invoke the `lead`.
 **Does not** write specs, code, or tests.
 
 ### lead — orchestrates one approved story into one PR
 
-Owns the path from an approved story to a single merged-ready PR by delegating —
-it never writes specs, code, or tests, and is deliberately **unaware of how an
-engineer builds a unit**. Invoking the `lead` is explicit permission to branch,
-worktree, commit, push, and open the PR.
+Owns the path from an approved story to a single merged-ready PR. It **writes and
+validates each unit's spec itself**, then delegates the build to a `coder` per unit
+— it never writes code or tests. Invoking the `lead` is explicit permission to
+branch, worktree, commit, push, and open the PR.
 
 1. **Analyze & start** — moves the card to **In Progress `[/]`**, reads the story,
    fit report, wiki, docs, and code; decides the units of work.
 2. **Decide the split** — prefers **one unit**; splits only for genuine parallelism
-   (frontend/backend, independent verticals). **One level only** — engineers never
+   (frontend/backend, independent verticals). **One level only** — units never
    split further.
 3. **Lock the contract** (when splitting) — defines the shared seams/interface so
    parallel units cannot diverge.
-4. **Spec each unit** — `product-owner` writes a spec; the reviewer (`gemini`,
-   audit) validates it; revise until it passes. No unvalidated spec is dispatched.
-5. **Review the spec set** (when splitting) — `gemini` audits all specs *plus the
-   contract together* for seam agreement and gaps before any fan-out.
+4. **Spec each unit** — **writes the spec itself** (Goal → Design → Requirements →
+   Tasks); the `auditor` validates it; revise until it passes. No unvalidated spec
+   is dispatched.
+5. **Review the spec set** (when splitting) — the `auditor` reviews all specs *plus
+   the contract together* for seam agreement and gaps before any fan-out.
 6. **Provision isolation** — a worktree/branch per unit so parallel work can't collide.
-7. **Dispatch** validated specs to engineers (parallel for independent units).
+7. **Dispatch** each validated spec to a `coder` (parallel for independent units).
+   Each coder owns its own qa → **low** review → fix → commit loop and returns the
+   finished unit; the lead trusts that reported state.
 8. **Integrate** the units into the story branch, resolving seam conflicts.
-9. **Integration review & story acceptance** (`gemini`, code-review):
-   - **Story acceptance — always**: verifies the integrated result meets the
-     **card's acceptance criteria**, not just each unit's spec.
-   - **Cross-unit/contract — when split**: reviews the integrated diff for seam issues.
-   - Findings route to the **owning engineer**; the PR does not open while any
-     acceptance criterion is unmet.
-10. **Docs** — one `writer` pass to update docs and convert the shipped spec(s).
-11. **Ship** — opens **one PR**, moves the card to **In Review `[?]`**. Moving it to
+9. **Simplify pass** — dispatches a `coder` to run `/simplify` over the whole
+   integrated change, re-run `qa`, and commit the cleanup — *before* the review, so
+   it sees already-cleaned code.
+10. **Integration review** — `reviewer` code-reviews the simplified `story-base..story-head`
+    range at **medium** effort (correctness + seam/contract issues when split).
+11. **Story acceptance** — the `auditor` verifies the integrated result meets the
+    **card's acceptance criteria**, not just each unit's spec. Findings from either
+    gate route to the **owning coder**; the PR does not open while any criterion is unmet.
+12. **Docs** — one `writer` pass to update docs and convert the shipped spec(s).
+13. **Ship** — opens **one PR**, moves the card to **In Review `[?]`**. Moving it to
     **Done `[x]`** after merge is your manual step.
 
-*Nesting fallback:* `lead → engineer → coder` is three levels; if the runtime can't
-nest that far, the lead runs units sequentially itself and reports the fallback.
+*Nesting fallback:* `lead → coder → (qa/reviewer)` is two levels; if the runtime
+can't nest even that far, the lead runs units sequentially itself and reports the fallback.
 
-### engineer — builds one unit through a self-contained loop
+### coder — builds one unit through its own loop
 
 Takes one validated unit spec (plus its worktree and the shared contract) and
-delivers it. Its `coder → qa → reviewer` loop is **private** — the lead only ever
-sees the finished, committed unit.
+delivers it end to end — the lead dispatches it directly and trusts the reported result.
 
 1. **Prepare** the worktree; confirm the spec; isolate pre-existing dirty changes.
-2. **Code** — `coder` implements with minimal scoped changes + one scenario test
-   per spec scenario.
-3. **QA** — `qa` runs validation and fills the test gaps (e2e, frontend, integration,
-   edge cases).
-4. **Review** — `gemini` (code-review) reviews the unit diff.
-5. **Close the loop locally** — routes review/QA findings back to the `coder`,
-   re-QAs, re-reviews; capped at 2–3 rounds.
+2. **Implement** with minimal scoped diffs + one scenario test per spec scenario,
+   consulting current third-party docs via context7 when external behavior matters.
+3. **QA** — hands off to `qa`, which runs validation and fills the test gaps (e2e,
+   frontend, integration, edge cases).
+4. **Review** — the `reviewer` reviews the unit diff at **low** effort.
+5. **Close the loop** — applies review/QA findings, re-QAs, re-reviews; capped at
+   2–3 rounds. A finding is rejected only with concrete evidence.
 6. **Commit** the clean unit in its worktree (Conventional Commits). **No push, no PR.**
-7. **Report up**, escalating only cross-unit/contract or unresolvable issues.
+7. **Report up** with the commit hash, escalating only cross-unit/contract, blocked
+   review gates, or unresolvable issues.
 
-### product-owner — writes one unit's spec, just in time
-
-Called per unit by the lead. Reads the docs and code the unit touches and writes one
-spec in the project's specs area, honoring the shared contract exactly (never
-widening the interface). Revises against the reviewer's findings until it passes.
-The canonical spec shape: **Goal → Design → Requirements (`### Requirement` /
-`#### Scenario` with WHEN/THEN) → Tasks**, plus `Status`/`Task`/`Last Updated`
-metadata. **Spec only** — no code, tests, or PRs.
-
-### coder — implements one unit
-
-Turns a validated spec into working, tested code: implements the requirements/tasks
-with minimal scoped diffs, writes exactly one scenario test per spec scenario, and
-consults current third-party docs via context7 when external behavior matters. Applies
-fixes the engineer routes back. **Does not** run the broad validation pass, review
-code, commit, push, or open PRs — the engineer commits.
+It also runs the **story-level simplify pass** when the lead dispatches it: applies
+`/simplify` over the named range (quality-only — reuse, simplification, efficiency;
+no bug-hunting), re-runs `qa`, and commits the cleanup on the story branch.
 
 ### qa — validates a unit and fills its test gaps
 
-Runs the project's validation commands, compares the spec's scenarios against existing
-tests, and adds the missing coverage (e2e, frontend, integration, edge cases), then
-re-runs. Reports pass/fail with evidence and what it added. **Does not** fix feature
-code (defects route to the engineer → coder), review code quality (that's `gemini`),
-or weaken a failing test to make the suite pass.
+Called by the `coder` inside its loop. Runs the project's validation commands,
+compares the spec's scenarios against existing tests, and adds the missing coverage
+(e2e, frontend, integration, edge cases), then re-runs. Reports pass/fail with
+evidence and what it added. **Does not** fix feature code (defects route back to the
+`coder`), review code quality (that's the `reviewer`), or weaken a failing test to
+make the suite pass.
+
+### reviewer — independent code review (native, in Claude)
+
+Invokes Claude Code's built-in code-review skill against exactly the diff the caller
+names — the coder's single-unit diff at **low** effort, the lead's whole-story
+`story-base..story-head` at **medium** — and relays the findings verbatim. Runs as
+its own subagent so a review is never done by the context that wrote the code.
+**Report-only**: it never edits or fixes code, and never reviews non-code artifacts
+(that's the `auditor`). `ultra` (multi-agent cloud review) only on explicit request.
+
+### auditor — independent readiness gate (native, in Claude)
+
+The readiness gate for *non-code* artifacts. The `lead` uses it to validate each unit
+spec, to review a split story's spec set against the shared contract, and to check the
+integrated story against the **card's acceptance criteria**; the `writer` uses it for
+docs consistency; the `analyst` uses it as a story advisor gate. Reads the artifact
+plus enough context to judge it on its own terms and returns a **ready / not-ready**
+verdict. **Report-only** — the caller owns applying fixes. Does not review code.
 
 ### writer — converts shipped specs into durable docs
 
 The single docs pass the lead runs after integration. Folds each shipped spec's
 durable content into its permanent home (features / flows / designs), reconciling
 with what exists, then **removes the spec** (specs are not archived). Every
-consistency check is delegated to `gemini` (audit mode) — the writer writes, `gemini`
+consistency check is delegated to the `auditor` — the writer writes, the `auditor`
 checks. **Does not** implement code, run tests, or commit/branch/PR (the lead does).
 
-### gemini — the single external pass (dispatcher to agy)
+### gemini — the library dispatcher (bridge to agy)
 
-The one bridge to Antigravity. It does **not** do the work itself; it builds a prompt,
-dispatches to `agy`, retries transient failures (up to 10 attempts with backoff, per
-the `antigravity-cli` skill), and relays a clean result. Three modes:
+The one bridge to Antigravity, now **library-only**. It does **not** do the work
+itself; it builds a prompt, dispatches to `agy`, retries transient failures (per the
+`antigravity-cli` skill), and relays a clean result. Its jobs are the agy library
+agents:
 
-- **code-review** — independent review of local changes (`/code-review:code-review`)
-  or a PR (`/code-review:pr-code-review`). The only mode that reviews code.
-- **library** — Markdown library work via the agy library agents:
-  `/ca77y-library:librarian` (cited answers), `/ca77y-library:scribe`
-  (ingest/synthesize), `/ca77y-library:clerk` (health audit).
-- **audit** — readiness gate for *non-code* artifacts: specs, plans, designs,
-  research findings.
+- `/ca77y-library:librarian` — cited answers from the Markdown library.
+- `/ca77y-library:scribe` — ingest raw notes / synthesize wiki pages.
+- `/ca77y-library:clerk` — library health audit (links, citations, taxonomy, stale indexes).
 
-**Fallback on exhausted retries:** for **code-review** and **audit**, `gemini` falls
-back to performing the review with Claude — clearly labeled as degraded and surfacing
-the `agy` failure. For **library**, there is **no fallback** (agy fully owns it).
+Library work has **no Claude fallback** — the library lives entirely on the agy side.
+Code review and readiness audits do **not** go through `gemini`; they are native
+(`reviewer` / `auditor`). It also passes the project root with `--add-dir` and attaches
+area context (e.g. `@library/AGENTS.md`) so the dispatched agent is properly grounded.
 
 ### antigravity-cli *(skill)*
 
@@ -321,17 +325,19 @@ dependencies — never a stack of PRs.
 
 **Specs** live in the specs area only while in flight. They follow Goal → Design →
 Requirements (WHEN/THEN scenarios) → Tasks, are written just-in-time by the
-`product-owner`, and are **converted into durable docs and removed** by the `writer`
+`lead`, and are **converted into durable docs and removed** by the `writer`
 when the story ships — they are never archived.
 
-**Every external check goes through `gemini`** — code-review for code, audit for
-non-code (specs, plans, designs, research). Self-checking is forbidden across the
-pipeline; the agent that produces an artifact never signs off on it.
+**Every check runs in an independent context.** Code review goes to the native
+`reviewer`, readiness/audit of non-code artifacts to the native `auditor`, and library
+health to `gemini` → `clerk`. Self-checking is forbidden across the pipeline; the
+agent that produces an artifact never signs off on it — the review always runs as a
+separate subagent.
 
 **Verification is layered**: `coder` writes per-scenario tests → `qa` fills coverage
-gaps → `gemini` reviews the unit → the spec set is reviewed before fan-out → the
-integrated story is reviewed *and checked against its acceptance criteria* before the
-PR opens.
+gaps → `reviewer` reviews the unit (low) → the spec set is audited before fan-out →
+a `/simplify` pass cleans the integrated change → `reviewer` reviews the whole story
+(medium) → the `auditor` checks it against its acceptance criteria before the PR opens.
 
 **Isolation**: each unit builds in its own worktree/branch (under the repo's worktree
 directory); the lead integrates and opens the one PR. No secrets are ever inspected,
