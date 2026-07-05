@@ -1,9 +1,8 @@
 # ca77y-agentic
 
-Personal agentic toolkit shared from one repo across two harnesses. It bundles a
-Claude Code development pipeline and a research-library crew as **two plugins over
-one shared content pool**, with each plugin's roster scoped through marketplace
-config rather than separate directories.
+Personal agentic toolkit for **Claude Code**. It bundles an idea-to-shipped
+development pipeline **and** a research-library crew into a single plugin — all
+agents run natively as Claude Code subagents. There is no second harness.
 
 ## Overview
 
@@ -13,17 +12,16 @@ flow lives **inside the repository you run it on** — there is no external trac
 Stories, specs, and research are plain Markdown in an Obsidian vault, so the board
 and the knowledge base are versioned alongside the code.
 
-The toolkit is split into two plugins:
+The toolkit is **one plugin**, `ca77y-engineering`, holding two rosters:
 
-- **`ca77y-engineering`** — the idea-to-shipped pipeline (research → analysis →
-  build → ship) plus the `gemini` dispatcher for the one job that still lives on the
-  agy side: the research library.
-- **`ca77y-library`** — a research-library crew (`librarian`, `scribe`, `clerk`)
-  that maintains the Markdown knowledge base. These run on Antigravity (`agy`) and
-  are reached from the pipeline through `gemini`.
+- The **pipeline** — `researcher → analyst → lead → coder(s) → writer`, with
+  `reviewer` and `auditor` gating native to Claude.
+- The **library crew** — `librarian`, `scribe`, `clerk` — that maintains the
+  project's Markdown research library. The crew runs as native Claude subagents,
+  dispatched directly by the agents that need library work.
 
-Code review and readiness audits run **natively in Claude** — the `reviewer` and
-`auditor` subagents — so `gemini` is purely the bridge to the agy-side library.
+Every check runs **natively in Claude** — code review (`reviewer`), readiness
+audits (`auditor`), and library health (`clerk`). No external CLI dispatcher.
 
 The end-to-end flow:
 
@@ -37,34 +35,24 @@ The end-to-end flow:
       │                      │                    │            └──────────┘
       │ library              │ fit gate           │ specs ▲ docs   │ qa · reviewer
       ▼                      ▼                    ▼       │       (owns its own loop)
-   ┌───────────────────┐   human          reviewer · auditor · writer
-   │  gemini (→ agy)    │   approval          (native, in Claude)
-   │  library only      │   gate
-   └───────────────────┘
+   ┌───────────┐        human          reviewer · auditor · writer
+   │ librarian │        approval          (native, in Claude)
+   │ scribe    │        gate
+   │ clerk     │
+   └───────────┘
 ```
 
 Two **human gates** punctuate the flow: you approve the analyst's stories before
 anything is built, and you explicitly invoke the `lead` to build a story. Moving a
 finished card to **Done** after merge is also yours — the agents never close it out.
 
-## Requires Claude Code **and** agy, working together
+## Runs entirely in Claude Code
 
-These tools are designed to run as a pair — **Claude Code** ([code.claude.com](https://code.claude.com))
-and **Antigravity CLI** (`agy`). They are not standalone:
-
-- The **`gemini`** agent in `ca77y-engineering` is a *dispatcher* for **library work
-  only** — it hands research-library lookups, synthesis, and audits to `agy` and relays
-  the result. Code review and readiness audits do **not** go through it; they run
-  natively in Claude (`reviewer` / `auditor`).
-- The **`ca77y-library`** agents (`librarian`, `scribe`, `clerk`) *execute on agy*;
-  the pipeline reaches them through that dispatcher.
-
-The two plugins live on **different harnesses**, not both on each: install
-**`ca77y-engineering` in Claude Code** (where the pipeline runs) and
-**`ca77y-library` on `agy`** (where the library crew executes). Skipping the `agy`
-side — the library plugin — leaves the pipeline unable to read or grow the research
-library. **Library work has no Claude fallback** and requires `agy`; everything else
-(code review, audits) is native to Claude and needs no agy at all.
+These tools run as **Claude Code** ([code.claude.com](https://code.claude.com))
+subagents. Everything the pipeline needs — research, code review, readiness
+audits, and the research library — is handled by agents in this one plugin,
+using the tools and models available in Claude Code. No external CLI, no second
+harness, no dispatcher bridge.
 
 ## Requires the target repo to be an Obsidian vault
 
@@ -72,8 +60,8 @@ The pipeline does **not** use an external tracker. Stories, specs, and the resea
 library are plain Markdown **inside the repo you run the pipeline on**, and that repo
 must be an **Obsidian vault** (a committed `.obsidian/` at its root) with the community
 plugins below installed and vendored. The board cards, Templater scaffolds, and library
-navigation depend on them — without the vault and these plugins, the `analyst`,
-`lead`, and library agents have nothing to read or write.
+navigation depend on them — without the vault and these plugins, the `analyst`, the
+`lead`, and the library crew have nothing to read or write.
 
 | Plugin | Used for | |
 | --- | --- | --- |
@@ -92,8 +80,7 @@ discover these locations from the project's own context — they do not hardcode
 
 ## Install
 
-Each plugin goes on the harness that runs it — `ca77y-engineering` in Claude Code,
-`ca77y-library` on `agy`.
+The whole plugin goes in Claude Code.
 
 ### Claude Code — `ca77y-engineering`
 
@@ -102,18 +89,11 @@ claude plugin marketplace add ca77y/agents
 claude plugin install ca77y-engineering@ca77y-agentic
 ```
 
-### Antigravity (agy) — `ca77y-library`
-
-```bash
-# the research-library crew (the only agy-side dependency)
-agy plugin import claude            # picks up the Claude marketplace
-agy plugin install ca77y-library@ca77y-agentic
-```
-
 ## The pipeline at a glance
 
 `researcher → analyst → lead → coder(s) → writer`, with `reviewer` and `auditor`
-gating natively in Claude and `gemini` bridging to the agy-side library.
+gating natively in Claude. The library crew — `librarian`, `scribe`, `clerk` —
+runs as native subagents too, dispatched directly by whoever needs the library work.
 
 | Stage | Agent | In | Out |
 | --- | --- | --- | --- |
@@ -125,7 +105,9 @@ gating natively in Claude and `gemini` bridging to the agy-side library.
 | Code review | `reviewer` | a unit or story diff | findings (low for a unit, medium for the story) |
 | Readiness | `auditor` | a spec, spec set, or the story vs its criteria | ready / not-ready verdict |
 | Docs | `writer` | a shipped story | durable docs; spec converted & removed |
-| Library | `gemini` | a library lookup / synthesis / audit | the result, via `agy` |
+| Library lookup | `librarian` | a research question | cited synthesis from the Markdown library |
+| Library write | `scribe` | raw notes / a synthesis target | wiki pages + index/taxonomy/log updates |
+| Library audit | `clerk` | the library vault | health findings (links, citations, taxonomy) |
 
 ---
 
@@ -137,7 +119,7 @@ Takes a research topic and runs an agent-steered deep dive, ending in durable
 library knowledge — not tickets or code.
 
 1. **Frames** the topic and decides if it's simple or needs subquestions.
-2. **Searches the library first** (via `gemini` → the `librarian`) to establish a
+2. **Searches the library first** (dispatching `librarian`) to establish a
    baseline and let gaps steer the web dive.
 3. **Decomposes** complex topics into subquestions, dispatching **one child
    `researcher` per subquestion** (sequential fallback if nesting is unavailable).
@@ -268,39 +250,29 @@ with what exists, then **removes the spec** (specs are not archived). Every
 consistency check is delegated to the `auditor` — the writer writes, the `auditor`
 checks. **Does not** implement code, run tests, or commit/branch/PR (the lead does).
 
-### gemini — the library dispatcher (bridge to agy)
+### librarian — cited answers from the library
 
-The one bridge to Antigravity, now **library-only**. It does **not** do the work
-itself; it builds a prompt, dispatches to `agy`, retries transient failures (per the
-`antigravity-cli` skill), and relays a clean result. Its jobs are the agy library
-agents:
+Answers research and product-context questions from the project's Markdown research
+library. Reads synthesized wiki first, verifies important claims against raw notes,
+and returns cited synthesis. Read-and-report by default — it does not edit library
+files unless you explicitly ask. Discovers the library layout from `library/README.md`
+and the `_meta/` files; never inspects secrets.
 
-- `/ca77y-library:librarian` — cited answers from the Markdown library.
-- `/ca77y-library:scribe` — ingest raw notes / synthesize wiki pages.
-- `/ca77y-library:clerk` — library health audit (links, citations, taxonomy, stale indexes).
+### scribe — ingests raw notes into the wiki
 
-Library work has **no Claude fallback** — the library lives entirely on the agy side.
-Code review and readiness audits do **not** go through `gemini`; they are native
-(`reviewer` / `auditor`). It also passes the project root with `--add-dir` and attaches
-area context (e.g. `@library/AGENTS.md`) so the dispatched agent is properly grounded.
+Ingests raw Markdown research notes into the synthesized wiki without destroying
+provenance. Preserves raw notes, extracts durable concepts/claims, writes or updates
+the matching wiki page, and updates links, taxonomy, the index, and the maintenance
+log. Follows the Obsidian authoring conventions in `library/_meta/librarian.md` for
+every file it touches.
 
-### antigravity-cli *(skill)*
+### clerk — audits library health
 
-The `agy` command mechanics `gemini` relies on: the headless pattern, core flags,
-Gemini-CLI parity notes, the retry policy, output discipline, and safety rules. It is
-flavor-blind — *which* job to run is `gemini`'s concern; *how* to run `agy` is the
-skill's.
-
-## The library crew (runs on agy)
-
-Reached only through `gemini` in library mode. Each agent reads the library's shared
-`librarian` conventions before acting.
-
-- **librarian** — answers questions from the Markdown library with cited synthesis.
-- **scribe** — ingests raw notes and writes synthesized wiki pages, links, taxonomy,
-  index, and log.
-- **clerk** — audits library health: broken links, citations, taxonomy, duplicates,
-  unsynthesized notes, stale indexes.
+Audits the project's Markdown research library for duplicate wiki pages, stale index
+entries, broken links, uncited claims, missing taxonomy tags, unsynthesized raw notes,
+and convention violations. Read-only by default — reports findings; applies fixes only
+when you explicitly ask. Audits against the Obsidian conventions in
+`library/_meta/librarian.md`.
 
 ---
 
@@ -330,9 +302,9 @@ when the story ships — they are never archived.
 
 **Every check runs in an independent context.** Code review goes to the native
 `reviewer`, readiness/audit of non-code artifacts to the native `auditor`, and library
-health to `gemini` → `clerk`. Self-checking is forbidden across the pipeline; the
-agent that produces an artifact never signs off on it — the review always runs as a
-separate subagent.
+health to the `clerk`. Self-checking is forbidden across the pipeline; the agent that
+produces an artifact never signs off on it — the review always runs as a separate
+subagent.
 
 **Verification is layered**: `coder` writes per-scenario tests → `qa` fills coverage
 gaps → `reviewer` reviews the unit (low) → the spec set is audited before fan-out →
@@ -357,22 +329,20 @@ product feature being built; you harvest the accumulated notes back into this to
 ```
 ca77y-agentic/
 ├── .claude-plugin/
-│   └── marketplace.json                  # lists both plugins
+│   └── marketplace.json                  # lists the plugin
 └── plugins/
-    ├── ca77y-engineering/
-    │   ├── .claude-plugin/plugin.json     # Claude manifest (agents whitelist)
-    │   ├── plugin.json                    # agy-native manifest (root)
-    │   ├── agents/                        # subagent definitions
-    │   └── skills/                        # antigravity-cli
-    └── ca77y-library/
-        ├── .claude-plugin/plugin.json     # Claude manifest
-        ├── plugin.json                    # agy-native manifest (root)
-        └── agents/                        # librarian scribe clerk
+    └── ca77y-engineering/
+        ├── .claude-plugin/plugin.json    # Claude manifest (agents whitelist)
+        ├── plugin.json                   # root manifest (mirrors the Claude one)
+        └── agents/                       # all subagent definitions:
+                                          #   analyst, auditor, clerk, coder, lead,
+                                          #   librarian, qa, researcher, reviewer,
+                                          #   scribe, writer
 ```
 
-Each plugin carries two manifests: Claude reads `.claude-plugin/plugin.json`; agy reads
-`plugin.json` at the plugin root. They live in different locations, so neither harness
-trips over the other's.
+Each plugin carries two manifests: Claude reads `.claude-plugin/plugin.json`; the root
+`plugin.json` mirrors it (kept in sync per the toolkit's version-drift rule). They live
+in different locations so neither harness trips over the other.
 
 ## How scoping works
 
@@ -384,5 +354,3 @@ everything. With separate roots:
 - **Agents** — each `plugin.json` whitelists its agents. The whitelist *replaces*
   the default `agents/` scan, so only the listed agent files load and any other
   Markdown in the plugin is never picked up as a phantom agent.
-- **Skills** — auto-discovered from each plugin's own `skills/`. No pool trick needed,
-  because the rosters are disjoint and each plugin only sees its own directory.

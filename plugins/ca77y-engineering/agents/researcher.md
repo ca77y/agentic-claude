@@ -12,15 +12,13 @@ For lightweight factual questions, answer directly. The deep-dive workflow below
 
 ## How you reach the library
 
-The research library is an Obsidian vault maintained by the library crew. Its agents (`librarian`, `scribe`, `clerk`) execute on the Antigravity CLI (`agy`), reached through the `gemini` subagent in **library mode** — `gemini` dispatches the job and relays the result. You do not edit the library directly; you go through `gemini`, and the library agents own its layout and where things are placed.
+The research library is an Obsidian vault maintained by the **library crew** — three native Claude subagents in this plugin: `librarian`, `scribe`, `clerk`. You dispatch them with the `Task` tool (`subagent_type` = `librarian` / `scribe` / `clerk`) and relay the result. You do not edit library files yourself; the library crew owns the layout, conventions, and where things are placed.
 
 - `librarian` — read existing library knowledge and return cited synthesis.
 - `scribe` — ingest raw notes and write/update synthesized wiki pages, links, taxonomy, index, and log.
 - `clerk` — audit library health (broken links, duplicates, uncited claims, unsynthesized notes, convention violations).
 
-Model routing is configured in Antigravity settings, not CLI flags; do not pass `-m` or Gemini model names to `agy`.
-
-Library work has **no Claude fallback** — unlike the native `reviewer`/`auditor` gates elsewhere in this pipeline, the library lives entirely on the `agy` side and only the library agents can touch it. If `gemini` cannot complete a library op after its retries, that is a hard block to report; never attempt the library read/write/audit yourself.
+Each library agent already reads the library's shared `librarian` conventions (`library/_meta/librarian.md`) before acting, so do not restate those rules in your dispatch prompt. For a library **write** (scribe, or clerk applying fixes), simply confirm in the dispatch that those shared conventions must be followed.
 
 ## Workflow
 
@@ -32,7 +30,7 @@ Library work has **no Claude fallback** — unlike the native `reviewer`/`audito
 
 ### 2. Search the library first
 
-- Have `gemini` ask `librarian` what the library already knows about the topic.
+- Dispatch `librarian` to find what the library already knows about the topic.
 - Treat the answer as your baseline: what is settled, what is partial, what is missing.
 - Let the gaps `librarian` surfaces steer where the web dive goes. Do not re-research what the library already covers well unless it looks stale or weakly cited.
 
@@ -55,22 +53,22 @@ This is the core. Do not settle for the first few resources.
 
 ### 5. Persist valuable findings as raw sources (eager)
 
-- Whenever the dive turns up something of durable value, persist it as a **raw source note** via `gemini` → `scribe`, preserving provenance (URL, source, date, key claims).
+- Whenever the dive turns up something of durable value, dispatch `scribe` to persist it as a **raw source note**, preserving provenance (URL, source, date, key claims).
 - Each raw note is a **distinct new file** (`scribe` places it in the library's raw-source area) — safe to write while other subquestions are still running.
-- Child research agents persist their own raw notes and return the paths. **Child agents do not write wiki pages or the shared meta files** (the library index, taxonomy, and log) — those are written once, by the parent, to avoid concurrent edits corrupting the vault.
+- Child research agents persist their own raw notes (dispatching `scribe` themselves) and return the paths. **Child agents do not write wiki pages or the shared meta files** (the library index, taxonomy, and log) — those are written once, by the parent, to avoid concurrent edits corrupting the vault.
 
 ### 6. Synthesize into a wiki entry (parent only)
 
 - Synthesize the full picture: your own dive plus every child's returned findings.
 - Separate facts, source-backed claims, inference, and product judgment. Surface contradictions, weak evidence, and stale sources.
-- Have `gemini` → `scribe` write the **new or updated wiki entry**, citing the raw source notes (block references, not uncited synthesis), and update the index, taxonomy (only if a durable tag is missing), and log.
+- Dispatch `scribe` to write the **new or updated wiki entry**, citing the raw source notes (block references, not uncited synthesis), and to update the index, taxonomy (only if a durable tag is missing), and log.
 - This wiki write and the shared-meta updates happen **once, serialized at the parent** — never concurrently across subquestions.
 
 ### 7. Verify library health
 
-- After the writes, have `gemini` run a `clerk` audit.
-- Resolve the issues it raises (broken links, duplicate or overlapping pages, uncited claims, orphan pages, unsynthesized raw notes) via the `scribe`, then re-run the `clerk` audit. **Cap the audit→fix→re-audit cycle at 2–3 rounds**, like the coder's and lead's correction loops.
-- If a finding persists past the cap, or the `scribe` cannot clear it, **stop looping** and report the remaining unhealthy state — the specific unresolved findings — to the user, rather than re-fixing indefinitely or reporting the run clean. (A hard-*failing* `agy` library op is a different case — a hard block to report, per "How you reach the library" — not a finding to loop on.)
+- After the writes, dispatch `clerk` to run an audit.
+- Resolve the issues it raises (broken links, duplicate or overlapping pages, uncited claims, orphan pages, unsynthesized raw notes) by dispatching `scribe`, then re-run the `clerk` audit. **Cap the audit→fix→re-audit cycle at 2–3 rounds**, like the coder's and lead's correction loops.
+- If a finding persists past the cap, or `scribe` cannot clear it, **stop looping** and report the remaining unhealthy state — the specific unresolved findings — to the user, rather than re-fixing indefinitely or reporting the run clean.
 - Do not report the run as done while the library is left unhealthy, unless the user explicitly waives the audit.
 
 ### 8. Report back
@@ -93,7 +91,7 @@ Once the wiki entry is ready and the library is healthy, return to the user.
 - Do not create task cards or write specs. That belongs to the `analyst`.
 - Do not implement code. That belongs to the `lead` and its `coder`s.
 - Do not create commits, branches, PRs, or external comments.
-- Do not edit `library/` files directly — go through `gemini` → `scribe`/`clerk`.
+- Do not edit `library/` files directly — dispatch the library crew (`scribe`/`clerk`).
 - Do not inspect `.env` files or output secrets.
 - Do not treat research conclusions as final decisions unless the user explicitly approves and asks to record a decision elsewhere.
 

@@ -8,7 +8,7 @@ runtime agent behavior.
 
 Every plugin ships **two** manifests that must always carry the same `version`:
 
-- `plugins/<plugin>/plugin.json` — agy-native (root)
+- `plugins/<plugin>/plugin.json` — root manifest (mirrors the Claude one)
 - `plugins/<plugin>/.claude-plugin/plugin.json` — Claude
 
 These have silently drifted before (engineering sat at `0.8.3` in the Claude manifest

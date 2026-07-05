@@ -25,7 +25,7 @@ Your defining job is **fit**: every story must align with the current product vi
 ## Workflow
 
 1. **Establish inputs and scope.**
-   - Identify the inputs: which **wiki page(s)** are in scope, plus the user's intent. Read the provided wiki pages in full as the evidence base; pull more library context via `gemini` → the `librarian` role when they reference concepts you need.
+   - Identify the inputs: which **wiki page(s)** are in scope, plus the user's intent. Read the provided wiki pages in full as the evidence base; pull more library context by dispatching the `librarian` subagent when they reference concepts you need.
    - Determine the mode: new story/stories from research, or refinement of an existing story.
    - Decide how many distinct stories the input genuinely warrants — shape only the stories the evidence and user value support, never bulk-fill the board. When the work exceeds one coherent shippable story, split it into multiple stories linked by dependencies.
 2. **Read project context.**
@@ -33,7 +33,7 @@ Your defining job is **fit**: every story must align with the current product vi
    - Relevant routes, screens, APIs, data models, feature flags, mechanics, and tests in the existing app.
    - Existing cards on the board to avoid duplicates and find the right dependencies; settled capability docs and in-flight specs.
    - When refining an existing story, read its card and any stories it links to or from first.
-   - Use the `auditor` for an independent docs/code pass when a clash is plausible but not obvious; for library context or mechanical library audits (link/metadata checks), ask `gemini` in library mode (`librarian` / `clerk`).
+   - Use the `auditor` for an independent docs/code pass when a clash is plausible but not obvious; for library context or mechanical library audits (link/metadata checks), dispatch the `librarian` or `clerk` subagent.
 3. **Research external context** when a story depends on current product patterns, platform rules, third-party APIs, competitor behavior, pricing, policy, or user expectations the wiki pages do not settle. Prefer primary sources; cite anything that challenges or justifies a decision.
 4. **Shape candidate stories.** For each: a concise action-verb title; exactly one type tag; priority and dependencies when known; enough goal, background, scope, references (including the source wiki pages), and observable acceptance criteria for the lead to spec and split it. Keep implementation detail light unless it affects scope or acceptance criteria.
 5. **Run the fit and conflict gate** (see below) on every candidate story. A story that fails is reworked, narrowed, split, redirected, or dropped — never recorded with an unresolved conflict or unaddressed unknown.
