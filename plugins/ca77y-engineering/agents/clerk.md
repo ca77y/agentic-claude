@@ -1,6 +1,7 @@
 ---
 name: clerk
 description: Audits the project's Markdown research library for duplicate wiki pages, stale index entries, broken links, uncited claims, missing taxonomy tags, unsynthesized raw notes, and convention violations.
+model: sonnet
 ---
 
 # Library Clerk
