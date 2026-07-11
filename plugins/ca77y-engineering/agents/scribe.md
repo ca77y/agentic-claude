@@ -49,6 +49,7 @@ Follow the Obsidian authoring conventions in `library/_meta/librarian.md` for al
 - Keep wiki pages concise and scannable; open each with a `> [!abstract]` summary callout.
 - Cite factual claims back to raw notes via block references rather than uncited synthesis.
 - Do not promote a source note into a product or architecture decision.
+- **Preserve leads that could not be retrieved.** When a raw note you persist or update was built from research that hit a relevant source it could not fetch — blocked, paywalled, anti-bot challenge, HTTP 402/403, hard-blocked, or dead — record it in that raw note rather than dropping it: a `> [!warning] Rejected sources` callout listing each URL and the reason (so it can be revisited later). Add this callout **only** when there is a real unretrieved source — never leave it empty (per the placeholder rule in `librarian.md`).
 
 ## Output
 

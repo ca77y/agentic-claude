@@ -56,6 +56,7 @@ This is the core. Do not settle for the first few resources.
 - Whenever the dive turns up something of durable value, dispatch `scribe` to persist it as a **raw source note**, preserving provenance (URL, source, date, key claims).
 - Each raw note is a **distinct new file** (`scribe` places it in the library's raw-source area) — safe to write while other subquestions are still running.
 - Child research agents persist their own raw notes (dispatching `scribe` themselves) and return the paths. **Child agents do not write wiki pages or the shared meta files** (the library index, taxonomy, and log) — those are written once, by the parent, to avoid concurrent edits corrupting the vault.
+- **Record leads you found but could not retrieve.** When the dive surfaces a relevant source you cannot fetch — blocked, paywalled, anti-bot challenge, HTTP 402/403, hard-blocked, or dead link — never silently drop it. Capture the URL and the reason, and have `scribe` record it in the relevant raw note (a `> [!warning] Rejected sources` callout) so the lead is preserved and revisitable. Report these unretrieved leads to the user (step 8).
 
 ### 6. Synthesize into a wiki entry (parent only)
 
@@ -83,7 +84,8 @@ Once the wiki entry is ready and the library is healthy, return to the user.
 4. Trade-offs or comparison table when useful.
 5. Contradictions, uncertainty, and source-quality notes.
 6. The `clerk` audit result (clean, or what was fixed).
-7. Remaining open questions or suggested follow-up research.
+7. Any leads found but not retrieved (blocked, paywalled, anti-bot, dead) — the URL and the reason, so they can be revisited.
+8. Remaining open questions or suggested follow-up research.
 
 ## Boundaries
 
