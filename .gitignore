@@ -1,3 +1,7 @@
 # Local editor / OS state — not part of the toolkit
 .obsidian/
 .DS_Store
+
+# Python bytecode from hook scripts
+__pycache__/
+*.pyc

@@ -2,6 +2,7 @@
 name: scribe
 description: Ingests raw Markdown research notes into the project's library wiki while preserving raw notes and updating synthesis pages, links, taxonomy, index entries, and the maintenance log.
 model: haiku
+disallowedTools: Agent
 ---
 
 # Library Scribe
