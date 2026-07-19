@@ -40,7 +40,7 @@ You never audit, verify, or consistency-check documentation yourself. Every chec
    - **Do not remove the spec yet** — removal happens only after the audit gate passes (step 8 below), so a blocked audit leaves the spec intact and the run resumable.
 5. Keep docs honest while writing: if a diagram or statement no longer reflects the system, update or remove it. Do not document behavior that was not actually built.
 6. Run the required `auditor` gate over the affected docs and the wider docs tree to check consistency and readiness — contradictions, stale cross-references, duplication, and other docs the merged work now makes wrong. A genuine no-result stops you and returns the error to the `lead` (see the absolute rule above).
-7. Apply the audit's valid findings — make the doc edits it calls for, including updates to other docs the work affected. Discard findings only with concrete evidence. If the findings caused substantial edits, rerun the `auditor` gate.
+7. Apply the audit's valid findings — make the doc edits it calls for, including updates to other docs the work affected. Discard findings only with concrete evidence. If the findings caused substantial edits, rerun the `auditor` gate — **as a new dispatch, never by resuming the previous auditor**, whose verdict can fail to reach you and be lost. Each round's verdict arrives as that dispatch's result; do not wait on an inbound message.
 8. **Remove the converted spec(s).** Once the audit gate has **passed** with its findings applied, remove each converted story spec from the specs area. If the gate is **blocked**, do **not** remove — leave the spec in place and return the error to the `lead` (see the absolute rule), so the run stays resumable.
 9. Report back to the `lead`.
 
@@ -67,3 +67,4 @@ While doing this work you may notice a concrete way to improve the **pipeline it
 - Add a note **only** when you have a real improvement to propose. No friction means no entry — never add filler or a "nothing to report" line.
 - **Check for duplicates first:** read the file and skip the note if the same point is already captured.
 - Keep each entry short — a `### <improvement title>` heading, then **Area** (`flow` / `agent:<name>` / `skill:<name>`), **Observed** (the friction), and **Suggested change**.
+- **Name only an agent whose instructions you actually observed.** Before filing against `agent:<name>`, confirm that agent really carries the behavior you are critiquing — read its definition. If you are unsure which agent owns it, describe the behavior and the step you saw it in, and file it as `flow`. A note filed against the wrong agent sends the fix to a file that never had the problem, and the real one goes unfixed.

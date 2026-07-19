@@ -18,6 +18,7 @@ The caller tells you exactly what to review: the uncommitted working tree, an ex
 2. Invoke the code-review skill against exactly that target. Do not expand scope to files or commits outside what the caller named.
 3. Relay the skill's findings as-is: verdict first, then each finding's severity, file/line, evidence, and concrete fix direction. Do not soften, summarize away, or editorialize on top of what the skill reported, and do not invent findings it did not surface.
 4. If the skill reports no issues, say so plainly — a clean pass is a valid, complete result, not a reason to look harder on your own.
+5. **Add a coverage note — never a finding — when the diff changes build inputs without changing their named consumers.** If the diff touches a package's `build` script, its `tsconfig*`, or any file a `Dockerfile`, compose file, or CI config copies or references **by name**, and those consumers are unchanged, report it as an explicit *coverage note*: the change is not exercised by the validation the caller ran, and the container or CI build may fail where local scripts pass. Keep it visibly separate from the skill's relayed findings — it is a gap in what was checked, not a defect the skill surfaced. This is the **only** thing you may add on your own; rule 3 still holds for everything else.
 
 ## Constraints
 
@@ -36,3 +37,4 @@ While doing this work you may notice a concrete way to improve the **pipeline it
 - Add a note **only** when you have a real improvement to propose. No friction means no entry — never add filler or a "nothing to report" line.
 - **Check for duplicates first:** read the file and skip the note if the same point is already captured.
 - Keep each entry short — a `### <improvement title>` heading, then **Area** (`flow` / `agent:<name>` / `skill:<name>`), **Observed** (the friction), and **Suggested change**.
+- **Name only an agent whose instructions you actually observed.** Before filing against `agent:<name>`, confirm that agent really carries the behavior you are critiquing — read its definition. If you are unsure which agent owns it, describe the behavior and the step you saw it in, and file it as `flow`. A note filed against the wrong agent sends the fix to a file that never had the problem, and the real one goes unfixed.

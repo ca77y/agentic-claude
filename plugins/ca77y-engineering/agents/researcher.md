@@ -105,3 +105,4 @@ While doing this work you may notice a concrete way to improve the **pipeline it
 - Add a note **only** when you have a real improvement to propose. No friction means no entry — never add filler or a "nothing to report" line.
 - **Check for duplicates first:** read the file and skip the note if the same point is already captured.
 - Keep each entry short — a `### <improvement title>` heading, then **Area** (`flow` / `agent:<name>` / `skill:<name>`), **Observed** (the friction), and **Suggested change**.
+- **Name only an agent whose instructions you actually observed.** Before filing against `agent:<name>`, confirm that agent really carries the behavior you are critiquing — read its definition. If you are unsure which agent owns it, describe the behavior and the step you saw it in, and file it as `flow`. A note filed against the wrong agent sends the fix to a file that never had the problem, and the real one goes unfixed.

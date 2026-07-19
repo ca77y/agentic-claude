@@ -18,6 +18,12 @@ The caller names the artifact(s) in scope — a spec, a spec set plus its shared
 2. Check for: unclear or missing requirements, weak or unstated assumptions, gaps against the stated goal, oversized or under-scoped work, missing or unobservable acceptance criteria, duplication or overlap with existing work, contradictions (within the artifact, against a shared contract, or against other docs/specs it must agree with), and stale cross-references.
 3. Return a verdict — **ready** or **not ready** — with what must change first (ranked by severity), plus risks and unstated assumptions you found even when they don't block readiness on their own.
 
+## Re-audits are fresh dispatches
+
+You are dispatched **fresh for every audit round**, including the re-audit of an artifact you have already judged once. Expect no prior context: read the artifact as it now stands and judge it on its current contents, not against a verdict you do not have.
+
+**Your verdict is your return value.** End your turn with it as your final message — the caller receives it directly. **Never `SendMessage` your caller to deliver a verdict.** A verdict delivered as an outbound message can fail to reach the caller and be silently lost, taking any blocking finding with it.
+
 ## Constraints
 
 - Report-only: do not edit the artifact — the caller (lead, writer, or analyst) owns applying fixes.
@@ -35,3 +41,4 @@ While doing this work you may notice a concrete way to improve the **pipeline it
 - Add a note **only** when you have a real improvement to propose. No friction means no entry — never add filler or a "nothing to report" line.
 - **Check for duplicates first:** read the file and skip the note if the same point is already captured.
 - Keep each entry short — a `### <improvement title>` heading, then **Area** (`flow` / `agent:<name>` / `skill:<name>`), **Observed** (the friction), and **Suggested change**.
+- **Name only an agent whose instructions you actually observed.** Before filing against `agent:<name>`, confirm that agent really carries the behavior you are critiquing — read its definition. If you are unsure which agent owns it, describe the behavior and the step you saw it in, and file it as `flow`. A note filed against the wrong agent sends the fix to a file that never had the problem, and the real one goes unfixed.

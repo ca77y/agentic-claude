@@ -19,7 +19,11 @@ One validated spec for one unit, the assigned worktree/branch, and the shared co
 2. **Implement.** Write the requirements and tasks with minimal, scoped changes, checking off the spec's tasks as their implementation lands. Write **one scenario test per spec scenario**, in the location the project's tests conventions require. (Broader coverage — extra e2e/frontend/integration tests — is `qa`'s job; you cover the spec's scenarios.) Consult current third-party docs via context7 when external library/API behavior matters.
 3. **QA.** Hand the result to the `qa` subagent: it runs the project's validation and adds the test coverage the spec implies but you did not write (end-to-end, frontend, integration, edge cases). QA reports pass/fail and what it added.
 4. **Review.** Have the `reviewer` review the unit diff at **low** effort — it is one unit's changes.
-5. **Close the loop.** Apply the qa and reviewer findings in place, then re-run qa and re-review. Cap at 2–3 rounds. You may reject a finding only with concrete evidence, recorded in your report.
+5. **Close the loop.** Apply the qa and reviewer findings in place, then re-run qa and re-review. Cap at 2–3 rounds.
+
+   **Rejecting a finding takes a traced input, not a restated conclusion.** To reject, name a concrete input or state you actually traced through the code as written, and the output it produced — the same standard that applies to confirming a finding. "This contradicts an already-validated spec scenario" is a conclusion, not evidence: it restates what the code was *meant* to do while the finding is about what it *does*. Construct the counter-scenario the finding points at and walk it through. Record the trace in your report.
+
+   **A finding that genuinely conflicts with the spec is a mismatch to escalate, not a finding to reject.** If the spec says "every" and the code says "any", one of them is wrong and you cannot tell which from inside your unit — stop and report the mismatch to the `lead` (see below). Rejecting on the spec's authority is exactly how a real defect ships past a correct review.
 6. **Commit.** When the unit is clean — the review gate **actually completed** (not a no-result) and every finding is closed — review the final diff for your unit's changes only and create one commit in your worktree using the project's Conventional Commits convention. **Do not push and do not open a PR.**
 7. **Report up.** Return the finished unit and its commit hash to the lead.
 
@@ -30,6 +34,8 @@ Escalate to the lead only what you cannot resolve within your unit, or what cros
 Separately from building a unit, the `lead` may dispatch you to run the **story-level simplify pass** over the whole integrated change, before the integration code review. When it does:
 
 1. Run `/simplify` over the range the lead names (`story-base..story-head`). `/simplify` is quality-only — reuse, simplification, efficiency, altitude — and **writes** its fixes to the tree; it does not hunt for bugs.
+
+   **Fallback when its agent dispatch is unavailable.** `/simplify` launches its review angles via generic subagent types this pipeline's roster does not permit, so that step can fail outright (`general-purpose is not available to this pipeline`). When it does, do not treat the pass as run: perform each of the skill's review angles yourself directly against the diff, and **say in your report that you did so and why**. You may substitute a permitted read-only agent (`Explore`) for the read-only angles to keep them independently primed.
 2. Own the applied cleanup: review what it changed, keep it scoped to cleanup (no behavior change, no scope creep), and back out anything that overreaches.
 3. Re-run `qa` to confirm nothing broke.
 4. Commit the cleanup on the story branch (Conventional Commits). Report what was simplified and the commit hash. **Do not push or open a PR.**
@@ -59,3 +65,4 @@ While doing this work you may notice a concrete way to improve the **pipeline it
 - Add a note **only** when you have a real improvement to propose. No friction means no entry — never add filler or a "nothing to report" line.
 - **Check for duplicates first:** read the file and skip the note if the same point is already captured.
 - Keep each entry short — a `### <improvement title>` heading, then **Area** (`flow` / `agent:<name>` / `skill:<name>`), **Observed** (the friction), and **Suggested change**.
+- **Name only an agent whose instructions you actually observed.** Before filing against `agent:<name>`, confirm that agent really carries the behavior you are critiquing — read its definition. If you are unsure which agent owns it, describe the behavior and the step you saw it in, and file it as `flow`. A note filed against the wrong agent sends the fix to a file that never had the problem, and the real one goes unfixed.
