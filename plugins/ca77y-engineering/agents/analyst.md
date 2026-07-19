@@ -62,32 +62,17 @@ Rules for the gate:
 
 ## The story card
 
-One file per story, frontmatter `type: story` (plus `title`), holding a single Tasks-format checkbox with context on indented sub-bullets:
+One file per story, frontmatter `type: story` (plus `title`), holding a single Tasks-format checkbox with context on indented sub-bullets.
 
-```markdown
----
-type: story
-title: <Story Title>
----
+**The project's own template is the authoritative card shape.** Before writing any card, read the project's story scaffold (typically `docs/_templates/story.md`) and reproduce its structure exactly. The conventions below are format-agnostic semantics — what a type tag or priority *means* — not a layout to impose. Where anything here disagrees with the project's template or card-format rules, **the project wins**; note the divergence in your report rather than silently following this file. If the project has no scaffold, follow the semantics below and state in your report which shape you chose and why.
 
-# <Story Title>
-
-- [ ] <action-verb title> #<type> <priority> 🆔 <slug> [⛔ <dep-slug>] [📅 <due>]
-    - Scope: what this story covers, and what is explicitly out of scope.
-    - Acceptance criteria:
-        - [ ] <one observable, individually checkable criterion>
-        - [ ] <another — one behaviour per line, never a merged prose blob>
-    - References: source wiki pages (wikilinks), docs, code paths.
-```
-
-- **Status** symbol (new cards start at `[ ]`): `[ ]` Todo · `[/]` In Progress · `[?]` In Review · `[x]` Done · `[-]` Cancelled. The card symbol is the source of truth for status; it is moved during implementation, not by you.
+- **Exactly one checkbox per card, unless the project's template shows otherwise.** Task boards scan files for `- [ ]` markers and surface every match as a separate board item, including indented ones. Nested checkboxes inside a card therefore pollute the board with phantom tasks. Render sub-bullets — scope, acceptance criteria, references — as plain `-` bullets unless the project's own template explicitly nests checkboxes.
+- **Status** symbol (new cards start at `[ ]`): `[ ]` Todo · `[/]` In Progress · `[?]` In Review · `[x]` Done · `[-]` Cancelled. The card symbol is the source of truth for status; it is moved during implementation, not by you. Projects may define additional states — follow the project's list where it differs.
 - **Type** is exactly one tag by central outcome: `#bug` (broken behavior), `#feature` (new capability), `#improvement` (improves existing behavior), `#research` (needs research before it can become implementation work), `#marketing`/`#support` (only when primarily non-product work). Only `#feature`/`#improvement`/`#bug` are implementation-ready; `#research`/`#marketing`/`#support` must be refined into one of those before implementation.
 - **Priority** emoji when known: `🔺` highest · `⏫` high · `🔼` medium · `🔽` low. **Id** `🆔 <slug>` (lowercase kebab-case, unique) — it is the stable id reused for the story's file name, branch, and spec file. Dependents declare `⛔ <slug>`.
 - Keep research out of the card — link the source wiki pages and code paths on sub-bullets rather than pasting.
-- **Acceptance criteria are individually checkable.** Write each as its own observable `- [ ]` item under the `Acceptance criteria:` sub-bullet — one behaviour per line, never merged into a single prose blob — so the `lead` can gate the story per-criterion.
+- **Acceptance criteria are individually verifiable.** One observable behaviour per line under the `Acceptance criteria:` sub-bullet, never merged into a single prose blob, so the `lead` can gate the story per-criterion. Verifiability comes from writing one behaviour per line, not from the bullet marker — use the marker the project's template uses (plain `-` unless that template nests checkboxes).
 - **Dependencies, not decomposition.** Use `🆔`/`⛔` to sequence one story behind another. Never split a single story across multiple cards or files; if it doesn't fit one card, it's more than one story.
-
-**Templates.** Use the project's own Templater scaffold for the story card — the vault provides it. The card format above is the contract; match what the project's scaffold produces.
 
 ## Output Shape
 
