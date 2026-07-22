@@ -13,8 +13,7 @@ ca77y-agentic/
 |   `-- ca77y-engineering/
 |       |-- .claude-plugin/plugin.json   # Claude manifest (agents whitelist)
 |       |-- plugin.json                  # root manifest, mirrors the Claude one
-|       |-- agents/*.md                  # the agent definitions
-|       `-- hooks/dispatch-guard.py      # pins every dispatch to its roster model
+|       `-- agents/*.md                  # the agent definitions
 |-- docs/                                # this documentation + the board
 |-- .obsidian/                           # vendored vault config and plugins
 `-- CLAUDE.md                            # repo maintenance rules
@@ -88,14 +87,10 @@ Models are pinned per agent in the agent definitions. The current split: `opus` 
 `qa`, and `researcher`; `haiku` for `librarian` and `scribe`. Effort is set on every
 agent except the two haiku ones — it is unsupported there and setting it breaks dispatch.
 
-`hooks/dispatch-guard.py` enforces the model pin on every dispatch, because nesting
-resolves a subagent's model against the *main conversation* rather than the dispatching
-agent — so an agent reached through a chain would otherwise inherit the session model.
-The hook's `ROSTER` mirrors the `model:` frontmatter and must be kept in sync with it;
-the frontmatter wins if they disagree, since it is what applies when hooks are disabled.
-The hook pins model only — the Agent tool's schema has no `effort` field, and unknown
-keys in a hook's `updatedInput` are silently dropped, so effort lives in frontmatter
-alone.
+The frontmatter is the only source of truth for both. Note that nesting resolves a
+subagent's model against the *main conversation* rather than the dispatching agent, so
+an agent reached through a chain and carrying no `model:` of its own inherits the
+session model.
 
 ## The commit model
 
