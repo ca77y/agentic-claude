@@ -110,7 +110,7 @@ library work.
 | Spec | `writer` | the task | a validated spec in the specs area |
 | Build | `coder` | the validated spec | the finished work in the story worktree |
 | Validation | `qa` | the work in progress | pass/fail + filled test gaps |
-| Code review | `reviewer` | a diff | findings (it sizes the review itself) |
+| Simplify & review | `reviewer` | a diff | cleaned-up code + review findings |
 | Readiness | `auditor` | a spec, docs tree, or the work vs its criteria | ready / not-ready verdict |
 | Docs | `writer` | the finished task | durable docs; spec converted & removed |
 | Library lookup | `librarian` | a research question | cited synthesis from the Markdown library |
@@ -180,11 +180,13 @@ relationship with the board: read-only.
 3. **Spec** — dispatches the `writer`, which authors the spec and clears its own
    `auditor` gate. The lead **commits the spec** (commit 1).
 4. **Build** — dispatches **one** `coder` with the spec's path, and **records its
-   agentId**. The coder implements, runs `qa` to green, and simplifies; the lead
-   trusts that reported state.
-5. **Code review** — dispatches the `reviewer` at the worktree's uncommitted
-   changes. Findings route back to the same coder by agentId; each re-review is a
-   **fresh** reviewer, capped at 3 rounds. A no-result is not a pass.
+   agentId**. The coder implements and runs `qa` to green; the lead trusts that
+   reported state.
+5. **Simplify & review** — dispatches the `reviewer` at the worktree's uncommitted
+   changes; it simplifies them, then reviews the cleaned result. This is the one
+   gate that **writes** to the tree, and its cleanup is part of what gets committed.
+   Findings route back to the same coder by agentId; each round is a **fresh**
+   reviewer, capped at 3. A no-result is not a pass.
 6. **Acceptance gate** — the `auditor` verifies the built result meets the task's
    acceptance criteria: the **card's** enumerated criteria when a card was named,
    the **spec's** requirements when not. Findings route back to the same coder by
@@ -233,10 +235,10 @@ the lead owns every gate over it.
    consulting current third-party docs via context7 when external behavior matters.
 3. **QA** — hands off to `qa`, which runs validation and fills the test gaps (e2e,
    frontend, integration, edge cases); fixes what it surfaces and re-runs until green.
-4. **Simplify** — once qa passes, runs `/simplify` over its changes (quality-only —
-   reuse, simplification, efficiency; no bug-hunting) so the review sees already-
-   cleaned code, and backs out anything that overreaches.
-5. **Report up** — no commit, no push, no PR.
+4. **Report up** — no commit, no push, no PR.
+
+It does **not** run `/simplify`; the `reviewer` does, from a depth where the skill's
+fan-out actually works. It also never reverts the cleanup the reviewer applied.
 
 The lead **resumes the same coder** for code-review, acceptance-gate, and PR-review
 findings. All three are handled the same way: apply the whole set in one go, re-run
@@ -254,18 +256,26 @@ what it added. **Does not** fix feature code (defects route back to the `coder`)
 review code quality (that's the `reviewer`), or weaken a failing test to make the
 suite pass.
 
-### reviewer — independent code review (native, in Claude)
+### reviewer — simplify + independent review (native, in Claude)
 
-Reviews exactly the diff the caller names — usually the **uncommitted working tree**,
-since the pipeline commits only at PR time — and relays the findings verbatim.
-Callers name only *what* to review: that it invokes Claude Code's built-in
-code-review skill, and at what effort, is internal to the reviewer, which sizes the
-review to the change. Runs as its own subagent so a review is never done by the
-context that wrote the code, and it is the one agent allowed to launch generic
-subagents, so the code-review skill's fan-out runs as designed instead of collapsing
-to a single pass. **Report-only**: it never edits or fixes code, and never
-reviews non-code artifacts (that's the `auditor`). `ultra` (multi-agent cloud review)
-only on explicit request.
+Two passes over exactly the diff the caller names — usually the **uncommitted working
+tree**, since the pipeline commits only at PR time:
+
+1. **Simplify** — runs `/simplify` over the target (quality-only: reuse,
+   simplification, efficiency; no bug-hunting), owns what it applies, backs out
+   anything that overreaches, and re-runs the project's validation to prove the
+   cleanup broke nothing.
+2. **Review** — invokes Claude Code's built-in code-review skill over the cleaned
+   result and relays the findings verbatim.
+
+Callers name only *what* to work on; which skills run, and at what effort, is
+internal to the reviewer, which sizes the review to the change. It is the one agent
+allowed to launch generic subagents — **both** skills fan out, and both would
+collapse to a single pass anywhere deeper in the chain, which is why the `lead`
+dispatches it directly. The simplify pass is the **only** writing it does: it never
+fixes the defects it finds (those go back to the `coder`) and never reviews non-code
+artifacts (that's the `auditor`). `ultra` (multi-agent cloud review) only on explicit
+request.
 
 ### auditor — independent readiness & acceptance gate (native, in Claude)
 
@@ -351,8 +361,8 @@ produces an artifact never signs off on it — the review always runs as a separ
 subagent.
 
 **Verification is layered**: the `auditor` validates the spec before any code exists
-→ `coder` writes per-scenario tests → `qa` fills coverage gaps → `/simplify` cleans
-the change → `reviewer` reviews it → the `auditor` gates the result against its
+→ `coder` writes per-scenario tests → `qa` fills coverage gaps → the `reviewer`
+simplifies the change and then reviews it → the `auditor` gates the result against its
 acceptance criteria → the PR opens → the Claude GitHub app reviews it, and the lead
 loops fixes back through the same coder.
 

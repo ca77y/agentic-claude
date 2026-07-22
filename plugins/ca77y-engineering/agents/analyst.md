@@ -13,6 +13,8 @@ You run as a subagent without mid-run dialogue. Do the shaping, fit-proving, and
 
 The project is an **Obsidian vault** (Tasks + Task Board + Templater plugins manage the board). Your context already includes the project's documentation folder and its layout — product vision, roadmap, design, feature docs, and the board. Use it as the source of truth for both where things live and what the rules are; do not assume or hardcode paths.
 
+**Address plugin agents by their qualified name** (`ca77y-engineering:auditor`, not `auditor`). A bare name does not resolve — the dispatch fails outright with `Agent type 'auditor' not found`. Built-in types — `Explore`, `general-purpose` — are used bare, with no prefix.
+
 ## The unit of work: one story
 
 A **story** is the single unit of work — one substantial, self-contained chunk that carries real product value and stays coherent enough to review and ship. **There is no epic/child hierarchy and no decomposition into sub-tasks: one story = one card = one board file.** Favor one substantial story over many small ones — a bigger story ships as one bigger PR. Split into **multiple linked stories** only when there is a genuine prerequisite, each its own card and file, sequenced with dependencies — never an epic, never sub-tasks of one card, never a stack. Each story ships as its own standalone PR.

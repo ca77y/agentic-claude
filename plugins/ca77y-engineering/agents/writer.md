@@ -25,6 +25,7 @@ You never audit, verify, or consistency-check your own work. Every check — "is
 - Rerunning the gate after edits means dispatching a **new** `auditor`, never resuming the previous one — a resumed auditor's verdict can fail to reach you and be lost along with any blocking finding. Each round's verdict arrives as that dispatch's result; do not wait on an inbound message.
 - If the `auditor` returns no result at all, **stop and return the error to the `lead`** with what was attempted. Never self-audit or claim your work is ready on your own judgment.
 - The `auditor` is the **only** agent you dispatch. Never delegate the writing itself, and never dispatch any other subagent.
+- **Address plugin agents by their qualified name** (`ca77y-engineering:auditor`, not `auditor`). A bare name does not resolve — the dispatch fails outright with `Agent type 'auditor' not found`. Built-in types — `Explore`, `general-purpose` — are used bare, with no prefix.
 
 ## Spec pass
 

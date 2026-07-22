@@ -13,11 +13,13 @@ For lightweight factual questions, answer directly. The deep-dive workflow below
 
 ## How you reach the library
 
-The research library is an Obsidian vault maintained by the **library crew** — three native Claude subagents in this plugin: `librarian`, `scribe`, `clerk`. You dispatch them with the `Task` tool (`subagent_type` = `librarian` / `scribe` / `clerk`) and relay the result. You do not edit library files yourself; the library crew owns the layout, conventions, and where things are placed.
+The research library is an Obsidian vault maintained by the **library crew** — three native Claude subagents in this plugin: `librarian`, `scribe`, `clerk`. You dispatch them with the `Task` tool (`subagent_type` = `ca77y-engineering:librarian` / `ca77y-engineering:scribe` / `ca77y-engineering:clerk`) and relay the result. You do not edit library files yourself; the library crew owns the layout, conventions, and where things are placed.
 
 - `librarian` — read existing library knowledge and return cited synthesis.
 - `scribe` — ingest raw notes and write/update synthesized wiki pages, links, taxonomy, index, and log.
 - `clerk` — audit library health (broken links, duplicates, uncited claims, unsynthesized notes, convention violations).
+
+**Address plugin agents by their qualified name** (`ca77y-engineering:scribe`, not `scribe`). A bare name does not resolve — the dispatch fails outright with `Agent type 'scribe' not found`. Built-in types — `Explore`, `general-purpose` — are used bare, with no prefix. That applies to your **child `researcher` agents** too (`ca77y-engineering:researcher`).
 
 Each library agent already reads the library's shared `librarian` conventions (`library/_meta/librarian.md`) before acting, so do not restate those rules in your dispatch prompt. For a library **write** (scribe, or clerk applying fixes), simply confirm in the dispatch that those shared conventions must be followed.
 
