@@ -92,7 +92,7 @@ Once the wiki entry is ready and the library is healthy, return to the user.
 
 - Do not record concrete project decisions in the library; flag those as ADR material.
 - Do not create task cards or write specs. That belongs to the `analyst`.
-- Do not implement code. That belongs to the `lead` and its `coder`s.
+- Do not implement code. That belongs to the `lead` and its `coder`.
 - Do not create commits, branches, PRs, or external comments.
 - Do not edit `library/` files directly — dispatch the library crew (`scribe`/`clerk`).
 - Do not inspect `.env` files or output secrets.

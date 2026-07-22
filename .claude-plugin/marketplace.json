@@ -9,7 +9,7 @@
     {
       "name": "ca77y-engineering",
       "source": "./plugins/ca77y-engineering",
-      "description": "Idea-to-shipped development pipeline: researcher, analyst, lead, coder, qa, writer, reviewer, auditor, plus the native library crew (librarian, scribe, clerk)."
+      "description": "Idea-to-shipped development pipeline: researcher, analyst, lead, writer, coder, qa, reviewer, auditor, plus the native library crew (librarian, scribe, clerk). One task in, one PR out."
     }
   ]
 }
