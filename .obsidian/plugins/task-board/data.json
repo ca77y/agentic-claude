@@ -172,7 +172,7 @@
           "headerUIType": "hor"
         },
         "taskCount": {
-          "pending": 1,
+          "pending": 14,
           "completed": 0
         }
       },
@@ -260,7 +260,7 @@
           "headerUIType": "hor"
         },
         "taskCount": {
-          "pending": 27,
+          "pending": 14,
           "completed": 0
         }
       }
@@ -524,7 +524,7 @@
       "safeGuardFeature": true,
       "lastViewHistory": {
         "viewedType": "kanban",
-        "boardIndex": 1,
+        "boardIndex": 2,
         "settingTab": 0
       },
       "boundTaskCompletionToChildTasks": false,
