@@ -37,13 +37,13 @@ The end-to-end flow:
 ┌────────────┐   wiki   ┌──────────┐  story   ┌──────┐   task   ┌──────────┐
 │ researcher │ ───────▶ │ analyst  │ ───────▶ │ lead │ ───────▶ │  writer  │ spec
 └────────────┘  pages   └──────────┘  cards   └──────┘          │  coder   │ build
-      │                      │                    │             │  auditor │ accept
-      │ library              │ fit gate           │             │  writer  │ docs
-      ▼                      ▼                    │             └──────────┘
-   ┌───────────┐        human                     │   commits · pushes · opens the PR
-   │ librarian │        approval                  └──▶ then drives the PR review loop
-   │ scribe    │        gate
-   │ clerk     │
+      │                      │                    │             │ reviewer │ review
+      │ library              │ fit gate           │             │  auditor │ accept
+      ▼                      ▼                    │             │  writer  │ docs
+   ┌───────────┐        human                     │             └──────────┘
+   │ librarian │        approval                  │
+   │ scribe    │        gate                      │   commits · pushes · opens the PR
+   │ clerk     │                                  └──▶ then drives the PR review loop
    └───────────┘
 ```
 
@@ -180,15 +180,18 @@ relationship with the board: read-only.
 3. **Spec** — dispatches the `writer`, which authors the spec and clears its own
    `auditor` gate. The lead **commits the spec** (commit 1).
 4. **Build** — dispatches **one** `coder` with the spec's path, and **records its
-   agentId**. The coder runs its own qa → simplify → review → fix loop and reports;
-   the lead trusts that reported state.
-5. **Acceptance gate** — the `auditor` verifies the built result meets the task's
+   agentId**. The coder implements, runs `qa` to green, and simplifies; the lead
+   trusts that reported state.
+5. **Code review** — dispatches the `reviewer` at the worktree's uncommitted
+   changes. Findings route back to the same coder by agentId; each re-review is a
+   **fresh** reviewer, capped at 3 rounds. A no-result is not a pass.
+6. **Acceptance gate** — the `auditor` verifies the built result meets the task's
    acceptance criteria: the **card's** enumerated criteria when a card was named,
    the **spec's** requirements when not. Findings route back to the same coder by
    agentId, capped at 3 rounds. Docs do not start while a criterion is unmet.
-6. **Docs** — a `writer` pass to update docs and convert the shipped spec.
-7. **Ship** — **commits everything else** (commit 2), pushes, opens **one PR**.
-8. **PR review loop** — drives the review to resolution (below).
+7. **Docs** — a `writer` pass to update docs and convert the shipped spec.
+8. **Ship** — **commits everything else** (commit 2), pushes, opens **one PR**.
+9. **PR review loop** — drives the review to resolution (below).
 
 **The commit model.** Nothing is committed while work is in flight; the story
 worktree is the only workspace and the lead is the only agent that commits. There
@@ -204,42 +207,47 @@ app, triggered on open and re-triggerable by comment.
   review was triggered.
 - **A comment showing the review started** → the timer bounds how long to wait for
   the review to be *triggered*, not to *finish* — keep waiting until it lands.
-- **Issues** → resume the same coder by agentId with the full set of findings, then
-  commit, push, and re-fire with `gh pr comment --body "@claude review"`.
+- **Issues** → resume the same coder by agentId with the full set of findings, put
+  the fixes back through the `reviewer`, then commit, push, and re-fire with
+  `gh pr comment --body "@claude review"`.
 - After 3 rounds it stops and reports what remains.
 
-*Nesting fallback:* `lead → coder → (qa/reviewer)` is two levels; if the runtime
-can't nest even that far, the lead runs the missing gates itself and reports the fallback.
+**Why every gate hangs off the lead.** Subagents can dispatch from the lead's level
+and one below it, but **three levels down the dispatch tool is absent entirely** —
+an agent there cannot delegate and cannot detect the limit in advance. So the
+`reviewer` is dispatched by the lead, not by the coder: from there the code-review
+skill's own fan-out still works, and from inside the coder it would silently
+collapse to a single pass. `qa` and the `auditor` sit at that third level happily,
+since neither dispatches anything. If a dispatch fails for depth anyway, the lead
+runs the missing gate itself and reports the fallback.
 
-### coder — builds the whole task through its own loop
+### coder — builds the whole task
 
 Takes the validated spec and the story worktree and delivers the task end to end.
 **It never commits** — its work stays in the tree for the lead, because the task
-ships as one commit.
+ships as one commit. It is also **not its own reviewer**: it builds and fixes, and
+the lead owns every gate over it.
 
 1. **Prepare** the worktree; confirm the spec; isolate pre-existing dirty changes.
 2. **Implement** with minimal scoped diffs + one scenario test per spec scenario,
    consulting current third-party docs via context7 when external behavior matters.
 3. **QA** — hands off to `qa`, which runs validation and fills the test gaps (e2e,
-   frontend, integration, edge cases).
+   frontend, integration, edge cases); fixes what it surfaces and re-runs until green.
 4. **Simplify** — once qa passes, runs `/simplify` over its changes (quality-only —
    reuse, simplification, efficiency; no bug-hunting) so the review sees already-
    cleaned code, and backs out anything that overreaches.
-5. **Review** — the `reviewer` reviews its working-tree changes.
-6. **Close the loop** — applies review/QA findings, re-QAs, re-reviews; capped at 3
-   rounds. A finding is rejected only with concrete evidence; a finding that
-   genuinely conflicts with the spec is escalated, never rejected.
-7. **Report up**, escalating unresolvable issues, spec mismatches, and blocked
-   review gates. **No commit, no push, no PR.**
+5. **Report up** — no commit, no push, no PR.
 
-The lead **resumes the same coder** for acceptance-gate findings and PR-review
-findings. Both are handled the same way: apply the whole set of findings in one go,
-then re-run the same gates — `qa`, then the `reviewer` — before reporting back.
+The lead **resumes the same coder** for code-review, acceptance-gate, and PR-review
+findings. All three are handled the same way: apply the whole set in one go, re-run
+`qa`, and report back for the lead to re-review. A finding is rejected only with a
+traced input, never a restated conclusion; a finding that genuinely conflicts with
+the spec is escalated as a mismatch, never rejected.
 
 ### qa — validates the work and fills its test gaps
 
-Called by the `coder` inside its loop, and again each time the coder is resumed with
-acceptance or PR findings. Runs the project's validation commands, compares the
+Called by the `coder` when it first builds, and again each time the coder is resumed
+with code-review, acceptance, or PR findings. Runs the project's validation commands, compares the
 spec's scenarios against existing tests, and adds the missing coverage (e2e,
 frontend, integration, edge cases), then re-runs. Reports pass/fail with evidence and
 what it added. **Does not** fix feature code (defects route back to the `coder`),
