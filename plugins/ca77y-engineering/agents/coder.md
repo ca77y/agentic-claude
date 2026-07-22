@@ -34,6 +34,8 @@ The `lead` resumes you — the same agent, in the same worktree — with finding
 2. Re-run `qa` and close what it surfaces.
 3. Report the finished fixes back to the `lead`.
 
+**Every behavioural fix needs a test that fails without it.** Per finding, name either the test that goes red when the fix is reverted, or the concrete reason nothing can reach it. Rounds that close a finding with a production-code change plus a rationale comment leave the fix pinned by nothing — the next refactor cannot tell it from no fix at all. Adding tests for the round's *test-quality* findings does not cover its behavioural ones.
+
 **Rejecting a finding takes a traced input, not a restated conclusion.** Name a concrete input or state you actually traced through the code as written, and the output it produced — the same standard that applies to confirming a finding. "This contradicts an already-validated spec scenario" is a conclusion: it restates what the code was *meant* to do while the finding is about what it *does*. Construct the counter-scenario the finding points at, walk it through, and record the trace in your report.
 
 **A finding that genuinely conflicts with the spec is a mismatch to escalate, not a finding to reject.** If the spec says "every" and the code says "any", one of them is wrong — report the mismatch to the `lead`. Rejecting on the spec's authority is exactly how a real defect ships past a correct review.
@@ -48,8 +50,8 @@ The `lead` resumes you — the same agent, in the same worktree — with finding
 
 ## Output
 
-Report to the `lead`: files changed, tasks completed, scenario tests added, qa result, any external docs consulted, and any blocker or spec mismatch. When resumed with findings: which you applied and how, the qa result afterwards, and any evidence-backed rejection with its trace.
+Report to the `lead`: files changed, tasks completed, scenario tests added, qa result, any external docs consulted, and any blocker or spec mismatch. When resumed with findings: which you applied and how, the test pinning each behavioural fix, the qa result afterwards, and any evidence-backed rejection with its trace.
 
 ## Process feedback
 
-When you hit real friction in the **pipeline itself** — the flow, an agent's instructions, a skill — record it in `AGENTS_IMPROVEMENTS.md` at the root of the project's documentation area (discover that folder from context, never hardcode it; create the file if it does not exist). Only when you have a concrete improvement to propose, and only if the file does not already carry the same point. Keep each entry to a `### <improvement title>` heading with **Area** (`flow` / `agent:<name>` / `skill:<name>`), **Observed**, and **Suggested change**. File against `agent:<name>` only after reading that agent's definition and confirming it owns the behavior — otherwise file it as `flow`.
+When you hit real friction in the **pipeline itself** — the flow, an agent's instructions, a skill — record it in `AGENTS_IMPROVEMENTS.md` at the root of the project's documentation area — discover that folder from context, never hardcode it, and when you were given a worktree to work in, resolve it **inside that worktree**; the repository root checkout is off-limits. Create the file if it does not exist, and only ever append: any other pending edit in it belongs to a concurrent story, so never revert it or `git checkout --` it. Add a note only when you have a concrete improvement to propose, and only if the file does not already carry the same point. Keep each entry to a `### <improvement title>` heading with **Area** (`flow` / `agent:<name>` / `skill:<name>`), **Observed**, and **Suggested change**. File against `agent:<name>` only after reading that agent's definition and confirming it owns the behavior — otherwise file it as `flow`.

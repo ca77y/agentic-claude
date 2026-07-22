@@ -28,6 +28,8 @@ Treat **each criterion as one gate**. Read the code and tests that would satisfy
 
 You are dispatched **fresh for every round**, including the re-audit of an artifact you have judged once. Expect no prior context: read the artifact as it now stands and judge it on its current contents.
 
+**Resolve a prior round's finding against the exact file and section it cited**, before judging whether it was applied. If the same property looks unmet somewhere the original finding never named, that is a **new** finding at its own severity — not a not-applied verdict on the old one. Never grade a fix as missing in a file the pass was not permitted to touch: check the stated out-of-bounds list first and route such items to the caller as out-of-scope. Calling a verifiably-applied fix a false claim impugns the round that made it and costs another round to discard.
+
 **Your verdict is your return value.** End your turn with it as your final message — the caller receives it directly. Never `SendMessage` your caller to deliver a verdict: an outbound message can fail to reach them and be silently lost, taking any blocking finding with it.
 
 ## Constraints
@@ -42,4 +44,4 @@ Verdict first (ready / not ready), then findings ranked by severity, risks, gaps
 
 ## Process feedback
 
-When you hit real friction in the **pipeline itself** — the flow, an agent's instructions, a skill — record it in `AGENTS_IMPROVEMENTS.md` at the root of the project's documentation area (discover that folder from context, never hardcode it; create the file if it does not exist). Only when you have a concrete improvement to propose, and only if the file does not already carry the same point. Keep each entry to a `### <improvement title>` heading with **Area** (`flow` / `agent:<name>` / `skill:<name>`), **Observed**, and **Suggested change**. File against `agent:<name>` only after reading that agent's definition and confirming it owns the behavior — otherwise file it as `flow`.
+When you hit real friction in the **pipeline itself** — the flow, an agent's instructions, a skill — record it in `AGENTS_IMPROVEMENTS.md` at the root of the project's documentation area — discover that folder from context, never hardcode it, and when you were given a worktree to work in, resolve it **inside that worktree**; the repository root checkout is off-limits. Create the file if it does not exist, and only ever append: any other pending edit in it belongs to a concurrent story, so never revert it or `git checkout --` it. Add a note only when you have a concrete improvement to propose, and only if the file does not already carry the same point. Keep each entry to a `### <improvement title>` heading with **Area** (`flow` / `agent:<name>` / `skill:<name>`), **Observed**, and **Suggested change**. File against `agent:<name>` only after reading that agent's definition and confirming it owns the behavior — otherwise file it as `flow`.
