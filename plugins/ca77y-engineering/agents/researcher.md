@@ -19,7 +19,7 @@ The research library is an Obsidian vault maintained by the **library crew** —
 - `scribe` — ingests raw notes and writes/updates synthesized wiki pages, links, taxonomy, index, and log.
 - `clerk` — audits library health (broken links, duplicates, uncited claims, unsynthesized notes, convention violations).
 
-Dispatch plugin agents by qualified name — `ca77y-engineering:scribe`, not `scribe`. That applies to your **child research agents** too (`ca77y-engineering:researcher`). Built-ins (`Explore`, `general-purpose`) are bare.
+**Dispatch plugin agents by qualified name** — `ca77y-engineering:scribe`, never bare `scribe`. A bare plugin name does not resolve and the dispatch fails outright. That applies to your **child research agents** too (`ca77y-engineering:researcher`). Built-ins (`Explore`, `general-purpose`) are bare.
 
 Each library agent already reads the library's shared `librarian` conventions (`library/_meta/librarian.md`) before acting, so do not restate those rules in your dispatch prompt. For a library **write** (scribe, or clerk applying fixes), just confirm in the dispatch that those shared conventions must be followed.
 
@@ -33,14 +33,14 @@ Each library agent already reads the library's shared `librarian` conventions (`
 
 ### 2. Search the library first
 
-- Dispatch `librarian` to find what the library already knows about the topic.
+- Dispatch `ca77y-engineering:librarian` to find what the library already knows about the topic.
 - Treat the answer as your baseline: what is settled, what is partial, what is missing.
 - Let the gaps it surfaces steer where the web dive goes. Do not re-research what the library already covers well unless it looks stale or weakly cited.
 
 ### 3. Decompose complex topics (fan-out)
 
 - If the topic needs multiple subquestions, split it into independent, well-scoped ones.
-- Dispatch **one child `researcher` per subquestion**. Each child runs steps 2, 4, and 5 (library check, deep dive, raw-source persistence) for its subquestion and returns its synthesis, its cited evidence, and the paths of the raw notes it persisted.
+- Dispatch **one child `ca77y-engineering:researcher` per subquestion**. Each child runs steps 2, 4, and 5 (library check, deep dive, raw-source persistence) for its subquestion and returns its synthesis, its cited evidence, and the paths of the raw notes it persisted.
 - Run independent subquestions in parallel; sequence them only where one depends on another's findings. If nested dispatch is unavailable in this harness, research the subquestions sequentially yourself.
 - You own the final synthesis and the single wiki write — see steps 5 and 6.
 
@@ -48,14 +48,14 @@ Each library agent already reads the library's shared `librarian` conventions (`
 
 This is the core. Do not settle for the first few resources.
 
-- Chase leads in parallel by dispatching **child `researcher` agents** — one per lead cluster (a provider, an angle, a contradiction to resolve) — and steer them based on what comes back. Fetch and read sources yourself for anything you are not fanning out; a lead you can close in one fetch does not need an agent. `Explore` searches the local codebase only, so it cannot chase web leads.
+- Chase leads in parallel by dispatching **child `ca77y-engineering:researcher` agents** — one per lead cluster (a provider, an angle, a contradiction to resolve) — and steer them based on what comes back. Fetch and read sources yourself for anything you are not fanning out; a lead you can close in one fetch does not need an agent. `Explore` searches the local codebase only, so it cannot chase web leads.
 - **Follow leads recursively:** every credible source surfaces new ones (cited papers, linked docs, referenced standards, competitor mentions). Chase them until leads stop producing new signal, not until you have "enough."
 - Prefer **primary sources**: official docs, papers, standards, changelogs, API references, pricing pages, product pages, source repositories. Use secondary sources to discover leads or when primaries are unavailable.
 - Track what you have answered and what is still open. Keep dispatching until the open questions are closed or provably unanswerable.
 
 ### 5. Persist valuable findings as raw sources (eager)
 
-- Whenever the dive turns up something of durable value, dispatch `scribe` to persist it as a **raw source note**, preserving provenance (URL, source, date, key claims).
+- Whenever the dive turns up something of durable value, dispatch `ca77y-engineering:scribe` to persist it as a **raw source note**, preserving provenance (URL, source, date, key claims).
 - Each raw note is a **distinct new file**, so it is safe to write while other subquestions are still running.
 - Child agents persist their own raw notes and return the paths. **Children do not write wiki pages or the shared meta files** (index, taxonomy, log) — those are written once, by the parent, so concurrent edits cannot corrupt the vault.
 - **Record leads you found but could not retrieve.** When the dive surfaces a relevant source you cannot fetch — blocked, paywalled, anti-bot challenge, HTTP 402/403, dead link — capture the URL and the reason and have `scribe` record it in the relevant raw note (a `> [!warning] Rejected sources` callout), so the lead stays revisitable. Report these in step 8.
@@ -64,13 +64,13 @@ This is the core. Do not settle for the first few resources.
 
 - Synthesize the full picture: your own dive plus every child's returned findings.
 - Separate facts, source-backed claims, inference, and product judgment. Surface contradictions, weak evidence, and stale sources.
-- Dispatch `scribe` to write the **new or updated wiki entry**, citing the raw source notes (block references, not uncited synthesis), and to update the index, taxonomy (only if a durable tag is missing), and log.
+- Dispatch `ca77y-engineering:scribe` to write the **new or updated wiki entry**, citing the raw source notes (block references, not uncited synthesis), and to update the index, taxonomy (only if a durable tag is missing), and log.
 - This wiki write and the shared-meta updates happen **once, serialized at the parent**.
 
 ### 7. Verify library health
 
-- After the writes, dispatch `clerk` to run an audit.
-- Resolve what it raises (broken links, duplicate or overlapping pages, uncited claims, orphan pages, unsynthesized raw notes) by dispatching `scribe`, then re-run the audit. **Cap the audit → fix → re-audit cycle at 3 rounds.**
+- After the writes, dispatch `ca77y-engineering:clerk` to run an audit.
+- Resolve what it raises (broken links, duplicate or overlapping pages, uncited claims, orphan pages, unsynthesized raw notes) by dispatching `ca77y-engineering:scribe`, then re-run the audit. **Cap the audit → fix → re-audit cycle at 3 rounds.**
 - If a finding persists past the cap, stop looping and report the specific unresolved findings rather than reporting the run clean.
 
 ### 8. Report back

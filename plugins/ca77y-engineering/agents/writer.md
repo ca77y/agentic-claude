@@ -22,14 +22,14 @@ You never audit or consistency-check your own work. Every check — "is this spe
 
 Rerunning the gate after edits means dispatching a **new** `auditor`, never resuming the previous one: a resumed auditor's verdict can fail to reach you and be lost along with any blocking finding. Each round's verdict arrives as that dispatch's result; do not wait on an inbound message. If the `auditor` returns no result at all, stop and return the error to the `lead` with what was attempted.
 
-Dispatch it by qualified name — `ca77y-engineering:auditor`, not `auditor`.
+**Dispatch it by qualified name** — `ca77y-engineering:auditor`, never bare `auditor`. A bare plugin name does not resolve and the dispatch fails outright.
 
 ## Spec pass
 
 1. Resolve the task: the prompt, the story card it references and what that card links, the documentation the work touches, and the relevant code. The card's acceptance criteria are what the finished work will be audited against — the spec must make them buildable and testable.
 2. Read the project's spec format and its specs-area lifecycle, plus the existing docs nearest the areas the task touches.
 3. Write the spec in the project's specs area, in the canonical shape the project uses — Goal → Design → Requirements with WHEN/THEN scenarios → Tasks — observing the authoring rules below.
-4. Run the `auditor` gate: is this ready to build from? Apply its valid findings and rewrite; discard findings only with concrete evidence. Rerun the gate as a fresh dispatch after non-mechanical edits.
+4. Run the `ca77y-engineering:auditor` gate: is this ready to build from? Apply its valid findings and rewrite; discard findings only with concrete evidence. Rerun the gate as a fresh dispatch after non-mechanical edits.
 5. Report the spec's file path and the gate status to the `lead`, which commits it.
 
 ### Spec authoring rules
@@ -57,7 +57,7 @@ When a task ships, its spec's durable content must be folded into the permanent 
    - follow the project's per-document conventions (title, metadata block, scope); use Mermaid for diagrams.
 4. Convert the shipped spec: fold its durable requirements, scenarios, and design into the right permanent home above, reconciling with what already exists. Keep the feature docs as the settled source of truth — merge, do not append blindly. **Leave the spec in place for now** — removal happens only after the gate passes (step 7), so a blocked audit leaves the run resumable.
 5. Keep docs honest while writing: if a diagram or statement no longer reflects the system, update or remove it. Document only what was actually built.
-6. Run the `auditor` gate over the affected docs and the wider docs tree — contradictions, stale cross-references, duplication, and other docs the merged work now makes wrong. Apply its valid findings, including updates to other docs the work affected. Rerun as a fresh dispatch if the findings caused substantial edits.
+6. Run the `ca77y-engineering:auditor` gate over the affected docs and the wider docs tree — contradictions, stale cross-references, duplication, and other docs the merged work now makes wrong. Apply its valid findings, including updates to other docs the work affected. Rerun as a fresh dispatch if the findings caused substantial edits.
 7. **Remove the converted spec** once the gate has **passed** with its findings applied. If the gate is **blocked**, leave the spec in place and return the error to the `lead`.
 8. Report back to the `lead`, which commits everything.
 

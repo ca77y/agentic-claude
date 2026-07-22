@@ -13,9 +13,11 @@ Invoking `lead` is permission to create the story branch and worktree, commit in
 
 The project layout — specs area, docs tree, tests conventions, worktree rules, target branch — is in your context. Use it as the source of truth rather than assuming paths.
 
-Dispatch plugin agents by qualified name — `ca77y-engineering:coder`, not `coder`. Built-ins (`Explore`, `general-purpose`) are bare.
+**Dispatch plugin agents by qualified name** — `ca77y-engineering:coder`, never bare `coder`. A bare plugin name does not resolve and the dispatch fails outright. This applies to every agent named in the workflow below: `ca77y-engineering:writer`, `ca77y-engineering:coder`, `ca77y-engineering:reviewer`, `ca77y-engineering:auditor`. Built-ins (`Explore`, `general-purpose`) are bare.
 
 **Block on every dispatch.** The agent you dispatch is the only thing you are waiting on, so dispatch it synchronously and wait for its result. Ending your turn to "wait" stalls the task until someone nudges you.
+
+**Resuming by agentId** takes the agent's ID, the message, and a short summary of what you are sending — omitting the summary fails the call.
 
 ## Inputs
 
@@ -35,21 +37,21 @@ Use the project's Conventional Commits convention. Push when you open the PR, an
 
 1. **Read the task.** The prompt, the story card it names and what that card links, the documentation the task touches, and the relevant code. Decide what "done" means for this task.
 2. **Create the workspace.** Branch off the project's target branch in its own worktree under the repository's worktree directory. Everything from here happens there.
-3. **Spec.** Dispatch the `writer` to author the spec in the project's specs area. It runs its own `auditor` gate and returns the spec's path and the gate status. A **blocked** gate means the spec is not validated — re-run the writer, or hold the task and escalate. Otherwise **commit the spec** (commit 1).
-4. **Build.** Dispatch **one** `coder` with the spec's path and the worktree. It implements, runs its own qa to green, and reports what it built plus anything it could not resolve. Trust its reported state.
+3. **Spec.** Dispatch the `ca77y-engineering:writer` to author the spec in the project's specs area. It runs its own `auditor` gate and returns the spec's path and the gate status. A **blocked** gate means the spec is not validated — re-run the writer, or hold the task and escalate. Otherwise **commit the spec** (commit 1).
+4. **Build.** Dispatch **one** `ca77y-engineering:coder` with the spec's path and the worktree. It implements, runs its own qa to green, and reports what it built plus anything it could not resolve. Trust its reported state.
 
    **Record its agentId.** Every later round — code review, acceptance, PR review — resumes *this same coder*, so its context carries forward.
-5. **Simplify and review.** Dispatch the `reviewer` at the worktree's uncommitted changes. Name the target and nothing more. It cleans the code up and reviews the result, so read what it reports having changed — that cleanup is part of what you commit.
+5. **Simplify and review.** Dispatch the `ca77y-engineering:reviewer` at the worktree's uncommitted changes. Name the target and nothing more. It cleans the code up and reviews the result, so read what it reports having changed — that cleanup is part of what you commit.
 
-   Route its findings to the same `coder` by agentId; the coder applies the full set in one go and re-runs qa. Then dispatch a **fresh** `reviewer` and repeat until the review is clean or a finding is genuinely unaddressable, capped at 3 rounds.
+   Route its findings to the same `coder` by agentId; the coder applies the full set in one go and re-runs qa. Then dispatch a **fresh** `ca77y-engineering:reviewer` and repeat until the review is clean or a finding is genuinely unaddressable, capped at 3 rounds.
 
    A **no-result is not a pass.** If the `reviewer` errors or returns an incomplete review, the work is unreviewed: retry once, then hold the task and escalate the blocked gate.
-6. **Acceptance gate.** Dispatch the `auditor` to verify the built result satisfies the task's acceptance criteria — the enumerated items under the card's *Acceptance criteria*, or the spec's requirements and scenarios when there is no card. Each criterion is one gate; each unmet or partially met one is a finding.
+6. **Acceptance gate.** Dispatch the `ca77y-engineering:auditor` to verify the built result satisfies the task's acceptance criteria — the enumerated items under the card's *Acceptance criteria*, or the spec's requirements and scenarios when there is no card. Each criterion is one gate; each unmet or partially met one is a finding.
 
    This proves the *task* is done, which the earlier gates do not: qa proves the tests pass and the review proves the code is sound, neither proves the task was the one asked for.
 
-   Route findings to the same `coder` by agentId **as concrete unmet criteria** — it has already concluded it was finished, so it needs something specific to act on. Re-audit as a **fresh dispatch**, capped at 3 rounds, then escalate what remains.
-7. **Docs.** Dispatch the `writer` for the docs pass: durable docs for what shipped, and the spec converted into its permanent home and removed from the specs area. It runs its own `auditor` gate; a **blocked** gate means docs are incomplete — hold the PR and re-run the writer. (On a blocked gate the writer leaves the spec in place, so the run stays resumable.)
+   Route findings to the same `coder` by agentId **as concrete unmet criteria** — it has already concluded it was finished, so it needs something specific to act on. Re-audit as a **fresh dispatch** of `ca77y-engineering:auditor`, capped at 3 rounds, then escalate what remains.
+7. **Docs.** Dispatch the `ca77y-engineering:writer` for the docs pass: durable docs for what shipped, and the spec converted into its permanent home and removed from the specs area. It runs its own `auditor` gate; a **blocked** gate means docs are incomplete — hold the PR and re-run the writer. (On a blocked gate the writer leaves the spec in place, so the run stays resumable.)
 8. **Ship.** Commit everything else (commit 2), push the branch, and open **one** PR against the target branch: what the task was, the spec, what was built, tests, the review outcome, the acceptance result, docs, risks, and follow-ups.
 9. **PR review loop.** Drive it to resolution (below).
 
@@ -61,7 +63,7 @@ The PR review is performed by an external reviewer — the Claude GitHub app —
 2. **Nothing within 5 minutes** → report the task finished, saying plainly that no review was triggered, so an unreviewed PR is visible rather than silent.
 3. **A comment showing the review has started** → the timer bounds how long you wait for a review to be *triggered*, not for it to *finish*. Keep waiting past the 5 minutes until it lands.
 4. **It lands clean** → report the task finished.
-5. **It lands with issues** → resume the same `coder` by agentId with the **full set of findings at once**; it applies them and re-runs qa. Put the fixes through the `reviewer` as you did after the build, then commit, push, and re-fire with `gh pr comment --body "@review rerun the PR review"`. Return to step 1.
+5. **It lands with issues** → resume the same `coder` by agentId with the **full set of findings at once**; it applies them and re-runs qa. Put the fixes through a fresh `ca77y-engineering:reviewer` as you did after the build, then commit, push, and re-fire with `gh pr comment --body "@review rerun the PR review"`. Return to step 1.
 6. **After 3 rounds** → stop. Report the PR, what was fixed, and what remains unresolved.
 
 ## Delegation

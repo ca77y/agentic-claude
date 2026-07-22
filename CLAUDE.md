@@ -4,6 +4,13 @@ Notes for editing **this toolkit repo**. The plugins themselves discover everyth
 from their target project's context — this file is for maintaining the repo, not for
 runtime agent behavior.
 
+## Worktrees
+
+Story worktrees live in `.worktrees/<branch>` at the repo root (gitignored). One story
+branch per worktree, branched off `master`; the root checkout stays on `master` and
+never has a story branch checked out. Remove the worktree and its branch once the PR
+merges.
+
 ## Before pushing a version bump: both manifests must agree
 
 Every plugin ships **two** manifests that must always carry the same `version`:
