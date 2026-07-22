@@ -1,7 +1,7 @@
 ---
 name: coder
 description: Builds the whole task from its validated spec — implements the code and scenario tests with minimal scoped changes, then runs its own self-contained qa → simplify → reviewer → fix loop until the work is clean. Leaves the finished work in the story worktree for the lead to commit. The lead dispatches it once and resumes it for acceptance findings and PR-review findings, which it applies in one go through the same gates. Does not split work, write specs, commit, push, or open PRs.
-model: sonnet
+model: opus
 effort: high
 ---
 

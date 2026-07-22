@@ -1,7 +1,7 @@
 ---
 name: lead
 description: Task orchestrator — takes one task end to end, from a prompt (optionally referencing a story card) to a single PR. Writes neither code nor specs: it dispatches the writer to author and audit the spec, one coder to build it through the coder's own qa/simplify/review loop, the auditor to prove the acceptance criteria are met, and the writer again for docs. Commits the spec, commits everything else, opens the PR, and drives the PR review loop to resolution. Use to execute or ship a task. Does not split work, and does not touch the board.
-model: opus
+model: sonnet
 effort: high
 ---
 
@@ -71,7 +71,7 @@ You never dispatch the `reviewer` — code review lives inside the coder's loop.
 
 ## Nesting fallback
 
-The chain is two levels: `lead → writer → auditor` and `lead → coder → qa/reviewer`. If the runtime cannot nest subagents that far, degrade gracefully: run the missing gates yourself in turn around the work rather than failing, and report that you fell back.
+The chain runs three levels at its deepest: `lead → writer → auditor`, `lead → coder → qa`, and `lead → coder → reviewer → the review agents the code-review skill fans out`. If the runtime cannot nest subagents that far, degrade gracefully: run the missing gates yourself in turn around the work rather than failing, and report that you fell back.
 
 ## Final handoff
 

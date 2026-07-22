@@ -2,7 +2,7 @@
 name: auditor
 description: Independent readiness auditor — external sanity check for non-code engineering/research artifacts (specs, plans, designs, docs, story cards) as a readiness gate, and the acceptance gate that proves finished work meets a task's acceptance criteria. Reads the artifact plus enough surrounding context to judge it on its own terms, then returns a ready/not-ready verdict. Used by the writer (spec validation, docs consistency), the lead (acceptance gate), and the analyst (story advisor gate). Runs as its own subagent so the critique is never performed by the same context that produced the artifact. Does not review code quality — that is the reviewer.
 model: sonnet
-effort: medium
+effort: high
 disallowedTools: Agent
 ---
 

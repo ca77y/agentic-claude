@@ -253,7 +253,9 @@ since the pipeline commits only at PR time — and relays the findings verbatim.
 Callers name only *what* to review: that it invokes Claude Code's built-in
 code-review skill, and at what effort, is internal to the reviewer, which sizes the
 review to the change. Runs as its own subagent so a review is never done by the
-context that wrote the code. **Report-only**: it never edits or fixes code, and never
+context that wrote the code, and it is the one agent allowed to launch generic
+subagents, so the code-review skill's fan-out runs as designed instead of collapsing
+to a single pass. **Report-only**: it never edits or fixes code, and never
 reviews non-code artifacts (that's the `auditor`). `ultra` (multi-agent cloud review)
 only on explicit request.
 

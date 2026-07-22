@@ -17,7 +17,9 @@ per-invocation parameter so the resolution never falls through to that default.
 
 Policy:
   general-purpose  denied — the caller does the work itself, or dispatches one of
-                   the named agents its own prompt specifies.
+                   the named agents its own prompt specifies. Exempt: the
+                   `reviewer`, whose code-review skill fans out over generic
+                   subagents. Caller identity comes from the event's `agent_type`.
   Explore          pinned to haiku. Explore stopped defaulting to Haiku in
                    v2.1.198 and now inherits the session model.
   known agent      forced to its ROSTER model, independent of the caller.
@@ -32,16 +34,16 @@ import json
 import sys
 
 ROSTER = {
-    "lead": "opus",
-    "analyst": "opus",
-    "researcher": "opus",
-    "writer": "opus",
-    "qa": "opus",
+    "coder": "opus",
     "reviewer": "opus",
-    "coder": "sonnet",
+    "analyst": "opus",
+    "writer": "opus",
+    "lead": "sonnet",
+    "researcher": "sonnet",
+    "qa": "sonnet",
     "auditor": "sonnet",
     "clerk": "sonnet",
-    "librarian": "sonnet",
+    "librarian": "haiku",
     "scribe": "haiku",
     # Built-in, so it has no frontmatter of ours to fall back on.
     "Explore": "haiku",
@@ -53,6 +55,14 @@ DENIED = {
         "with Read/Grep/Glob, use Explore for read-only search, or dispatch one of "
         "the named agents your own prompt specifies."
     ),
+}
+
+# Callers exempt from a DENIED entry, keyed by the requested subagent type. The
+# reviewer runs the code-review skill, which fans its review angles out across
+# generic subagents; denying those would silently collapse the review to a
+# single pass.
+EXEMPT_CALLERS = {
+    "general-purpose": {"reviewer"},
 }
 
 
@@ -75,7 +85,11 @@ def main():
     # Agents may be addressed bare or plugin-scoped ("ca77y-engineering:coder").
     name = requested.split(":")[-1]
 
-    if name in DENIED:
+    # `agent_type` is the *calling* agent — absent or a non-roster value for the
+    # main loop, the agent's own type when a subagent is doing the dispatching.
+    caller = str(event.get("agent_type") or "").split(":")[-1]
+
+    if name in DENIED and caller not in EXEMPT_CALLERS.get(name, frozenset()):
         emit({"permissionDecision": "deny", "permissionDecisionReason": DENIED[name]})
 
     model = ROSTER.get(name)

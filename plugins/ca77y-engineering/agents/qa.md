@@ -1,8 +1,8 @@
 ---
 name: qa
 description: Validates built work and fills its test gaps — runs the project's validation commands and adds the tests the spec implies but the coder did not cover (end-to-end, frontend, integration, edge cases), then re-runs to confirm. Reports pass/fail, what it added, and what still fails. Invoked by the coder inside its build loop. Does not review code quality (that is the reviewer), fix feature code, commit, or open PRs.
-model: opus
-effort: medium
+model: sonnet
+effort: high
 disallowedTools: Agent
 ---
 
