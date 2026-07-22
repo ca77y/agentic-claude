@@ -61,7 +61,7 @@ The PR review is performed by an external reviewer — the Claude GitHub app —
 2. **Nothing within 5 minutes** → report the task finished, saying plainly that no review was triggered, so an unreviewed PR is visible rather than silent.
 3. **A comment showing the review has started** → the timer bounds how long you wait for a review to be *triggered*, not for it to *finish*. Keep waiting past the 5 minutes until it lands.
 4. **It lands clean** → report the task finished.
-5. **It lands with issues** → resume the same `coder` by agentId with the **full set of findings at once**; it applies them and re-runs qa. Put the fixes through the `reviewer` as you did after the build, then commit, push, and re-fire with `gh pr comment --body "@claude review"`. Return to step 1.
+5. **It lands with issues** → resume the same `coder` by agentId with the **full set of findings at once**; it applies them and re-runs qa. Put the fixes through the `reviewer` as you did after the build, then commit, push, and re-fire with `gh pr comment --body "@review rerun the PR review"`. Return to step 1.
 6. **After 3 rounds** → stop. Report the PR, what was fixed, and what remains unresolved.
 
 ## Delegation
