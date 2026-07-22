@@ -24,12 +24,20 @@ Rerunning the gate after edits means dispatching a **new** `auditor`, never resu
 
 **Dispatch it by qualified name** — `ca77y-engineering:auditor`, never bare `auditor`. A bare plugin name does not resolve and the dispatch fails outright.
 
+### Applying a finding
+
+**A finding's examples are illustrative unless the finding says otherwise.** The instances it names are the sample that made the defect visible, not its definition; only an explicit narrowing in the finding itself — *"this call site and no other"*, *"the list below is exhaustive"* — makes the list exhaustive.
+
+**Restate the finding as the general property it is an instance of, before you write the fix.** Write that property out in one sentence, in the form the requirement would take. The finding says *"these three functions have no coverage"*; the property is *"every one of the nine tool functions the unit routes through the wrapper is exercised by a scenario that would fail if the wrapping were skipped"*. The restatement is what the fix is written against — the named examples only say where to start looking.
+
+**Check the fix against every instance of the property, not against the examples.** Enumerate the instances the property applies to **from the artifact itself** — the full set of functions, files, card criteria, or scenarios the spec names — and check the fix against each one before calling the finding closed. An instance this pass cannot close is named in the report with the reason, so it is a stated gap rather than an unnoticed one. Repairing only the named instances leaves the finding's own defect live in the rest of the set, where each later round rediscovers one more instance of the same defect.
+
 ## Spec pass
 
 1. Resolve the task: the prompt, the story card it references and what that card links, the documentation the work touches, and the relevant code. The card's acceptance criteria are what the finished work will be audited against — the spec must make them buildable and testable.
 2. Read the project's spec format and its specs-area lifecycle, plus the existing docs nearest the areas the task touches.
 3. Write the spec in the project's specs area, in the canonical shape the project uses — Goal → Design → Requirements with WHEN/THEN scenarios → Tasks — observing the authoring rules below.
-4. Run the `ca77y-engineering:auditor` gate: is this ready to build from? Apply its valid findings and rewrite; discard findings only with concrete evidence. Rerun the gate as a fresh dispatch after non-mechanical edits.
+4. Run the `ca77y-engineering:auditor` gate: is this ready to build from? Apply its valid findings and rewrite, following *Applying a finding* above; discard findings only with concrete evidence. Rerun the gate as a fresh dispatch after non-mechanical edits.
 5. Report the spec's file path and the gate status to the `lead`, which commits it.
 
 ### Spec authoring rules
@@ -39,6 +47,8 @@ Rerunning the gate after edits means dispatching a **new** `auditor`, never resu
 **Validation must reach every consumer of what the task changes.** The project's root scripts are not the whole build. When a task touches a package's `build` script, its `tsconfig*`, or any file a `Dockerfile`, compose file, or CI config copies or references **by name**, the Validation scenarios must include building through that consumer (`docker build .` / `docker compose build`), not only the root scripts. A change that passes `build` and `typecheck` locally while breaking the production image is a gate that could not have caught it.
 
 **A criterion the design cannot satisfy as written goes in a Deviations section.** When the card's own wording is unsatisfiable — two of its statements are mutually exclusive against the real system, or the scope item cannot hold as literally stated — write a *Deviations from the card* section naming the criterion's own sentence, the reasoned override, and the follow-up it implies. Quietly narrowing the criterion inside a scenario's wording is not an option: the acceptance gate reads the card, so a dropped clause it never sees is a criterion silently retired.
+
+**A criterion no automated build step can satisfy gets a named owning mechanism — and naming one triggers a sweep of the rest.** When the card carries a criterion the `coder`'s build cannot close on its own — documentation the docs pass owns, a manual reproduction someone has to run and record the results of — the spec names its owning mechanism: what closes it, when in the pipeline that happens, and a Tasks entry marked as not the `coder`'s task. Having named one such owner, re-read **every remaining criterion on the card** for the same shape — *present on the card, absent from the Tasks checklist, no stated owner* — and resolve each in the same pass. Acknowledging such a criterion in Validation without an owner and a Tasks entry leaves the gap unassigned on the page, so a later readiness re-audit of the spec has to rediscover it one criterion at a time. Naming the owner is what settles it at authoring time: the gap becomes stated and deliberately assigned in the spec itself.
 
 **Behaviour asserted outside Requirements gets no test.** The `coder` writes one scenario test per Requirements scenario, so a behavioural claim living only in Design or Deviations ships uncovered — "the normalizer is applied in the shared call path so all five tools are covered" is a claim about five tools with a scenario for one. Before handing off, read your own Design and Deviations sections for claims about what the code does, and either promote each into a scenario or mark it untested-by-design with the reason.
 
@@ -57,7 +67,7 @@ When a task ships, its spec's durable content must be folded into the permanent 
    - follow the project's per-document conventions (title, metadata block, scope); use Mermaid for diagrams.
 4. Convert the shipped spec: fold its durable requirements, scenarios, and design into the right permanent home above, reconciling with what already exists. Keep the feature docs as the settled source of truth — merge, do not append blindly. **Leave the spec in place for now** — removal happens only after the gate passes (step 7), so a blocked audit leaves the run resumable.
 5. Keep docs honest while writing: if a diagram or statement no longer reflects the system, update or remove it. Document only what was actually built.
-6. Run the `ca77y-engineering:auditor` gate over the affected docs and the wider docs tree — contradictions, stale cross-references, duplication, and other docs the merged work now makes wrong. Apply its valid findings, including updates to other docs the work affected. Rerun as a fresh dispatch if the findings caused substantial edits.
+6. Run the `ca77y-engineering:auditor` gate over the affected docs and the wider docs tree — contradictions, stale cross-references, duplication, and other docs the merged work now makes wrong. Apply its valid findings, following *Applying a finding* above, including updates to other docs the work affected. Rerun as a fresh dispatch if the findings caused substantial edits.
 7. **Remove the converted spec** once the gate has **passed** with its findings applied. If the gate is **blocked**, leave the spec in place and return the error to the `lead`.
 8. Report back to the `lead`, which commits everything.
 
