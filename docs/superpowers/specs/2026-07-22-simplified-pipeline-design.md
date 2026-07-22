@@ -45,8 +45,9 @@ repository root, outside its own worktree.
 
 Two review roles stay distinct:
 
-- `reviewer` — **code** only. Invokes Claude Code's built-in code-review skill
-  against a diff. Its sole caller is now the `coder`.
+- `reviewer` — **code** only. Callers name a diff to review; how it reviews (the
+  code-review skill, and at what effort) is internal to it. Its sole caller is now
+  the `coder`.
 - `auditor` — **artifacts** only (specs, docs trees, story cards). Its callers are
   the `writer` (spec gate, docs gate) and the `analyst` (advisor gate).
 
@@ -222,9 +223,11 @@ spec-mismatch escalation rule, and the blocked-review-gate rule.
 - Callers: the `coder` only. Remove the lead's integration review.
 - Its usual target is now the **uncommitted working tree**, since nothing is
   committed until PR time. Keep support for a committed range and a PR ref.
-- **Make the effort distinction explicit:** the effort the caller names — `low` for
-  the coder's review — is the **code-review skill's** effort level, not the
-  reviewer agent's own reasoning effort, which comes from its frontmatter.
+- **How the review is performed becomes internal to the reviewer.** The caller
+  names only *what* to review — the target. That it runs the code-review skill, and
+  at what effort, is the reviewer's own business: it sizes the change and picks the
+  effort itself. Remove "use the effort the caller names" and every caller-side
+  mention of an effort level.
 
 ### `auditor.md`
 
