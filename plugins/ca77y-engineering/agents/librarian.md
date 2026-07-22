@@ -45,9 +45,4 @@ Search by concept first: taxonomy tags, index titles and summaries, then follow 
 
 ## Process feedback
 
-While doing this work you may notice a concrete way to improve the **pipeline itself** — a gap or friction in the flow, in an agent's instructions, or in a skill. This is about *how the agents work*, never the library content you are answering from. When you spot one, record it in a file named `AGENTS_IMPROVEMENTS.md` at the root of the project's documentation area — discover that folder from project context, never hardcode the path, and create the file if it does not exist.
-
-- Add a note **only** when you have a real improvement to propose. No friction means no entry — never add filler or a "nothing to report" line.
-- **Check for duplicates first:** read the file and skip the note if the same point is already captured.
-- Keep each entry short — a `### <improvement title>` heading, then **Area** (`flow` / `agent:<name>` / `skill:<name>`), **Observed** (the friction), and **Suggested change**.
-- **Name only an agent whose instructions you actually observed.** Before filing against `agent:<name>`, confirm that agent really carries the behavior you are critiquing — read its definition. If you are unsure which agent owns it, describe the behavior and the step you saw it in, and file it as `flow`. A note filed against the wrong agent sends the fix to a file that never had the problem, and the real one goes unfixed.
+When you hit real friction in the **pipeline itself** — the flow, an agent's instructions, a skill, never the library content you are working with — record it in `AGENTS_IMPROVEMENTS.md` at the root of the project's documentation area (discover that folder from context, never hardcode it; create the file if it does not exist). Only when you have a concrete improvement to propose, and only if the file does not already carry the same point. Keep each entry to a `### <improvement title>` heading with **Area** (`flow` / `agent:<name>` / `skill:<name>`), **Observed**, and **Suggested change**. File against `agent:<name>` only after reading that agent's definition and confirming it owns the behavior — otherwise file it as `flow`.
