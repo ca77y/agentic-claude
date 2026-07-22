@@ -10,10 +10,11 @@ The pipeline grew a story/unit split that never pays for itself. The `lead`
 decides whether to split a story into units, locks a shared interface contract
 between them, writes and audits a spec per unit, provisions a worktree and branch
 per unit, dispatches N coders, merges their branches, resolves seam conflicts,
-runs a separate simplify pass, runs an integration review, and audits the
-integrated result against the card's acceptance criteria. Each of those steps is
-a place the run can stall or diverge, and in practice nearly every story is one
-unit anyway.
+runs a separate simplify pass, and runs an integration review. Each of those steps
+is a place the run can stall or diverge, and in practice nearly every story is one
+unit anyway. (The acceptance audit at the end of that chain earns its keep and
+survives — it is the only check that the *task* is done rather than that the code
+works.)
 
 The `lead` also owns board card status transitions, which forces an awkward
 carve-out: the one write it is allowed to make to the base branch, in the
@@ -48,10 +49,12 @@ Two review roles stay distinct:
 - `reviewer` — **code** only. Callers name a diff to review; how it reviews (the
   code-review skill, and at what effort) is internal to it. Its sole caller is now
   the `coder`.
-- `auditor` — **artifacts** only (specs, docs trees, story cards). Its callers are
-  the `writer` (spec gate, docs gate) and the `analyst` (advisor gate).
+- `auditor` — **artifacts** only (specs, docs trees, story cards), plus the
+  acceptance gate. Its callers are the `writer` (spec gate, docs gate), the
+  `analyst` (advisor gate), and the `lead` (acceptance gate).
 
-The `lead` dispatches neither. It dispatches only `writer` and `coder`.
+The `lead` dispatches `writer`, `coder`, and `auditor`. It never dispatches
+`reviewer` — code review belongs to the coder's loop.
 
 ## The flow
 
@@ -69,6 +72,8 @@ lead ── creates one story branch in one worktree; all work happens there
   │      ▲                                                       │
   │      └───────────────── loop, cap 3 rounds ──────────────────┘
   │      (reports; never commits)
+  │
+  ├─▶ auditor (acceptance gate) ── unmet criteria ──▶ back to the coder
   │
   ├─▶ writer  (docs pass) ──▶ auditor gate ──▶ spec converted & removed
   │
@@ -113,13 +118,21 @@ worktree. It is recoverable (the worktree persists), but it is not in git.
    worktree. **Record the coder's agentId** — the PR-review loop resumes this same
    coder rather than dispatching a fresh one. The coder reports the finished work;
    it does not commit.
-5. **Docs.** Dispatch the `writer` for the docs pass: durable docs for what
+5. **Acceptance gate.** Dispatch the `auditor` to verify the built result actually
+   satisfies the task's acceptance criteria — the enumerated items under the story
+   card's *Acceptance criteria* when the task references a card, and the spec's
+   requirements and scenarios when it does not. Each criterion is one gate; each
+   unmet or only-partially-met criterion is a finding. This proves the *task* is
+   done, which the coder's own gates do not — those prove the code works and the
+   tests pass. Route findings back to the same `coder` by its agentId and re-audit,
+   capped at 3 rounds, then escalate what remains. Do not proceed to docs while a
+   criterion is unmet.
+6. **Docs.** Dispatch the `writer` for the docs pass: durable docs for what
    shipped, the spec converted into its permanent home and removed. The `writer`
    runs its own `auditor` gate.
-6. **Confirm and ship.** Confirm the result covers the task as stated. Commit
-   everything else (commit 2), push, open **one** PR against the project's target
-   branch.
-7. **PR review loop** (below).
+7. **Ship.** Commit everything else (commit 2), push, open **one** PR against the
+   project's target branch.
+8. **PR review loop** (below).
 
 Every dispatch is a single agent the lead has nothing to do but wait on, so the
 lead **blocks synchronously** on each one. The parallel-dispatch monitor branch is
@@ -162,7 +175,6 @@ Remove:
 - The integrate step.
 - The simplify-pass dispatch.
 - The integration review dispatch.
-- The story-acceptance `auditor` dispatch and per-criterion gating.
 - Finding routing across multiple coders.
 
 Keep, adapted:
@@ -172,6 +184,9 @@ Keep, adapted:
 - The active-wait discipline, narrowed to blocking synchronously on one dispatch.
 - The nesting-fallback note. The chain is still two levels
   (`lead → writer → auditor`, `lead → coder → qa/reviewer`).
+- The story-acceptance `auditor` dispatch and its per-criterion gating, adapted to
+  fall back to the spec's requirements when the task has no card, and to route
+  findings to the single coder by agentId.
 - The process-feedback section.
 
 Add:
@@ -231,9 +246,11 @@ spec-mismatch escalation rule, and the blocked-review-gate rule.
 
 ### `auditor.md`
 
-- Update the caller list to the `writer` (spec gate, docs gate) and the `analyst`
-  (advisor gate). Remove the `lead`'s spec validation, spec-set review, and
-  story-acceptance uses.
+- Update the caller list to the `writer` (spec gate, docs gate), the `analyst`
+  (advisor gate), and the `lead` (acceptance gate). Remove the `lead`'s spec
+  validation and spec-set review — spec validation is the writer's gate now.
+- The acceptance gate's target broadens: a story card's criteria when there is a
+  card, the spec's requirements and scenarios when there is not.
 
 ### `qa.md`
 
@@ -272,7 +289,7 @@ no agent or model changes.
 
 "unit of work", "unit spec", "split", "shared contract", "shared seam", "spec set",
 "integration review", "integrate", "per-unit worktree", "story-level simplify
-pass", "story acceptance", "In Progress"/"In Review" as lead actions.
+pass", "In Progress"/"In Review" as lead actions.
 
 ## Risks
 
@@ -284,6 +301,8 @@ pass", "story acceptance", "In Progress"/"In Review" as lead actions.
   *any* signal, the lead reports the task finished with the PR unreviewed. The
   report must say plainly that no review was triggered, so this is visible rather
   than silent.
-- **Losing the story-acceptance gate.** Nothing now audits the finished work against
-  a card's acceptance criteria. The `lead` confirming the result covers the task is
-  a weaker check by design; the tradeoff is one fewer dispatch and one fewer loop.
+- **The acceptance gate resumes the coder that just declared itself done.** Routing
+  criteria findings back to the same `coder` by agentId keeps its context, but that
+  context includes its own conclusion that the work was finished. The gate's
+  findings must be handed over as concrete unmet criteria, not as a request to
+  re-check, so the coder has something specific to act on.
