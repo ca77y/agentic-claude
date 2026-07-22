@@ -211,7 +211,7 @@ app, triggered on open and re-triggerable by comment.
   the review to be *triggered*, not to *finish* — keep waiting until it lands.
 - **Issues** → resume the same coder by agentId with the full set of findings, put
   the fixes back through the `reviewer`, then commit, push, and re-fire with
-  `gh pr comment --body "@claude review"`.
+  `gh pr comment --body "@review rerun the PR review"`.
 - After 3 rounds it stops and reports what remains.
 
 **Why every gate hangs off the lead.** Subagents can dispatch from the lead's level

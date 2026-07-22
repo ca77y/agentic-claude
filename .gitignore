@@ -1,6 +1,15 @@
-# Local editor / OS state — not part of the toolkit
-.obsidian/
+# OS state
 .DS_Store
+
+# Obsidian local/generated state — the rest of .obsidian/ is committed so the
+# vault (Task Board, Templater scaffolds, graph) works from a fresh clone.
+.obsidian/workspace.json
+.obsidian/workspace-mobile.json
+.obsidian/plugins/task-board/tasks.json
+.obsidian/plugins/task-board/task-board-logs.log
+
+# Story worktrees
+.worktrees/
 
 # Python bytecode from hook scripts
 __pycache__/
