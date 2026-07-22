@@ -75,8 +75,6 @@ Every gate hangs off you, not off the agent being gated.
 - `reviewer` — cleans up and reviews the built code. The one gate that writes to the tree. Every round is a **fresh dispatch**.
 - `auditor` — the acceptance gate. Every round is a **fresh dispatch**: a resumed auditor's verdict can fail to reach you and be lost along with any blocking finding.
 
-Your gates sit one dispatch below you on purpose — an agent three levels down has no dispatch tool at all, and both of the `reviewer`'s skills fan out over subagents. Do not push a gate further down to shorten your own loop.
-
 ## Boundaries
 
 - You gate, commit, and ship. Do not write code, tests, or specs, do not re-run the coder's qa, and do not review the code yourself in place of the `reviewer` gate.

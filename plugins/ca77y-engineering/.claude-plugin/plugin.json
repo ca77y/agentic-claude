@@ -2,7 +2,7 @@
   "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
   "name": "ca77y-engineering",
   "description": "Idea-to-shipped development pipeline as Claude Code subagents: researcher, analyst (shapes stories + records cards), lead (takes one task from a prompt or a story card to a single PR \u2014 no splitting, no merging, and it drives the PR review loop), writer (authors the task's spec, then its docs), coder (builds the whole task through its own qa/simplify/review loop), qa, reviewer (native code review), auditor (native readiness audits + the acceptance gate), plus the native library crew \u2014 librarian, scribe, clerk \u2014 that maintains the project's Markdown research library in Claude.",
-  "version": "1.6.1",
+  "version": "1.6.2",
   "author": {
     "name": "ca77y"
   },
