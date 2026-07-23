@@ -5,7 +5,8 @@ title: Stop the docs-pass audit gate flagging the spec it is about to remove
 
 # Stop the docs-pass audit gate flagging the spec it is about to remove
 
-- [ ] Stop the docs-pass audit gate flagging the spec it is about to remove #improvement 🔼 🆔 stop-docs-gate-flagging-spec-slated-for-removal
+- [-] Stop the docs-pass audit gate flagging the spec it is about to remove #improvement 🔼 🆔 stop-docs-gate-flagging-spec-slated-for-removal
+  - **Cancelled** — the writer's docs pass no longer runs an auditor gate at all. The pipeline was flattened so the `lead` is the only orchestrator and the writer's output (spec and docs) is trusted, not gated. With no docs-pass gate, there is nothing to flag the spec slated for removal.
   - `writer.md`'s docs pass leaves the spec in place while the `auditor` gate runs — "removal happens only after the gate passes, so a blocked audit leaves the run resumable" — but the auditor then reads the still-present spec as the pass's headline defect and returns NOT-READY. The two instructions are individually reasonable and jointly guarantee one wasted audit round on every docs pass whose only remaining step is the deletion.
   - Background: this happened even though the gate dispatch stated the spec was "still present, slated for removal". The auditor called it "the one filesystem action that makes it a docs pass" and blocked, costing a full extra audit round (~80k subagent tokens) to clear something that was never a defect.
   - Scope: `plugins/ca77y-engineering/agents/writer.md`, docs pass (steps 6–7) and the gate dispatch it issues to the `auditor`.

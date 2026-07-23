@@ -5,7 +5,8 @@ title: Feed the simplify pass the governing spec so it does not cut required con
 
 # Feed the simplify pass the governing spec so it does not cut required content
 
-- [ ] Feed the simplify pass the governing spec so it does not cut required content #improvement ⏫ 🆔 feed-the-simplify-pass-the-governing-spec
+- [-] Feed the simplify pass the governing spec so it does not cut required content #improvement ⏫ 🆔 feed-the-simplify-pass-the-governing-spec
+  - **Cancelled** — the pipeline no longer runs a local simplify pass. The `reviewer` was removed and code review folded into `qa`, which surfaces findings but does not run `/simplify`; the independent code review runs on the PR. No simplify pass remains to feed a spec to.
   - The `reviewer` runs `/simplify` over the diff alone. When the artifact is prose whose exact propositions are mandated clause by clause by the spec's Requirements scenarios, the cleanup agents correctly identify spec-required clauses as redundant and cut them — every cut a genuine redundancy, every one breaking an acceptance scenario. The pass cannot know which redundancy is mandated without the spec in hand.
   - Background: on `generalize-audit-findings-to-the-property`, the cleanup agents cut three spec-mandated clauses. The `reviewer` only caught it because it happened to read the spec afterwards to size the code review; had it not, a clean-looking simplify pass would have silently failed the acceptance gate a round later. This matters most for docs and agent-definition work, where the artifact is prose the spec quotes directly.
   - Scope: `plugins/ca77y-engineering/agents/reviewer.md`, the simplify step (step 2).

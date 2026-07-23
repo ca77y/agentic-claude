@@ -47,44 +47,52 @@ exist at runtime.
 
 ## The agent roster
 
-Eleven agents in one plugin, in two groups:
+Ten agents in one plugin, in two groups:
 
 | Group | Agents | Role |
 | --- | --- | --- |
-| Pipeline | `researcher`, `analyst`, `lead`, `writer`, `coder`, `qa`, `reviewer`, `auditor` | idea → shipped PR |
+| Pipeline | `researcher`, `analyst`, `lead`, `writer`, `coder`, `qa`, `auditor` | idea → shipped PR |
 | Library crew | `librarian`, `scribe`, `clerk` | maintains the target project's Markdown research library |
 
-The flow is `researcher → analyst → lead → writer → coder → writer`, with `qa`,
-`reviewer`, and `auditor` gating. The library crew is dispatched directly by whichever
-agent needs library work.
+The flow is `researcher → analyst → lead → writer → coder → writer`, with `qa`
+(validation plus the local code review) and the `auditor` gating, and the independent
+code review running on the opened PR. Under the `lead`, `writer`, `coder`, `qa`, and
+`auditor` are all **leaves it dispatches directly** — none of them dispatches another.
+The library crew is dispatched directly by whichever agent needs library work.
 
 It stays **one plugin**. Splitting the library crew out was considered and rejected: the
 seam between the two groups is a file — a wiki page — not an agent call, but the
 `analyst` dispatches `librarian` and `clerk` directly, so a split would flip the
 dependency rather than remove it.
 
-## Dispatch depth — the constraint that shapes the topology
+## A flat topology — the lead is the only orchestrator
 
-Subagents can dispatch from the `lead`'s level and one below it. **Three levels down the
-dispatch tool is absent entirely**, and an agent there cannot detect the limit in
-advance — a fan-out skill invoked from that depth silently collapses to a single pass.
+The pipeline is deliberately flat. The `lead` dispatches every pipeline agent directly —
+`writer`, `coder`, `qa`, `auditor` — and **none of them dispatches another**. The chain is
+never more than two deep: the lead, then a leaf. Each leaf does its one job and returns;
+the lead **trusts that result** and never does the work itself, never re-checks it, and
+never steps in when a dispatch fails (it retries or escalates). The `writer`'s docs are
+trusted outright; its spec is gated by the lead's `auditor` before the build.
 
-This is why:
+This sidesteps Claude Code's dispatch-depth limit: three levels down the dispatch tool is
+absent entirely, and a fan-out skill invoked from that depth silently collapses to a
+single pass. With every pipeline agent a leaf under the lead, nothing runs deep enough to
+hit it. The leaves keep the Agent tool — the limit is **not** enforced on them — but by
+design they do not orchestrate; being a leaf is a role, not a restriction.
 
-- The `reviewer` is dispatched by the `lead`, not by the `coder`. Both of its skills
-  (`/simplify` and code review) fan out, and from inside the coder they would degrade
-  without warning.
-- `qa` and the `auditor` sit happily at that third level, since neither dispatches.
-- The `lead` runs a missing gate itself and reports the fallback if a dispatch fails for
-  depth anyway.
+The heavy, fan-out **code review runs on the PR** (the Claude GitHub review), outside the
+dispatch tree entirely, so depth never constrains it; `qa`'s local review is a
+single-context pass.
 
-Any change to who dispatches whom has to be checked against this rule first.
+The `analyst` and `researcher` are separate top-level orchestrators, **not** part of the
+lead's tree: they run their own sub-dispatch — the analyst's advisor gate and library
+lookups, the researcher's subquestion decomposition and library writes.
 
 ## Model and effort assignment
 
 Models are pinned per agent in the agent definitions. The current split: `opus` for
-`analyst`, `coder`, `reviewer`, and `writer`; `sonnet` for `auditor`, `clerk`, `lead`,
-`qa`, and `researcher`; `haiku` for `librarian` and `scribe`. Effort is set on every
+`analyst`, `qa`, and `writer`; `sonnet` for `auditor`, `clerk`, `coder`, `lead`,
+and `researcher`; `haiku` for `librarian` and `scribe`. Effort is set on every
 agent except the two haiku ones — it is unsupported there and setting it breaks dispatch.
 
 The frontmatter is the only source of truth for both. Note that nesting resolves a

@@ -25,14 +25,15 @@ code — without adopting a tracker, a second harness, or a dispatcher bridge.
   plain Markdown inside the repository the pipeline runs on. There is no external
   tracker and no hosted state.
 - **Nothing signs off on itself.** The agent that produces an artifact never gates it.
-  Code review goes to the `reviewer`, readiness and acceptance to the `auditor`, library
-  health to the `clerk` — each in its own subagent context.
+  Code review goes to `qa` (a separate context from the `coder`) locally and to the PR
+  review on the opened PR, readiness and acceptance to the `auditor`, library health to
+  the `clerk` — each in its own subagent context.
 - **The human owns the board.** Agents read cards; only the human moves them. Two human
   gates punctuate the flow: approving the analyst's stories, and invoking the `lead`.
 - **Agents discover, they do not assume.** Every agent reads paths, conventions, and
   product context from the target project. Hardcoded paths are a defect.
-- **Verification is layered, not repeated.** Spec audit → per-scenario tests → qa gap
-  fill → simplify + review → acceptance audit → PR review. Each layer checks something
+- **Verification is layered, not repeated.** Spec authored + audited → per-scenario tests → qa gap
+  fill and local review → acceptance audit → PR review. Each layer checks something
   the previous one cannot.
 
 ## Boundaries

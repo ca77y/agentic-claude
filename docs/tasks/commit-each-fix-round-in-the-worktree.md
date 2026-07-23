@@ -5,7 +5,8 @@ title: Commit each fix round so a fresh reviewer can see what changed
 
 # Commit each fix round so a fresh reviewer can see what changed
 
-- [ ] Commit each fix round so a fresh reviewer can see what changed #improvement 🔼 🆔 commit-each-fix-round-in-the-worktree
+- [-] Commit each fix round so a fresh reviewer can see what changed #improvement 🔼 🆔 commit-each-fix-round-in-the-worktree
+  - **Cancelled** — there is no longer a fresh local reviewer per round. Code review is folded into `qa` (in-loop, same worktree) and the independent review runs on the PR against committed diffs, so the premise (a fresh reviewer cannot see an uncommitted prior round) no longer applies.
   - `lead.md`'s commit model commits only the spec (commit 1) and then everything else at ship (commit 2), so a review or acceptance fix round's pre-fix wording exists nowhere — not in `git log`, `git stash`, or the reflog. A `reviewer` dispatched fresh each round can only see the post-fix text, so it cannot verify a reworded fix against what it replaced, and the simplify pass cannot tell a round's remediation from unmandated filler.
   - Background: on round 2 of `generalize-audit-findings-to-the-property`, the round-2 `reviewer` was asked to verify two round-1 findings had been correctly reworded, but round 1's pre-fix text was gone. The simplify pass then proposed cutting a sentence that was plausibly *itself* the round-1 remediation; with no way to tell remediation from filler, the only safe call was to skip a legitimate cleanup. The simplify pass is silently degraded on every round after the first.
   - Scope: `plugins/ca77y-engineering/agents/lead.md`, `## The commit model`. Pick one resolution.

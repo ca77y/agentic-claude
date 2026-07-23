@@ -15,13 +15,15 @@ and the knowledge base are versioned alongside the code.
 The toolkit is **one plugin**, `ca77y-engineering`, holding two rosters:
 
 - The **pipeline** — `researcher → analyst → lead → writer → coder → writer`, with
-  `qa`, `reviewer`, and `auditor` gating native to Claude.
+  `qa` (validation plus the local code review) and the `auditor` gating native to
+  Claude, and the independent code review running on the opened PR.
 - The **library crew** — `librarian`, `scribe`, `clerk` — that maintains the
   project's Markdown research library. The crew runs as native Claude subagents,
   dispatched directly by the agents that need library work.
 
-Every check runs **natively in Claude** — code review (`reviewer`), readiness and
-acceptance audits (`auditor`), and library health (`clerk`). No external CLI
+Every check runs **natively in Claude** — the local code review (`qa`), readiness and
+acceptance audits (`auditor`), and library health (`clerk`), plus the independent code
+review on the PR (the Claude GitHub review — Claude Code in CI). No external CLI
 dispatcher.
 
 **One task in, one PR out.** The `lead` takes a single task — a prompt, optionally
@@ -37,7 +39,7 @@ The end-to-end flow:
 ┌────────────┐   wiki   ┌──────────┐  story   ┌──────┐   task   ┌──────────┐
 │ researcher │ ───────▶ │ analyst  │ ───────▶ │ lead │ ───────▶ │  writer  │ spec
 └────────────┘  pages   └──────────┘  cards   └──────┘          │  coder   │ build
-      │                      │                    │             │ reviewer │ review
+      │                      │                    │             │    qa    │ test+review
       │ library              │ fit gate           │             │  auditor │ accept
       ▼                      ▼                    │             │  writer  │ docs
    ┌───────────┐        human                     │             └──────────┘
@@ -97,8 +99,9 @@ claude plugin install ca77y-engineering@ca77y-agentic
 
 ## The pipeline at a glance
 
-`researcher → analyst → lead → writer → coder → writer`, with `qa`, `reviewer`, and
-`auditor` gating natively in Claude. The library crew — `librarian`, `scribe`,
+`researcher → analyst → lead → writer → coder → writer`, with `qa` (validation plus the
+local code review) and the `auditor` gating natively in Claude, and the independent code
+review on the opened PR. The library crew — `librarian`, `scribe`,
 `clerk` — runs as native subagents too, dispatched directly by whoever needs the
 library work.
 
@@ -109,9 +112,8 @@ library work.
 | Orchestration | `lead` | one task (a prompt, maybe naming a card) | a single merged-ready PR, reviewed |
 | Spec | `writer` | the task | a validated spec in the specs area |
 | Build | `coder` | the validated spec | the finished work in the story worktree |
-| Validation | `qa` | the work in progress | pass/fail + filled test gaps |
-| Simplify & review | `reviewer` | a diff | cleaned-up code + review findings |
-| Readiness | `auditor` | a spec, docs tree, or the work vs its criteria | ready / not-ready verdict |
+| Validation & review | `qa` | the work in progress | pass/fail + filled test gaps + code-review findings |
+| Readiness & acceptance | `auditor` | the spec, the built work vs its criteria, or a story card | ready / not-ready verdict |
 | Docs | `writer` | the finished task | durable docs; spec converted & removed |
 | Library lookup | `librarian` | a research question | cited synthesis from the Markdown library |
 | Library write | `scribe` | raw notes / a synthesis target | wiki pages + index/taxonomy/log updates |
@@ -177,21 +179,20 @@ relationship with the board: read-only.
    and the relevant code.
 2. **Create the workspace** — one story branch in **one worktree**; the repo root
    stays on its base branch. Everything happens in that worktree.
-3. **Spec** — dispatches the `writer`, which authors the spec and clears its own
-   `auditor` gate. The lead **commits the spec** (commit 1).
+3. **Spec** — dispatches the `writer` to author the spec, then the `auditor` to gate
+   it; routes any findings back to the writer to revise, re-audits fresh, and once
+   ready **commits the spec** (commit 1).
 4. **Build** — dispatches **one** `coder` with the spec's path, and **records its
-   agentId**. The coder implements and runs `qa` to green; the lead trusts that
-   reported state.
-5. **Simplify & review** — dispatches the `reviewer` at the worktree's uncommitted
-   changes; it simplifies them, then reviews the cleaned result. This is the one
-   gate that **writes** to the tree, and its cleanup is part of what gets committed.
-   Findings route back to the same coder by agentId; each round is a **fresh**
-   reviewer, capped at 3. A no-result is not a pass.
+   agentId**. The coder implements and reports; the lead trusts that reported state.
+5. **Validate & review** — dispatches `qa` to validate the build and review the diff;
+   routes its findings back to the same coder by agentId and re-dispatches a **fresh**
+   `qa`, capped at 3 rounds.
 6. **Acceptance gate** — the `auditor` verifies the built result meets the task's
    acceptance criteria: the **card's** enumerated criteria when a card was named,
    the **spec's** requirements when not. Findings route back to the same coder by
    agentId, capped at 3 rounds. Docs do not start while a criterion is unmet.
-7. **Docs** — a `writer` pass to update docs and convert the shipped spec.
+7. **Docs** — a `writer` pass to update docs and convert the shipped spec; the lead
+   trusts it, no docs gate.
 8. **Ship** — **commits everything else** (commit 2), pushes, opens **one PR**.
 9. **PR review loop** — drives the review to resolution (below).
 
@@ -209,81 +210,56 @@ app, triggered on open and re-triggerable by comment.
   review was triggered.
 - **A comment showing the review started** → the timer bounds how long to wait for
   the review to be *triggered*, not to *finish* — keep waiting until it lands.
-- **Issues** → resume the same coder by agentId with the full set of findings, put
-  the fixes back through the `reviewer`, then commit, push, and re-fire with
-  `gh pr comment --body "@review rerun the PR review"`.
+- **Issues** → resume the same coder by agentId with the full set of findings, then
+  commit, push, and re-fire with `gh pr comment --body "@review rerun the PR review"`.
 - After 3 rounds it stops and reports what remains.
 
-**Why every gate hangs off the lead.** Subagents can dispatch from the lead's level
-and one below it, but **three levels down the dispatch tool is absent entirely** —
-an agent there cannot delegate and cannot detect the limit in advance. So the
-`reviewer` is dispatched by the lead, not by the coder: from there the code-review
-skill's own fan-out still works, and from inside the coder it would silently
-collapse to a single pass. `qa` and the `auditor` sit at that third level happily,
-since neither dispatches anything. If a dispatch fails for depth anyway, the lead
-runs the missing gate itself and reports the fallback.
+**A flat topology, and the lead never does the work.** The `lead` is the only
+orchestrator: it dispatches `writer`, `coder`, `qa`, and `auditor` directly, and none of
+them dispatches another — the chain is never more than two deep. Each is a leaf that does
+its one job and returns, and the lead **trusts that result**: it never writes, tests,
+reviews, or judges the work itself, and if a dispatch fails it retries or escalates rather
+than stepping in. This also sidesteps Claude Code's dispatch-depth limit — three levels
+down the dispatch tool is gone, and a fan-out skill there silently collapses to a single
+pass — since with every pipeline agent a leaf under the lead, nothing runs deep enough to
+hit it, and the heavy fan-out **code review runs on the PR** (the Claude GitHub review),
+outside the dispatch tree entirely.
 
 ### coder — builds the whole task
 
 Takes the validated spec and the story worktree and delivers the task end to end.
 **It never commits** — its work stays in the tree for the lead, because the task
-ships as one commit. It is also **not its own reviewer**: it builds and fixes, and
-the lead owns every gate over it.
+ships as one commit. It is **not its own reviewer** — `qa` reviews its work in a
+separate context — and the lead owns every gate over it.
 
 1. **Prepare** the worktree; confirm the spec; isolate pre-existing dirty changes.
 2. **Implement** with minimal scoped diffs + one scenario test per spec scenario,
    consulting current third-party docs via context7 when external behavior matters.
-3. **QA** — hands off to `qa`, which runs validation and fills the test gaps (e2e,
-   frontend, integration, edge cases); fixes what it surfaces and re-runs until green.
-4. **Report up** — no commit, no push, no PR.
+3. **Report up** — no commit, no push, no PR. The lead then runs `qa` over the build.
 
-It does **not** run `/simplify`; the `reviewer` does, from a depth where the skill's
-fan-out actually works. It also never reverts the cleanup the reviewer applied.
+The lead **resumes the same coder** for qa, acceptance-gate, and PR-review findings. All
+are handled the same way: apply the whole set in one go and report back to the lead, which
+re-runs `qa`. A finding is rejected only with a traced input, never a restated conclusion;
+a finding that genuinely conflicts with the spec is escalated as a mismatch, never rejected.
 
-The lead **resumes the same coder** for code-review, acceptance-gate, and PR-review
-findings. All three are handled the same way: apply the whole set in one go, re-run
-`qa`, and report back for the lead to re-review. A finding is rejected only with a
-traced input, never a restated conclusion; a finding that genuinely conflicts with
-the spec is escalated as a mismatch, never rejected.
+### qa — validates the work, fills test gaps, and reviews the diff
 
-### qa — validates the work and fills its test gaps
-
-Called by the `coder` when it first builds, and again each time the coder is resumed
-with code-review, acceptance, or PR findings. Runs the project's validation commands, compares the
-spec's scenarios against existing tests, and adds the missing coverage (e2e,
-frontend, integration, edge cases), then re-runs. Reports pass/fail with evidence and
-what it added. **Does not** fix feature code (defects route back to the `coder`),
-review code quality (that's the `reviewer`), or weaken a failing test to make the
-suite pass.
-
-### reviewer — simplify + independent review (native, in Claude)
-
-Two passes over exactly the diff the caller names — usually the **uncommitted working
-tree**, since the pipeline commits only at PR time:
-
-1. **Simplify** — runs `/simplify` over the target (quality-only: reuse,
-   simplification, efficiency; no bug-hunting), owns what it applies, backs out
-   anything that overreaches, and re-runs the project's validation to prove the
-   cleanup broke nothing.
-2. **Review** — invokes Claude Code's built-in code-review skill over the cleaned
-   result and relays the findings verbatim.
-
-Callers name only *what* to work on; which skills run, and at what effort, is
-internal to the reviewer, which sizes the review to the change. It is the one agent
-allowed to launch generic subagents — **both** skills fan out, and both would
-collapse to a single pass anywhere deeper in the chain, which is why the `lead`
-dispatches it directly. The simplify pass is the **only** writing it does: it never
-fixes the defects it finds (those go back to the `coder`) and never reviews non-code
-artifacts (that's the `auditor`). `ultra` (multi-agent cloud review) only on explicit
-request.
+Dispatched by the `lead` after the coder builds, and again after each fix round. Runs the
+project's validation commands, compares the spec's scenarios against existing tests and
+adds the missing coverage (e2e, frontend, integration, edge cases), then re-runs; and
+**reviews the changed code** against the spec and the project's conventions for defects
+and quality, since it is a separate context from the one that wrote it. Reports pass/fail
+with evidence, the tests it added, and its review findings — the lead routes them to the
+`coder`. **Does not** fix feature code or weaken a failing test to make the suite pass.
+The heavy, independent code review runs again on the **PR** — the Claude GitHub review.
 
 ### auditor — independent readiness & acceptance gate (native, in Claude)
 
-The gate for everything that isn't code quality. The `writer` uses it twice — to
-validate the spec before any code is written, and to check docs consistency after;
-the `lead` uses it as the **acceptance gate**, proving the finished work meets the
-task's acceptance criteria criterion by criterion; the `analyst` uses it as a story
-advisor gate. Reads the artifact plus enough context to judge it on its own terms and
+The gate for everything that isn't code quality. The `lead` uses it as the
+**spec-readiness gate** before the build and the **acceptance gate** after it, proving
+the finished work meets the task's acceptance criteria criterion by criterion; the
+`analyst` uses it as a story advisor gate on candidate cards. (The `writer`'s docs are
+trusted with no gate; its spec is gated.) Reads the artifact plus enough context to judge it on its own terms and
 returns a **ready / not-ready** verdict. **Report-only** — the caller owns applying
 fixes. Does not review code quality.
 
@@ -293,15 +269,14 @@ Runs in two modes the lead dispatches separately, and **never commits**.
 
 - **Spec pass**, before any code exists: authors the task's spec (Goal → Design →
   Requirements with WHEN/THEN scenarios → Tasks) against the acceptance criteria the
-  work will be judged on, then clears the `auditor` gate and hands back the path.
+  work will be judged on, and hands back the path; the lead has the `auditor` gate it
+  before the build and routes any findings back to the writer to revise.
 - **Docs pass**, after the build is accepted: folds the shipped spec's durable
   content into its permanent home (features / flows / designs), reconciling with what
-  exists, and **removes the spec** (specs are not archived) — but only once the
-  `auditor` gate passes, so a blocked gate leaves the run resumable.
+  exists, and **removes the spec** (specs are not archived).
 
-Every consistency check is delegated to the `auditor` in both modes — the writer
-writes, the `auditor` checks. **Does not** implement code, run tests, or
-commit/branch/PR (the lead does).
+The writer just authors and returns; its spec is gated by the lead's `auditor`, its
+docs trusted. **Does not** implement code, run tests, or commit/branch/PR (the lead does).
 
 ### librarian — cited answers from the library
 
@@ -354,17 +329,16 @@ and are **converted into durable docs and removed** by the `writer` when the tas
 ships — they are never archived. The spec gets its own commit precisely so it
 survives in history after that removal.
 
-**Every check runs in an independent context.** Code review goes to the native
-`reviewer`, readiness and acceptance audits to the native `auditor`, and library
-health to the `clerk`. Self-checking is forbidden across the pipeline; the agent that
-produces an artifact never signs off on it — the review always runs as a separate
-subagent.
+**Every check runs in an independent context.** Code review goes to `qa` locally — a
+separate context from the `coder` — and to the PR review on the opened PR, readiness and
+acceptance audits to the native `auditor`, and library health to the `clerk`.
+Self-checking is forbidden across the pipeline; the agent that produces an artifact never
+signs off on it — the review always runs as a separate subagent.
 
-**Verification is layered**: the `auditor` validates the spec before any code exists
-→ `coder` writes per-scenario tests → `qa` fills coverage gaps → the `reviewer`
-simplifies the change and then reviews it → the `auditor` gates the result against its
-acceptance criteria → the PR opens → the Claude GitHub app reviews it, and the lead
-loops fixes back through the same coder.
+**Verification is layered**: the `writer` authors the spec → the `auditor` gates it
+ready-to-build → `coder` writes per-scenario tests → `qa` fills coverage gaps and reviews
+the diff → the `auditor` gates the result against its acceptance criteria → the PR opens →
+the Claude GitHub review reviews it, and the lead loops fixes back through the same coder.
 
 **Isolation**: the task builds in one worktree/branch under the repo's worktree
 directory, and the repo root stays on its base branch. Nothing is committed until the
@@ -392,8 +366,8 @@ ca77y-agentic/
         ├── plugin.json                   # root manifest (mirrors the Claude one)
         └── agents/                       # all subagent definitions:
                                           #   analyst, auditor, clerk, coder, lead,
-                                          #   librarian, qa, researcher, reviewer,
-                                          #   scribe, writer
+                                          #   librarian, qa, researcher, scribe,
+                                          #   writer
 ```
 
 Each plugin carries two manifests: Claude reads `.claude-plugin/plugin.json`; the root
