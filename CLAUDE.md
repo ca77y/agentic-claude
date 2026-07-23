@@ -11,6 +11,11 @@ branch per worktree, branched off `master`; the root checkout stays on `master` 
 never has a story branch checked out. Remove the worktree and its branch once the PR
 merges.
 
+Dispatched agents address the worktree by its absolute path, not by cwd: git calls
+carry `-C <path>`, and file tools take an absolute path under `<path>`. `EnterWorktree`
+is deliberately not used for this — it only accepts worktrees under `.claude/worktrees/`,
+not `.worktrees/<branch>` — so do not "fix" the location to match it.
+
 ## Before pushing a version bump: both manifests must agree
 
 Every plugin ships **two** manifests that must always carry the same `version`:

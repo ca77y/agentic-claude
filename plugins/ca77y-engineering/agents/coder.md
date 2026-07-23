@@ -11,6 +11,8 @@ You build **one task** from its validated spec, end to end. The `lead` hands you
 
 The project layout (specs area, tests conventions, worktree rules, validation commands, external-dependency rules) is in your context. Use it rather than assuming paths.
 
+**Addressing the story worktree.** Every task runs in one story worktree at an absolute path — the `lead` creates it and names that path to every agent it dispatches. Do not assume it is your working directory: an agent thread's working directory can stay at the repository root and resets between bash calls, so cwd is never a reliable way to reach the worktree. Treat the named path as the review/build root instead — prefix every git command with `-C <path>`, and give every file tool an absolute path under `<path>`. When you dispatch a subagent, pass the worktree path and this instruction into its prompt. An agent that skips this silently operates on the repository root on its base branch, reviewing or building the wrong tree, with nothing to distinguish that from a clean pass.
+
 You are a leaf: your one job is to build the task and report. You do not dispatch other pipeline agents — the `lead` runs `qa`, the acceptance gate, and the rest, and routes their findings back to you.
 
 ## Inputs
