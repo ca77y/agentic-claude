@@ -54,7 +54,7 @@ These steps are the default happy path — **guidance, not a script.** Your job 
 
    Route findings to the same `coder` by agentId **as concrete unmet criteria** — it has already concluded it was finished, so it needs something specific to act on. Re-audit as a **fresh dispatch** of `ca77y-engineering:auditor`, capped at 3 rounds, then escalate what remains.
 7. **Docs.** Dispatch the `ca77y-engineering:writer` for the docs pass: durable docs for what shipped, and the spec converted into its permanent home and removed from the specs area. Trust what it returns — there is no docs-consistency gate.
-8. **Ship.** Commit everything else (commit 2), push the branch, and open **one** PR against the target branch: what the task was, the spec, what was built, tests, the acceptance result, docs, risks, and follow-ups. The code review runs on the PR after this, so it is not part of the opening description.
+8. **Ship.** Commit everything else (commit 2), push the branch, and open **one** PR against the target branch: what the task was, the spec, what was built, tests, the acceptance result, docs, any production hazards the coder reported, risks, and follow-ups. The code review runs on the PR after this, so it is not part of the opening description.
 9. **PR review loop.** Drive it to resolution (below).
 
 ## When a gate finds a problem
@@ -76,7 +76,7 @@ The PR review is performed by an external reviewer — the Claude GitHub app —
 2. **Nothing within 5 minutes** → report the task finished, saying plainly that no review was triggered, so an unreviewed PR is visible rather than silent.
 3. **A comment showing the review has started** → the timer bounds how long you wait for a review to be *triggered*, not for it to *finish*. Keep waiting past the 5 minutes until it lands — arm the waiting monitor with a long timeout (a review can take many minutes to finish; a 5-minute floor is the minimum, longer is better here) so you are woken when it lands, not re-prompted on a short cycle. Treat "in progress", "working…", and "Reviewing…" comment states as still-running; only a finalized review comment (or a submitted review) counts as landed.
 4. **It lands clean** → report the task finished.
-5. **It lands with issues** → route each finding to the agent that owns it: **code** to the `coder` (resume by agentId), **docs** to the `writer`, and an issue large enough to invalidate the approach back to a revised **spec** for the `coder` to rebuild against. Apply the full set, re-run `qa` over any code changes, then commit, push, and re-fire with `gh pr comment --body "@review rerun the PR review"`. Return to step 1.
+5. **It lands with issues** → route each finding to the agent that owns it: **code** to the `coder` (resume by agentId), **docs** to the `writer`, and an issue large enough to invalidate the approach back to a revised **spec** for the `coder` to rebuild against. Apply the full set, re-run `qa` over any code changes, carry any production hazard the coder reports in this round into the PR update — not only hazards known at the initial open — then commit, push, and re-fire with `gh pr comment --body "@review rerun the PR review"`. Return to step 1.
 6. **After 3 rounds** → stop. Report the PR, what was fixed, and what remains unresolved.
 
 ## Delegation
@@ -102,7 +102,7 @@ Every agent here is a leaf: it does its one job and returns, and you trust that 
 
 ## Final handoff
 
-Report: the task and the story card it referenced, if any; the spec's location; what the coder built and anything it could not resolve; the qa validation and review — rounds and how findings closed; the acceptance gate per criterion; docs changed and the spec converted and removed; the two commits and the PR link; the PR review outcome — reviewed clean, fixed across N rounds, or **no review triggered**; and remaining risks and follow-ups.
+Report: the task and the story card it referenced, if any; the spec's location; what the coder built, any production hazards it reported, and anything it could not resolve; the qa validation and review — rounds and how findings closed; the acceptance gate per criterion; docs changed and the spec converted and removed; the two commits and the PR link; the PR review outcome — reviewed clean, fixed across N rounds, or **no review triggered**; and remaining risks and follow-ups.
 
 ## Process feedback
 
