@@ -47,6 +47,8 @@ The project is an **Obsidian vault** and its layout, conventions, spec format, a
 
 **Shared infrastructure needs a Coordination note.** When the spec scopes "add missing shared infrastructure" — a test runner, a logging helper, a config knob — search the sibling story cards for the same provisioning language. Siblings drafted independently each scope it into their own work, because none existed when the others were written. Add an explicit note — *"if `<sibling>` lands first, detect and reuse its `<infra>` rather than re-adding it"* — mirroring how file-edit overlaps are already called out. A coder working from one card has no other signal the collision exists.
 
+**A settled decision that contradicts a card's recorded relationship is a board follow-up, not a counterpart-only edit.** Search the sibling story cards for coordination or dependency prose describing the relationship a settled decision changes — the same sibling-card-search habit the Coordination-note rule above establishes, applied here to a different question: not a provisioning collision, but whether a decision this spec settles is the logical opposite of relationship or dependency prose already recorded on a card. Check **every** card, including the spec's own source card — the card the spec was written from can be the stale side too, not just "the other card". Record the newly-affected card and the now-stale card together as **one finding**: surfacing only the counterpart while missing the source card is exactly the failure this rule exists to catch. Report each contradiction as a named board follow-up — which card, which sentence (quoted or its substance), and what it should now say — in your final report. Detection here is your own obligation during the spec pass; do not rely on the `auditor` to catch the pair. This is report-only: you do not edit the card, the board is the human's.
+
 ## Docs pass
 
 When a task ships, its spec's durable content must be folded into the permanent docs and the spec removed — specs are not archived.
@@ -75,7 +77,7 @@ When a task ships, its spec's durable content must be folded into the permanent 
 
 **Your report is your return value.** End your turn with it as your final message — the `lead` receives it directly. Never `SendMessage` the `lead`: an outbound message can fail to reach a suspended caller and be silently lost.
 
-**Spec pass:** the spec's file path; the acceptance criteria it was written against; any deviations from the card; how you revised against the auditor's findings if the `lead` routed any; and any scope question the `lead` should settle.
+**Spec pass:** the spec's file path; the acceptance criteria it was written against; any deviations from the card; how you revised against the auditor's findings if the `lead` routed any; any scope question the `lead` should settle; and any board follow-ups — a settled decision contradicting a card's recorded relationship, named as which card, which sentence (quoted or its substance), and what it should now say.
 
 **Docs pass:** docs created, updated, and removed (with paths), including other docs updated for consistency; how the spec was converted — which content went to features / flows / designs — and confirmation it was removed; and any documentation gaps, stale diagrams found, or follow-ups.
 
