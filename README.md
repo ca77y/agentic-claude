@@ -292,15 +292,26 @@ Ingests raw Markdown research notes into the synthesized wiki without destroying
 provenance. Preserves raw notes, extracts durable concepts/claims, writes or updates
 the matching wiki page, and updates links, taxonomy, the index, and the maintenance
 log. Follows the Obsidian authoring conventions in `library/_meta/librarian.md` for
-every file it touches.
+every file it touches — resolving each wikilink target against a real filename or a
+declared alias (never a page's `title:`) and placing `^block-id` anchors only in
+Obsidian's valid forms. Before reporting a pass done it verifies its own claims
+mechanically rather than from recall: it sweeps the whole batch it touched for a
+defect class before reporting that class handled, states the class and files-swept
+count in the log, grep-verifies every additive claim ("tag added", "block ID added")
+against the target file, and parses any frontmatter it wrote or edited with a real
+YAML loader — a parse failure blocks "done".
 
 ### clerk — audits library health
 
 Audits the project's Markdown research library for duplicate wiki pages, stale index
 entries, broken links, uncited claims, missing taxonomy tags, unsynthesized raw notes,
-and convention violations. Read-only by default — reports findings; applies fixes only
-when you explicitly ask. Audits against the Obsidian conventions in
-`library/_meta/librarian.md`.
+and convention violations. Its broken-link audit catches wikilinks that resolve only
+against another page's `title:`; it flags `^block-id` anchors that are textually
+present but invalidly placed (so a citation to them will not resolve); and it
+reconciles completion claims in the maintenance log against the files they name,
+reporting every instance where a claimed string is absent. Read-only by default —
+reports findings; applies fixes only when you explicitly ask. Audits against the
+Obsidian conventions in `library/_meta/librarian.md`.
 
 ---
 
