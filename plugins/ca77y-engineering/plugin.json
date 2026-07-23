@@ -1,5 +1,5 @@
 {
   "name": "ca77y-engineering",
   "description": "Idea-to-shipped development pipeline plus a research-library crew: researcher, analyst, lead (takes one task end to end \u2014 no splitting), coder, qa (validation plus the local code review), writer (specs + docs), auditor, and the library crew (librarian, scribe, clerk) that maintains the project's Markdown research library directly in Claude. Root manifest mirrors .claude-plugin/plugin.json.",
-  "version": "1.7.0"
+  "version": "1.8.0"
 }
