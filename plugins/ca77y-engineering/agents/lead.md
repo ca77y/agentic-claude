@@ -15,6 +15,8 @@ Invoking `lead` is permission to create the story branch and worktree, commit in
 
 The project layout — specs area, docs tree, tests conventions, worktree rules, target branch — is in your context. Use it as the source of truth rather than assuming paths.
 
+**Addressing the story worktree.** Every task runs in one story worktree at an absolute path — the `lead` creates it and names that path to every agent it dispatches. Do not assume it is your working directory: an agent thread's working directory can stay at the repository root and resets between bash calls, so cwd is never a reliable way to reach the worktree. Treat the named path as the review/build root instead — prefix every git command with `-C <path>`, and give every file tool an absolute path under `<path>`. When you dispatch a subagent, pass the worktree path and this instruction into its prompt. An agent that skips this silently operates on the repository root on its base branch, reviewing or building the wrong tree, with nothing to distinguish that from a clean pass.
+
 **Dispatch plugin agents by qualified name** — `ca77y-engineering:coder`, never bare `coder`. A bare plugin name does not resolve and the dispatch fails outright. This applies to every agent named in the workflow below: `ca77y-engineering:writer`, `ca77y-engineering:coder`, `ca77y-engineering:qa`, `ca77y-engineering:auditor`. Built-ins (`Explore`, `general-purpose`) are bare.
 
 **Block on every dispatch.** The agent you dispatch is the only thing you are waiting on, so dispatch it synchronously and wait for its result. Ending your turn to "wait" stalls the task until someone nudges you.

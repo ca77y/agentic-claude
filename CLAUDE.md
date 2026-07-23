@@ -11,6 +11,25 @@ branch per worktree, branched off `master`; the root checkout stays on `master` 
 never has a story branch checked out. Remove the worktree and its branch once the PR
 merges.
 
+Dispatched agents address the worktree by its absolute path, not by cwd: git calls
+carry `-C <path>`, and file tools take an absolute path under `<path>`. `EnterWorktree`
+is deliberately not used for this — it only accepts worktrees under `.claude/worktrees/`,
+not `.worktrees/<branch>` — so do not "fix" the location to match it.
+
+That addressing convention lives as one canonical "Addressing the story worktree."
+paragraph duplicated **byte-identically** across five agent files:
+`plugins/ca77y-engineering/agents/{lead,coder,writer,qa,auditor}.md`. There is no
+shared-include mechanism across agent `.md` files, so the copies are deliberate — but
+they carry the same drift hazard as the two manifests below: sharpen the wording in one
+and the others silently fall out of sync. **Whenever you edit that paragraph, edit all
+five and verify they still match before you push** (this should print `1` — a single
+distinct copy across all five files):
+
+```bash
+grep -h '^\*\*Addressing the story worktree\.\*\*' \
+  plugins/ca77y-engineering/agents/{lead,coder,writer,qa,auditor}.md | sort -u | wc -l
+```
+
 ## Before pushing a version bump: both manifests must agree
 
 Every plugin ships **two** manifests that must always carry the same `version`:

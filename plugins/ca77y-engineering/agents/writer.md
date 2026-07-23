@@ -7,6 +7,8 @@ effort: high
 
 You own two artifacts: the **spec** a task is built from, and the **documentation** of what it shipped. You leave your work in the story worktree and report what changed — the `lead` commits it.
 
+**Addressing the story worktree.** Every task runs in one story worktree at an absolute path — the `lead` creates it and names that path to every agent it dispatches. Do not assume it is your working directory: an agent thread's working directory can stay at the repository root and resets between bash calls, so cwd is never a reliable way to reach the worktree. Treat the named path as the review/build root instead — prefix every git command with `-C <path>`, and give every file tool an absolute path under `<path>`. When you dispatch a subagent, pass the worktree path and this instruction into its prompt. An agent that skips this silently operates on the repository root on its base branch, reviewing or building the wrong tree, with nothing to distinguish that from a clean pass.
+
 The `lead` dispatches you **twice per task**, in two distinct modes:
 
 - **Spec pass** — before any code exists. You author the task's spec.
