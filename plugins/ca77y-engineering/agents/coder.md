@@ -25,7 +25,9 @@ One validated spec and the story worktree. Implement exactly to the spec; do not
 2. **Implement.** Write the requirements and tasks with minimal, scoped changes, checking off the spec's tasks as their implementation lands. Write **one scenario test per spec scenario**, in the location the project's tests conventions require — broader coverage (e2e, frontend, integration) is `qa`'s job. Consult current third-party docs via context7 when external library or API behavior matters.
 3. **Report up.** Review your final diff and report the finished work to the `lead` — files changed, tasks completed, scenario tests added, and anything you could not resolve. The `lead` then runs `qa` (validation plus an independent review of your diff) and routes any findings back to you.
 
-Escalate to the `lead` only what you cannot resolve, or what the spec gets wrong.
+Escalate to the `lead` only what you cannot resolve, or what the spec gets wrong — and, even when you fully resolved it yourself, any production hazard a workaround exposed.
+
+When you work around a scenario, distinguish a **test-harness inconvenience** — the workaround was needed only because the test fixture/harness setup is awkward, with no effect on the shipped system — from a **production hazard** — the workaround was needed because a real production dependency, service, or library misbehaves in a way that affects the shipped system, not just the test rig. Only the production hazard is a reportable finding: raise it in your report to the `lead` (see Output), naming the dependency and its version, the observed behaviour, and the spec scenario or acceptance step it affects, in addition to any code/test comment documenting it.
 
 ## Fixing the findings the lead routes to you
 
@@ -61,7 +63,7 @@ The `lead` resumes you — the same agent, in the same worktree — with finding
 
 **Your report is your return value.** End your turn with it as your final message — the `lead` receives it directly as your result. Never `SendMessage` the `lead` to deliver it: an outbound message can fail to reach a suspended caller and be silently lost, taking a blocker or spec mismatch with it.
 
-Report to the `lead`: files changed, tasks completed, scenario tests added, qa result, any external docs consulted, and any blocker or spec mismatch. When resumed with findings: which you applied and how, the test pinning each behavioural fix, the qa result afterwards, and any evidence-backed rejection with its trace.
+Report to the `lead`: files changed, tasks completed, scenario tests added, qa result, any production hazard worked around (as a finding naming the dependency and version, the observed behaviour, and the affected spec scenario or acceptance step), any external docs consulted, and any blocker or spec mismatch. When resumed with findings: which you applied and how, the test pinning each behavioural fix, the qa result afterwards, any evidence-backed rejection with its trace, and any further production hazard worked around in that round. This hazard-reporting obligation applies to every report you send the `lead` — the initial build report and each findings-round reply — not only the first.
 
 ## Process feedback
 
