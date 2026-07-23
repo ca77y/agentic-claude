@@ -199,9 +199,9 @@ relationship with the board: read-only.
 7. **Docs** — a `writer` pass to update docs and convert the shipped spec; the lead
    trusts it, no docs gate.
 8. **Ship** — **commits everything else** (commit 2), pushes, opens **one PR** —
-   relaying any board follow-ups the writer surfaced while speccing in both its final
-   report and the PR description, so a card a decision made stale is visible without
-   opening the spec.
+   carrying any production hazards the coder reported into its description, and relaying
+   any board follow-ups the writer surfaced while speccing in both its final report and
+   the PR description, so a card a decision made stale is visible without opening the spec.
 9. **PR review loop** — drives the review to resolution (below).
 
 **The commit model.** Nothing is committed while work is in flight; the story
@@ -218,8 +218,9 @@ app, triggered on open and re-triggerable by comment.
   review was triggered.
 - **A comment showing the review started** → the timer bounds how long to wait for
   the review to be *triggered*, not to *finish* — keep waiting until it lands.
-- **Issues** → resume the same coder by agentId with the full set of findings, then
-  commit, push, and re-fire with `gh pr comment --body "@review rerun the PR review"`.
+- **Issues** → resume the same coder by agentId with the full set of findings, carrying
+  any production hazard it surfaces this round into the PR update, then commit, push, and
+  re-fire with `gh pr comment --body "@review rerun the PR review"`.
 - After 3 rounds it stops and reports what remains.
 
 **A flat topology, and the lead never does the work.** The `lead` is the only
@@ -249,6 +250,15 @@ The lead **resumes the same coder** for qa, acceptance-gate, and PR-review findi
 are handled the same way: apply the whole set in one go and report back to the lead, which
 re-runs `qa`. A finding is rejected only with a traced input, never a restated conclusion;
 a finding that genuinely conflicts with the spec is escalated as a mismatch, never rejected.
+
+When a scenario workaround is forced by a real production dependency misbehaving — a
+**production hazard**, as opposed to a mere **test-harness inconvenience** the fixture
+setup made awkward with no effect on the shipped system — the coder raises it as an
+explicit finding to the lead (naming the dependency and its version, the observed
+behaviour, and the spec scenario or acceptance step it affects), on top of any code/test
+comment, even when its own workaround fully resolved the problem. That obligation holds for
+**every** report it sends — the initial build and each findings round — so a production
+risk reaches the human through the PR rather than only through a comment on a test file.
 
 ### qa — validates the work, fills test gaps, and reviews the diff
 
