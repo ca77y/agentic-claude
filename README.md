@@ -55,7 +55,7 @@ yours** — the `lead` reads a referenced card but never writes it, so every sta
 transition, Done included, is a manual step. When speccing settles a decision that
 contradicts what a card records about its relationship to another — even the card the
 work came from — the `writer` surfaces it as a **board follow-up** (which card, which
-sentence, what it should now say) and the `lead` relays it to you in its final report
+sentence, and what it should now say) and the `lead` relays it to you in its final report
 and on the PR, so you can correct a stale card yourself; the pipeline still never edits
 the board for you.
 
