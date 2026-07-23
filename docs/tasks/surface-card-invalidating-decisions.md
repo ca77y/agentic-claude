@@ -5,7 +5,7 @@ title: Surface decisions that invalidate another card's recorded relationship
 
 # Surface decisions that invalidate another card's recorded relationship
 
-- [ ] Surface decisions that invalidate another card's recorded relationship #improvement 🔽 🆔 surface-card-invalidating-decisions
+- [<] Surface decisions that invalidate another card's recorded relationship #improvement 🔽 🆔 surface-card-invalidating-decisions
   - Two cards can each carry a hand-written coordination note describing their relationship. When a decision changes that relationship, only the card being newly blocked gets updated — the other side keeps asserting the old arrangement, and no agent is responsible for noticing.
   - Background: two sibling stories each carried a note describing their relationship as parallel. A decisions session settled that the first story now relocates a subdirectory, making the two sequential. The second card was updated — "no longer parallel", plus a blocking dependency marker. The first card still said "these two root-structure stories are parallel" and "prefer project references over relocating the app" — the exact opposite of what its own spec's first decision settles. The spec's Tasks list only tasked updating the *other* card, missing that its own source card had become the stale one.
   - The pipeline deliberately never writes cards — the board is the human's — so the fix is a reporting obligation, not a card edit. The `writer` discovers the contradiction while speccing; the `lead` is what the human actually reads.
