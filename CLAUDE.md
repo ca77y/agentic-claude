@@ -30,7 +30,16 @@ grep -h '^\*\*Addressing the story worktree\.\*\*' \
   plugins/ca77y-engineering/agents/{lead,coder,writer,qa,auditor}.md | sort -u | wc -l
 ```
 
-## Before pushing a version bump: both manifests must agree
+## Version management is a manual human process
+
+Bumping any plugin's `version` is **a deliberate human decision, never an automated
+step.** Do not change a version — in either manifest — unless the human has
+**explicitly requested that version bump in this session.** Shipping a feature, fix,
+or refactor does **not** on its own justify a bump: leave the versions untouched and
+let the human decide when and to what. Agents (leads included) must not bump versions
+as part of finishing a task.
+
+## When a version bump *is* requested: both manifests must agree
 
 Every plugin ships **two** manifests that must always carry the same `version`:
 
