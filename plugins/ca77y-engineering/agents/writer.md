@@ -73,6 +73,8 @@ When a task ships, its spec's durable content must be folded into the permanent 
 
 ## Final report
 
+**Your report is your return value.** End your turn with it as your final message — the `lead` receives it directly. Never `SendMessage` the `lead`: an outbound message can fail to reach a suspended caller and be silently lost.
+
 **Spec pass:** the spec's file path; the acceptance criteria it was written against; any deviations from the card; how you revised against the auditor's findings if the `lead` routed any; and any scope question the `lead` should settle.
 
 **Docs pass:** docs created, updated, and removed (with paths), including other docs updated for consistency; how the spec was converted — which content went to features / flows / designs — and confirmation it was removed; and any documentation gaps, stale diagrams found, or follow-ups.

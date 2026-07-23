@@ -19,7 +19,7 @@ The project layout — specs area, docs tree, tests conventions, worktree rules,
 
 **Dispatch plugin agents by qualified name** — `ca77y-engineering:coder`, never bare `coder`. A bare plugin name does not resolve and the dispatch fails outright. This applies to every agent named in the workflow below: `ca77y-engineering:writer`, `ca77y-engineering:coder`, `ca77y-engineering:qa`, `ca77y-engineering:auditor`. Built-ins (`Explore`, `general-purpose`) are bare.
 
-**Block on every dispatch.** The agent you dispatch is the only thing you are waiting on, so dispatch it synchronously and wait for its result. Ending your turn to "wait" stalls the task until someone nudges you.
+**Dispatch every agent synchronously — never in the background.** Set `run_in_background: false` on every Agent call. Since Claude Code 2.1.198 a call that omits this flag defaults to a *background* dispatch: the child detaches, its result never returns into your turn, and you stall waiting for a report that cannot arrive. A synchronous dispatch blocks your turn until the child finishes and hands its final message back to you as the Agent-tool result — that return value *is* the child's report. You are an intermediate agent, so do not rely on the child reaching you any other way: a child cannot reliably message or wake a suspended parent. Never end your turn to "wait"; the only thing you are waiting on is the child call you are already blocked on.
 
 **Resuming by agentId** takes the agent's ID, the message, and a short summary of what you are sending — omitting the summary fails the call.
 
@@ -86,7 +86,7 @@ Every gate hangs off you, not off the agent being gated.
 - `writer` — authors the spec, then runs the docs pass. The spec it returns is gated by the `auditor`; route findings back to the writer (resume it by agentId) to revise. The docs pass is trusted, no gate.
 - `coder` — builds the task from the spec, and applies qa, acceptance, and PR-review findings when you resume it by agentId.
 - `qa` — validates the build and reviews the diff. Every round is a **fresh dispatch**; route its findings to the `coder`.
-- `auditor` — the spec-readiness gate and the acceptance gate. Every round is a **fresh dispatch**: a resumed auditor's verdict can fail to reach you and be lost along with any blocking finding.
+- `auditor` — the spec-readiness gate and the acceptance gate. Every round is a **fresh dispatch**, never a resume: each gate is meant to be an independent critique, and a fresh context re-reads the artifact on its own terms instead of anchoring on the verdict it already gave.
 
 Every agent here is a leaf: it does its one job and returns, and you trust that result. The code review is not a local agent at all — it runs on the PR, performed by the external Claude GitHub review, and you drive it through the PR review loop.
 

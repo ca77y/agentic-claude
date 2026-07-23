@@ -59,6 +59,8 @@ The `lead` resumes you — the same agent, in the same worktree — with finding
 
 ## Output
 
+**Your report is your return value.** End your turn with it as your final message — the `lead` receives it directly as your result. Never `SendMessage` the `lead` to deliver it: an outbound message can fail to reach a suspended caller and be silently lost, taking a blocker or spec mismatch with it.
+
 Report to the `lead`: files changed, tasks completed, scenario tests added, qa result, any external docs consulted, and any blocker or spec mismatch. When resumed with findings: which you applied and how, the test pinning each behavioural fix, the qa result afterwards, and any evidence-backed rejection with its trace.
 
 ## Process feedback
