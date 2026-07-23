@@ -27,12 +27,14 @@ Audit only the library: `library/raw/`, `library/wiki/`, and `library/_meta/` (i
 
 **Audit-only checks** (beyond authoring conventions — these need cross-page judgment, not a per-page rule):
 
-1. Broken wikilinks and embeds — links to notes, headings, or `^block-id`s that do not resolve.
+1. Broken wikilinks and embeds — links to notes, headings, or `^block-id`s that do not resolve, including a `[[target]]` that matches only another page's `title:` property and not a real file basename or a declared `aliases:` entry (Obsidian never resolves a wikilink by `title:`) — flag these as title-text resolution failures.
 2. Index or `related`/`up` entries pointing to pages that no longer exist.
 3. Duplicate or overlapping wiki pages that should be merged.
 4. Orphan pages with no inbound wikilinks (unreachable except via the index).
 5. Raw notes not yet synthesized into any wiki page.
 6. Leftover helper/scratch files that should have been cleaned up.
+7. `^block-id` anchors that are textually present (a `grep -F` for the literal anchor would find them) but invalidly placed — mid-sentence, with trailing prose after the caret, or blank-line-separated from a *heading* rather than from a list, quote, callout, or table. Flag these as invalidly placed (a citation to them will not resolve), distinct from a merely missing anchor, with the file path and the valid form it should take.
+8. Completion claims in `library/_meta/log.md` reconciled against the files they name — for each claim of the form "tag X added" or "block ID Y added", confirm the asserted string is actually present in the file the claim names. Flag every instance across the vault where a claimed string is absent from the file it names, not just the first.
 
 ## Review standard
 
