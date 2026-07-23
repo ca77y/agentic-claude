@@ -43,7 +43,7 @@ These steps are the default happy path — **guidance, not a script.** Your job 
 
 1. **Read the task.** The prompt, the story card it names and what that card links, the documentation the task touches, and the relevant code. Decide what "done" means for this task.
 2. **Create the workspace.** Branch off the project's target branch in its own worktree under the repository's worktree directory. Everything from here happens there.
-3. **Spec.** Dispatch the `ca77y-engineering:writer` to author the spec in the project's specs area, and **record its agentId**. When it returns, dispatch the `ca77y-engineering:auditor` to gate the spec — is it ready to build from? A **not-ready** verdict → route its findings to the writer (resume it by agentId) to revise, then re-audit with a **fresh** `ca77y-engineering:auditor`; loop until ready, capped at 3 rounds, then escalate what remains. Once ready, **commit the spec** (commit 1). You never audit the spec yourself — the auditor does, and you act on its verdict.
+3. **Spec.** Dispatch the `ca77y-engineering:writer` to author the spec in the project's specs area, and **record its agentId**. When it returns, dispatch the `ca77y-engineering:auditor` to gate the spec — is it ready to build from? A **not-ready** verdict → route its findings to the writer (resume it by agentId) to revise, then re-audit with a **fresh** `ca77y-engineering:auditor`; loop until ready, capped at 3 rounds, then escalate what remains. Once ready, **commit the spec** (commit 1). You never audit the spec yourself — the auditor does, and you act on its verdict. Retain any board follow-ups the writer reported with the spec — which card, which stale sentence, and what it should now say — and carry them forward; they are not dropped when the spec is committed, and they resurface at step 8 and in the Final handoff.
 4. **Build.** Dispatch **one** `ca77y-engineering:coder` with the spec's path and the worktree. It implements and reports what it built plus anything it could not resolve. Trust its reported state.
 
    **Record its agentId.** Every later round — qa, acceptance, PR review — resumes *this same coder*, so its context carries forward.
@@ -54,7 +54,7 @@ These steps are the default happy path — **guidance, not a script.** Your job 
 
    Route findings to the same `coder` by agentId **as concrete unmet criteria** — it has already concluded it was finished, so it needs something specific to act on. Re-audit as a **fresh dispatch** of `ca77y-engineering:auditor`, capped at 3 rounds, then escalate what remains.
 7. **Docs.** Dispatch the `ca77y-engineering:writer` for the docs pass: durable docs for what shipped, and the spec converted into its permanent home and removed from the specs area. Trust what it returns — there is no docs-consistency gate.
-8. **Ship.** Commit everything else (commit 2), push the branch, and open **one** PR against the target branch: what the task was, the spec, what was built, tests, the acceptance result, docs, risks, and follow-ups. The code review runs on the PR after this, so it is not part of the opening description.
+8. **Ship.** Commit everything else (commit 2), push the branch, and open **one** PR against the target branch: what the task was, the spec, what was built, tests, the acceptance result, docs, risks, and follow-ups — including any board follow-ups the writer reported during the spec pass (which card, which sentence, what it should now say), so the human who owns the board sees them without opening the spec. The code review runs on the PR after this, so it is not part of the opening description.
 9. **PR review loop.** Drive it to resolution (below).
 
 ## When a gate finds a problem
@@ -102,7 +102,7 @@ Every agent here is a leaf: it does its one job and returns, and you trust that 
 
 ## Final handoff
 
-Report: the task and the story card it referenced, if any; the spec's location; what the coder built and anything it could not resolve; the qa validation and review — rounds and how findings closed; the acceptance gate per criterion; docs changed and the spec converted and removed; the two commits and the PR link; the PR review outcome — reviewed clean, fixed across N rounds, or **no review triggered**; and remaining risks and follow-ups.
+Report: the task and the story card it referenced, if any; the spec's location; what the coder built and anything it could not resolve; the qa validation and review — rounds and how findings closed; the acceptance gate per criterion; docs changed and the spec converted and removed; the two commits and the PR link; the PR review outcome — reviewed clean, fixed across N rounds, or **no review triggered**; any board follow-ups the writer reported — card, stale sentence, and correction — relayed to the user without acting on them, since the board is theirs to fix; and remaining risks and follow-ups.
 
 ## Process feedback
 

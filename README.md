@@ -52,7 +52,12 @@ The end-to-end flow:
 Two **human gates** punctuate the flow: you approve the analyst's stories before
 anything is built, and you explicitly invoke the `lead` to build one. **The board is
 yours** — the `lead` reads a referenced card but never writes it, so every status
-transition, Done included, is a manual step.
+transition, Done included, is a manual step. When speccing settles a decision that
+contradicts what a card records about its relationship to another — even the card the
+work came from — the `writer` surfaces it as a **board follow-up** (which card, which
+sentence, what it should now say) and the `lead` relays it to you in its final report
+and on the PR, so you can correct a stale card yourself; the pipeline still never edits
+the board for you.
 
 ## Runs entirely in Claude Code
 
@@ -193,7 +198,10 @@ relationship with the board: read-only.
    agentId, capped at 3 rounds. Docs do not start while a criterion is unmet.
 7. **Docs** — a `writer` pass to update docs and convert the shipped spec; the lead
    trusts it, no docs gate.
-8. **Ship** — **commits everything else** (commit 2), pushes, opens **one PR**.
+8. **Ship** — **commits everything else** (commit 2), pushes, opens **one PR** —
+   relaying any board follow-ups the writer surfaced while speccing in both its final
+   report and the PR description, so a card a decision made stale is visible without
+   opening the spec.
 9. **PR review loop** — drives the review to resolution (below).
 
 **The commit model.** Nothing is committed while work is in flight; the story
@@ -270,7 +278,11 @@ Runs in two modes the lead dispatches separately, and **never commits**.
 - **Spec pass**, before any code exists: authors the task's spec (Goal → Design →
   Requirements with WHEN/THEN scenarios → Tasks) against the acceptance criteria the
   work will be judged on, and hands back the path; the lead has the `auditor` gate it
-  before the build and routes any findings back to the writer to revise.
+  before the build and routes any findings back to the writer to revise. It also
+  returns any **board follow-ups** — when a decision the spec settles contradicts
+  relationship or dependency prose recorded on any card (including the card the work
+  came from), it names which card, which sentence, and what it should now say, for you
+  to fix. It never edits the board.
 - **Docs pass**, after the build is accepted: folds the shipped spec's durable
   content into its permanent home (features / flows / designs), reconciling with what
   exists, and **removes the spec** (specs are not archived).
