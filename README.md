@@ -353,9 +353,10 @@ outcome can come from an unrelated cause. A claim the spec marks as an *assumpti
 reported as unverified rather than treated as established, and so is one whose cited
 source it cannot read (package absent, or the worktree's provisioning status absent or
 negative) — it reports that instead of provisioning anything to check. At the readiness
-gate the same concern shows up earlier: a dependency claim with neither a citation nor an
-assumption marking, and a scenario whose outcome would still hold with the claimed
-mechanism absent, are both things it checks for.
+gate, before anything is built, the same concern shows up as two things it looks for in
+the spec: a dependency claim carrying neither a citation nor an assumption marking, and a
+scenario that could pass with the claimed mechanism absent without naming the alternative
+cause or saying where the mechanism is really covered.
 
 ### writer — the task's spec, then its docs
 
@@ -457,9 +458,13 @@ signs off on it — the review always runs as a separate subagent.
 ready-to-build → `coder` writes per-scenario tests → `qa` fills coverage gaps and reviews
 the diff → the `auditor` gates the result against its acceptance criteria → the PR opens →
 the Claude GitHub review reviews it, and the lead loops fixes back through the same coder.
-Both `auditor` gates judge a spec's **dependency claims at the mechanism** — the cited
-source at the cited version — rather than accepting a passing scenario as proof, since an
-observable outcome can hold for a reason unrelated to the claim it was written for.
+The two `auditor` gates divide a spec's **dependency claims** between them: at readiness
+it checks each such claim is either cited or explicitly marked an assumption, and that a
+scenario which could pass with the claimed mechanism absent names that alternative cause
+or says where the mechanism is really covered; at acceptance — once there is built work to
+judge — it opens the cited source at the cited version and confirms the mechanism itself,
+since a passing scenario's observable outcome can hold for a reason unrelated to the claim
+it was written for.
 
 **Isolation**: the task builds in one worktree/branch under the repo's worktree
 directory, and the repo root stays on its base branch. That worktree is **provisioned
