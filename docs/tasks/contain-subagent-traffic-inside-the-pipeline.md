@@ -1,0 +1,23 @@
+---
+type: story
+title: Contain the pipeline's subagent traffic so the main session is not its message bus
+---
+
+# Contain the pipeline's subagent traffic so the main session is not its message bus
+
+- [<] Contain the pipeline's subagent traffic so the main session is not its message bus #improvement 🔺 🆔 contain-subagent-traffic-inside-the-pipeline
+  - A `lead` is supposed to be a sealed unit: hand it a card, get back a merged PR. It is not. Every child the `lead` dispatches reports **into the main session** instead of to its `lead` — coder rounds, qa rounds, writer passes, auditor gates — so the session that dispatched the `lead` is made a spectator on, and repeatedly an unwilling participant in, work it delegated precisely so it would not have to watch. The desired contract is one notification per `lead`, when the **lead** finishes. What actually arrives is one per child round.
+  - Root cause on the child side: a child cannot address its own `lead`. Verbatim, this session: `No agent named 'ca77y-engineering:lead' is reachable`. Every child correctly falls back to returning its report as its result — and a result from a resumed child is delivered to the session, not into the caller's turn. So the fallback path *is* the leak.
+  - Background (2026-08-01, two leads on [#10](https://github.com/ca77y/agentic-claude/pull/10) and [#11](https://github.com/ca77y/agentic-claude/pull/11)): the main session received roughly eight child reports it had no business acting on — two coder fix rounds, a writer spec revision, a docs pass, and more — arriving as both task-notifications and peer agent-messages, sometimes the **same report through both channels**. None required action. Each still had to be read and triaged to decide that.
+  - **This is not the [`collect-sendmessage-resumes-inside-the-leads-turn`](collect-sendmessage-resumes-inside-the-leads-turn.md) bug, and that fix is not in question** — it held for every round of both leads. That story made the `lead` *collect* correctly despite the leak. This story is about the leak itself: the `lead` now reliably gets its report, and the session gets a copy it never wanted.
+  - Honest unknown, to be settled by the work rather than assumed: an unknown share of this is **harness behaviour** (subagent addressability, where a resumed agent's result is delivered, notification routing) rather than anything an agent definition controls. The first job is to establish that boundary empirically instead of writing prose that cannot take effect. Per [`../CLAUDE.md`](../CLAUDE.md) and [`../docs/CLAUDE.md`](CLAUDE.md), whatever proves harness-limited belongs in `docs/issues/` as a recorded problem with evidence and what would unblock it — not as agent prose pretending to fix it.
+  - Scope: begins as an investigation across the pipeline's reporting contracts — `plugins/ca77y-engineering/agents/{lead,coder,writer,qa,auditor}.md` — and lands as whatever subset is genuinely controllable, plus a `docs/issues/` note for the rest. Do not weaken the `lead`'s existing collection rule to achieve containment.
+  - Acceptance criteria:
+  - The work establishes, with evidence from an actual run, which of these are controllable from agent definitions and which are harness behaviour: whether a child can address its dispatching `lead`; where a resumed child's result is delivered; whether a child's completion notifies the main session.
+  - Anything proven harness-limited is recorded in `docs/issues/` with what was tried, the evidence, and what would unblock it — not papered over with instructions that cannot take effect.
+  - For everything controllable: a child's report reaches its `lead` without transiting the main session; where that is impossible, the definitions state so plainly and name the fallback, so the behaviour is designed rather than incidental.
+  - The main session receives one notification per `lead` — its completion — and not one per child round.
+  - No pipeline agent instructs a child to message `main`, or relies on the main session to relay between a `lead` and its children.
+  - The `lead` still never ends its turn waiting for a child, and the collection rule shipped in 1.9.0 is not regressed — verified by a real pipeline run, not by inspection alone.
+  - A `lead` that loses a child's report still fails loudly and recoverably rather than waiting silently.
+  - Cross-links [`collect-sendmessage-resumes-inside-the-leads-turn`](collect-sendmessage-resumes-inside-the-leads-turn.md) (made the `lead` collect despite the leak) and [`detect-pr-review-completion-from-an-edited-comment`](detect-pr-review-completion-from-an-edited-comment.md) (the other place a `lead` stalls and the session has to step in).

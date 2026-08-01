@@ -18,4 +18,4 @@ title: Make a spec measure its baseline instead of inheriting it
   - If that command fails, the failing file is in scope by definition and the Boundary and Deviations say so, rather than deferring it to an Escalation the build has to override anyway.
   - The `writer` applies a self-check to its own draft: for every requirement, "would this scenario pass against the tree as it is today?" — any that would is not testing this task.
   - Depends on [`install-dependencies-in-story-worktrees`](install-dependencies-in-story-worktrees.md): the `writer` cannot run a project command in a worktree that has no dependencies.
-  - Cross-links [`require-citations-for-dependency-claims`](require-citations-for-dependency-claims.md) — that card governs claims about a dependency's documented behaviour; this one governs claims about the project's own current state.
+  - Cross-links [`require-citations-for-dependency-claims`](require-citations-for-dependency-claims.md) — that card governs claims about a dependency's actual behaviour, evidenced by a citation into its installed source at the pinned version; this one governs claims about the project's own current state.
