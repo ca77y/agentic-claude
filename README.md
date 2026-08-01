@@ -183,7 +183,14 @@ relationship with the board: read-only.
 1. **Read the task** — the prompt, the referenced card if any, the docs it touches,
    and the relevant code.
 2. **Create the workspace** — one story branch in **one worktree**; the repo root
-   stays on its base branch. Everything happens in that worktree.
+   stays on its base branch. Creating it includes **provisioning its dependencies**,
+   before any agent is dispatched into it: wherever the project's dependency layout
+   allows, by inheriting the main checkout's already-resolved state rather than
+   re-deriving it with a fresh install — a re-resolving install can produce a different
+   layout from the same lockfile and break tests the task never touched — otherwise by
+   running the project's own install/bootstrap step. The lead then **records the
+   provisioning status**, including *not provisioned, with the reason*, and every
+   dispatch into the worktree names it. Everything happens in that worktree.
 3. **Spec** — dispatches the `writer` to author the spec, then the `auditor` to gate
    it; routes any findings back to the writer to revise, re-audits fresh, and once
    ready **commits the spec** (commit 1).
@@ -374,8 +381,18 @@ the diff → the `auditor` gates the result against its acceptance criteria → 
 the Claude GitHub review reviews it, and the lead loops fixes back through the same coder.
 
 **Isolation**: the task builds in one worktree/branch under the repo's worktree
-directory, and the repo root stays on its base branch. Nothing is committed until the
-lead ships: two commits (the spec, then everything else) plus one per PR-review fix
+directory, and the repo root stays on its base branch. That worktree is **provisioned
+with the project's dependencies when the lead creates it**, and every agent is handed
+the worktree path **together with the resulting provisioning status** — so it knows
+before it runs anything whether a command's result is trustworthy. Handed an absent or
+negative status, an agent reports the gap instead of concluding from the output, and
+never provisions the worktree itself (a fresh re-resolving install is what breaks
+untouched tests). The root checkout is **readable** for dependency and vendor sources —
+resolved dependency trees, installed type definitions, vendored packages — and is
+**never written**; and no agent resolves a project CLI through a bare `npx`-style
+fetch-and-run, which silently runs a toolchain that is not the project's and fails with
+errors that read like a real defect in the file under review. Nothing is committed until
+the lead ships: two commits (the spec, then everything else) plus one per PR-review fix
 round. No secrets are ever inspected, output, or committed.
 
 **The pipeline improves itself.** Every agent — orchestrators and sub-agents alike —

@@ -100,10 +100,57 @@ subagent's model against the *main conversation* rather than the dispatching age
 an agent reached through a chain and carrying no `model:` of its own inherits the
 session model.
 
+## The story worktree contract
+
+A story worktree is the pipeline's only workspace, and the `lead` owns making it usable.
+`git worktree add` copies no installed dependencies, so **provisioning is part of
+creating the workspace** — it happens in the `lead`'s workspace-creation step, before any
+agent is dispatched into the worktree, and it is provisioning only: not running the
+project's tests, validation, or build, which stay `qa`'s.
+
+Provisioning **prefers inheriting the main checkout's already-resolved dependency state
+over re-deriving it**, wherever the project's dependency layout allows; otherwise it runs
+the project's own install/bootstrap step, discovered from project context. The rule is
+stated as a shape, never as a command — the toolkit runs against arbitrary projects, so no
+package manager, installer, or ecosystem may be named. The preference is not cosmetic: an
+install that re-resolves can produce a different dependency layout than the main checkout
+*from the same lockfile*, and so can break pre-existing tests the task never touched.
+When a project has no install step, or provisioning fails, the status is recorded as **not
+provisioned, with the reason**, and the run proceeds.
+
+**The resulting status is part of the handover.** Every dispatch that names a worktree
+names its dependency-provisioning status alongside the path, so a receiving agent knows
+*before* it runs a command whether the result is trustworthy. An agent handed an absent or
+negative status treats dependency-sensitive command output as untrustworthy and **reports
+that**, and does **not** provision the worktree itself — self-repair by fresh install is
+the exact move that breaks untouched tests, and only the `lead`'s creation step can prefer
+inheritance over re-resolution.
+
+Two further rules complete the contract. The repository root checkout is **readable** for
+dependency and vendor sources — resolved dependency trees, installed type definitions,
+vendored packages — when something is missing or ambiguous in the worktree, and **never
+writable**; reading it that way never substitutes the root for the worktree as the review
+or build target. And a project CLI is never invoked through a **bare fetch-and-run**
+(`npx`-style, or any ecosystem's equivalent) from inside a worktree: the fetched CLI is
+not the project's toolchain, and it fails with errors that read exactly like a real defect
+in the file under review.
+
+**All of this lives in one physical line.** The contract is a single canonical
+`**Addressing the story worktree.**` paragraph duplicated byte-identically across
+`lead.md`, `coder.md`, `writer.md`, `qa.md`, and `auditor.md` — there is no shared-include
+mechanism across agent `.md` files. That placement is a constraint, not a style choice:
+the drift check in the root [`CLAUDE.md`](../CLAUDE.md) compares exactly one line per
+file, so a *sibling* shared paragraph would be invisible to it and would drift freely
+across five copies. Carrying the obligation in the shared paragraph rather than at each of
+the `lead`'s dispatch steps also makes it bind by construction — including sub-dispatches
+the `lead` does not make itself — and puts the rule in the receiving agent's own
+definition, which is where a "is this result trustworthy?" decision is taken.
+
 ## The commit model
 
 The `lead` is the only agent that commits. Work happens in one worktree on one story
-branch under the repo's worktree directory; the repo root stays on its base branch.
+branch under the repo's worktree directory; the repo root stays on its base branch, and
+that worktree is provisioned at creation (above).
 
 There are exactly two commits — the spec, then everything else — plus one per PR-review
 fix round. The spec gets its own commit precisely because the docs pass later folds it
