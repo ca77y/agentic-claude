@@ -254,8 +254,9 @@ app, triggered on open and re-triggerable by comment.
   entry, not just the first: coming back round from a fix round, round 1's stale review
   and the lead's own rerun comment are already sitting there, and without the baseline the
   script reads them as a fresh trigger. The script
-  prints a visibly distinct line per case: print-and-exit as soon as about five minutes pass
-  with zero **new** activity, or print-and-keep-running as soon as new activity appears. That
+  prints a visibly distinct line per case and exits either way: print-and-exit as soon as
+  about five minutes pass with zero **new** activity, or print-and-exit as soon as new
+  activity appears — so nothing is still listening when step 3 arms its own monitor. That
   emitted event is what the lead acts on. `Monitor`'s own `timeout_ms` is a separate,
   longer **safety ceiling** for the whole wait — at least 30 minutes (1800000 ms), up to
   the 3600000 ms maximum, never the monitor's short default, since a review routinely
