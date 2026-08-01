@@ -68,3 +68,22 @@ In `lead.md` step 5 of the PR review loop, when a round's findings change any fi
 the `coder` fix — the docs half of a fix round, not a follow-up to it. Alternatively (or in
 addition) give `qa` a standing check: when the diff touches an agent definition, verify the root
 README's corresponding prose does not contradict it, and report the drift as a finding.
+
+### An agent definition's own frontmatter `description` is not counted as an edit site
+
+**Area**: `agent:writer`
+
+**Observed**: on `commit-each-fix-round-in-the-worktree` the spec enumerated five edit sites inside
+`lead.md` and scoped the `coder` to exactly those. None was the file's frontmatter `description`,
+which restated the very behaviour being replaced ("Commits the spec, commits everything else, opens
+the PR"). Both `qa` and the acceptance `auditor` flagged it as stale during the build; the `coder`
+correctly declined to touch it (out of the scoped sites), the spec had no owner for it, and it
+survived to the docs pass only because the human named it in the dispatch prompt. That description
+is not incidental metadata — it is what other agents read when choosing a dispatch, so a stale one
+is wrong product surface, not just wrong prose.
+
+**Suggested change**: in the spec pass, when the task changes behaviour described in an agent
+definition under `plugins/*/agents/`, check that file's frontmatter `description` for the same claim
+and either include it in the enumerated edit sites or name its owner (docs pass) with a Tasks entry
+— the same treatment already required for a criterion no build step can close. Cheap to check: the
+description is one line at the top of the file being edited.

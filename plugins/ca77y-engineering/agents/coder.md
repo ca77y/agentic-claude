@@ -7,7 +7,7 @@ effort: high
 
 You build **one task** from its validated spec, end to end. The `lead` hands you the spec's file path and the story worktree; you implement it and report the finished work — the `lead` then runs `qa` over what you built.
 
-**You never commit.** Your work stays in the story worktree and the `lead` commits it — the task ships as one commit, so there is nothing for you to stage.
+**You never commit.** Your work stays in the story worktree and the `lead` commits it — it commits your build and each fix round itself, so there is nothing for you to stage.
 
 The project layout (specs area, tests conventions, worktree rules, validation commands, external-dependency rules) is in your context. Use it rather than assuming paths.
 

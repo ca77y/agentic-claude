@@ -196,17 +196,22 @@ relationship with the board: read-only.
    ready **commits the spec** (commit 1).
 4. **Build** — dispatches **one** `coder` with the spec's path, and **records its
    agentId**. The coder implements and reports; the lead trusts that reported state.
-5. **Validate & review** — dispatches `qa` to validate the build and review the diff;
-   routes its findings back to the same coder by agentId — resuming and collecting inside
-   one turn (see **Dispatch and resume** below) — and re-dispatches a **fresh** `qa`,
-   capped at 3 rounds.
+5. **Validate & review** — **commits the coder's build**, then dispatches `qa` to
+   validate it and review the diff; routes its findings back to the same coder by
+   agentId — resuming and collecting inside one turn (see **Dispatch and resume**
+   below) — **commits that round's work** when the coder reports back, and
+   re-dispatches a **fresh** `qa` with the commit references to diff against, capped
+   at 3 rounds.
 6. **Acceptance gate** — the `auditor` verifies the built result meets the task's
    acceptance criteria: the **card's** enumerated criteria when a card was named,
    the **spec's** requirements when not. Findings route back to the same coder by
-   agentId, capped at 3 rounds. Docs do not start while a criterion is unmet.
+   agentId; each round's fix is **committed before the fresh re-audit**, which is
+   handed the references to diff against. Capped at 3 rounds. Docs do not start while
+   a criterion is unmet.
 7. **Docs** — a `writer` pass to update docs and convert the shipped spec; the lead
    trusts it, no docs gate.
-8. **Ship** — **commits everything else** (commit 2), pushes, opens **one PR** —
+8. **Ship** — **commits whatever is still uncommitted** (the ship commit), pushes, and
+   opens **one PR** —
    carrying any production hazards the coder reported into its description, and relaying
    any board follow-ups the writer surfaced while speccing in both its final report and
    the PR description, so a card a decision made stale is visible without opening the spec.
@@ -231,11 +236,17 @@ that merely *seems* lost, the lead checks the ground truth on disk
 agent and a slow-but-working one look identical, and re-dispatching the second puts two
 agents on the same files.
 
-**The commit model.** Nothing is committed while work is in flight; the story
-worktree is the only workspace and the lead is the only agent that commits. There
-are exactly two commits — the spec, then everything else — plus one per PR-review
-fix round. Committing the spec separately is what keeps it in history at all, since
-the docs pass later converts and deletes it.
+**The commit model.** The story worktree is the only workspace and the lead is the
+only agent that commits. It commits the spec; then one commit per **pre-ship round**
+— the coder's initial build, then each `qa` and acceptance-gate fix round; then the
+**ship commit** with whatever is still uncommitted at PR time (mainly docs and the
+spec's removal); then one per PR-review fix round. The count varies with how many
+rounds ran. The pre-ship round commits exist because every `qa` and acceptance
+dispatch is a **fresh** context: they give it two commit references to diff round N
+against round N−1, instead of one undifferentiated tree in which the build and every
+round are folded together. They stay local until the PR opens. Committing the spec
+separately is what keeps it in history at all, since the docs pass later converts and
+deletes it.
 
 **The PR review loop** (max 3 rounds). The review is performed by the Claude GitHub
 app, triggered on open and re-triggerable by comment.
@@ -301,9 +312,9 @@ outside the dispatch tree entirely.
 ### coder — builds the whole task
 
 Takes the validated spec and the story worktree and delivers the task end to end.
-**It never commits** — its work stays in the tree for the lead, because the task
-ships as one commit. It is **not its own reviewer** — `qa` reviews its work in a
-separate context — and the lead owns every gate over it.
+**It never commits** — its work stays in the tree for the lead, which commits the
+build and each fix round itself. It is **not its own reviewer** — `qa` reviews its
+work in a separate context — and the lead owns every gate over it.
 
 1. **Prepare** the worktree; confirm the spec; isolate pre-existing dirty changes.
 2. **Implement** with minimal scoped diffs + one scenario test per spec scenario,
@@ -326,7 +337,9 @@ risk reaches the human through the PR rather than only through a comment on a te
 
 ### qa — validates the work, fills test gaps, and reviews the diff
 
-Dispatched by the `lead` after the coder builds, and again after each fix round. Runs the
+Dispatched by the `lead` after the coder builds, and again after each fix round — each
+fresh dispatch handed the round's commit references (the state the previous round
+reviewed, and the new round commit) so it can diff round N against round N−1. Runs the
 project's validation commands, compares the spec's scenarios against existing tests and
 adds the missing coverage (e2e, frontend, integration, edge cases), then re-runs; and
 **reviews the changed code** against the spec and the project's conventions for defects
@@ -477,9 +490,10 @@ untouched tests). The root checkout is **readable** for dependency and vendor so
 resolved dependency trees, installed type definitions, vendored packages — and is
 **never written**; and no agent resolves a project CLI through a bare `npx`-style
 fetch-and-run, which silently runs a toolchain that is not the project's and fails with
-errors that read like a real defect in the file under review. Nothing is committed until
-the lead ships: two commits (the spec, then everything else) plus one per PR-review fix
-round. No secrets are ever inspected, output, or committed.
+errors that read like a real defect in the file under review. Only the lead commits, and
+only in that worktree: the spec, one per pre-ship round (the build, then each qa and
+acceptance fix round), the ship commit, then one per PR-review fix round — nothing is
+pushed until the PR opens. No secrets are ever inspected, output, or committed.
 
 **The pipeline improves itself.** Every agent — orchestrators and sub-agents alike —
 can log feedback about the *pipeline itself* (the flow, an agent's instructions, or a
