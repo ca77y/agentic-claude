@@ -5,7 +5,7 @@ title: Re-check pending pipeline-feedback notes against the diff that ships them
 
 # Re-check pending pipeline-feedback notes against the diff that ships them
 
-- [ ] Re-check pending pipeline-feedback notes against the diff that ships them #improvement 🔽 🆔 recheck-pending-feedback-notes-before-commit
+- [<] Re-check pending pipeline-feedback notes against the diff that ships them #improvement 🔽 🆔 recheck-pending-feedback-notes-before-commit
   - A pipeline-feedback note is drafted mid-round as an accurate observation, then carried unchanged into the commit that closes the very gap it describes. The improvement log is explicitly a durable record read by later agents, so a note written in the present tense becomes a false record of the repository the moment the same round fixes it.
   - Background: one commit did three things at once. It added a guard to an error handler; it added the fake-server mode and the test that pins that guard; and it added a feedback entry asserting that the guard "shipped as a production-code change plus a long rationale comment, with no test", that "nothing in the probe test file can produce a non-2xx POST", and that "reverting the guard leaves 14/14 green". All three assertions were true at the parent commit — that file had 14 tests — and false at the commit that carried them, which had 15, the new one being exactly the missing discriminator.
   - Nothing in the flow re-reads a pending note against the diff it is about to ship in. The note is treated as commentary alongside the change rather than as part of the change under review.
