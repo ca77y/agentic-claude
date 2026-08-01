@@ -345,6 +345,19 @@ trusted with no gate; its spec is gated.) Reads the artifact plus enough context
 returns a **ready / not-ready** verdict. **Report-only** — the caller owns applying
 fixes. Does not review code quality.
 
+Where a criterion rests on a claim about how a **third-party or vendored dependency**
+behaves, it verifies at the **mechanism, not the symptom**: it opens the cited source at
+the cited version and confirms the behavior is what the spec says, because a scenario
+passing on its observable outcome is not on its own evidence for the mechanism — the same
+outcome can come from an unrelated cause. A claim the spec marks as an *assumption* is
+reported as unverified rather than treated as established, and so is one whose cited
+source it cannot read (package absent, or the worktree's provisioning status absent or
+negative) — it reports that instead of provisioning anything to check. At the readiness
+gate, before anything is built, the same concern shows up as two things it looks for in
+the spec: a dependency claim carrying neither a citation nor an assumption marking, and a
+scenario that could pass with the claimed mechanism absent without naming the alternative
+cause or saying where the mechanism is really covered.
+
 ### writer — the task's spec, then its docs
 
 Runs in two modes the lead dispatches separately, and **never commits**.
@@ -352,7 +365,16 @@ Runs in two modes the lead dispatches separately, and **never commits**.
 - **Spec pass**, before any code exists: authors the task's spec (Goal → Design →
   Requirements with WHEN/THEN scenarios → Tasks) against the acceptance criteria the
   work will be judged on, and hands back the path; the lead has the `auditor` gate it
-  before the build and routes any findings back to the writer to revise. It also
+  before the build and routes any findings back to the writer to revise. Its authoring
+  rules make a spec's claims about the outside world checkable: a claim about how a
+  **third-party or vendored dependency** behaves carries the package at the
+  **resolved/installed** version plus a file-and-line into that package's own source —
+  one citation per distinct mechanism claimed, since a compound sentence can be half
+  true — or else it is written as an explicitly marked **assumption** saying why it
+  could not be cited and what would settle it, so the round that verifies it knows it
+  was never checked. A scenario whose observable outcome could hold with the claimed
+  mechanism absent gets that alternative cause named while the spec is written, so a
+  green test is never mistaken for a confirmed claim. It also
   returns any **board follow-ups** — when a decision the spec settles contradicts
   relationship or dependency prose recorded on any card (including the card the work
   came from), it names which card, which sentence, and what it should now say, for you
@@ -436,6 +458,13 @@ signs off on it — the review always runs as a separate subagent.
 ready-to-build → `coder` writes per-scenario tests → `qa` fills coverage gaps and reviews
 the diff → the `auditor` gates the result against its acceptance criteria → the PR opens →
 the Claude GitHub review reviews it, and the lead loops fixes back through the same coder.
+The two `auditor` gates divide a spec's **dependency claims** between them: at readiness
+it checks each such claim is either cited or explicitly marked an assumption, and that a
+scenario which could pass with the claimed mechanism absent names that alternative cause
+or says where the mechanism is really covered; at acceptance — once there is built work to
+judge — it opens the cited source at the cited version and confirms the mechanism itself,
+since a passing scenario's observable outcome can hold for a reason unrelated to the claim
+it was written for.
 
 **Isolation**: the task builds in one worktree/branch under the repo's worktree
 directory, and the repo root stays on its base branch. That worktree is **provisioned
