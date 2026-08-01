@@ -152,13 +152,42 @@ The `lead` is the only agent that commits. Work happens in one worktree on one s
 branch under the repo's worktree directory; the repo root stays on its base branch, and
 that worktree is provisioned at creation (above).
 
-There are exactly two commits — the spec, then everything else — plus one per PR-review
-fix round. The spec gets its own commit precisely because the docs pass later folds it
-into durable docs and deletes it; without that commit it would never appear in history.
+The commits a run produces, in order: the spec; one per **pre-ship round** — the
+`coder`'s initial build, then each `qa` and acceptance-gate fix round; the **ship
+commit**, carrying whatever is still uncommitted at PR time (by then mainly the docs and
+the spec's removal); then one per PR-review fix round. The count therefore varies with
+how many rounds ran, rather than being fixed at two. The spec gets its own commit
+precisely because the docs pass later folds it into durable docs and deletes it; without
+that commit it would never appear in history.
 
-The accepted tradeoff: between the two commits the entire build lives only in the
-worktree. An interrupted run loses nothing, since the worktree persists, but it has
-nothing in git either. That is the price of a clean two-commit history.
+The pre-ship round commits exist because every `qa` and acceptance-gate dispatch is a
+**fresh** context. Without them, a round-2 dispatch inherits one undifferentiated
+working tree holding the build and every round folded together, and cannot answer the
+question its own dispatch asks — *what did the coder change in response to round 1?*
+With them, the `lead` hands each fresh dispatch two commit references and it diffs round
+N against round N−1: cheap, exact, and enough to check the coder changed **only** what
+was reported. It is the same mechanism the PR-review loop already used, applied one
+phase earlier. Round commits stay local in the worktree — there is no remote branch to
+push to until the PR opens.
+
+Three details of the design are deliberate. The **build** is committed before the *first*
+`qa` dispatch, not just after each fix round: without it, round 1's fix lands fused with
+the build and the first isolable diff only arrives at round 3 — exactly the blindness the
+rule exists to remove. A round is committed **when the `coder` reports back**, whether or
+not another dispatch follows, since the terminal round — the 3× cap reached and the
+`lead` escalating to a human — is when the diffable history is needed most. And a round
+stays **one** commit whose message names its composition (which round's findings it
+applies, and any tests the previous `qa` added), rather than being split into coder and
+qa commits: the reader of the diff needs to tell the hunks apart, which the message does,
+without doubling the commit count. Keeping the branch at literally two commits by
+amending and recording the pre-amend SHA was rejected — it makes the baseline a dangling,
+unreachable commit that `git gc` may prune, and the PR-review loop already put the count
+above two, so "two commits" described the model's *shape*, not a ceiling.
+
+A consequence worth stating: an interrupted run now has each completed round in git, not
+just in the worktree. The worktree already made an interruption lossless; the round
+commits also make the work *legible* after one — the history shows which rounds landed
+and what each changed, instead of one working tree of merged edits.
 
 ## The self-improvement channel
 
