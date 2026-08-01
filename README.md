@@ -224,12 +224,12 @@ with `block: true` and a generous explicit timeout, re-issued if it expires; a
 **foreground**, explicitly-timed Bash poll where `TaskOutput` is unavailable). The lead
 never ends its turn to await a completion notification — that notification is precisely
 what cannot reach it. `Monitor` *does* wake the lead and stays the right tool for an
-unbounded external wait like the PR review; a Bash poll dispatched in the background, or
+long-running external wait like the PR review; a Bash poll dispatched in the background, or
 left on the tool's ~2-minute default timeout, does not. And before replacing an agent
-that merely *seems* lost, the lead checks the ground truth on disk (`git status --short`
-in the worktree, plus the files the agent was to produce): a stalled agent and a
-slow-but-working one look identical, and re-dispatching the second puts two agents on the
-same files.
+that merely *seems* lost, the lead checks the ground truth on disk
+(`git -C <worktree> status --short`, plus the files the agent was to produce): a stalled
+agent and a slow-but-working one look identical, and re-dispatching the second puts two
+agents on the same files.
 
 **The commit model.** Nothing is committed while work is in flight; the story
 worktree is the only workspace and the lead is the only agent that commits. There
@@ -240,17 +240,47 @@ the docs pass later converts and deletes it.
 **The PR review loop** (max 3 rounds). The review is performed by the Claude GitHub
 app, triggered on open and re-triggerable by comment.
 
-- Poll the PR for review activity with a **genuinely long monitor** — at least 30 minutes
-  (1800000 ms), up to the 3600000 ms maximum, never the monitor's short default, since a
-  review routinely takes longer than five minutes to land.
-- **No review activity at all** after about five minutes → report the task finished,
-  saying plainly that no review was triggered. That five-minute window is a *judgement*
-  about how long the reviewer took to appear — not the monitor's own armed deadline, which
-  stays long.
-- **A comment showing the review started** → that judgement bounds how long to wait for
-  the review to be *triggered*, not to *finish* — keep waiting until it lands, continuing
-  the armed monitor or re-arming it with `persistent: true` now that a review is confirmed
-  underway, never dropping back to a short timeout.
+- Poll the PR for review activity (`gh pr view --json reviews,comments`) with a
+  **genuinely long monitor**, and make **the polling script itself** measure the
+  five-minute boundary **against a baseline captured at the trigger**. The baseline is the
+  **ids** of the PR's existing reviews and comments — not a count, which cannot identify
+  *which* items are new — captured immediately before firing the trigger: right before
+  `gh pr create` on the first entry, or right before the `@review rerun` comment on a
+  re-entry. Never merely "when polling begins", or activity landing in the gap between
+  opening the PR and arming the monitor is misread as stale and a PR under active review
+  reads as unreviewed. Every tick counts only what is **new since that baseline** as
+  activity, excluding the lead's own trigger comment by author or exact content rather
+  than by recency — recency is precisely what races the trigger. This applies on every
+  entry, not just the first: coming back round from a fix round, round 1's stale review
+  and the lead's own rerun comment are already sitting there, and without the baseline the
+  script reads them as a fresh trigger. The script
+  prints a visibly distinct line per case: print-and-exit as soon as about five minutes pass
+  with zero **new** activity, or print-and-keep-running as soon as new activity appears. That
+  emitted event is what the lead acts on. `Monitor`'s own `timeout_ms` is a separate,
+  longer **safety ceiling** for the whole wait — at least 30 minutes (1800000 ms), up to
+  the 3600000 ms maximum, never the monitor's short default, since a review routinely
+  takes longer than five minutes to land. The ceiling must not be what produces the
+  five-minute judgement: a script that only emits on state change prints nothing until the
+  full ceiling elapses, silently absorbing the five-minute window instead of surfacing it.
+- **The script reports no new review activity** after about five minutes → report the task
+  finished, saying plainly that no review was triggered, so an unreviewed PR is visible
+  rather than silent. This is the script's own observable event, measured against the
+  baseline captured at the trigger — not the raw presence of an earlier round's output
+  or the lead's own re-fire comment — and not something inferred from the monitor's armed
+  ceiling, which keeps running underneath regardless.
+- **The script reports new activity** — a comment showing the review started → that
+  five-minute boundary bounds how long to wait for the review to be *triggered*, not to
+  *finish*. Step 1's monitor call has already ended — it exited the moment it printed that
+  signal — so arm a **new** monitor for this phase, against a script with its own distinct
+  signal: **landed** (a finalized review comment or a submitted review) versus **still in
+  progress** ("in progress", "working…", "Reviewing…" are never landed). Arm it at the same
+  bounded deadline (at least 1800000 ms, up to 3600000 ms), and re-arm when that ceiling
+  *expires* with the review still not landed — the observable moment, not some sense of the
+  deadline being "close". Do **not** switch to `persistent: true`: `Monitor` ignores
+  `timeout_ms` entirely once that is set, so a stalled or dead reviewer would hang the lead
+  for the rest of the session with no bound and no event to recover on. After two full
+  re-arms (three arms total) with no landed review, stop and report the PR as
+  review-stalled rather than waiting forever.
 - **Issues** → resume the same coder by agentId with the full set of findings, carrying
   any production hazard it surfaces this round into the PR update, then commit, push, and
   re-fire with `gh pr comment --body "@review rerun the PR review"`.
