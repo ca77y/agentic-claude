@@ -204,10 +204,12 @@ relationship with the board: read-only.
    at 3 rounds.
 6. **Acceptance gate** — the `auditor` verifies the built result meets the task's
    acceptance criteria: the **card's** enumerated criteria when a card was named,
-   the **spec's** requirements when not. Findings route back to the same coder by
-   agentId; each round's fix is **committed before the fresh re-audit**, which is
-   handed the references to diff against. Capped at 3 rounds. Docs do not start while
-   a criterion is unmet.
+   the **spec's** requirements when not. Anything the qa loop left uncommitted — the
+   final clean round's added tests included — is **committed before the first
+   acceptance dispatch**, so it does not fuse into the first acceptance fix. Findings
+   route back to the same coder by agentId; each round's fix is likewise **committed
+   before the fresh re-audit**, which is handed the references to diff against. Capped
+   at 3 rounds. Docs do not start while a criterion is unmet.
 7. **Docs** — a `writer` pass to update docs and convert the shipped spec; the lead
    trusts it, no docs gate.
 8. **Ship** — **commits whatever is still uncommitted** (the ship commit), pushes, and
