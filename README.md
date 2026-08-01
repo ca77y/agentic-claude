@@ -197,8 +197,9 @@ relationship with the board: read-only.
 4. **Build** — dispatches **one** `coder` with the spec's path, and **records its
    agentId**. The coder implements and reports; the lead trusts that reported state.
 5. **Validate & review** — dispatches `qa` to validate the build and review the diff;
-   routes its findings back to the same coder by agentId and re-dispatches a **fresh**
-   `qa`, capped at 3 rounds.
+   routes its findings back to the same coder by agentId — resuming and collecting inside
+   one turn (see **Dispatch and resume** below) — and re-dispatches a **fresh** `qa`,
+   capped at 3 rounds.
 6. **Acceptance gate** — the `auditor` verifies the built result meets the task's
    acceptance criteria: the **card's** enumerated criteria when a card was named,
    the **spec's** requirements when not. Findings route back to the same coder by
@@ -211,6 +212,25 @@ relationship with the board: read-only.
    the PR description, so a card a decision made stale is visible without opening the spec.
 9. **PR review loop** — drives the review to resolution (below).
 
+**Dispatch and resume.** A *fresh* dispatch is synchronous (`run_in_background: false`)
+and its tool result **is** the child's report. Most rounds are not fresh dispatches,
+though: the lead **resumes** the writer across spec revisions and the same coder across
+qa, acceptance, and PR-review rounds, because a resume is the only way to preserve their
+context. A resume is a `SendMessage`, and `SendMessage` has **no synchronous mode** — it
+wakes the agent detached and hands back only a delivery acknowledgement, while the
+agent's report goes to the *session*, not into the lead's turn. So every resume is
+followed **in the same turn** by a blocking collection on that same agentId (`TaskOutput`
+with `block: true` and a generous explicit timeout, re-issued if it expires; a
+**foreground**, explicitly-timed Bash poll where `TaskOutput` is unavailable). The lead
+never ends its turn to await a completion notification — that notification is precisely
+what cannot reach it. `Monitor` *does* wake the lead and stays the right tool for an
+unbounded external wait like the PR review; a Bash poll dispatched in the background, or
+left on the tool's ~2-minute default timeout, does not. And before replacing an agent
+that merely *seems* lost, the lead checks the ground truth on disk (`git status --short`
+in the worktree, plus the files the agent was to produce): a stalled agent and a
+slow-but-working one look identical, and re-dispatching the second puts two agents on the
+same files.
+
 **The commit model.** Nothing is committed while work is in flight; the story
 worktree is the only workspace and the lead is the only agent that commits. There
 are exactly two commits — the spec, then everything else — plus one per PR-review
@@ -220,11 +240,17 @@ the docs pass later converts and deletes it.
 **The PR review loop** (max 3 rounds). The review is performed by the Claude GitHub
 app, triggered on open and re-triggerable by comment.
 
-- Poll the PR up to **5 minutes** for review activity.
-- **Nothing at all** in 5 minutes → report the task finished, saying plainly that no
-  review was triggered.
-- **A comment showing the review started** → the timer bounds how long to wait for
-  the review to be *triggered*, not to *finish* — keep waiting until it lands.
+- Poll the PR for review activity with a **genuinely long monitor** — at least 30 minutes
+  (1800000 ms), up to the 3600000 ms maximum, never the monitor's short default, since a
+  review routinely takes longer than five minutes to land.
+- **No review activity at all** after about five minutes → report the task finished,
+  saying plainly that no review was triggered. That five-minute window is a *judgement*
+  about how long the reviewer took to appear — not the monitor's own armed deadline, which
+  stays long.
+- **A comment showing the review started** → that judgement bounds how long to wait for
+  the review to be *triggered*, not to *finish* — keep waiting until it lands, continuing
+  the armed monitor or re-arming it with `persistent: true` now that a review is confirmed
+  underway, never dropping back to a short timeout.
 - **Issues** → resume the same coder by agentId with the full set of findings, carrying
   any production hazard it surfaces this round into the PR update, then commit, push, and
   re-fire with `gh pr comment --body "@review rerun the PR review"`.
