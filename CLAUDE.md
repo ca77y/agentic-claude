@@ -16,8 +16,17 @@ carry `-C <path>`, and file tools take an absolute path under `<path>`. `EnterWo
 is deliberately not used for this — it only accepts worktrees under `.claude/worktrees/`,
 not `.worktrees/<branch>` — so do not "fix" the location to match it.
 
-That addressing convention lives as one canonical "Addressing the story worktree."
-paragraph duplicated **byte-identically** across five agent files:
+This repo has no install or bootstrap step of its own (no `package.json`, no lockfile),
+so a story worktree here needs no dependency provisioning — a `lead` running the
+pipeline on this repo records the status as *not provisioned: no install step* and
+proceeds.
+
+That addressing convention — together with the rest of the worktree contract every
+dispatched agent carries: the dependency-provisioning status handed over with the path,
+the rule that the root checkout may be **read** for dependency and vendor sources but
+**never written**, and the ban on invoking a project CLI through a bare fetch-and-run —
+lives as one canonical "Addressing the story worktree." paragraph duplicated
+**byte-identically** across five agent files:
 `plugins/ca77y-engineering/agents/{lead,coder,writer,qa,auditor}.md`. There is no
 shared-include mechanism across agent `.md` files, so the copies are deliberate — but
 they carry the same drift hazard as the two manifests below: sharpen the wording in one
