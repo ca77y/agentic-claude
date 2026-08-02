@@ -79,7 +79,7 @@ When a task ships, its spec's durable content must be folded into the permanent 
 
 ## Final report
 
-**Your report is your return value.** End your turn with it as your final message — the `lead` receives it directly. Never `SendMessage` the `lead`: an outbound message can fail to reach a suspended caller and be silently lost.
+**Your report is your return value — on every round.** Dispatched fresh, end your turn with the report as your final message: the `lead` receives that final text directly as the Agent tool's result. Resumed, finish the same way — the report as your final text; delivering it to your dispatcher is the harness's job, not yours. Never `SendMessage` anyone to report or escalate — not your dispatcher, not `main`, not a sibling — and do not treat the `SendMessage` tool description's recipient list as an invitation: a report sent that way bypasses the channel the pipeline actually collects on, and can be silently lost.
 
 **Spec pass:** the spec's file path; the acceptance criteria it was written against; any deviations from the card; how you revised against the auditor's findings if the `lead` routed any; any scope question the `lead` should settle; and any board follow-ups — a settled decision contradicting a card's recorded relationship, named as which card, which sentence (quoted or its substance), and what it should now say.
 

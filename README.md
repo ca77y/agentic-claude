@@ -12,11 +12,13 @@ flow lives **inside the repository you run it on** — there is no external trac
 Stories, specs, and research are plain Markdown in an Obsidian vault, so the board
 and the knowledge base are versioned alongside the code.
 
-The toolkit is **one plugin**, `ca77y-engineering`, holding two rosters:
+The toolkit is **one plugin**, `ca77y-engineering`, holding two rosters and one skill:
 
 - The **pipeline** — `researcher → analyst → lead → writer → coder → writer`, with
   `qa` (validation plus the local code review) and the `auditor` gating native to
-  Claude, and the independent code review running on the opened PR.
+  Claude, and the independent code review running on the opened PR. The `lead` is a
+  **skill run in the main session** (`/ca77y-engineering:lead <task>`), not a
+  subagent; every other pipeline role is a subagent it dispatches directly, flat.
 - The **library crew** — `librarian`, `scribe`, `clerk` — that maintains the
   project's Markdown research library. The crew runs as native Claude subagents,
   dispatched directly by the agents that need library work.
@@ -36,21 +38,22 @@ The end-to-end flow:
  idea / topic                                                       shipped PR
       │                                                                  ▲
       ▼                                                                  │
-┌────────────┐   wiki   ┌──────────┐  story   ┌──────┐   task   ┌──────────┐
-│ researcher │ ───────▶ │ analyst  │ ───────▶ │ lead │ ───────▶ │  writer  │ spec
-└────────────┘  pages   └──────────┘  cards   └──────┘          │  coder   │ build
-      │                      │                    │             │    qa    │ test+review
-      │ library              │ fit gate           │             │  auditor │ accept
-      ▼                      ▼                    │             │  writer  │ docs
-   ┌───────────┐        human                     │             └──────────┘
-   │ librarian │        approval                  │
-   │ scribe    │        gate                      │   commits · pushes · opens the PR
-   │ clerk     │                                  └──▶ then drives the PR review loop
+┌────────────┐   wiki   ┌──────────┐  story   ┌────────────┐  task  ┌──────────┐
+│ researcher │ ───────▶ │ analyst  │ ───────▶ │ lead skill │ ─────▶ │  writer  │ spec
+└────────────┘  pages   └──────────┘  cards   │ (the main  │        │  coder   │ build
+      │                      │                │  session)  │        │    qa    │ test+review
+      │ library              │ fit gate       └────────────┘        │  auditor │ accept
+      ▼                      ▼                      │               │  writer  │ docs
+   ┌───────────┐        human                       │               └──────────┘
+   │ librarian │        approval                    │
+   │ scribe    │        gate                        │   commits · pushes · opens the PR
+   │ clerk     │                                    └──▶ then drives the PR review loop
    └───────────┘
 ```
 
 Two **human gates** punctuate the flow: you approve the analyst's stories before
-anything is built, and you explicitly invoke the `lead` to build one. **The board is
+anything is built, and you explicitly invoke the `lead` skill
+(`/ca77y-engineering:lead <task>`) to build one. **The board is
 yours** — the `lead` reads a referenced card but never writes it, so every status
 transition, Done included, is a manual step. When speccing settles a decision that
 contradicts what a card records about its relationship to another — even the card the
@@ -106,7 +109,8 @@ claude plugin install ca77y-engineering@ca77y-agentic
 
 `researcher → analyst → lead → writer → coder → writer`, with `qa` (validation plus the
 local code review) and the `auditor` gating natively in Claude, and the independent code
-review on the opened PR. The library crew — `librarian`, `scribe`,
+review on the opened PR. The `lead` is a skill the main session runs; everything else is
+a subagent. The library crew — `librarian`, `scribe`,
 `clerk` — runs as native subagents too, dispatched directly by whoever needs the
 library work.
 
@@ -114,7 +118,7 @@ library work.
 | --- | --- | --- | --- |
 | Research | `researcher` | a topic | a cited wiki entry + raw sources in the library |
 | Analysis | `analyst` | wiki pages + your input | board-ready **story cards** (fit-proven) |
-| Orchestration | `lead` | one task (a prompt, maybe naming a card) | a single merged-ready PR, reviewed |
+| Orchestration | `lead` (skill, main session) | one task (a prompt, maybe naming a card) | a single merged-ready PR, reviewed |
 | Spec | `writer` | the task | a validated spec in the specs area |
 | Build | `coder` | the validated spec | the finished work in the story worktree |
 | Validation & review | `qa` | the work in progress | pass/fail + filled test gaps + code-review findings |
@@ -170,11 +174,15 @@ ready**. After shaping, the native `auditor` gate critiques the cards. Cards lan
 `[ ]` Todo as proposals; nothing executes until you approve and invoke the `lead`.
 **Does not** write specs, code, or tests.
 
-### lead — takes one task to one reviewed PR
+### lead — the skill that takes one task to one reviewed PR
 
-Owns the path from a task to a single merged-ready PR. It writes neither code nor
-specs — it dispatches, gates, commits, and ships. Invoking the `lead` is explicit
-permission to branch, worktree, commit, push, and open the PR.
+The `lead` is a **skill, not a subagent**: invoking `/ca77y-engineering:lead <task>`
+makes the **main session itself the orchestrator**, dispatching the workers flat —
+every pipeline agent is a leaf directly below it. It owns the path from a task to a
+single merged-ready PR, and writes neither code nor specs — it dispatches, gates,
+commits, and ships. Invoking the `lead` is explicit permission to branch, worktree,
+commit, push, and open the PR. (Orchestration runs on the session's model; the
+workers keep the models pinned in their own frontmatter.)
 
 Its input is a **prompt**. If that prompt references a story card, the lead reads the
 card and what it links before reasoning about the task. That is its whole
@@ -198,8 +206,8 @@ relationship with the board: read-only.
    agentId**. The coder implements and reports; the lead trusts that reported state.
 5. **Validate & review** — **commits the coder's build**, then dispatches `qa` to
    validate it and review the diff; routes its findings back to the same coder by
-   agentId — resuming and collecting inside one turn (see **Dispatch and resume**
-   below) — **commits that round's work** when the coder reports back, and
+   agentId — resuming it and continuing on its completion notification (see
+   **Dispatch and resume** below) — **commits that round's work** when the coder reports back, and
    re-dispatches a **fresh** `qa` with the commit references to diff against, capped
    at 3 rounds.
 6. **Acceptance gate** — the `auditor` verifies the built result meets the task's
@@ -220,26 +228,34 @@ relationship with the board: read-only.
 9. **PR review loop** — drives the review to resolution (below).
 
 **Dispatch and resume.** A *fresh* dispatch is synchronous (`run_in_background: false`)
-and its tool result **is** the child's report. Most rounds are not fresh dispatches,
+and its tool result **is** the worker's report. Most rounds are not fresh dispatches,
 though: the lead **resumes** the writer across spec revisions and the same coder across
 qa, acceptance, and PR-review rounds, because a resume is the only way to preserve their
-context. A resume is a `SendMessage`, and `SendMessage` has **no synchronous mode** — it
-wakes the agent detached and hands back only a delivery acknowledgement, while the
-agent's report goes to the *session*, not into the lead's turn. So every resume is
-followed **in the same turn** by a blocking collection on that same agentId (`TaskOutput`
-with `block: true` and a generous explicit timeout, re-issued if it expires; a
-**foreground**, explicitly-timed Bash poll where `TaskOutput` is unavailable). The lead
-never ends its turn to await a completion notification — that notification is precisely
-what cannot reach it. `Monitor` *does* wake the lead and stays the right tool for an
-long-running external wait like the PR review; a Bash poll dispatched in the background, or
-left on the tool's ~2-minute default timeout, does not. And before replacing an agent
-that merely *seems* lost, the lead checks the ground truth on disk
-(`git -C <worktree> status --short`, plus the files the agent was to produce): a stalled
-agent and a slow-but-working one look identical, and re-dispatching the second puts two
-agents on the same files.
+context. A resume is a `SendMessage` by agentId, which hands back only a delivery
+acknowledgement — the resumed worker's report arrives as its **completion notification**,
+delivered to the main session. Because the orchestrator *is* the main session, that
+delivery lands exactly where it is needed: the lead records what is awaited in its
+ledger, **ends its turn**, and the notification wakes it carrying the report. When a
+wake brings no usable report, it checks ground truth before re-dispatching —
+`TaskList`/`TaskOutput` on the recorded agentId, then `git -C <worktree> status --short`
+and the files the worker was to produce: work on disk means collect, not replace (a
+stalled agent and a slow-but-working one look identical, and re-dispatching the second
+puts two agents on the same files), and anything genuinely lost is escalated rather
+than silently re-dispatched. `Monitor` wakes the session too and stays the right tool
+for a long external wait like the PR review.
+
+**Context discipline.** Workers are handed **paths, not content** — the spec path, the
+worktree path, the provisioning status, and commit refs; a round's findings that exceed
+a short summary go to `.worktrees/<branch>.findings-round-<N>.md`, with the resume
+message carrying that path. The lead also maintains a durable **ledger** at
+`.worktrees/<branch>.ledger.md` — task, step, agentIds, round counters, commits, what
+is awaited — updated before every dispatch and turn end, so after a compaction or
+session restart the ledger plus `git log`, not recollection, say where the pipeline
+stands. Both files live next to the worktree, outside it and gitignored, so no commit
+step can sweep them into a story commit.
 
 **The commit model.** The story worktree is the only workspace and the lead is the
-only agent that commits. It commits the spec; then one commit per **pre-ship round**
+only one that commits. It commits the spec; then one commit per **pre-ship round**
 — the coder's initial build, then each `qa` and acceptance-gate fix round; then the
 **ship commit** with whatever is still uncommitted at PR time (mainly docs and the
 spec's removal); then one per PR-review fix round. The count varies with how many
@@ -300,15 +316,18 @@ app, triggered on open and re-triggerable by comment.
   re-fire with `gh pr comment --body "@review rerun the PR review"`.
 - After 3 rounds it stops and reports what remains.
 
-**A flat topology, and the lead never does the work.** The `lead` is the only
-orchestrator: it dispatches `writer`, `coder`, `qa`, and `auditor` directly, and none of
-them dispatches another — the chain is never more than two deep. Each is a leaf that does
-its one job and returns, and the lead **trusts that result**: it never writes, tests,
-reviews, or judges the work itself, and if a dispatch fails it retries or escalates rather
-than stepping in. This also sidesteps Claude Code's dispatch-depth limit — three levels
-down the dispatch tool is gone, and a fan-out skill there silently collapses to a single
-pass — since with every pipeline agent a leaf under the lead, nothing runs deep enough to
-hit it, and the heavy fan-out **code review runs on the PR** (the Claude GitHub review),
+**A flat topology, and the lead never does the work.** The lead skill is the only
+orchestrator, and it runs in the main session: it dispatches `writer`, `coder`, `qa`,
+and `auditor` directly, and no pipeline agent dispatches or resumes another — every
+worker is a leaf at depth 1. Each leaf does its one job and returns, and the lead
+**trusts that result**: it never writes, tests, reviews, or judges the work itself, and
+if a dispatch fails it retries or escalates rather than stepping in. The flatness is
+deliberate: the harness does not support a nested orchestrator — a subagent's children
+detach, their completion notifications route to the root session, and a resumed child's
+report never reaches a subagent parent (see
+[`docs/issues/nested-subagent-result-routing.md`](docs/issues/nested-subagent-result-routing.md)).
+Running the orchestrator in the main session puts it exactly where the harness
+delivers. The heavy fan-out **code review runs on the PR** (the Claude GitHub review),
 outside the dispatch tree entirely.
 
 ### coder — builds the whole task
@@ -516,8 +535,11 @@ ca77y-agentic/
     └── ca77y-engineering/
         ├── .claude-plugin/plugin.json    # Claude manifest (agents whitelist)
         ├── plugin.json                   # root manifest (mirrors the Claude one)
+        ├── skills/
+        │   └── lead/SKILL.md             # the lead — the pipeline orchestrator,
+        │                                 #   run in the main session
         └── agents/                       # all subagent definitions:
-                                          #   analyst, auditor, clerk, coder, lead,
+                                          #   analyst, auditor, clerk, coder,
                                           #   librarian, qa, researcher, scribe,
                                           #   writer
 ```

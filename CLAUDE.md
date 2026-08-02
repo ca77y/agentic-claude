@@ -26,9 +26,12 @@ dispatched agent carries: the dependency-provisioning status handed over with th
 the rule that the root checkout may be **read** for dependency and vendor sources but
 **never written**, and the ban on invoking a project CLI through a bare fetch-and-run —
 lives as one canonical "Addressing the story worktree." paragraph duplicated
-**byte-identically** across five agent files:
-`plugins/ca77y-engineering/agents/{lead,coder,writer,qa,auditor}.md`. There is no
-shared-include mechanism across agent `.md` files, so the copies are deliberate — but
+**byte-identically** across five files — the four worker agents plus the `lead` skill
+(the skill creates the worktree and names it to every dispatch, so it carries the
+paragraph verbatim):
+`plugins/ca77y-engineering/agents/{coder,writer,qa,auditor}.md` and
+`plugins/ca77y-engineering/skills/lead/SKILL.md`. There is no
+shared-include mechanism across these `.md` files, so the copies are deliberate — but
 they carry the same drift hazard as the two manifests below: sharpen the wording in one
 and the others silently fall out of sync. **Whenever you edit that paragraph, edit all
 five and verify they still match before you push** (this should print `1` — a single
@@ -36,7 +39,8 @@ distinct copy across all five files):
 
 ```bash
 grep -h '^\*\*Addressing the story worktree\.\*\*' \
-  plugins/ca77y-engineering/agents/{lead,coder,writer,qa,auditor}.md | sort -u | wc -l
+  plugins/ca77y-engineering/agents/{coder,writer,qa,auditor}.md \
+  plugins/ca77y-engineering/skills/lead/SKILL.md | sort -u | wc -l
 ```
 
 ## Version management is a manual human process

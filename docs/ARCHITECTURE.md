@@ -13,14 +13,16 @@ ca77y-agentic/
 |   `-- ca77y-engineering/
 |       |-- .claude-plugin/plugin.json   # Claude manifest (agents whitelist)
 |       |-- plugin.json                  # root manifest, mirrors the Claude one
+|       |-- skills/lead/SKILL.md         # the lead skill - the pipeline orchestrator
 |       `-- agents/*.md                  # the agent definitions
 |-- docs/                                # this documentation + the board
 |-- .obsidian/                           # vendored vault config and plugins
 `-- CLAUDE.md                            # repo maintenance rules
 ```
 
-The agent Markdown files under `plugins/ca77y-engineering/agents/` **are the product**.
-Everything else is packaging, documentation, or vault state.
+The agent Markdown files under `plugins/ca77y-engineering/agents/` and the `lead`
+skill under `plugins/ca77y-engineering/skills/` **are the product**. Everything else
+is packaging, documentation, or vault state.
 
 ## The dual manifest
 
@@ -47,17 +49,19 @@ exist at runtime.
 
 ## The agent roster
 
-Ten agents in one plugin, in two groups:
+Nine agents and one skill in one plugin, in two groups:
 
 | Group | Agents | Role |
 | --- | --- | --- |
-| Pipeline | `researcher`, `analyst`, `lead`, `writer`, `coder`, `qa`, `auditor` | idea → shipped PR |
+| Pipeline | the `lead` **skill**, plus `researcher`, `analyst`, `writer`, `coder`, `qa`, `auditor` | idea → shipped PR |
 | Library crew | `librarian`, `scribe`, `clerk` | maintains the target project's Markdown research library |
 
 The flow is `researcher → analyst → lead → writer → coder → writer`, with `qa`
 (validation plus the local code review) and the `auditor` gating, and the independent
-code review running on the opened PR. Under the `lead`, `writer`, `coder`, `qa`, and
-`auditor` are all **leaves it dispatches directly** — none of them dispatches another.
+code review running on the opened PR. The `lead` is not an agent: it is a **skill the
+user invokes in the main session** (`/ca77y-engineering:lead <task>`), and the main
+session then orchestrates. Under it, `writer`, `coder`, `qa`, and `auditor` are all
+**leaves it dispatches directly** — no pipeline agent dispatches or resumes another.
 The library crew is dispatched directly by whichever agent needs library work.
 
 It stays **one plugin**. Splitting the library crew out was considered and rejected: the
@@ -65,35 +69,56 @@ seam between the two groups is a file — a wiki page — not an agent call, but
 `analyst` dispatches `librarian` and `clerk` directly, so a split would flip the
 dependency rather than remove it.
 
-## A flat topology — the lead is the only orchestrator
+## A flat topology — the orchestrator is the main session
 
-The pipeline is deliberately flat. The `lead` dispatches every pipeline agent directly —
-`writer`, `coder`, `qa`, `auditor` — and **none of them dispatches another**. The chain is
-never more than two deep: the lead, then a leaf. Each leaf does its one job and returns;
-the lead **trusts that result** and never does the work itself, never re-checks it, and
-never steps in when a dispatch fails (it retries or escalates). The `writer`'s docs are
+The pipeline is deliberately flat, and the orchestrator is the **main session**,
+running the `lead` skill. It dispatches every pipeline agent directly — `writer`,
+`coder`, `qa`, `auditor` — and **no pipeline agent dispatches or resumes another**:
+every worker is a leaf at depth 1. Each leaf does its one job and returns; the lead
+**trusts that result** and never does the work itself, never re-checks it, and never
+steps in when a dispatch fails (it retries or escalates). The `writer`'s docs are
 trusted outright; its spec is gated by the lead's `auditor` before the build.
 
-This sidesteps Claude Code's dispatch-depth limit: three levels down the dispatch tool is
-absent entirely, and a fan-out skill invoked from that depth silently collapses to a
-single pass. With every pipeline agent a leaf under the lead, nothing runs deep enough to
-hit it. The leaves keep the Agent tool — the limit is **not** enforced on them — but by
-design they do not orchestrate; being a leaf is a role, not a restriction.
+The flatness exists because the harness does not support a nested orchestrator: a
+subagent's children detach regardless of `run_in_background`, their completion
+notifications route to the root session from any depth, a resumed child's report never
+reaches a subagent parent, and subagents have no `TaskOutput` to collect with. The
+`lead` ran as a subagent orchestrator until 1.9.0 and hit exactly that; the evidence
+and upstream references are recorded in
+[`issues/nested-subagent-result-routing.md`](issues/nested-subagent-result-routing.md).
+Running the orchestrator in the main session puts it where the harness actually
+delivers: fresh synchronous dispatches return their report as the tool result, a
+resumed worker's completion notification wakes the orchestrating session, and
+`TaskOutput`/`TaskList` exist there for lost-report recovery. The trade is accepted:
+one story per session, with parallel stories as parallel sessions over their own
+per-story worktrees. Flatness is the skill's design, not a machine-enforced cap — no
+depth-limiting environment variable is set anywhere.
 
-The heavy, fan-out **code review runs on the PR** (the Claude GitHub review), outside the
-dispatch tree entirely, so depth never constrains it; `qa`'s local review is a
-single-context pass.
+The skill keeps its orchestration state on disk, next to the worktree and outside it
+(`.worktrees/<branch>.ledger.md` for the pipeline ledger,
+`.worktrees/<branch>.findings-round-<N>.md` for oversized findings), and hands workers
+**paths, not content** — so a compaction or restart mid-pipeline recovers from the
+ledger plus `git log`, and orchestration files can never enter a story commit.
 
-The `analyst` and `researcher` are separate top-level orchestrators, **not** part of the
-lead's tree: they run their own sub-dispatch — the analyst's advisor gate and library
-lookups, the researcher's subquestion decomposition and library writes.
+The heavy, fan-out **code review runs on the PR** (the Claude GitHub review), outside
+the dispatch tree entirely; `qa`'s local review is a single-context pass.
+
+The `analyst` and `researcher` are separate top-level orchestrators, **not** part of
+the lead's tree: they run their own sub-dispatch — the analyst's advisor gate and
+library lookups, the researcher's subquestion decomposition and library writes. Their
+fresh, synchronous depth-2 dispatches are the pattern the harness delivers correctly;
+the worker definitions' report-channel hygiene (final text is the report, never
+`SendMessage` as a reporting or escalation channel) keeps those trees clean too.
 
 ## Model and effort assignment
 
 Models are pinned per agent in the agent definitions. The current split: `opus` for
-`analyst`, `qa`, and `writer`; `sonnet` for `auditor`, `clerk`, `coder`, `lead`,
-and `researcher`; `haiku` for `librarian` and `scribe`. Effort is set on every
+`analyst`, `qa`, and `writer`; `sonnet` for `auditor`, `clerk`, `coder`, and
+`researcher`; `haiku` for `librarian` and `scribe`. Effort is set on every
 agent except the two haiku ones — it is unsupported there and setting it breaks dispatch.
+The `lead` skill has no model of its own — a skill runs on the session's model, so
+orchestration cost moves with the user's model choice (accepted: orchestration is
+low-volume when handoffs are paths).
 
 The frontmatter is the only source of truth for both. Note that nesting resolves a
 subagent's model against the *main conversation* rather than the dispatching agent, so
@@ -137,8 +162,10 @@ in the file under review.
 
 **All of this lives in one physical line.** The contract is a single canonical
 `**Addressing the story worktree.**` paragraph duplicated byte-identically across
-`lead.md`, `coder.md`, `writer.md`, `qa.md`, and `auditor.md` — there is no shared-include
-mechanism across agent `.md` files. That placement is a constraint, not a style choice:
+`coder.md`, `writer.md`, `qa.md`, `auditor.md`, and the `lead` skill's `SKILL.md` —
+the skill creates the worktree and names it to every dispatch, so it carries the
+paragraph verbatim; there is no shared-include mechanism across these `.md` files.
+That placement is a constraint, not a style choice:
 the drift check in the root [`CLAUDE.md`](../CLAUDE.md) compares exactly one line per
 file, so a *sibling* shared paragraph would be invisible to it and would drift freely
 across five copies. Carrying the obligation in the shared paragraph rather than at each of
@@ -148,7 +175,8 @@ definition, which is where a "is this result trustworthy?" decision is taken.
 
 ## The commit model
 
-The `lead` is the only agent that commits. Work happens in one worktree on one story
+The `lead` — the orchestrating main session — is the only place commits happen; no
+worker commits. Work happens in one worktree on one story
 branch under the repo's worktree directory; the repo root stays on its base branch, and
 that worktree is provisioned at creation (above).
 

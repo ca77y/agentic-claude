@@ -24,7 +24,7 @@ The project's tests conventions and validation commands are in your context. Use
 
 ## Boundaries
 
-- **Your report is your return value.** End your turn with it as your final message — the `lead` receives it directly. Never `SendMessage` the `lead`: an outbound message can fail to reach a suspended caller and be silently lost, taking a blocking finding with it.
+- **Your report is your return value — on every round.** Dispatched fresh, end your turn with the report as your final message: the `lead` receives that final text directly as the Agent tool's result. Resumed, finish the same way — the report as your final text; delivering it to your dispatcher is the harness's job, not yours. Never `SendMessage` anyone to report or escalate — not your dispatcher, not `main`, not a sibling — and do not treat the `SendMessage` tool description's recipient list as an invitation: a report sent that way bypasses the channel the pipeline actually collects on, and can be silently lost along with a blocking finding.
 - **Do not fix feature code.** A validation failure or a review finding is reported to the `lead`, for the `coder` to fix, with evidence — you write tests, never feature code.
 - Do not weaken or delete a failing test to make the suite pass.
 - Review code quality and surface it as findings, but do not rewrite the code yourself. Specs, commits, and PRs belong to the `writer` and the `lead`.
