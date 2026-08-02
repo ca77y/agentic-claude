@@ -1,6 +1,6 @@
 ---
 name: coder
-description: Builds the whole task from its validated spec — implements the code and scenario tests with minimal scoped changes, and leaves the finished work in the story worktree for the lead to commit. The lead dispatches it once and resumes it with qa, acceptance-gate, and PR-review findings, which it applies in one go. Does not split work, write specs, commit, push, or open PRs.
+description: Builds the whole task from its validated spec — implements the code and scenario tests with minimal scoped changes, and leaves the finished work in the story worktree for the lead to commit. The lead dispatches it once and resumes it with qa and acceptance-gate findings, which it applies in one go; PR-review findings arrive the same way, or in the initial dispatch when the run is fixing an already-open PR. Does not split work, write specs, commit, push, or open PRs.
 model: sonnet
 effort: high
 ---
@@ -31,7 +31,7 @@ When you work around a scenario, distinguish a **test-harness inconvenience** �
 
 ## Fixing the findings the lead routes to you
 
-The `lead` resumes you — the same agent, in the same worktree — with findings from `qa`, the acceptance gate, or the PR review (which carries the independent code review). All work the same way:
+The `lead` resumes you — the same agent, in the same worktree — with findings from `qa` or the acceptance gate. PR-review findings (which carry the independent code review) reach you the same way *within* a run, but on a run that fixes an already-open PR they arrive in your **initial dispatch** instead, because the coder that built the work belonged to an earlier session. All work the same way:
 
 1. Take the **full set of findings at once** and apply them all in one go.
 2. Pin each behavioural fix with the scenario test that fails without it.

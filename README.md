@@ -47,15 +47,16 @@ The end-to-end flow:
    ┌───────────┐        human                       │               └──────────┘
    │ librarian │        approval                    │
    │ scribe    │        gate                        │   commits · pushes · opens the PR
-   │ clerk     │                                    └──▶ then drives the PR review loop
+   │ clerk     │                                    └──▶ then hands the PR off to you
    └───────────┘
 ```
 
 Two **human gates** punctuate the flow: you approve the analyst's stories before
 anything is built, and you explicitly invoke the `lead` skill
 (`/ca77y-engineering:lead <task>`) to build one. **The board is
-yours** — the `lead` reads a referenced card but never writes it, so every status
-transition, Done included, is a manual step. When speccing settles a decision that
+yours** — the `lead` only moves the story it is executing to **In Progress** when it
+starts and to **In Review** when its PR opens, so every other transition, **Done**
+included, is a manual step. When speccing settles a decision that
 contradicts what a card records about its relationship to another — even the card the
 work came from — the `writer` surfaces it as a **board follow-up** (which card, which
 sentence, and what it should now say) and the `lead` relays it to you in its final report
@@ -118,7 +119,7 @@ library work.
 | --- | --- | --- | --- |
 | Research | `researcher` | a topic | a cited wiki entry + raw sources in the library |
 | Analysis | `analyst` | wiki pages + your input | board-ready **story cards** (fit-proven) |
-| Orchestration | `lead` (skill, main session) | one task (a prompt, maybe naming a card) | a single merged-ready PR, reviewed |
+| Orchestration | `lead` (skill, main session) | one task (a prompt, maybe naming a card) | a single open PR, gated and handed off for review |
 | Spec | `writer` | the task | a validated spec in the specs area |
 | Build | `coder` | the validated spec | the finished work in the story worktree |
 | Validation & review | `qa` | the work in progress | pass/fail + filled test gaps + code-review findings |
@@ -179,14 +180,16 @@ ready**. After shaping, the native `auditor` gate critiques the cards. Cards lan
 The `lead` is a **skill, not a subagent**: invoking `/ca77y-engineering:lead <task>`
 makes the **main session itself the orchestrator**, dispatching the workers flat —
 every pipeline agent is a leaf directly below it. It owns the path from a task to a
-single merged-ready PR, and writes neither code nor specs — it dispatches, gates,
+single open PR, and writes neither code nor specs — it dispatches, gates,
 commits, and ships. Invoking the `lead` is explicit permission to branch, worktree,
 commit, push, and open the PR. (Orchestration runs on the session's model; the
 workers keep the models pinned in their own frontmatter.)
 
 Its input is a **prompt**. If that prompt references a story card, the lead reads the
-card and what it links before reasoning about the task. That is its whole
-relationship with the board: read-only.
+card and what it links before reasoning about the task. That, plus two status
+transitions on that one card — **In Progress** at workspace creation, **In Review**
+once the PR is open, written in the repository root checkout and left uncommitted —
+is its whole relationship with the board.
 
 1. **Read the task** — the prompt, the referenced card if any, the docs it touches,
    and the relevant code.
@@ -198,7 +201,8 @@ relationship with the board: read-only.
    layout from the same lockfile and break tests the task never touched — otherwise by
    running the project's own install/bootstrap step. The lead then **records the
    provisioning status**, including *not provisioned, with the reason*, and every
-   dispatch into the worktree names it. Everything happens in that worktree.
+   dispatch into the worktree names it, and **moves the referenced card to In
+   Progress** in the root checkout. Everything else happens in that worktree.
 3. **Spec** — dispatches the `writer` to author the spec, then the `auditor` to gate
    it; routes any findings back to the writer to revise, re-audits fresh, and once
    ready **commits the spec** (commit 1).
@@ -225,12 +229,13 @@ relationship with the board: read-only.
    carrying any production hazards the coder reported into its description, and relaying
    any board follow-ups the writer surfaced while speccing in both its final report and
    the PR description, so a card a decision made stale is visible without opening the spec.
-9. **PR review loop** — drives the review to resolution (below).
+   Then **moves the card to In Review**.
+   The run **ends here** — the lead does not wait for the review (below).
 
 **Dispatch and resume.** A *fresh* dispatch is synchronous (`run_in_background: false`)
 and its tool result **is** the worker's report. Most rounds are not fresh dispatches,
 though: the lead **resumes** the writer across spec revisions and the same coder across
-qa, acceptance, and PR-review rounds, because a resume is the only way to preserve their
+qa and acceptance rounds, because a resume is the only way to preserve their
 context. A resume is a `SendMessage` by agentId, which hands back only a delivery
 acknowledgement — the resumed worker's report arrives as its **completion notification**,
 delivered to the main session. Because the orchestrator *is* the main session, that
@@ -241,8 +246,9 @@ wake brings no usable report, it checks ground truth before re-dispatching —
 and the files the worker was to produce: work on disk means collect, not replace (a
 stalled agent and a slow-but-working one look identical, and re-dispatching the second
 puts two agents on the same files), and anything genuinely lost is escalated rather
-than silently re-dispatched. `Monitor` wakes the session too and stays the right tool
-for a long external wait like the PR review.
+than silently re-dispatched. Those two waits — a synchronous dispatch and a
+resumed worker's notification — are the only ones the lead has; it never waits on
+anything external.
 
 **Context discipline.** Workers are handed **paths, not content** — the spec path, the
 worktree path, the provisioning status, and commit refs; a round's findings that exceed
@@ -266,55 +272,21 @@ round are folded together. They stay local until the PR opens. Committing the sp
 separately is what keeps it in history at all, since the docs pass later converts and
 deletes it.
 
-**The PR review loop** (max 3 rounds). The review is performed by the Claude GitHub
-app, triggered on open and re-triggerable by comment.
+**The PR review, and the hand-off.** The lead does **not** wait for the review. It
+opens the PR, moves the card to In Review, reports the PR as open and not yet reviewed,
+and stops — no monitor, no polling script, no baseline diffing. Waiting on an external
+reviewer means polling an outside system on an unbounded schedule from a session with
+nothing else to do; you drive the review from the PR instead. An unreviewed PR that is
+*reported* as unreviewed is a correct outcome.
 
-- Poll the PR for review activity (`gh pr view --json reviews,comments`) with a
-  **genuinely long monitor**, and make **the polling script itself** measure the
-  five-minute boundary **against a baseline captured at the trigger**. The baseline is the
-  **ids** of the PR's existing reviews and comments — not a count, which cannot identify
-  *which* items are new — captured immediately before firing the trigger: right before
-  `gh pr create` on the first entry, or right before the `@review rerun` comment on a
-  re-entry. Never merely "when polling begins", or activity landing in the gap between
-  opening the PR and arming the monitor is misread as stale and a PR under active review
-  reads as unreviewed. Every tick counts only what is **new since that baseline** as
-  activity, excluding the lead's own trigger comment by author or exact content rather
-  than by recency — recency is precisely what races the trigger. This applies on every
-  entry, not just the first: coming back round from a fix round, round 1's stale review
-  and the lead's own rerun comment are already sitting there, and without the baseline the
-  script reads them as a fresh trigger. The script
-  prints a visibly distinct line per case and exits either way: print-and-exit as soon as
-  about five minutes pass with zero **new** activity, or print-and-exit as soon as new
-  activity appears — so nothing is still listening when step 3 arms its own monitor. That
-  emitted event is what the lead acts on. `Monitor`'s own `timeout_ms` is a separate,
-  longer **safety ceiling** for the whole wait — at least 30 minutes (1800000 ms), up to
-  the 3600000 ms maximum, never the monitor's short default, since a review routinely
-  takes longer than five minutes to land. The ceiling must not be what produces the
-  five-minute judgement: a script that only emits on state change prints nothing until the
-  full ceiling elapses, silently absorbing the five-minute window instead of surfacing it.
-- **The script reports no new review activity** after about five minutes → report the task
-  finished, saying plainly that no review was triggered, so an unreviewed PR is visible
-  rather than silent. This is the script's own observable event, measured against the
-  baseline captured at the trigger — not the raw presence of an earlier round's output
-  or the lead's own re-fire comment — and not something inferred from the monitor's armed
-  ceiling, which keeps running underneath regardless.
-- **The script reports new activity** — a comment showing the review started → that
-  five-minute boundary bounds how long to wait for the review to be *triggered*, not to
-  *finish*. Step 1's monitor call has already ended — it exited the moment it printed that
-  signal — so arm a **new** monitor for this phase, against a script with its own distinct
-  signal: **landed** (a finalized review comment or a submitted review) versus **still in
-  progress** ("in progress", "working…", "Reviewing…" are never landed). Arm it at the same
-  bounded deadline (at least 1800000 ms, up to 3600000 ms), and re-arm when that ceiling
-  *expires* with the review still not landed — the observable moment, not some sense of the
-  deadline being "close". Do **not** switch to `persistent: true`: `Monitor` ignores
-  `timeout_ms` entirely once that is set, so a stalled or dead reviewer would hang the lead
-  for the rest of the session with no bound and no event to recover on. After two full
-  re-arms (three arms total) with no landed review, stop and report the PR as
-  review-stalled rather than waiting forever.
-- **Issues** → resume the same coder by agentId with the full set of findings, carrying
-  any production hazard it surfaces this round into the PR update, then commit, push, and
-  re-fire with `gh pr comment --body "@review rerun the PR review"`.
-- After 3 rounds it stops and reports what remains.
+The review's findings come back by **invoking the lead again** with them (or with the
+PR). That fix run reuses the existing branch, worktree, and PR — never a second one —
+recovering state from the ledger and `git log`, since the previous run's agentIds died
+with it and every worker is a fresh dispatch. It routes each finding to its owner (code
+→ `coder`, docs → `writer`, approach-invalidating → a revised spec), re-runs `qa` over
+any code change, commits and pushes the round, updates the PR description with anything
+new it must carry, re-fires the review with a `@review` comment — and hands off again.
+The 3× rule applies within each run.
 
 **A flat topology, and the lead never does the work.** The lead skill is the only
 orchestrator, and it runs in the main session: it dispatches `writer`, `coder`, `qa`,
@@ -467,9 +439,13 @@ dependencies — never a stack of PRs.
 **Story cards** (`type: story` frontmatter) are Obsidian Tasks-format checkboxes:
 
 - **Status** `[ ]` Todo · `[/]` In Progress · `[?]` In Review ·
-  `[x]` Done · `[-]` Cancelled. The card symbol is the source of truth, and **moving
-  it is yours** — no agent writes card status. The `lead` starts an invoked story
-  from whatever state it's in; invoking it is the go-ahead.
+  `[x]` Done · `[-]` Cancelled. The card symbol is the source of truth. The `lead`
+  moves the story it is executing to **In Progress** when it starts and to
+  **In Review** once its PR is open — edited in the repository root checkout, not
+  the story worktree, and left uncommitted, so the board is current on your disk
+  before the merge. Every other transition — **Done** above all — is **yours**, and
+  no other agent writes card status. The `lead` starts an invoked story from
+  whatever state it's in; invoking it is the go-ahead.
 - **Type** (exactly one): `#feature` · `#improvement` · `#bug` (implementation-ready)
   · `#research` · `#marketing` · `#support` (must be refined first).
 - **Priority** `🔺` highest · `⏫` high · `🔼` medium · `🔽` low.
@@ -491,7 +467,7 @@ signs off on it — the review always runs as a separate subagent.
 **Verification is layered**: the `writer` authors the spec → the `auditor` gates it
 ready-to-build → `coder` writes per-scenario tests → `qa` fills coverage gaps and reviews
 the diff → the `auditor` gates the result against its acceptance criteria → the PR opens →
-the Claude GitHub review reviews it, and the lead loops fixes back through the same coder.
+the Claude GitHub review reviews it, and its findings come back through another `lead` run.
 The two `auditor` gates divide a spec's **dependency claims** between them: at readiness
 it checks each such claim is either cited or explicitly marked an assumption, and that a
 scenario which could pass with the claimed mechanism absent names that alternative cause
