@@ -161,12 +161,16 @@ hosted tracker needs only the pieces its docs and library actually use.
 
 | Plugin | Used for | |
 | --- | --- | --- |
-| **Templater** (`templater-obsidian`) | the story / task-card / spec scaffolds under `docs/_templates/` | required |
+| **Templater** (`templater-obsidian`) | the spec scaffold under `docs/_templates/`, plus the story scaffold when the board is repo-local | required |
 | **Tasks** (`obsidian-tasks-plugin`) | the card checkbox + emoji format (`#type`, `🆔`, `⛔`, priority) | required *for a repo-local board* |
 | **Task Board** (`task-board`) | the status-based kanban view built from `docs/tasks/*.md` cards | required *for a repo-local board* |
 | **Dataview** (`dataview`) | index/query pages across docs and the library | recommended |
 | **Breadcrumbs** (`breadcrumbs`) | `up`/`related` wikilink navigation the library `clerk` audits | recommended |
 | **Excalidraw** (`obsidian-excalidraw-plugin`) | design/flow diagrams and analyst visual companions | recommended |
+
+The two board plugins are conditional, and **this repo does not vendor them** — its own
+board is Linear, so only Templater, Dataview, Breadcrumbs, and Excalidraw are installed
+under `.obsidian/`. Add them back only if you keep your cards as Markdown in the repo.
 
 The expected vault layout in the target repo: `docs/specs/` (in-flight specs),
 `docs/features|flows|designs/` (durable docs), `library/` (the research wiki),
