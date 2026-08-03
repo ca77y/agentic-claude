@@ -17,7 +17,7 @@ ca77y-agentic/
 |       |-- skills/board/SKILL.md        # resolves the project's board into a profile
 |       |   `-- references/              # loaded only to author an ISSUE_TRACKING.md
 |       `-- agents/*.md                  # the agent definitions
-|-- docs/                                # this documentation + this repo's own board
+|-- docs/                                # this documentation (work is tracked in Linear)
 |-- .obsidian/                           # vendored vault config and plugins
 `-- CLAUDE.md                            # repo maintenance rules
 ```
@@ -243,14 +243,13 @@ They are harvested back into this repository by hand.
 ## Working on this repo with the pipeline
 
 This repository is itself an Obsidian vault with the layout the pipeline expects, so the
-toolkit can be run on its own definitions: cards in [`tasks/`](./tasks/), in-flight specs
-in `specs/`, scaffolds in `_templates/`. The board scan is scoped to `docs/tasks` in
-`.obsidian/plugins/task-board/data.json`, excluding `_archive/`, `_backlog/`, and the
-folder's `CLAUDE.md`.
+toolkit can be run on its own definitions: in-flight specs in `specs/`, the spec scaffold
+in `_templates/`.
 
-Its board is repo-local Markdown, declared in
-[`ISSUE_TRACKING.md`](./ISSUE_TRACKING.md) — bindings, the two permitted transitions, the
-visibility rule, and the write authority; [`tasks/CLAUDE.md`](./tasks/CLAUDE.md) stays the
-authority on the card format. That declaration is what the `board` skill resolves against
-when the pipeline runs here, so the repo doubles as the worked example of a file-based
-board.
+Its board is **Linear** — the `Agentic Claude` project in team `Smerfy` — declared in
+[`ISSUE_TRACKING.md`](./ISSUE_TRACKING.md): bindings onto the Linear MCP tools, the card
+shape, the two permitted transitions, the visibility rule, and the write authority. That
+declaration is what the `board` skill resolves against when the pipeline runs here, so the
+repo doubles as the worked example of a **hosted** board reached over MCP. The Markdown
+board that preceded it (`docs/tasks/`, 35 cards) was migrated to Linear on 2026-08-03 and
+removed; git history holds the originals.

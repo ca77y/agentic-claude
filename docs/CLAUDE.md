@@ -1,6 +1,6 @@
 # Docs
 
-Engineering documentation for `ca77y-agentic`: product direction, how the plugin is assembled, known issues, active specs, and the story board. Human-facing toolkit usage stays in the root [`README.md`](../README.md); the repo's own maintenance rules (manifest version parity) stay in the root [`CLAUDE.md`](../CLAUDE.md).
+Engineering documentation for `ca77y-agentic`: product direction, how the plugin is assembled, known issues, active specs, and how work is tracked. Human-facing toolkit usage stays in the root [`README.md`](../README.md); the repo's own maintenance rules (manifest version parity) stay in the root [`CLAUDE.md`](../CLAUDE.md).
 
 ## Layout
 
@@ -11,8 +11,7 @@ docs/
 |-- ISSUE_TRACKING.md # How this repo's board is reached; the board skill resolves it
 |-- issues/           # Known problems with no identified solution on our side
 |-- specs/            # Active specs, one per in-flight unit
-|-- tasks/            # Story board (card format in tasks/CLAUDE.md)
-`-- _templates/       # Story, task-card, and spec scaffolds
+`-- _templates/       # The spec scaffold
 ```
 
 ## Rules
@@ -21,6 +20,6 @@ docs/
 - Keep product direction in `PRODUCT.md` and the structural model in `ARCHITECTURE.md`.
 - The root `README.md` is the user-facing description of every agent. When an agent's behavior changes, update the README — `ARCHITECTURE.md` covers structure, not per-agent prose.
 - Specs are temporary implementation contracts. After shipping, fold durable content into `ARCHITECTURE.md` (or `PRODUCT.md` when it changes direction) and the root `README.md`, then remove the spec. Do not archive specs.
-- Record a problem in `issues/` only when it is real but no solution could be identified on our side. State what was investigated, the evidence, and what would unblock it. Once a fix becomes identifiable, replace the note with a story in `tasks/`.
+- Record a problem in `issues/` only when it is real but no solution could be identified on our side. State what was investigated, the evidence, and what would unblock it. Once a fix becomes identifiable, replace the note with an issue on the board (see [`ISSUE_TRACKING.md`](./ISSUE_TRACKING.md)).
 - Copy templates from `_templates/`; do not edit a template into a real artifact.
 - The agent definitions under `plugins/*/agents/` are the product. Prose about how an agent *should* behave belongs in its definition, not here.

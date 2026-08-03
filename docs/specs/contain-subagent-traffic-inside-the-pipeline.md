@@ -14,7 +14,7 @@ sits on an open harness defect: children of a subagent detach regardless of
 `run_in_background`, completion notifications route to the root session from any depth,
 a resumed child's report leaks to the main session, and subagents have no `TaskOutput`
 to collect with. Established empirically in the story's investigation log
-([card](../tasks/contain-subagent-traffic-inside-the-pipeline.md)) and reproduced
+([SMR-166](https://linear.app/ca77y/issue/SMR-166)) and reproduced
 upstream ([anthropics/claude-code#75043](https://github.com/anthropics/claude-code/issues/75043),
 [#81438](https://github.com/anthropics/claude-code/issues/81438),
 [#69212](https://github.com/anthropics/claude-code/issues/69212)).

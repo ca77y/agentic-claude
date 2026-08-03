@@ -1,1 +1,0 @@
-- [ ] <action-verb title> #<type> <priority> 🆔 <slug>

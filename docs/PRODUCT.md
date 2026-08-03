@@ -66,8 +66,9 @@ requirement covers the **docs and library** (`docs/specs/`, durable docs, `libra
 
 The board is separate and optional: a project either declares one — canonically in an
 `ISSUE_TRACKING.md` the `board` skill can help write, or anywhere else its context already
-documents itself — or declares none, and the pipeline runs trackerless off the spec. A repo-local Markdown board adds
-`docs/tasks/` plus the Tasks and Task Board community plugins.
+documents itself — or declares none, and the pipeline runs trackerless off the spec. This
+repo tracks its own work in Linear; a repo-local Markdown board instead needs a cards
+directory plus the Tasks and Task Board community plugins.
 
 This repository satisfies those requirements itself, so the pipeline can be run on the
 toolkit that defines it.

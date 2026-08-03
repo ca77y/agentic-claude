@@ -133,10 +133,12 @@ Three shapes it resolves today, none of them privileged:
 
 - **Repo-local Markdown** — cards as files, searched by grep, transitioned by editing
   the card in the root checkout and leaving it uncommitted, so your board is current on
-  disk before the branch merges. This repo's own declaration is
-  [`docs/ISSUE_TRACKING.md`](docs/ISSUE_TRACKING.md).
+  disk before the branch merges.
 - **A hosted tracker over MCP** (Linear, Jira, GitHub Issues) — bindings are tool
-  calls, transitions are API writes, and no checkout is involved at all.
+  calls, transitions are API writes, and no checkout is involved at all. This is what
+  this repo itself uses; its declaration is
+  [`docs/ISSUE_TRACKING.md`](docs/ISSUE_TRACKING.md), pointed at from the root
+  `CLAUDE.md`.
 - **A CLI or documented REST endpoint** — bindings are commands. Credentials come from
   the mechanism's own configured auth; `.env` files are never read.
 

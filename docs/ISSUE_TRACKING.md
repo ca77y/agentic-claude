@@ -5,60 +5,67 @@ a board profile; keep it true, because the pipeline binds real calls to what it 
 
 ## The board
 
-Plain Markdown files committed in this repo, under [`tasks/`](./tasks/), viewed as a
-kanban board by the vendored Obsidian **Task Board** plugin. There is no tracker service
-and no API — every operation is a file read, a grep, or a file edit. The card format and
-the folder's own rules live in [`tasks/CLAUDE.md`](./tasks/CLAUDE.md).
+**Linear** — the `Agentic Claude` project in the `Smerfy` team (`SMR`).
+<https://linear.app/ca77y/project/agentic-claude-e233525564c3>
+
+Work is not tracked in this repo. The Markdown board that used to live in `docs/tasks/`
+was migrated to Linear on 2026-08-03 (35 cards → `SMR-132`…`SMR-166`) and removed; git
+history holds the originals, and each migrated issue names its source file.
 
 ## Reaching it
 
-The repo itself. No credentials, no server, nothing to authenticate.
+The **Linear MCP server**, already connected in this workspace — tools are named
+`mcp__plugin_linear_linear__*` and load through `ToolSearch` on demand. Nothing to
+authenticate; no credentials live in this repo.
 
 ## Operations
 
-- **locate** — `docs/tasks/<slug>.md`, by slug or by title.
-- **read** — read the file. One story per file, context on the card's sub-bullets.
-- **search** — grep `docs/tasks/`, including `_backlog/` and `_archive/`.
-- **create** — copy [`_templates/story.md`](./_templates/story.md) to `docs/tasks/<slug>.md`.
-- **transition** — edit the card's checkbox symbol in place.
+- **locate** — `get_issue` by identifier (`SMR-166`) or URL; `list_issues` with
+  `project: "Agentic Claude"` and `query: <title or slug>` when only a name is known.
+- **read** — `get_issue`, with `includeRelations: true` when dependencies matter.
+- **search** — `list_issues` with `project: "Agentic Claude"` plus `query`, `state`,
+  `label`, or `priority`. Full-text `query` covers title and description.
+- **create** — `save_issue` with `team: "Smerfy"`, `project: "Agentic Claude"`, and
+  `state: "Backlog"`.
+- **transition** — `save_issue` with the issue `id` and the target `state`.
 
 ## Card shape
 
-Defined by [`_templates/story.md`](./_templates/story.md), with the semantics in
-[`tasks/CLAUDE.md`](./tasks/CLAUDE.md): `type: story` frontmatter; one Obsidian Tasks
-checkbox carrying the title, a `#type` tag, a priority emoji (`🔺⏫🔼🔽`), and the story id
-(`🆔 <slug>`); dependents declare `⛔ <slug>`. The slug is reused for the branch and the
-spec file, so one story is one name across board, repo, and PR.
+A Linear issue. Title is the action-verb story title; the body goes in `description` as
+Markdown.
 
-Acceptance criteria are recorded **one observable behaviour per line** — the acceptance
-gate reads them one at a time.
+- **Type** — exactly one label: `Bug`, `Improvement`, or `Feature`. These three are
+  implementation-ready; there is no research/marketing/support label, so work of that
+  kind is refined into one of the three before it is filed.
+- **Priority** — `1` Urgent · `2` High · `3` Medium · `4` Low.
+- **Identity** — the issue identifier (`SMR-166`). It is the stable name across board,
+  branch, and PR: branch from the issue's own `gitBranchName`, and name the spec
+  `docs/specs/<identifier-slug>.md` (lowercase, e.g. `smr-166-convert-the-lead.md`).
+- **Dependencies** — Linear's blocking relations, set via `blockedBy` / `blocks` on
+  `save_issue`. There are no sub-issues: one story is one issue is one PR.
 
-**Format quirk:** the Task Board view scans files for `- [ ]` markers and surfaces *every*
-match as its own item, including indented ones. Exactly one checkbox per card; scope,
-criteria, and references go on plain `-` bullets.
+Acceptance criteria are recorded **one observable behaviour per line** under an
+`Acceptance criteria:` line — the acceptance gate reads them one at a time.
 
 ## Statuses
 
-`[ ]` Todo · `[<]` Ready to start · `[/]` In Progress · `[?]` In Review · `[x]` Done ·
-`[X]` Completed · `[-]` Cancelled. The checkbox symbol is the source of truth; status is
-never duplicated in frontmatter.
+`Backlog` · `Todo` · `In Progress` · `In Review` · `Done` · `Canceled` · `Duplicate`.
 
-- **work started** → `[/]` (expect `[ ]` or `[<]`)
-- **awaiting review** → `[?]` (expect `[/]`)
-- Terminal states — `[x]`, `[X]`, `[-]` — are the human's.
+- **work started** → `In Progress` (expect `Backlog` or `Todo`)
+- **awaiting review** → `In Review` (expect `In Progress`)
+- Terminal states — `Done`, `Canceled`, `Duplicate` — are the human's.
 
 ## Visibility
 
-Status writes land in the **repository root checkout on `master`, left uncommitted**, and
-never inside a story worktree: a card edited on a story branch stays invisible until that
-branch merges, which is exactly when its status has stopped mattering. The board is the
-human's to commit.
+A status write is the API call itself; it is visible in Linear immediately. **No checkout
+is involved** — never write a status into the repository, a worktree, or a branch, and
+never commit one.
 
 ## What the pipeline may write
 
-- The `analyst` creates cards, at `[ ]`.
-- The `lead` makes the two transitions above, on the one card it is executing.
+- The `analyst` creates issues, at `Backlog`.
+- The `lead` makes the two transitions above, on the one issue it is executing.
 
-Nothing else. Every other status, and every edit to a card's content — its scope, its
-criteria, its links, its relationships — is the human's; the pipeline reports follow-ups
-rather than applying them.
+Nothing else. Comments, PR-link attachments, terminal states, and every edit to an
+issue's content — its title, description, criteria, labels, priority, relations — are the
+human's; the pipeline reports follow-ups rather than applying them.
