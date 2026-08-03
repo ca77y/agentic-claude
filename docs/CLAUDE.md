@@ -11,7 +11,7 @@ docs/
 |-- ISSUE_TRACKING.md # How this repo's board is reached; the board skill resolves it
 |-- issues/           # Known problems with no identified solution on our side
 |-- specs/            # Active specs, one per in-flight unit
-`-- _templates/       # The spec scaffold
+`-- _templates/       # The spec scaffold, and the story scaffold for a Linear issue body
 ```
 
 ## Rules

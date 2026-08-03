@@ -11,6 +11,6 @@ Toolkit usage — what the plugin is, how to install it, and what each agent doe
 - `ISSUE_TRACKING.md` - how the board is reached; the `board` skill resolves it
 - `issues/` - known problems with no identified solution on our side
 - `specs/` - temporary specs for in-flight units of work
-- `_templates/` - the spec scaffold
+- `_templates/` - the spec and story scaffolds
 
 See [`CLAUDE.md`](./CLAUDE.md) for placement and lifecycle rules.

@@ -43,9 +43,18 @@ Markdown.
   `docs/specs/<identifier-slug>.md` (lowercase, e.g. `smr-166-convert-the-lead.md`).
 - **Dependencies** — Linear's blocking relations, set via `blockedBy` / `blocks` on
   `save_issue`. There are no sub-issues: one story is one issue is one PR.
+- **Body** — scaffolded by [`_templates/story.md`](./_templates/story.md): a summary
+  paragraph, then `## Why`, `## Scope`, `## Out of scope`, `## Acceptance criteria`,
+  `## References`. Sections that do not apply are dropped, not left empty. The fields
+  above are Linear's own and are never restated in the body, and the body carries no
+  `#` heading — the issue title is the heading.
 
-Acceptance criteria are recorded **one observable behaviour per line** under an
-`Acceptance criteria:` line — the acceptance gate reads them one at a time.
+Acceptance criteria are recorded **one observable behaviour per line** under the
+`## Acceptance criteria` heading — the acceptance gate reads them one at a time, and
+grades each separately.
+
+*Quirk:* Linear rewrites `-` bullets to `*` and wraps bare URLs in `<…>` on save. It is
+cosmetic and the content round-trips intact; do not reshape a body to avoid it.
 
 ## Statuses
 

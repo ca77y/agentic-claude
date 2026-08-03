@@ -243,8 +243,8 @@ They are harvested back into this repository by hand.
 ## Working on this repo with the pipeline
 
 This repository is itself an Obsidian vault with the layout the pipeline expects, so the
-toolkit can be run on its own definitions: in-flight specs in `specs/`, the spec scaffold
-in `_templates/`.
+toolkit can be run on its own definitions: in-flight specs in `specs/`, the spec and
+story scaffolds in `_templates/`.
 
 Its board is **Linear** — the `Agentic Claude` project in team `Smerfy` — declared in
 [`ISSUE_TRACKING.md`](./ISSUE_TRACKING.md): bindings onto the Linear MCP tools, the card
