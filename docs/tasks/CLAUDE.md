@@ -2,6 +2,8 @@
 
 Local work tracking in plain Markdown. One story is one substantial, self-contained, shippable unit: one story, one card, one file, and one pull request. A prerequisite is a separate linked story, not a child task.
 
+This directory **is** this project's board. How the pipeline reaches it — bindings, the two status transitions it may make, where those writes land, and its write authority — is declared once in [`../ISSUE_TRACKING.md`](../ISSUE_TRACKING.md), which the `ca77y-engineering:board` skill resolves. This page stays the authority on the *card format* below.
+
 ## Files
 
 - `<slug>.md` - one active story file with `type: story` frontmatter

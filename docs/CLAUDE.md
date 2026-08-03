@@ -6,12 +6,13 @@ Engineering documentation for `ca77y-agentic`: product direction, how the plugin
 
 ```text
 docs/
-|-- PRODUCT.md       # Toolkit intent, boundaries, and direction
-|-- ARCHITECTURE.md  # Plugin structure, agent roster, dispatch model
-|-- issues/          # Known problems with no identified solution on our side
-|-- specs/           # Active specs, one per in-flight unit
-|-- tasks/           # Story board
-`-- _templates/      # Story, task-card, and spec scaffolds
+|-- PRODUCT.md        # Toolkit intent, boundaries, and direction
+|-- ARCHITECTURE.md   # Plugin structure, agent roster, dispatch model
+|-- ISSUE_TRACKING.md # How this repo's board is reached; the board skill resolves it
+|-- issues/           # Known problems with no identified solution on our side
+|-- specs/            # Active specs, one per in-flight unit
+|-- tasks/            # Story board (card format in tasks/CLAUDE.md)
+`-- _templates/       # Story, task-card, and spec scaffolds
 ```
 
 ## Rules

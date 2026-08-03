@@ -43,6 +43,34 @@ grep -h '^\*\*Addressing the story worktree\.\*\*' \
   plugins/ca77y-engineering/skills/lead/SKILL.md | sort -u | wc -l
 ```
 
+The same hazard applies to a second, shorter canonical paragraph: **"Working from the
+board profile."**, carried by the two agents that *receive* a resolved board profile
+rather than resolving one — `writer` and `auditor`. (The `lead` skill and the `analyst`
+invoke the `board` skill themselves and carry their own resolver wording, which is
+deliberately different prose; do not try to unify the four.) Edit both copies together
+— this should also print `1`:
+
+```bash
+grep -h '^\*\*Working from the board profile\.\*\*' \
+  plugins/ca77y-engineering/agents/{writer,auditor}.md | sort -u | wc -l
+```
+
+## The board is resolved, never hardcoded
+
+No agent may name a tracker, a card path, a status symbol, or a card field as a fact
+about "the project". All of it comes from the `board` skill's resolved **board
+profile** — bindings for locate/read/search/create/transition, the card shape, the
+status vocabulary, the visibility rule, and the write authority. When editing an agent,
+treat any concrete tracker detail as a bug unless it is explicitly framed as *one
+board's realization* of a semantic (the README's Obsidian Tasks example, the analyst's
+format-quirk rule).
+
+Work tracking for this repo — the board, its statuses, and what agents may write to it —
+is declared in [`docs/ISSUE_TRACKING.md`](docs/ISSUE_TRACKING.md). That line is not
+decoration: the `board` skill reads the declaration at the path its **context** gives it
+and never searches for one, so a declaration nothing points at is invisible on the runs
+where nobody happens to grep for it. Keep the pointer here whenever the file moves.
+
 ## Version management is a manual human process
 
 Bumping any plugin's `version` is **a deliberate human decision, never an automated

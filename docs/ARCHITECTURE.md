@@ -14,14 +14,16 @@ ca77y-agentic/
 |       |-- .claude-plugin/plugin.json   # Claude manifest (agents whitelist)
 |       |-- plugin.json                  # root manifest, mirrors the Claude one
 |       |-- skills/lead/SKILL.md         # the lead skill - the pipeline orchestrator
+|       |-- skills/board/SKILL.md        # resolves the project's board into a profile
+|       |   `-- references/              # loaded only to author an ISSUE_TRACKING.md
 |       `-- agents/*.md                  # the agent definitions
-|-- docs/                                # this documentation + the board
+|-- docs/                                # this documentation + this repo's own board
 |-- .obsidian/                           # vendored vault config and plugins
 `-- CLAUDE.md                            # repo maintenance rules
 ```
 
-The agent Markdown files under `plugins/ca77y-engineering/agents/` and the `lead`
-skill under `plugins/ca77y-engineering/skills/` **are the product**. Everything else
+The agent Markdown files under `plugins/ca77y-engineering/agents/` and the skills under
+`plugins/ca77y-engineering/skills/` **are the product**. Everything else
 is packaging, documentation, or vault state.
 
 ## The dual manifest
@@ -49,11 +51,11 @@ exist at runtime.
 
 ## The agent roster
 
-Nine agents and one skill in one plugin, in two groups:
+Nine agents and two skills in one plugin, in two groups:
 
 | Group | Agents | Role |
 | --- | --- | --- |
-| Pipeline | the `lead` **skill**, plus `researcher`, `analyst`, `writer`, `coder`, `qa`, `auditor` | idea → shipped PR |
+| Pipeline | the `lead` and `board` **skills**, plus `researcher`, `analyst`, `writer`, `coder`, `qa`, `auditor` | idea → shipped PR |
 | Library crew | `librarian`, `scribe`, `clerk` | maintains the target project's Markdown research library |
 
 The flow is `researcher → analyst → lead → writer → coder → writer`, with `qa`
@@ -63,6 +65,17 @@ user invokes in the main session** (`/ca77y-engineering:lead <task>`), and the m
 session then orchestrates. Under it, `writer`, `coder`, `qa`, and `auditor` are all
 **leaves it dispatches directly** — no pipeline agent dispatches or resumes another.
 The library crew is dispatched directly by whichever agent needs library work.
+
+`board` is the second skill, and the only one nothing dispatches: the `lead` and the
+`analyst` **invoke** it (loading its instructions into their own context, not spawning
+an agent) to resolve how the project tracks work, and it returns a **board profile** —
+bindings for locate/read/search/create/transition, the card shape, the status
+vocabulary, the visibility rule, and the write authority. That profile is the pipeline's
+only interface to a tracker; `writer` and `auditor` receive it in their dispatch, and
+`coder` and `qa` get no board access at all. It keeps the board a *resolved* dependency
+rather than a structural one — repo-local Markdown, a hosted tracker, or nothing changes
+the profile's contents and nothing else in the pipeline. A user can invoke it directly
+to see what resolves.
 
 It stays **one plugin**. Splitting the library crew out was considered and rejected: the
 seam between the two groups is a file — a wiki page — not an agent call, but the
@@ -234,3 +247,10 @@ toolkit can be run on its own definitions: cards in [`tasks/`](./tasks/), in-fli
 in `specs/`, scaffolds in `_templates/`. The board scan is scoped to `docs/tasks` in
 `.obsidian/plugins/task-board/data.json`, excluding `_archive/`, `_backlog/`, and the
 folder's `CLAUDE.md`.
+
+Its board is repo-local Markdown, declared in
+[`ISSUE_TRACKING.md`](./ISSUE_TRACKING.md) — bindings, the two permitted transitions, the
+visibility rule, and the write authority; [`tasks/CLAUDE.md`](./tasks/CLAUDE.md) stays the
+authority on the card format. That declaration is what the `board` skill resolves against
+when the pipeline runs here, so the repo doubles as the worked example of a file-based
+board.

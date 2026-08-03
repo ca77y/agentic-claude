@@ -7,18 +7,25 @@ agents run natively as Claude Code subagents. There is no second harness.
 ## Overview
 
 `ca77y-agentic` turns a raw idea into a shipped pull request through a chain of
-specialized agents, each owning one stage and handing off to the next. The whole
-flow lives **inside the repository you run it on** — there is no external tracker.
-Stories, specs, and research are plain Markdown in an Obsidian vault, so the board
-and the knowledge base are versioned alongside the code.
+specialized agents, each owning one stage and handing off to the next. Specs and
+research live **inside the repository you run it on** — plain Markdown in an Obsidian
+vault, versioned alongside the code. **The board is whatever you already use**:
+Markdown cards in the repo, Linear, Jira, GitHub Issues, or nothing at all. The
+pipeline resolves it from the project's own context at the start of every run and
+hardcodes none of it — see [Bring your own board](#bring-your-own-board).
 
-The toolkit is **one plugin**, `ca77y-engineering`, holding two rosters and one skill:
+The toolkit is **one plugin**, `ca77y-engineering`, holding two rosters and two skills:
 
 - The **pipeline** — `researcher → analyst → lead → writer → coder → writer`, with
   `qa` (validation plus the local code review) and the `auditor` gating native to
   Claude, and the independent code review running on the opened PR. The `lead` is a
   **skill run in the main session** (`/ca77y-engineering:lead <task>`), not a
   subagent; every other pipeline role is a subagent it dispatches directly, flat.
+- The **board skill** (`/ca77y-engineering:board`) — resolves *how this project
+  tracks work* and hands the pipeline a **board profile** to work from: the bindings
+  for reading, searching, creating, and transitioning cards, the card shape and status
+  vocabulary, and what the pipeline is permitted to write. The `lead` and the `analyst`
+  invoke it before touching a card; you can run it yourself to see what resolves.
 - The **library crew** — `librarian`, `scribe`, `clerk` — that maintains the
   project's Markdown research library. The crew runs as native Claude subagents,
   dispatched directly by the agents that need library work.
@@ -54,9 +61,9 @@ The end-to-end flow:
 Two **human gates** punctuate the flow: you approve the analyst's stories before
 anything is built, and you explicitly invoke the `lead` skill
 (`/ca77y-engineering:lead <task>`) to build one. **The board is
-yours** — the `lead` only moves the story it is executing to **In Progress** when it
-starts and to **In Review** when its PR opens, so every other transition, **Done**
-included, is a manual step. When speccing settles a decision that
+yours** — the `lead` only moves the story it is executing to your board's
+*work-started* status when it starts and to its *awaiting-review* status when the PR
+opens, so every other transition, **Done** included, is a manual step. When speccing settles a decision that
 contradicts what a card records about its relationship to another — even the card the
 work came from — the `writer` surfaces it as a **board follow-up** (which card, which
 sentence, and what it should now say) and the `lead` relays it to you in its final report
@@ -71,29 +78,100 @@ audits, and the research library — is handled by agents in this one plugin,
 using the tools and models available in Claude Code. No external CLI, no second
 harness, no dispatcher bridge.
 
-## Requires the target repo to be an Obsidian vault
+## Bring your own board
 
-The pipeline does **not** use an external tracker. Stories, specs, and the research
-library are plain Markdown **inside the repo you run the pipeline on**, and that repo
-must be an **Obsidian vault** (a committed `.obsidian/` at its root) with the community
-plugins below installed and vendored. The board cards, Templater scaffolds, and library
-navigation depend on them — without the vault and these plugins, the `analyst`, the
-`lead`, and the library crew have nothing to read or write.
+**Nothing in the pipeline knows what tracks your work.** *Board* and *card* are roles,
+not formats: a board can be Markdown files committed in the repo, a hosted tracker
+behind an MCP server or a CLI, a documented REST API, or nothing at all. Which one it
+is gets **resolved from the project's own context at the start of each run**, by the
+`board` skill, and everything downstream works from what it resolves.
+
+The skill hands back a **board profile** — the pipeline's only interface to a tracker:
+
+| Field | What it settles |
+| --- | --- |
+| **Board & mechanism** | which system, reached through what: a project skill, an MCP server, a CLI, repo files, documented HTTP |
+| **Bindings** | the concrete call for each of the five operations — *locate · read · search · create · transition* |
+| **Probe** | the read-only call actually run to prove the binding works. A binding no real call returned through is **unresolved**, however plausible it looks |
+| **Card shape** | where the scaffold or field set is defined, and which field carries identity, type, priority, dependencies, acceptance criteria |
+| **Status** | the board's own vocabulary, with the pipeline's two semantic transitions mapped onto it: *work started* and *awaiting review*, each with the value to expect before writing |
+| **Visibility** | where a write must land to be seen **now** — for a repo-local board, the root checkout left uncommitted; for a hosted one, the bound call |
+| **Write authority** | the exhaustive list of operations the pipeline may perform. **Declared by your project; defaults to the two status transitions and nothing else** |
+
+**Declare your board in an `ISSUE_TRACKING.md`** at the root of your docs area (or the
+repo root) — the bindings, the card shape, the statuses, and what the pipeline may write
+— **and point at it from your `CLAUDE.md`**:
+
+```markdown
+Work tracking — the board, its statuses, and what agents may write to it — is declared in
+[`docs/ISSUE_TRACKING.md`](docs/ISSUE_TRACKING.md).
+```
+
+That pointer is load-bearing. The skill reads the declaration at the path its **context**
+gives it and **never searches for one**: a file nothing points at loads on the run where
+something happens to grep for it and vanishes on the next, and the pipeline binds real
+calls to what it says. Intermittently visible is worse than absent.
+
+Don't have one? `/ca77y-engineering:board` is dual-purpose: with no declaration in
+context it walks you through writing the file, wiring up the pointer, and probing the
+result. Invoked *during* a run it never writes anything — it resolves what it can and
+puts the recommendation in the report, because a project document that appears
+mid-pipeline is a side effect you didn't ask for. And if you already have the file but
+it isn't in context, it tells you to add the pointer rather than hunting for it or
+writing a second one.
+
+A declaration is not mandatory. With none in context, discovery falls through to the
+project's other self-documentation (a `CLAUDE.md` section, a rules page beside the
+cards), then what the session can actually reach (MCP servers, CLIs), then repo evidence,
+then the shape of the reference you handed it (`PROJ-123` vs a URL vs a slug) — so a run
+is never blocked, it just also recommends writing the declaration. A board the
+project declares but nothing available can reach resolves as **blocked** and is
+reported — never silently swapped for one that happens to be reachable. Two equally
+plausible candidates resolve to **none**, for the same reason.
+
+Three shapes it resolves today, none of them privileged:
+
+- **Repo-local Markdown** — cards as files, searched by grep, transitioned by editing
+  the card in the root checkout and leaving it uncommitted, so your board is current on
+  disk before the branch merges. This repo's own declaration is
+  [`docs/ISSUE_TRACKING.md`](docs/ISSUE_TRACKING.md).
+- **A hosted tracker over MCP** (Linear, Jira, GitHub Issues) — bindings are tool
+  calls, transitions are API writes, and no checkout is involved at all.
+- **A CLI or documented REST endpoint** — bindings are commands. Credentials come from
+  the mechanism's own configured auth; `.env` files are never read.
+
+**No board is a supported answer, not a failure.** The pipeline then runs trackerless:
+acceptance criteria come from the spec's requirements and scenarios, there are no
+status transitions, and the handoff says so. The `analyst` still shapes and fit-gates
+its stories and returns them in its report as the deliverable — a story you can paste
+into your own tracker beats a card written somewhere it guessed.
+
+Discovery never invents an endpoint, a project key, a field, a status value, or a card
+location, and never writes through a binding that was not probed.
+
+## Requires the target repo to be an Obsidian vault (docs & library)
+
+Specs, durable docs, and the research library are plain Markdown **inside the repo you
+run the pipeline on**, and that repo must be an **Obsidian vault** (a committed
+`.obsidian/` at its root) with the community plugins below installed and vendored. This
+requirement covers the *documentation and library*, not the board — a project using a
+hosted tracker needs only the pieces its docs and library actually use.
 
 | Plugin | Used for | |
 | --- | --- | --- |
-| **Tasks** (`obsidian-tasks-plugin`) | the card checkbox + emoji format (`#type`, `🆔`, `⛔`, priority) | required |
-| **Task Board** (`task-board`) | the status-based kanban board built from `docs/tasks/*.md` cards | required |
 | **Templater** (`templater-obsidian`) | the story / task-card / spec scaffolds under `docs/_templates/` | required |
+| **Tasks** (`obsidian-tasks-plugin`) | the card checkbox + emoji format (`#type`, `🆔`, `⛔`, priority) | required *for a repo-local board* |
+| **Task Board** (`task-board`) | the status-based kanban view built from `docs/tasks/*.md` cards | required *for a repo-local board* |
 | **Dataview** (`dataview`) | index/query pages across docs and the library | recommended |
 | **Breadcrumbs** (`breadcrumbs`) | `up`/`related` wikilink navigation the library `clerk` audits | recommended |
 | **Excalidraw** (`obsidian-excalidraw-plugin`) | design/flow diagrams and analyst visual companions | recommended |
 
-The expected vault layout in the target repo: `docs/tasks/` (story cards),
-`docs/specs/` (in-flight specs), `docs/features|flows|designs/` (durable docs),
-`library/` (the research wiki), and `docs/_templates/` (Templater scaffolds).
-The reference Nextflick vault is the canonical example of this layout. The agents
-discover these locations from the project's own context — they do not hardcode paths.
+The expected vault layout in the target repo: `docs/specs/` (in-flight specs),
+`docs/features|flows|designs/` (durable docs), `library/` (the research wiki),
+`docs/_templates/` (Templater scaffolds), and — for a repo-local board — `docs/tasks/`
+(story cards). The reference Nextflick vault is the canonical example of this layout.
+The agents discover these locations from the project's own context — they do not
+hardcode paths.
 
 ## Install
 
@@ -119,6 +197,7 @@ library work.
 | --- | --- | --- | --- |
 | Research | `researcher` | a topic | a cited wiki entry + raw sources in the library |
 | Analysis | `analyst` | wiki pages + your input | board-ready **story cards** (fit-proven) |
+| Board resolution | `board` (skill) | the project's own context | a **board profile**: bindings, card shape, status vocabulary, write authority |
 | Orchestration | `lead` (skill, main session) | one task (a prompt, maybe naming a card) | a single open PR, gated and handed off for review |
 | Spec | `writer` | the task | a validated spec in the specs area |
 | Build | `coder` | the validated spec | the finished work in the story worktree |
@@ -172,8 +251,10 @@ each with a *fits / conflicts / unknown* verdict backed by concrete evidence:
 
 A story with an unresolved conflict or an unaddressed unknown is **never recorded as
 ready**. After shaping, the native `auditor` gate critiques the cards. Cards land at
-`[ ]` Todo as proposals; nothing executes until you approve and invoke the `lead`.
-**Does not** write specs, code, or tests.
+your board's **initial status** as proposals; nothing executes until you approve and
+invoke the `lead`. When no board resolves — or the profile cannot create on it — the
+analyst still shapes and gates every story and returns them **in its report** rather
+than inventing somewhere to file them. **Does not** write specs, code, or tests.
 
 ### lead — the skill that takes one task to one reviewed PR
 
@@ -185,11 +266,13 @@ commits, and ships. Invoking the `lead` is explicit permission to branch, worktr
 commit, push, and open the PR. (Orchestration runs on the session's model; the
 workers keep the models pinned in their own frontmatter.)
 
-Its input is a **prompt**. If that prompt references a story card, the lead reads the
-card and what it links before reasoning about the task. That, plus two status
-transitions on that one card — **In Progress** at workspace creation, **In Review**
-once the PR is open, written in the repository root checkout and left uncommitted —
-is its whole relationship with the board.
+Its input is a **prompt**. Before anything else it **resolves the board** (the `board`
+skill), so that if the prompt references a card it reads that card — and what it links —
+through resolved bindings rather than an assumed tracker. That, plus two status
+transitions on that one card — *work started* at workspace creation, *awaiting review*
+once the PR is open, landed wherever the profile's visibility rule says — is its whole
+relationship with the board. It names the profile in every dispatch that touches a card
+(`writer`, `auditor`); the `coder` and `qa` get no board access and need none.
 
 1. **Read the task** — the prompt, the referenced card if any, the docs it touches,
    and the relevant code.
@@ -201,8 +284,8 @@ is its whole relationship with the board.
    layout from the same lockfile and break tests the task never touched — otherwise by
    running the project's own install/bootstrap step. The lead then **records the
    provisioning status**, including *not provisioned, with the reason*, and every
-   dispatch into the worktree names it, and **moves the referenced card to In
-   Progress** in the root checkout. Everything else happens in that worktree.
+   dispatch into the worktree names it, and **transitions the referenced card to
+   work started**. Everything else happens in that worktree.
 3. **Spec** — dispatches the `writer` to author the spec, then the `auditor` to gate
    it; routes any findings back to the writer to revise, re-audits fresh, and once
    ready **commits the spec** (commit 1).
@@ -215,8 +298,10 @@ is its whole relationship with the board.
    re-dispatches a **fresh** `qa` with the commit references to diff against, capped
    at 3 rounds.
 6. **Acceptance gate** — the `auditor` verifies the built result meets the task's
-   acceptance criteria: the **card's** enumerated criteria when a card was named,
-   the **spec's** requirements when not. Anything the qa loop left uncommitted — the
+   acceptance criteria: the **card's** enumerated criteria when a card was named —
+   read off the board itself, never restated into the dispatch prompt, since a
+   restated criterion drifts toward what the work already does — or the **spec's**
+   requirements when there is no card or no board. Anything the qa loop left uncommitted — the
    final clean round's added tests included — is **committed before the first
    acceptance dispatch**, so it does not fuse into the first acceptance fix. Findings
    route back to the same coder by agentId; each round's fix is likewise **committed
@@ -229,7 +314,7 @@ is its whole relationship with the board.
    carrying any production hazards the coder reported into its description, and relaying
    any board follow-ups the writer surfaced while speccing in both its final report and
    the PR description, so a card a decision made stale is visible without opening the spec.
-   Then **moves the card to In Review**.
+   Then **transitions the card to awaiting review**.
    The run **ends here** — the lead does not wait for the review (below).
 
 **Dispatch and resume.** A *fresh* dispatch is synchronous (`run_in_background: false`)
@@ -273,7 +358,7 @@ separately is what keeps it in history at all, since the docs pass later convert
 deletes it.
 
 **The PR review, and the hand-off.** The lead does **not** wait for the review. It
-opens the PR, moves the card to In Review, reports the PR as open and not yet reviewed,
+opens the PR, transitions the card to awaiting review, reports the PR as open and not yet reviewed,
 and stops — no monitor, no polling script, no baseline diffing. Waiting on an external
 reviewer means polling an outside system on an unbounded schedule from a session with
 nothing else to do; you drive the review from the PR instead. An unreviewed PR that is
@@ -431,26 +516,37 @@ Obsidian conventions in `library/_meta/librarian.md`.
 
 ## Conventions that tie it together
 
-**One story = one card = one file = one PR.** There is no epic/story/bug hierarchy
-and no sub-task decomposition. Bigger work becomes a bigger single story (and a bigger
+**One story = one card = one PR.** There is no epic/story/bug hierarchy and no
+sub-task decomposition, whatever your board offers. Bigger work becomes a bigger single story (and a bigger
 single PR); genuinely separate work becomes **multiple linked stories** sequenced with
 dependencies — never a stack of PRs.
 
-**Story cards** (`type: story` frontmatter) are Obsidian Tasks-format checkboxes:
+**Story cards** carry the same semantics on every board; the *form* comes from your
+board's own shape, recorded in the profile. Where a board has no native field for one
+of these, the project's documented convention supplies it — the pipeline never invents
+a field, a status, or a marker:
 
-- **Status** `[ ]` Todo · `[/]` In Progress · `[?]` In Review ·
-  `[x]` Done · `[-]` Cancelled. The card symbol is the source of truth. The `lead`
-  moves the story it is executing to **In Progress** when it starts and to
-  **In Review** once its PR is open — edited in the repository root checkout, not
-  the story worktree, and left uncommitted, so the board is current on your disk
-  before the merge. Every other transition — **Done** above all — is **yours**, and
-  no other agent writes card status. The `lead` starts an invoked story from
-  whatever state it's in; invoking it is the go-ahead.
-- **Type** (exactly one): `#feature` · `#improvement` · `#bug` (implementation-ready)
-  · `#research` · `#marketing` · `#support` (must be refined first).
-- **Priority** `🔺` highest · `⏫` high · `🔼` medium · `🔽` low.
-- **Dependencies** `🆔 <slug>` identifies a story; dependents declare `⛔ <slug>`.
-  The slug is reused for the file name, branch, and spec.
+- **Status** is the source of truth for where a story stands. New cards land at the
+  board's initial value. The `lead` moves the story it is executing to *work started*
+  when it starts and to *awaiting review* once its PR is open, checking the expected
+  current value first and leaving the card alone if it does not match. Every other
+  transition — **Done** above all — is **yours**, and no other agent writes card
+  status. The `lead` starts an invoked story from whatever state it's in; invoking it
+  is the go-ahead.
+- **Type** (exactly one), by central outcome: feature · improvement · bug
+  (implementation-ready) · research · marketing · support (must be refined first).
+- **Priority** when known, on the board's own scale.
+- **Identity and dependencies**: a stable unique id, reused for the branch and the
+  spec so one story is one name across board, repo, and PR; dependents point back at
+  it through the board's own dependency link.
+- **Acceptance criteria are individually verifiable** — one observable behaviour per
+  line, never a prose blob. This is the one property the acceptance gate depends on,
+  and it holds on every board.
+
+On a repo-local Markdown board those become `type: story` frontmatter, an Obsidian
+Tasks checkbox (`[ ]` Todo · `[/]` In Progress · `[?]` In Review · `[x]` Done ·
+`[-]` Cancelled), `#type` tags, `🔺⏫🔼🔽` priority, and `🆔`/`⛔` dependency markers —
+**one realization of the semantics above, not the semantics themselves.**
 
 **Specs** live in the specs area only while in flight. They follow Goal → Design →
 Requirements (WHEN/THEN scenarios) → Tasks, are written just-in-time by the `writer`,
@@ -512,8 +608,10 @@ ca77y-agentic/
         ├── .claude-plugin/plugin.json    # Claude manifest (agents whitelist)
         ├── plugin.json                   # root manifest (mirrors the Claude one)
         ├── skills/
-        │   └── lead/SKILL.md             # the lead — the pipeline orchestrator,
-        │                                 #   run in the main session
+        │   ├── lead/SKILL.md             # the lead — the pipeline orchestrator,
+        │   │                             #   run in the main session
+        │   └── board/SKILL.md            # resolves the project's board into a
+        │                                 #   board profile the pipeline works from
         └── agents/                       # all subagent definitions:
                                           #   analyst, auditor, clerk, coder,
                                           #   librarian, qa, researcher, scribe,
