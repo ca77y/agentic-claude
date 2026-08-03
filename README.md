@@ -60,15 +60,17 @@ The end-to-end flow:
 
 Two **human gates** punctuate the flow: you approve the analyst's stories before
 anything is built, and you explicitly invoke the `lead` skill
-(`/ca77y-engineering:lead <task>`) to build one. **The board is
-yours** — the `lead` only moves the story it is executing to your board's
-*work-started* status when it starts and to its *awaiting-review* status when the PR
-opens, so every other transition, **Done** included, is a manual step. When speccing settles a decision that
-contradicts what a card records about its relationship to another — even the card the
-work came from — the `writer` surfaces it as a **board follow-up** (which card, which
-sentence, and what it should now say) and the `lead` relays it to you in its final report
-and on the PR, so you can correct a stale card yourself; the pipeline still never edits
-the board for you.
+(`/ca77y-engineering:lead <task>`) to build one. **The gates on your board are
+yours** — the `lead` moves the story it is executing to your board's *work-started*
+status when it starts and to *awaiting-review* when the PR opens, and never through a
+transition your declaration reserves for you (typically *ready to start* and *done*:
+the judgements about whether work should begin and whether it is actually finished).
+How much else the pipeline may write is **your declaration's call** — it can be limited
+to those two transitions, or extended to commenting, attaching the PR, and correcting a
+card's own content. When speccing settles a decision that contradicts what a card records
+about its relationship to another — even the card the work came from — the `writer`
+surfaces it as a **board follow-up**, and *applies* it where you authorised that or
+relays it where you did not; the `lead`'s report says which happened for each.
 
 ## Runs entirely in Claude Code
 
@@ -94,9 +96,9 @@ The skill hands back a **board profile** — the pipeline's only interface to a 
 | **Bindings** | the concrete call for each of the five operations — *locate · read · search · create · transition* |
 | **Probe** | the read-only call actually run to prove the binding works. A binding no real call returned through is **unresolved**, however plausible it looks |
 | **Card shape** | where the scaffold or field set is defined, and which field carries identity, type, priority, dependencies, acceptance criteria |
-| **Status** | the board's own vocabulary, with the pipeline's two semantic transitions mapped onto it: *work started* and *awaiting review*, each with the value to expect before writing |
+| **Status** | the board's own vocabulary, with the pipeline's two semantic transitions mapped onto it: *work started* and *awaiting review*, each with the value to expect before writing — plus every transition reserved for you by name, terminal or not |
 | **Visibility** | where a write must land to be seen **now** — for a repo-local board, the root checkout left uncommitted; for a hosted one, the bound call |
-| **Write authority** | the exhaustive list of operations the pipeline may perform. **Declared by your project; defaults to the two status transitions and nothing else** |
+| **Write authority** | the exhaustive list of operations the pipeline may perform. **Declared by your project; defaults to the two status transitions and nothing else** — grant more (comment, attach the PR, update a card) and the pipeline uses it, applying authorised fixes rather than reporting them |
 
 **Declare your board in an `ISSUE_TRACKING.md`** at the root of your docs area (or the
 repo root) — the bindings, the card shape, the statuses, and what the pipeline may write
@@ -474,8 +476,9 @@ Runs in two modes the lead dispatches separately, and **never commits**.
   green test is never mistaken for a confirmed claim. It also
   returns any **board follow-ups** — when a decision the spec settles contradicts
   relationship or dependency prose recorded on any card (including the card the work
-  came from), it names which card, which sentence, and what it should now say, for you
-  to fix. It never edits the board.
+  came from), it names which card, which sentence, and what it should now say — and
+  **applies the correction itself where your write authority permits it**, reporting what
+  it changed, rather than handing you a fix you already authorised.
 - **Docs pass**, after the build is accepted: folds the shipped spec's durable
   content into its permanent home (features / flows / designs), reconciling with what
   exists, and **removes the spec** (specs are not archived).
@@ -535,10 +538,11 @@ a field, a status, or a marker:
 - **Status** is the source of truth for where a story stands. New cards land at the
   board's initial value. The `lead` moves the story it is executing to *work started*
   when it starts and to *awaiting review* once its PR is open, checking the expected
-  current value first and leaving the card alone if it does not match. Every other
-  transition — **Done** above all — is **yours**, and no other agent writes card
-  status. The `lead` starts an invoked story from whatever state it's in; invoking it
-  is the go-ahead.
+  current value first and leaving the card alone if it does not match. **Every transition
+  your declaration reserves for you stays yours** — terminal states like *done*, and any
+  mid-flow gate like *ready to start*; those encode judgements about the pipeline's own
+  work that it is not positioned to make. No other agent writes card status. The `lead`
+  starts an invoked story from whatever state it's in; invoking it is the go-ahead.
 - **Type** (exactly one), by central outcome: feature · improvement · bug
   (implementation-ready) · research · marketing · support (must be refined first).
 - **Priority** when known, on the board's own scale.

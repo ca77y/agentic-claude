@@ -26,7 +26,12 @@ Five operations. Bind each one to a concrete call, or record it as unbound:
 - **create** — record a new card at the board's initial status. The `analyst` alone uses it.
 - **transition** — move one card's status. The `lead` alone uses it, twice per run.
 
-A pipeline step needs a subset: the `lead` needs locate, read, and transition; the `analyst` needs search, read, and create; the `writer` and `auditor` need read and search. **An operation a step needs but the profile leaves unbound is a blocked resolution, not a gap to improvise around** — say so in the profile and let the caller decide, rather than hand over a binding you invented.
+Two more exist only where the project's write authority grants them. Bind them when it does, and leave them **unbound** — not merely unused — when it does not, so an agent cannot reach for a capability the project never authorised:
+
+- **comment** — add a note to a card without changing it: progress, a production hazard, a handoff summary.
+- **update** — change a card's own content: its description, acceptance criteria, labels, priority, relations, or an attached link such as the PR.
+
+A pipeline step needs a subset: the `lead` needs locate, read, and transition; the `analyst` needs search, read, and create; the `writer` and `auditor` need read and search. Any step may additionally use comment and update **where the authority grants them**. **An operation a step needs but the profile leaves unbound is a blocked resolution, not a gap to improvise around** — say so in the profile and let the caller decide, rather than hand over a binding you invented.
 
 ## Discovery order
 
@@ -55,11 +60,15 @@ Read these from the project; never assume them.
 
 **Card shape.** Take the field set from the project's declaration and its scaffold, and record how the board expresses each thing the pipeline depends on: identity, type, priority, dependency edges, and acceptance criteria as individually verifiable items. Use the board's native field where it has one; use the project's documented convention where it does not; **never invent a field, a status, a project key, or an endpoint.** Record format quirks that constrain whoever writes a card — a file board whose kanban view scans for checkbox markers will surface *every* match in a file as a separate item, so nested checkboxes create phantom cards there and nowhere else. Quirks like that belong in the profile as facts about *this* board, not as rules the pipeline carries everywhere.
 
-**Status vocabulary.** Record the board's full list in its own words, then map the pipeline's two semantic transitions onto it: **work started** and **awaiting review**. For each, record the value to write *and* the value the pipeline should expect to find before writing it. Record the terminal states too — done, cancelled, whatever the project calls them — marked as the human's, so no agent reads them as available.
+**Status vocabulary.** Record the board's full list in its own words, then map the pipeline's two semantic transitions onto it: **work started** and **awaiting review**. For each, record the value to write *and* the value the pipeline should expect to find before writing it.
+
+**Record the human gates by name — every transition the pipeline may not make, not only the terminal ones.** A reserved transition is often mid-flow: a board can keep *ready to start* or *verified* for the human whose judgement it encodes, and those look like ordinary statuses from the outside. List them explicitly, so no agent infers permission from a status merely existing.
 
 **Visibility.** Record where a write has to land for the human to see it *now*. For a repo-local board that is the repository root checkout on its base branch, left uncommitted: a card edited inside the story worktree stays invisible until the branch merges, which is precisely when its status has stopped mattering. For a hosted board it is the tool or API call, and no checkout is involved at all. This is the field that keeps the rest of the pipeline from re-deriving a file-board rule on a board that has no files.
 
-**Write authority.** Take it from the project's declaration. **Default to the two status transitions and nothing else** when the project does not say. Record the permitted operations explicitly and exhaustively — an operation the profile does not list is not permitted. Everything else the pipeline notices about a card, including a relationship a decision has made stale or a criterion that no longer holds, is **reported as a follow-up for the human**, never applied.
+**Write authority.** Take it from the project's declaration and record the permitted operations explicitly and exhaustively — an operation the profile does not list is not permitted. **Default to the two status transitions and nothing else** when the project does not say, because a silent project has not consented to more. But a project may grant a great deal — commenting, attaching the PR, correcting a card's own content — and where it does, **what is permitted is meant to be used**: a permitted edit is *made*, not reported. Reporting a fix the profile authorises you to apply is not caution, it is work left for someone else.
+
+What the profile does not permit — and anything the pipeline notices beyond it — is **reported as a follow-up for the human** instead.
 
 ## No board is a real answer
 
@@ -86,11 +95,12 @@ Resolved <when> · by <lead | analyst | user> · probe: <passed | failed | skipp
 - **Rules documented at**: <path or URL>   ← the authority; this profile points, it does not copy
 - **Mechanism**: <project skill | MCP server + tool names | project CLI | repo files | documented HTTP>
 - **Probe**: <the read-only call actually run> → <what it returned>
-- **Bindings**: locate · read · search · create · transition — the concrete call for each, or *unbound*
+- **Bindings**: locate · read · search · create · transition (· comment · update where authorised) — the concrete call for each, or *unbound*
 - **Card shape**: <where the scaffold/field set is defined; the field carrying identity, type,
   priority, dependencies, acceptance criteria; format quirks that constrain a writer>
 - **Status**: <the board's full vocabulary> — work started → `<value>` (expect `<value>`),
-  awaiting review → `<value>` (expect `<value>`); terminal states, marked as the human's
+  awaiting review → `<value>` (expect `<value>`); every transition reserved for the human,
+  named explicitly, terminal or not
 - **Visibility**: <where a write must land to be seen immediately>
 - **Write authority**: <the exhaustive list of permitted operations; default: the two transitions>
 - **Unresolved**: <what did not resolve, and what would settle it>

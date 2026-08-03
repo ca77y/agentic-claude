@@ -51,9 +51,18 @@ Acceptance criteria are recorded **one observable behaviour per line** under an
 
 `Backlog` · `Todo` · `In Progress` · `In Review` · `Done` · `Canceled` · `Duplicate`.
 
-- **work started** → `In Progress` (expect `Backlog` or `Todo`)
-- **awaiting review** → `In Review` (expect `In Progress`)
-- Terminal states — `Done`, `Canceled`, `Duplicate` — are the human's.
+The flow, and who moves it:
+
+| From → to | Who | When |
+| --- | --- | --- |
+| `Backlog` → `Todo` | **human** | the story is refined and ready to start |
+| `Todo` → `In Progress` | `lead` | the run starts, at workspace creation |
+| `In Progress` → `In Review` | `lead` | the PR is open |
+| `In Review` → `Done` | **human** | the work is verified |
+| anything → `Canceled` / `Duplicate` | **human** | abandoning or folding work is a product call |
+
+The two human gates are the whole point of the split: I decide what is **ready to build**
+and what is **actually finished**. Everything between those two is the pipeline's.
 
 ## Visibility
 
@@ -63,9 +72,31 @@ never commit one.
 
 ## What the pipeline may write
 
-- The `analyst` creates issues, at `Backlog`.
-- The `lead` makes the two transitions above, on the one issue it is executing.
+Agents **work** these issues; they do not just read them. Permitted, and expected:
 
-Nothing else. Comments, PR-link attachments, terminal states, and every edit to an
-issue's content — its title, description, criteria, labels, priority, relations — are the
-human's; the pipeline reports follow-ups rather than applying them.
+- **create** — the `analyst` files new issues at `Backlog`.
+- **transition** — the `lead` makes the two middle transitions above, and only those.
+- **attach the PR** — the `lead` links the PR to the issue when it opens it. Preferred,
+  not optional: an issue should carry its own PR rather than making someone search.
+- **comment** — progress, production hazards, and the handoff summary belong on the
+  issue, where they outlive the session that produced them.
+- **edit content** — description, acceptance criteria, labels, priority, and relations
+  may be corrected as the work teaches something. A stale relationship, a mislabelled
+  type, a criterion the design proves unsatisfiable: **fix it on the issue** rather than
+  reporting it and hoping someone gets to it.
+
+Two rules bound all of that:
+
+- **Never move a status through a human gate.** `Backlog` → `Todo`, `In Review` → `Done`,
+  and anything → `Canceled`/`Duplicate` are mine. They encode judgements — *ready* and
+  *verified* — that the pipeline is not positioned to make about its own work.
+- **Never edit an acceptance criterion to match what was built.** Criteria may be
+  corrected — when the design proves one unsatisfiable as written, or a met one should be
+  marked verified — but never by the agent whose work is being judged against it, and
+  never in the window between the build and the gate that judges it. The `writer`
+  corrects a criterion during the spec pass and records the deviation; the `lead` marks
+  criteria verified only after the acceptance gate has passed; the `auditor` never edits
+  what it gates. A criterion edited by the work it governs is not a criterion.
+
+Where an agent is unsure whether an edit is a correction or a rewrite of the goal, it
+reports instead of writing. That is the only case left where reporting beats acting.

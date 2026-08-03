@@ -54,7 +54,7 @@ When the task names a card, you move its status twice, and only twice. Both are 
 - **work started**, as part of creating the workspace (step 2) — the run has started and the board should say so.
 - **awaiting review**, immediately after the PR opens (step 8).
 
-Nothing else. The terminal states — done, cancelled, whatever this board calls them — are the user's, as is every other edit to the card: its scope, its acceptance criteria, its links, and the board follow-ups the `writer` reports, which you still only relay. When the task names no card, or the profile resolved to no board, there is no transition to make; say so in the handoff rather than inventing a card.
+Those two are the only *statuses* you write. Every transition the profile reserves for the human stays theirs — the terminal states, and any mid-flow gate like *ready to start* it names. Content is a separate question with a separate answer: where the profile's write authority permits updating a card, you apply what you are authorised to apply, including the board follow-ups the `writer` hands you; where it does not, you relay them. When the task names no card, or the profile resolved to no board, there is no transition to make; say so in the handoff rather than inventing a card.
 
 **Write the value the profile records, and check the value it says to expect before you write.** The vocabulary is the project's, not yours — a file board's `[/]`, a hosted board's *In Progress*, a workflow state with a name nobody outside the project would guess. If the card's current value is not the one the profile says to transition from — someone else moved it, the card has already moved on, the vocabulary differs from what was resolved — leave it alone and report that, rather than forcing a value you inferred.
 
@@ -62,7 +62,7 @@ Nothing else. The terminal states — done, cancelled, whatever this board calls
 
 **Never write a transition inside the story worktree, and never commit, push, or branch for one.** On a repo-local board, leave the edit uncommitted in the root and never check the story branch out there — the board is the human's to commit, and your job is only that its status is current on their disk. Record each transition in the ledger as you make it, so a wake or restart does not repeat or lose it.
 
-**Stay inside the profile's recorded write authority.** These two transitions are the default and the whole of it; anything further — a comment, a link back to the PR, a field update — happens only where the project has explicitly declared it permitted, and never on your own judgement that it would be helpful.
+**Stay inside the profile's recorded write authority — and use all of it.** The two transitions are the *default* authority, not a ceiling. Where the project declares more — commenting, attaching the PR, correcting a card's content — those are yours to use, and an authorised fix is applied rather than described. Where it declares less, or says nothing, the two transitions are the whole of it and everything else is reported. Either way, a transition the profile reserves for the human is never yours, however ordinary it looks: *ready to start* and *verified* are judgements about your own work that you are not positioned to make.
 
 ## The commit model
 
@@ -117,7 +117,8 @@ Step 8, and the end of your run. In order:
 1. **Commit** whatever is still uncommitted — the ship commit — and **push** the branch.
 2. **Open one PR** against the target branch: what the task was, the spec, what was built, tests, the acceptance result, docs, any production hazards the coder reported, risks, and follow-ups — including any board follow-ups the writer reported during the spec pass (which card, which sentence, and what it should now say), so the human who owns the board sees them without opening the spec. The review has not run yet, so it is not part of this description.
 3. **Transition the card to awaiting review** — the board's own value, landed where the profile's visibility rule says — and record it in the ledger, per *The story card*. It is the board's last honest state before the human decides on a terminal one.
-4. **Report and stop**, per *Final handoff*.
+4. **Attach the PR to the card, and post the handoff on it**, where the profile's write authority permits either — the link first, since an issue that carries its own PR saves the human a search. Where the authority permits neither, the PR link lives in your report alone and you say so.
+5. **Report and stop**, per *Final handoff*.
 
 **You do not wait for the PR review, and you do not drive it.** The review is an external reviewer — a repository workflow or the Claude GitHub app — triggered when the PR opens and re-triggerable by comment. Waiting on it means polling an outside system on an unbounded schedule from a session that has nothing else to do; the user drives it from the PR instead. So: no `Monitor`, no polling script, no baseline diffing, no waiting for a first comment to appear. Open the PR, say plainly in your report that the review has not been awaited and how to re-fire it (a `@review` comment on the PR, matching the project's own trigger), and finish. An unreviewed PR that is reported as unreviewed is a correct outcome for this skill.
 
@@ -150,7 +151,7 @@ Every agent here is a leaf: it does its one job and returns, and you trust that 
 - One worktree, one branch, one coder, one PR — and on a later fix run, that same branch and that same PR, never a second one. Never commit to the target branch, and never check the story branch out in the repository root.
 - **Never wait on the PR review**, and never poll an external system for it. Your run ends when the PR is open and reported.
 - Do not build from a spec the `auditor` has not passed, or ship with an acceptance criterion unmet.
-- The only board writes you make are the card's two status transitions — work started at workspace creation, awaiting review once the PR is open — through the profile's bindings, within its write authority, landed where its visibility rule says. Terminal states, every other status, and every edit to a card's content are the user's, including the board follow-ups the `writer` reports, which you relay rather than apply.
+- The only *statuses* you write are the card's two transitions — work started at workspace creation, awaiting review once the PR is open — through the profile's bindings and landed where its visibility rule says. Every transition the profile reserves for the human is theirs, terminal or not. Beyond status, you write exactly what the profile's write authority permits and no more: where it grants comments, PR links, or content corrections, use them; where it does not, report instead.
 - Never reach a board any way the profile did not bind, and never write through a binding the `board` skill did not probe.
 - Do not finish with a shipped spec still in the specs area.
 - The **3× rule** is the one hard stop: at most three attempts at the same problem — a spec gate, a qa or acceptance finding, a review finding, anything — then **report it to the user** rather than trying a fourth time or shipping around it.
@@ -169,7 +170,7 @@ Report, in this order:
 - **The commits this run produced** — the spec, the `coder`'s build, one per pre-ship `qa`/acceptance fix round, and the ship commit — stated as a count rather than left to be assumed to be two.
 - **The PR link**, said plainly to be **open and not yet reviewed**: how to re-fire the review (a `@review` comment), and that its findings come back by invoking this skill again.
 - **The card's status transitions** — in the board's own values — and where it now stands, or that the task named no card, that the board resolved to none, or that a transition was skipped and why. For a repo-local board, note that those edits are uncommitted in the root checkout. The terminal states stay the user's either way.
-- **Board follow-ups** the `writer` reported — which card, which sentence, and what it should now say — relayed without acting on them, since the board is the user's to fix.
+- **Board follow-ups** the `writer` reported — which card, which sentence, and what it should now say — stating for each whether it was **applied** (the profile authorised it) or **relayed** (it did not), so nothing is assumed fixed that is not.
 - **Remaining risks and follow-ups.**
 
 ## Process feedback
