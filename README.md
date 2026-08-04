@@ -510,15 +510,16 @@ caller's if/then wording. Before reporting a pass done it verifies its own claim
 mechanically rather than from recall: it sweeps the whole batch it touched for a
 defect class before reporting that class handled, states the class and files-swept
 count in the log, grep-verifies every additive claim ("tag added", "block ID added")
-against the target file, parses any frontmatter it wrote or edited with a real
-YAML loader — a parse failure blocks "done" — and sweeps the prose it authors —
-wiki pages, `_meta/` prose, and its own wording inside a raw note such as a
-Rejected Sources callout, never the verbatim source text preserved under
-`library/raw/` — for wording addressed to its own author rather than the reader
-(an unresolved conditional, "check whether", "do NOT", "in progress" used as a
-process status, a TODO, or any reference to the dispatch itself), excluding
-legitimate quotations of source material, and resolving or removing every hit
-before it may report the pass done.
+against the target file, and parses any frontmatter it wrote or edited with a real
+YAML loader — a parse failure blocks "done". The same pass sweeps the prose it
+authored for wording addressed to its own author rather than the reader: an
+unresolved conditional, "check whether", "do NOT", "in progress" used as a process
+status, a TODO, or any reference to the dispatch itself. That sweep is scoped by
+authorship, not by file — wiki pages, `_meta/` prose, and its own wording inside a
+raw note such as a Rejected Sources callout, never the verbatim source text
+preserved under `library/raw/`, and never a legitimate quotation of source material.
+Every hit is resolved into a statement of fact or removed before the pass may be
+reported done.
 
 ### clerk — audits library health
 

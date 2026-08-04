@@ -186,6 +186,44 @@ the `lead`'s dispatch steps also makes it bind by construction — including sub
 the `lead` does not make itself — and puts the rule in the receiving agent's own
 definition, which is where a "is this result trustworthy?" decision is taken.
 
+## Two nets around published library prose
+
+A dispatcher that cannot know the vault's state in advance writes an if/then into the
+dispatch prompt — *"if a dedicated page on X exists by now, link it; if not, say a
+deep-dive is in progress"*. Reproduced verbatim, that wording turns a reader-facing page
+into instructions to its own author, and nothing in the crew was positioned to notice: it
+is not a broken link, a missing tag, or an uncited claim.
+
+The obligation sits with the **receiving** side, as two independent nets — a write-time
+self-check in `scribe.md`, and a named default category in the `clerk`'s audit checklist
+ranked as a critical library-integrity issue. Neither is gated on a dispatcher naming the
+defect, on a human re-reading the page, or on the other net having run; the per-agent
+wording is in the root [`README.md`](../README.md). No dispatcher-side constraint
+accompanies them: `researcher.md` and any other caller may keep writing state-dependent
+conditionals, because a dispatcher genuinely cannot know a racing sibling's state in
+advance — which is exactly why the check belongs to the agent that can perform it.
+
+Three constraints shape where that wording lives.
+
+**The write-side sweep is scoped by authorship, not by file.** It covers the prose the
+`scribe` writes in its own voice — wiki pages, `_meta/` prose, its own wording inside a raw
+note — wherever that lives, and never the verbatim source text preserved under
+`library/raw/`, which the crew exists to keep intact. It also governs published prose only:
+a prohibition addressed to the `scribe` in a dispatch is still obeyed as an instruction; it
+simply never appears in a page.
+
+**A defect class this toolkit defines belongs in the `clerk`'s audit-only checks.** Its
+*Convention compliance* item is a checklist entry in `clerk.md` like any other, but the
+detailed validity rules behind it are deliberately delegated to the target project's
+`library/_meta/librarian.md`, and a second copy of them here is forbidden. A class the
+toolkit defines — rather than one a target project's conventions define — therefore has to
+be named in the audit-only list, the part of the checklist `clerk.md` owns outright.
+
+**The two nets are not a canonical paragraph pair.** Unlike the worktree contract above,
+they describe one defect from two sides — a self-check and an audit finding — and are
+deliberately *not* required to match byte for byte. No drift check covers them and none
+should be added; unifying the wording would fuse two different jobs.
+
 ## The commit model
 
 The `lead` — the orchestrating main session — is the only place commits happen; no
