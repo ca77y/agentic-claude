@@ -502,24 +502,38 @@ the matching wiki page, and updates links, taxonomy, the index, and the maintena
 log. Follows the Obsidian authoring conventions in `library/_meta/librarian.md` for
 every file it touches — resolving each wikilink target against a real filename or a
 declared alias (never a page's `title:`) and placing `^block-id` anchors only in
-Obsidian's valid forms. Before reporting a pass done it verifies its own claims
+Obsidian's valid forms. A dispatch conditional whose truth depends on vault state
+("if a dedicated page exists, link to it; if not, state …") is an instruction to the
+scribe, not content: it settles the condition against the vault at write time and
+publishes only the resolved branch's outcome as a settled statement, never the
+caller's if/then wording. Before reporting a pass done it verifies its own claims
 mechanically rather than from recall: it sweeps the whole batch it touched for a
 defect class before reporting that class handled, states the class and files-swept
 count in the log, grep-verifies every additive claim ("tag added", "block ID added")
-against the target file, and parses any frontmatter it wrote or edited with a real
-YAML loader — a parse failure blocks "done".
+against the target file, parses any frontmatter it wrote or edited with a real
+YAML loader — a parse failure blocks "done" — and sweeps every page it touched for
+wording addressed to its own author rather than the reader (an unresolved
+conditional, "check whether", "do NOT", "in progress" used as a process status, a
+TODO, or any reference to the dispatch itself), resolving or removing every hit
+before it may report the pass done.
 
 ### clerk — audits library health
 
 Audits the project's Markdown research library for duplicate wiki pages, stale index
 entries, broken links, uncited claims, missing taxonomy tags, unsynthesized raw notes,
-and convention violations. Its broken-link audit catches wikilinks that resolve only
-against another page's `title:`; it flags `^block-id` anchors that are textually
-present but invalidly placed (so a citation to them will not resolve); and it
-reconciles completion claims in the maintenance log against the files they name,
-reporting every instance where a claimed string is absent. Read-only by default —
-reports findings; applies fixes only when you explicitly ask. Audits against the
-Obsidian conventions in `library/_meta/librarian.md`.
+leaked meta-instructions in published prose, and convention violations. Its
+broken-link audit catches wikilinks that resolve only against another page's
+`title:`; it flags `^block-id` anchors that are textually present but invalidly
+placed (so a citation to them will not resolve); it reconciles completion claims in
+the maintenance log against the files they name, reporting every instance where a
+claimed string is absent; and, by default and without a dispatcher naming it, it
+flags wording addressed to a page's own author rather than its reader — an
+unresolved dispatch conditional, an instruction to check something, a prohibition,
+or a process-status sentence about the page's own writing — as a critical
+library-integrity issue, excluding legitimately quoted instructions and the
+`library/_meta/templates/` exception. Read-only by default — reports findings;
+applies fixes only when you explicitly ask. Audits against the Obsidian conventions
+in `library/_meta/librarian.md`.
 
 ---
 

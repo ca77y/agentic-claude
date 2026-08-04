@@ -378,27 +378,27 @@ and capture real output.
 
 ## Tasks
 
-- [ ] `scribe.md` `## Writing rules`: add the resolve-the-dispatch bullet — mechanical
+- [x] `scribe.md` `## Writing rules`: add the resolve-the-dispatch bullet — mechanical
       vault check, publish only the resolved branch as a settled statement,
       unresolvable-condition fallback plus report to caller
-- [ ] `scribe.md` `## Verify before you report done`: add the tell sweep — named tell
+- [x] `scribe.md` `## Verify before you report done`: add the tell sweep — named tell
       list, whole-page and whole-batch scope framed as an instance of the existing sweep
       rule, log-count statement, and the "published prose only / a caller prohibition is
       still obeyed" sentence
-- [ ] `clerk.md` `## Audit workflow`: add the numbered audit-only check for leaked
+- [x] `clerk.md` `## Audit workflow`: add the numbered audit-only check for leaked
       meta-instructions — four forms, ungated by mode or dispatch, quoted-material and
       `library/_meta/templates/` exclusions, every occurrence reported, path + wording +
       fix in the finding
-- [ ] `clerk.md` `## Output` (and `## Review standard` if a line helps): state the
+- [x] `clerk.md` `## Output` (and `## Review standard` if a line helps): state the
       severity rank as a critical library-integrity issue
-- [ ] `clerk.md` frontmatter `description`: name the new category alongside the existing
+- [x] `clerk.md` frontmatter `description`: name the new category alongside the existing
       list
-- [ ] `README.md`: extend the `### clerk` paragraph with the new category and the
+- [x] `README.md`: extend the `### clerk` paragraph with the new category and the
       `### scribe` paragraph with the resolve-and-self-check behaviour
-- [ ] Confirm `scribe.md`'s frontmatter `description` states nothing the change makes
+- [x] Confirm `scribe.md`'s frontmatter `description` states nothing the change makes
       stale, leave it unchanged, and say so in the build report (the check is recorded,
       not skipped)
-- [ ] Run the Validation checklist steps 1–6 and paste the real output; leave both
+- [x] Run the Validation checklist steps 1–6 and paste the real output; leave both
       manifests and both canonical paragraphs untouched
 - [ ] *Not the `coder`'s task* — Validation step 7: the human closes the observational
       half of the fourth criterion on the next real library pass and records it on
