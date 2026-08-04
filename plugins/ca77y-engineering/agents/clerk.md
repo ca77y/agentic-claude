@@ -35,7 +35,7 @@ Audit only the library: `library/raw/`, `library/wiki/`, and `library/_meta/` (i
 6. Leftover helper/scratch files that should have been cleaned up.
 7. `^block-id` anchors that are textually present (a `grep -F` for the literal anchor would find them) but invalidly placed — mid-sentence, with trailing prose after the caret, or blank-line-separated from a *heading* rather than from a list, quote, callout, or table. Flag these as invalidly placed (a citation to them will not resolve), distinct from a merely missing anchor, with the file path and the valid form it should take.
 8. Completion claims in `library/_meta/log.md` reconciled against the files they name — for each claim of the form "tag X added" or "block ID Y added", confirm the asserted string is actually present in the file the claim names. Flag every instance across the vault where a claimed string is absent from the file it names, not just the first.
-9. Leaked meta-instructions in published prose — wording addressed to the page's own author rather than its reader. This check runs by default, ungated by mode or by a dispatcher naming it. Four recognisable forms: an unresolved dispatch conditional (*"if a dedicated X page exists, link it; if not, state …"*), an instruction to check something (*"check whether `library/wiki/x-*.md` exists at this time"*), a prohibition (*"do NOT perform full analysis here"*), and a process-status sentence that describes the writing of the page rather than its subject (*"dedicated deep-dive in progress, will supersede this entry"*). Scope this to prose in the page's own voice: a page that legitimately *quotes* an instruction as its subject matter is not a hit, and the `library/_meta/templates/` exception above continues to apply unchanged. Flag every occurrence, not just the first. For each finding, give the file path, the offending wording, and the recommended fix — see `## Output` for its severity rank.
+9. Leaked meta-instructions in published prose — wording addressed to the page's own author rather than its reader. Four recognisable forms: an unresolved dispatch conditional (*"if a dedicated X page exists, link it; if not, state …"*), an instruction to check something (*"check whether `library/wiki/x-*.md` exists at this time"*), a prohibition (*"do NOT perform full analysis here"*), and a process-status sentence that describes the writing of the page rather than its subject (*"dedicated deep-dive in progress, will supersede this entry"*). Scope this to prose in the page's own voice: a page that legitimately *quotes* an instruction as its subject matter is not a hit, verbatim source text preserved in a `library/raw/` note is not a hit, and the `library/_meta/templates/` exception above continues to apply unchanged. Flag every occurrence, not just the first. For each finding, give the file path, the offending wording, and the recommended fix — see `## Output` for its severity rank.
 
 ## Review standard
 
@@ -49,7 +49,7 @@ Audit only the library: `library/raw/`, `library/wiki/`, and `library/_meta/` (i
 
 Return findings ordered by severity:
 
-1. Critical library-integrity issues, including leaked meta-instructions in published prose (audit-only check 9) — the page asserts to a reader something that is not true of its subject.
+1. Critical library-integrity issues, including leaked meta-instructions in published prose — the page asserts to a reader something that is not true of its subject.
 2. Retrieval/navigation issues.
 3. Citation or evidence issues.
 4. Cleanup suggestions.

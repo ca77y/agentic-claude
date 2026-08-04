@@ -511,11 +511,13 @@ mechanically rather than from recall: it sweeps the whole batch it touched for a
 defect class before reporting that class handled, states the class and files-swept
 count in the log, grep-verifies every additive claim ("tag added", "block ID added")
 against the target file, parses any frontmatter it wrote or edited with a real
-YAML loader — a parse failure blocks "done" — and sweeps every page it touched for
+YAML loader — a parse failure blocks "done" — and sweeps every wiki page and
+`_meta/` prose file it touched (not the raw notes it preserves verbatim) for
 wording addressed to its own author rather than the reader (an unresolved
 conditional, "check whether", "do NOT", "in progress" used as a process status, a
-TODO, or any reference to the dispatch itself), resolving or removing every hit
-before it may report the pass done.
+TODO, or any reference to the dispatch itself), excluding legitimate quotations of
+source material, and resolving or removing every hit before it may report the pass
+done.
 
 ### clerk — audits library health
 
