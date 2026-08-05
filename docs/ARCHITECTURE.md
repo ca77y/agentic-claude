@@ -114,6 +114,17 @@ The skill keeps its orchestration state on disk, next to the worktree and outsid
 **paths, not content** — so a compaction or restart mid-pipeline recovers from the
 ledger plus `git log`, and orchestration files can never enter a story commit.
 
+Three alternatives were evaluated against this one and rejected, and are recorded here
+so they are not re-litigated from scratch. **Agent teams** were tried with the flag
+enabled: experimental, 13–22% idle-notification token burn, no teammate restore on
+`/resume`, and a poor fit for a sequential hub-and-spoke pipeline — they also fix the
+lead to the main session and forbid nested teams, so they do not restore the sealed
+orchestrator either. **Staying nested with file-poll workarounds** means fighting an
+open harness defect indefinitely, and no prose can reroute notification delivery.
+**Dynamic workflows** are a larger rebuild; they remain a viable follow-up for
+restoring the sealed-unit property — hand the lead a card, get back a PR — and nothing
+in the flat topology forecloses that.
+
 The heavy, fan-out **code review runs on the PR** (the Claude GitHub review), outside
 the dispatch tree entirely; `qa`'s local review is a single-context pass.
 

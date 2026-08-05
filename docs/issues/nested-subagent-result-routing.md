@@ -12,9 +12,13 @@ re-attempted while the harness behaves this way.
 
 The full investigation log — transcript audits of a four-lead session (39 depth-2
 dispatches, harness 2.1.220), two live minimal-reproduction probes, an agent-teams
-evaluation with the flag enabled, and three web-research passes — lives on the story
-card:
-[`../tasks/contain-subagent-traffic-inside-the-pipeline.md`](../tasks/contain-subagent-traffic-inside-the-pipeline.md).
+evaluation with the flag enabled, and three web-research passes — lives in the **first
+comment** on the story card,
+[SMR-166](https://linear.app/ca77y/issue/SMR-166/convert-the-lead-into-a-main-session-skill-that-runs-the-pipeline-flat),
+alongside the option A/B/C analysis that chose this topology. (The log was originally
+`docs/tasks/contain-subagent-traffic-inside-the-pipeline.md`; that Markdown board was
+migrated to Linear on 2026-08-03 and removed — see
+[`../ISSUE_TRACKING.md`](../ISSUE_TRACKING.md).)
 
 ## The evidence
 
