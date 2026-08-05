@@ -48,3 +48,28 @@ and parenthetical notes to the author are constraints to satisfy, never sentence
 a shipped line that narrates what the document does not say, or why a rule sits where it sits, is
 cut to the operative instruction. A cheap tell-sweep catches most of it (*"Nothing here says"*,
 *"this section does not"*, *"see Non-goals"* surviving into the artifact).
+
+### A spec's claims about the project's own files carry no citation discipline
+
+**Area**: flow
+
+**Observed**: The `writer`'s authoring rules require a path-and-line citation for any claim about
+a **third-party or vendored dependency**, and nothing equivalent for a claim about the project's
+own files — even though the latter is what a prose-deliverable spec is almost entirely made of.
+SMR-178's spec states, in *How this is validated* → *Consumers of the changed files*, that the
+agent definitions are loaded "by `plugins/ca77y-engineering/.claude-plugin/plugin.json`, which
+lists each by path in its `agents` array, and by the mirrored root
+`plugins/ca77y-engineering/plugin.json`". The root manifest carries only `name`, `description`
+and `version`; it has no `agents` array. The spec elsewhere claims exactly this discipline for
+itself — *"Every quoted claim above is a claim about this repository's own files, given with a
+path and a line number … and verifiable by reading them"* — but that sentence covers the quoted
+Design claims, not the consumer analysis, so the readiness gate had nothing to check the
+consumer claim against. It reached qa round 2 unchallenged and harmed nothing here only because
+the build changed no file's registration.
+
+**Suggested change**: Extend the citation rule to load-bearing claims about the project's own
+files — the ones a Validation or Boundary section rests on, such as which consumer loads a
+changed file — requiring the path plus the line or key that shows it, at the commit named. It is
+cheaper than the dependency rule (the file is in the worktree) and it gives the `auditor` a
+concrete thing to open, instead of a plausible sentence about the repo that reads the same
+whether it was verified or assumed.
