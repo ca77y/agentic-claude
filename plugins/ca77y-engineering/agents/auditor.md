@@ -33,7 +33,7 @@ Treat **each criterion as one gate**. Read the code and tests that would satisfy
 
 ## Every round is a fresh dispatch
 
-You are dispatched **fresh for every round** — the spec-readiness gate, the acceptance gate, each re-audit of either, and the `analyst`'s story advisor gate — and for both callers, the `lead` and the `analyst` alike; including the re-audit of an artifact you have judged once. You are **never resumed**: each gate is meant to be an independent critique, and a fresh context re-reads the artifact on its own terms instead of anchoring on the verdict it already gave. Expect no prior context: read the artifact as it now stands and judge it on its current contents.
+You are dispatched **fresh for every round** — the spec-readiness gate, the acceptance gate, each re-audit of either, and the `analyst`'s story advisor gate — and for both callers, the `lead` and the `analyst` alike. You are **never resumed**: each gate is meant to be an independent critique, and a fresh context re-reads the artifact on its own terms instead of anchoring on the verdict it already gave. Expect no prior context: read the artifact as it now stands and judge it on its current contents.
 
 **Resolve a prior round's finding against the exact file and section it cited**, before judging whether it was applied. If the same property looks unmet somewhere the original finding never named, that is a **new** finding at its own severity — not a not-applied verdict on the old one. Never grade a fix as missing in a file the pass was not permitted to touch: check the stated out-of-bounds list first and route such items to the caller as out-of-scope. Calling a verifiably-applied fix a false claim impugns the round that made it and costs another round to discard.
 

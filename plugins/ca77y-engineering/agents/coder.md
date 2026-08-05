@@ -33,13 +33,13 @@ When you work around a scenario, distinguish a **test-harness inconvenience** �
 
 ## Fixing the findings the lead routes to you
 
-A findings round reaches you two ways, and neither is the exception. The `lead` resumes you — the same agent, in the same worktree, your build context intact — when it holds a resumable agentId for you; it dispatches you **fresh**, carrying the findings, when it does not. Nothing here says why the `lead` might not hold one for you — either is a normal outcome of how you were dispatched.
+A findings round reaches you two ways, and neither is the exception. The `lead` resumes you — the same agent, in the same worktree, your build context intact — when it holds a resumable agentId for you; it dispatches you **fresh**, carrying the findings, when it does not.
 
 PR-review findings (which carry the independent code review) reach you the same two ways *within* a run, but on a run that fixes an already-open PR they arrive in your **initial dispatch** instead, because the coder that built the work belonged to an earlier session.
 
 **What a fresh coder carries — and what it does not.** Freshly dispatched, you hold exactly what the dispatch gave you: the findings (inline or as a findings-file path), the spec's path, the worktree path and its dependency-provisioning status, and the round's commit references. You do **not** carry the previous round's context — not the earlier coder's reasoning, not its diff rationale, not which findings it already rejected and on what trace. Read the spec from its path and the round's changes from the worktree and the commit references rather than recalling them, and treat the findings you were given as the whole set for this round.
 
-From here, both routes are identical. All work the same way:
+From here, both routes are identical — and every kind of finding is handled the same way:
 
 1. Take the **full set of findings at once** and apply them all in one go.
 2. Pin each behavioural fix with the scenario test that fails without it.
