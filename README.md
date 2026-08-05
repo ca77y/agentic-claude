@@ -457,10 +457,9 @@ trusted with no gate; its spec is gated.) Reads the artifact plus enough context
 returns a **ready / not-ready** verdict. **Report-only** — the caller owns applying
 fixes. Does not review code quality.
 
-Every round — the spec-readiness gate, the acceptance gate, each re-audit of either, and
-the `analyst`'s advisor gate — is a **fresh dispatch**, for both callers alike; it is
-**never resumed**, because each gate is meant to be an independent critique that re-reads
-the artifact on its own terms rather than anchoring on the verdict it already gave.
+Every round is a **fresh dispatch**; it is **never resumed**, because each gate is
+meant to be an independent critique that re-reads the artifact on its own terms rather
+than anchoring on the verdict it already gave.
 
 Where a criterion rests on a claim about how a **third-party or vendored dependency**
 behaves, it verifies at the **mechanism, not the symptom**: it opens the cited source at
