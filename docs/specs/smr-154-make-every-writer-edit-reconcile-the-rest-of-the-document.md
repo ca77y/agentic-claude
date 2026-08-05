@@ -165,8 +165,11 @@ The subsection must state:
   A stated principle is a statement of what the product is *for*, and **rewriting the
   principle so it matches a document** is not the same as deciding the product changed
   direction — the two referents must be distinguishable in the sentence, or the guard
-  states nothing. Concluding the principle is stale therefore means reporting it and
-  leaving the sentence as it stands; the principles side is the human's call. This mirrors
+  states nothing. It has **two triggers, not one**: concluding the principle is the stale
+  side, *and* being unable to tell which side is stale. Either one means reporting and
+  leaving the sentence as it stands; the principles side is the human's call, and an
+  unresolved case is not a licence to pick. Firing on the settled conclusion alone leaves
+  the ambiguous case — the more common one — with no instruction at all. This mirrors
   the guard already in the board-follow-up rule — *"the one thing you never do either way
   is rewrite what the story is for"* — and keeps the writer from silently retiring a
   principle to make a sentence pass.
@@ -186,9 +189,20 @@ referent. A spec pass is dispatched *at a section*, so the spec-pass line uses t
 own phrasing — "outside the section you were dispatched to change" — and that is the line
 criterion 5 is written against. A docs pass is dispatched at a shipped build, not a
 section, so the same phrase has nothing to point at there; its line names the same duty in
-docs-pass terms instead — the docs it changed *only* to reconcile a contradiction the
-shipped work did not require, plus any contradiction left unfixed with its reason. Forcing
-one shared sentence across both would put a dangling referent in the docs-pass list.
+docs-pass terms instead — everything it reconciled **beyond what the shipped work
+required**, plus any contradiction left unfixed with its reason. Forcing one shared
+sentence across both would put a dangling referent in the docs-pass list.
+
+**The docs-pass trigger is the change, never the document that carries it.** A line that
+fires only on a *document* the writer touched solely to reconcile a contradiction reports
+nothing in the case this card exists for: the writer is already rewriting that document for
+the build, finds a wrong sentence inside a paragraph it was editing anyway, and fixes it —
+one change made only to reconcile, inside a document the shipped work required updating
+regardless. That is the card's second Goal failure exactly; the "synced/exported copy of the
+SQLite DB" sentence survived *because* the pass was already rewriting paragraphs around it.
+So the unit the line triggers on is the individual change, and it fires whether or not the
+document carrying it needed updating anyway. Any narrowing back to the document is a defect,
+not a rephrasing.
 
 ### Reconciling `writer.md` with itself
 
@@ -203,7 +217,7 @@ beside the text it supersedes:
 | `### Spec authoring rules` | New rule, first in the section. |
 | `## Docs pass` step 5 | Rewritten to a pointer at the new subsection, carrying at most an orienting clause and none of the duty's substance. Its current content moves into that subsection — it is not duplicated. |
 | `## Docs pass`, after step 7 | New `### Reconciling what you touch` subsection. |
-| `## Final report` | The duty added to each of the two mode lists, in each mode's own referent — the spec-pass list in the card's phrasing, the docs-pass list in docs-pass terms. Not one shared sentence. |
+| `## Final report` | The duty added to each of the two mode lists, in each mode's own referent — the spec-pass list in the card's phrasing; the docs-pass list triggering on each **change** made only to reconcile, whether or not the document carrying it needed updating anyway. Not one shared sentence, and never narrowed to the document. |
 
 Nothing else in the file is touched. In particular `## Boundaries` still holds unchanged:
 reconciling a document one is already editing is authoring, not gating, so *"You author the
@@ -415,7 +429,7 @@ Every scenario is verified by reading the shipped
   principle is a statement of what the product is for
 - **VERIFIED BY** reading the subsection for that guard
 
-### Requirement: The final report names what was reconciled outside the dispatched section
+### Requirement: The final report names what the writer reconciled beyond its assignment
 
 *Card criterion 5.*
 
@@ -434,8 +448,11 @@ Every scenario is verified by reading the shipped
   dispatched at a build rather than at a section — what it reconciled beyond what the
   shipped work required, and any contradiction left unfixed with the reason — with no
   dangling "the section you were dispatched to change"
-- **VERIFIED BY** reading the `**Docs pass:**` list for both halves, and confirming the
-  spec-pass phrase does not appear in it
+- **VERIFIED BY** reading the `**Docs pass:**` list for both halves; confirming the
+  spec-pass phrase does not appear in it; and running the card's own Goal case against the
+  line's trigger — a single sentence corrected inside a paragraph the shipped work required
+  rewriting anyway must fall under it. A line that triggers on the *document* rather than
+  the *change* fails this scenario, because that document needed updating regardless
 
 ### Requirement: `writer.md` states each duty exactly once
 
@@ -490,12 +507,17 @@ Every scenario is verified by reading the shipped
 - [ ] Add `### Reconciling what you touch` after the docs pass's numbered list: paragraph
       as unit, both standards, corrected-even-when-unrelated, discover-the-principles-doc,
       report-when-a-project-states-none, the do-not-rewrite-a-principle guard (naming both
-      referents distinguishably, and saying to leave the sentence alone when the principle
-      is the stale side), and diagrams counting as sentences. Every rule reads as a standing
-      instruction — none describes what the definition previously lacked
+      referents distinguishably, and firing on **both** triggers — concluding the principle
+      is the stale side, and being unable to tell which side is — with the same outcome:
+      report and leave the sentence as it stands), and diagrams counting as sentences. Every
+      rule reads as a standing instruction — none describes what the definition previously
+      lacked
 - [ ] Add the duty to **both** mode lists in `## Final report`, in each mode's own
-      referent: the spec-pass list in the card's phrasing, the docs-pass list in docs-pass
-      terms with no dangling "section you were dispatched to change"
+      referent: the spec-pass list in the card's phrasing; the docs-pass list with no
+      dangling "section you were dispatched to change", triggering on each **change** made
+      only to reconcile a contradiction rather than on the document carrying it, so a
+      sentence fixed inside a paragraph the shipped work required rewriting anyway is still
+      reported
 - [ ] Check the frontmatter `description` against the shipped behaviour; edit only if it
       now states something this change replaced, and report the outcome either way
 - [ ] Verify the blast radius: `git diff --stat` shows only `writer.md`, setting aside the
