@@ -26,3 +26,25 @@ section to enumerate the other sides and state, per side, whether it is being ch
 carried as a named follow-up — rather than only listing files the build must not touch. The
 enumeration is the deliverable; the drift is invisible without it, and "out of scope" currently
 reads the same whether the other side was checked or never looked at.
+
+### A spec's negative constraint reaches the artifact as prose instead of being obeyed
+
+**Area**: flow
+
+**Observed**: SMR-178's spec instructed, as a note to its author, *"Nothing is said about why it
+might not hold one (see Non-goals)"*. The build shipped that instruction as a sentence in the
+agent's own voice — `coder.md:36` now ends *"Nothing here says why the `lead` might not hold one
+for you"* — so a constraint on what to omit became text a dispatched coder reads about itself.
+This is the same defect class SMR-149 shipped two nets for, and its own qa round found it inside
+its own fix (*"Both new passages had explained why the rule sits where it sits — the defect class
+this story exists to stop, appearing in its own fix"*). Those nets landed only in `scribe` and
+`clerk`, scoped to the research library's published pages; nothing covers the `coder` editing an
+agent definition or the `writer` authoring a spec, which is where the pipeline's own prose is
+written.
+
+**Suggested change**: Give the `coder` and the `writer` the receiving-side rule the library crew
+already has, scoped to prose in the artifact's own voice: a spec's non-goals, "verify only" rows,
+and parenthetical notes to the author are constraints to satisfy, never sentences to transcribe —
+a shipped line that narrates what the document does not say, or why a rule sits where it sits, is
+cut to the operative instruction. A cheap tell-sweep catches most of it (*"Nothing here says"*,
+*"this section does not"*, *"see Non-goals"* surviving into the artifact).
