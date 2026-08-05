@@ -362,8 +362,7 @@ durable **ledger** at `.worktrees/<branch>.ledger.md` — task, step, agentIds, 
 counters, commits, what is awaited — updated before every dispatch and turn end, so
 after a compaction or session restart the ledger plus `git log`, not recollection, say
 where the pipeline stands. Both files live next to the worktree, outside it and
-gitignored, so no commit
-step can sweep them into a story commit.
+gitignored, so no commit step can sweep them into a story commit.
 
 **The commit model.** The story worktree is the only workspace and the lead is the
 only one that commits. It commits the spec; then one commit per **pre-ship round**
