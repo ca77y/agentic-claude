@@ -304,9 +304,9 @@ relationship with the board. It names the profile in every dispatch that touches
    validate it and review the diff; routes its findings back to the same coder —
    resuming it by agentId when one is held, or a fresh dispatch carrying the findings
    when it is not, either way continuing on the report that dispatch delivers (see
-   **Dispatch and resume** below) — **commits that round's work** when the coder reports back, and
-   re-dispatches a **fresh** `qa` with the commit references to diff against, capped
-   at 3 rounds.
+   **Dispatch and resume** below) — **commits that round's work** when the coder
+   reports back, and re-dispatches a **fresh** `qa` with the commit references to
+   diff against, capped at 3 rounds.
 6. **Acceptance gate** — the `auditor` verifies the built result meets the task's
    acceptance criteria: the **card's** enumerated criteria when a card was named —
    read off the board itself, never restated into the dispatch prompt, since a

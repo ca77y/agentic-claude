@@ -100,8 +100,9 @@ reaches a subagent parent, and subagents have no `TaskOutput` to collect with. T
 and upstream references are recorded in
 [`issues/nested-subagent-result-routing.md`](issues/nested-subagent-result-routing.md).
 Running the orchestrator in the main session puts it where the harness actually
-delivers: fresh synchronous dispatches return their report as the tool result, a
-resumed worker's completion notification wakes the orchestrating session, and
+delivers, by every collection path the pipeline uses: a fresh synchronous dispatch
+returns its report as the tool result, a fresh background dispatch and a resumed worker
+both wake the orchestrating session with a completion notification carrying theirs, and
 `TaskOutput`/`TaskList` exist there for lost-report recovery. The trade is accepted:
 one story per session, with parallel stories as parallel sessions over their own
 per-story worktrees. Flatness is the skill's design, not a machine-enforced cap — no
@@ -122,6 +123,48 @@ library lookups, the researcher's subquestion decomposition and library writes. 
 fresh, synchronous depth-2 dispatches are the pattern the harness delivers correctly;
 the worker definitions' report-channel hygiene (final text is the report, never
 `SendMessage` as a reporting or escalation channel) keeps those trees clean too.
+
+## The dispatch model — mode is the lead's choice, per dispatch
+
+The `lead` dispatches each of its workers in one of two modes, and the skill prescribes
+**neither**. A **synchronous** call (`run_in_background: false`) blocks until the worker finishes and
+its tool result *is* the report, in the dispatching turn — it keeps a gate sequential
+and lands the answer immediately. A **background** dispatch frees the turn and delivers
+the report later as a completion notification; its spawn result is also what hands back
+the agentId that makes that worker resumable. The skill states what each mode buys and
+leaves the choice to the lead, dispatch by dispatch. Those two collection paths — an
+in-turn tool result, and a completion notification (from a background dispatch or a
+resume) — are the lead's only waits, both bounded by an agent finishing, which is why no
+sleep and no background Bash poll is a waiting mechanism anywhere in the pipeline.
+
+Resumability is documented as a **fact that follows from the dispatch mode**, never as a
+rule. A resume is a `SendMessage` by agentId, so it needs an id the dispatch actually
+produced, and the lead's test is simply whether it holds one. What a resume buys is the
+worker's preserved context across rounds — a benefit, not the only route. Every step
+that routes findings back to a worker therefore names two carry-forwards of equal
+standing: resume the worker whose agentId is held, or dispatch a **fresh** worker of the
+same role carrying the spec path, the worktree path and its provisioning status, the
+board profile where that role needs one, the round's commit references, and the findings
+(inline, or by the findings-file path). The only thing the fresh route loses is the
+previous worker's own context.
+
+**Why the prescription was removed rather than inverted.** The skill once mandated
+`run_in_background: false` on every fresh dispatch and, six lines later, called a resume
+the only way to preserve a worker's context across rounds. Both could not hold: a lead
+that obeyed the mandate held no agentId to resume by. The conflict stayed invisible until
+the first findings round — by which point the coder's whole build context had been spent
+— and was then observed failing exactly that way (`No transcript found for agent ID`,
+role-name addressing rejected, an empty `TaskList`), leaving the lead to improvise a
+recovery mid-pipeline. Mandating background everywhere would have reproduced the defect
+with the opposite sign, forbidding the synchronous gate dispatches the pipeline's
+sequencing relies on. What the files now hold is the absence of both prescriptions: no
+sentence fixes a mode, and none assumes unconditional resumability.
+
+The asymmetry underneath that — a synchronous dispatch surfacing no agentId to resume by
+— is recorded as an **observation** from two runs, not a certified harness mechanism; a
+controlled probe would settle it. The design deliberately does not rest on it: the
+invariant that survives either answer is that a lead can only resume a worker whose
+agentId it actually holds.
 
 ## Model and effort assignment
 
