@@ -298,13 +298,15 @@ relationship with the board. It names the profile in every dispatch that touches
    it; routes any findings back to the writer to revise, re-audits fresh, and once
    ready **commits the spec** (commit 1).
 4. **Build** — dispatches **one** `coder` with the spec's path, and **records its
-   agentId**. The coder implements and reports; the lead trusts that reported state.
+   agentId when the dispatch produces one**. The coder implements and reports; the
+   lead trusts that reported state.
 5. **Validate & review** — **commits the coder's build**, then dispatches `qa` to
-   validate it and review the diff; routes its findings back to the same coder by
-   agentId — resuming it and continuing on its completion notification (see
-   **Dispatch and resume** below) — **commits that round's work** when the coder reports back, and
-   re-dispatches a **fresh** `qa` with the commit references to diff against, capped
-   at 3 rounds.
+   validate it and review the diff; routes its findings back to the same coder —
+   resuming it by agentId when one is held, or a fresh dispatch carrying the findings
+   when it is not, either way continuing on the report that dispatch delivers (see
+   **Dispatch and resume** below) — **commits that round's work** when the coder
+   reports back, and re-dispatches a **fresh** `qa` with the commit references to
+   diff against, capped at 3 rounds.
 6. **Acceptance gate** — the `auditor` verifies the built result meets the task's
    acceptance criteria: the **card's** enumerated criteria when a card was named —
    read off the board itself, never restated into the dispatch prompt, since a
@@ -312,9 +314,10 @@ relationship with the board. It names the profile in every dispatch that touches
    requirements when there is no card or no board. Anything the qa loop left uncommitted — the
    final clean round's added tests included — is **committed before the first
    acceptance dispatch**, so it does not fuse into the first acceptance fix. Findings
-   route back to the same coder by agentId; each round's fix is likewise **committed
-   before the fresh re-audit**, which is handed the references to diff against. Capped
-   at 3 rounds. Docs do not start while a criterion is unmet.
+   route back to the same coder — resumed when its agentId is held, or freshly
+   dispatched with the findings when it is not — and each round's fix is likewise
+   **committed before the fresh re-audit**, which is handed the references to diff
+   against. Capped at 3 rounds. Docs do not start while a criterion is unmet.
 7. **Docs** — a `writer` pass to update docs and convert the shipped spec; the lead
    trusts it, no docs gate.
 8. **Ship** — **commits whatever is still uncommitted** (the ship commit), pushes, and
@@ -325,33 +328,41 @@ relationship with the board. It names the profile in every dispatch that touches
    Then **transitions the card to awaiting review**.
    The run **ends here** — the lead does not wait for the review (below).
 
-**Dispatch and resume.** A *fresh* dispatch is synchronous (`run_in_background: false`)
-and its tool result **is** the worker's report. Most rounds are not fresh dispatches,
-though: the lead **resumes** the writer across spec revisions and the same coder across
-qa and acceptance rounds, because a resume is the only way to preserve their
-context. A resume is a `SendMessage` by agentId, which hands back only a delivery
-acknowledgement — the resumed worker's report arrives as its **completion notification**,
-delivered to the main session. Because the orchestrator *is* the main session, that
-delivery lands exactly where it is needed: the lead records what is awaited in its
-ledger, **ends its turn**, and the notification wakes it carrying the report. When a
-wake brings no usable report, it checks ground truth before re-dispatching —
-`TaskList`/`TaskOutput` on the recorded agentId, then `git -C <worktree> status --short`
-and the files the worker was to produce: work on disk means collect, not replace (a
-stalled agent and a slow-but-working one look identical, and re-dispatching the second
-puts two agents on the same files), and anything genuinely lost is escalated rather
-than silently re-dispatched. Those two waits — a synchronous dispatch and a
-resumed worker's notification — are the only ones the lead has; it never waits on
-anything external.
+**Dispatch and resume.** Each `Agent` dispatch is either synchronous
+(`run_in_background: false`), whose tool result **is** the worker's report in the same
+turn, or background, which frees the turn and delivers the report later as a completion
+notification — and whose spawn result is also what makes that worker resumable. Neither
+mode is fixed for any step; the lead weighs the trade-off per dispatch. When a round
+needs to carry a worker's context forward — a spec revision, a qa or acceptance fix —
+the lead **resumes** it if it holds a resumable agentId for that worker: a resume is a
+`SendMessage` by agentId, which hands back only a delivery acknowledgement — the
+resumed worker's report arrives as its **completion notification**, delivered to the
+main session. Because the orchestrator *is* the main session, that delivery lands
+exactly where it is needed: the lead records what is awaited in its ledger, **ends its
+turn**, and the notification wakes it carrying the report. A resume is what preserves a
+worker's context across rounds — that is its benefit, not the only route: when the lead
+holds no resumable agentId for the worker a round needs to reach, it carries the round
+forward instead with a fresh dispatch of the same role, given the spec path, the
+worktree and its provisioning status, the board profile where needed, the round's
+commit references, and the findings. When a wake brings no usable report, the lead
+checks ground truth before re-dispatching — `TaskList`/`TaskOutput` on the agentId,
+where the dispatch produced one, then `git -C <worktree> status --short` and the files
+the worker was to produce: work on disk means collect, not replace (a stalled agent and
+a slow-but-working one look identical, and re-dispatching the second puts two agents on
+the same files), and anything genuinely lost is escalated rather than silently
+re-dispatched. A synchronous dispatch's in-turn result and a background or resumed
+worker's notification are the only waits the lead has; it never waits on anything
+external.
 
 **Context discipline.** Workers are handed **paths, not content** — the spec path, the
 worktree path, the provisioning status, and commit refs; a round's findings that exceed
 a short summary go to `.worktrees/<branch>.findings-round-<N>.md`, with the resume
-message carrying that path. The lead also maintains a durable **ledger** at
-`.worktrees/<branch>.ledger.md` — task, step, agentIds, round counters, commits, what
-is awaited — updated before every dispatch and turn end, so after a compaction or
-session restart the ledger plus `git log`, not recollection, say where the pipeline
-stands. Both files live next to the worktree, outside it and gitignored, so no commit
-step can sweep them into a story commit.
+message, or a fresh dispatch's prompt, carrying that path. The lead also maintains a
+durable **ledger** at `.worktrees/<branch>.ledger.md` — task, step, agentIds, round
+counters, commits, what is awaited — updated before every dispatch and turn end, so
+after a compaction or session restart the ledger plus `git log`, not recollection, say
+where the pipeline stands. Both files live next to the worktree, outside it and
+gitignored, so no commit step can sweep them into a story commit.
 
 **The commit model.** The story worktree is the only workspace and the lead is the
 only one that commits. It commits the spec; then one commit per **pre-ship round**
@@ -407,10 +418,12 @@ work in a separate context — and the lead owns every gate over it.
    consulting current third-party docs via context7 when external behavior matters.
 3. **Report up** — no commit, no push, no PR. The lead then runs `qa` over the build.
 
-The lead **resumes the same coder** for qa, acceptance-gate, and PR-review findings. All
-are handled the same way: apply the whole set in one go and report back to the lead, which
-re-runs `qa`. A finding is rejected only with a traced input, never a restated conclusion;
-a finding that genuinely conflicts with the spec is escalated as a mismatch, never rejected.
+The lead routes qa, acceptance-gate, and PR-review findings back to the same coder —
+**resuming it** when it holds a resumable agentId for it, or dispatching a fresh coder
+carrying the findings when it does not. All are handled the same way: apply the whole
+set in one go and report back to the lead, which re-runs `qa`. A finding is rejected
+only with a traced input, never a restated conclusion; a finding that genuinely
+conflicts with the spec is escalated as a mismatch, never rejected.
 
 When a scenario workaround is forced by a real production dependency misbehaving — a
 **production hazard**, as opposed to a mere **test-harness inconvenience** the fixture
