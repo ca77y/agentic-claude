@@ -124,3 +124,26 @@ the worktree; where a harness requires session isolation, enter the already-crea
 `path`, which leaves the location untouched. The `lead` skill could name the same fallback, since
 a `lead` invoked as a background job will meet this guard on its first write every time, and the
 failure arrives as a rejected edit with no indication that a compliant remedy exists.
+
+### The root `CLAUDE.md`'s own verification snippets cannot be run in an isolated session
+
+**Area** — `flow`
+
+**Observed** — The root `CLAUDE.md` ships three copy-pasteable verification snippets that specs
+then require agents to run: the two duplicated-paragraph drift `grep`s and the manifest-parity
+`for` loop. In a worktree-isolated session all three are refused verbatim by the harness guard
+with *"this command is too complex to verify that it stays inside the worktree; break it into
+plain, separate commands"* — the `grep`s because of the `{coder,writer,qa,auditor}.md` brace
+expansion and the trailing pipeline, the parity check because it is a `for` loop with command
+substitution. On SMR-154 the spec's Tasks entry and a Requirements scenario both name these
+snippets as the verification, so `qa` had to hand-translate each into a single plain command
+(explicit file paths instead of braces; one `python3 -c` printing both manifest versions) before
+it could report a result. Absolute `git -C <worktree> …` is accepted, so the canonical addressing
+rule itself is fine — it is specifically these three snippets that do not survive isolation.
+
+**Suggested change** — Make the checks runnable where they are documented, rather than leaving
+each agent to reinvent an isolation-safe equivalent and risk reporting a refusal as a failure.
+Either rewrite the three snippets in the root `CLAUDE.md` in plain, brace-free, one-command-each
+form, or move them into a small checked-in script the guard can accept as a single invocation and
+have `CLAUDE.md` point at it. Whichever form is chosen, keep the expected output (`1`, `1`, and
+`ok` per plugin) stated beside it, since that is what a spec's Tasks entry cites.
