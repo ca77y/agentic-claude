@@ -343,24 +343,26 @@ turn**, and the notification wakes it carrying the report. A resume is what pres
 worker's context across rounds — that is its benefit, not the only route: when the lead
 holds no resumable agentId for the worker a round needs to reach, it carries the round
 forward instead with a fresh dispatch of the same role, given the spec path, the
-worktree, the board profile where needed, the round's commit references, and the
-findings. When a wake brings no usable report, the lead checks ground truth before
-re-dispatching — `TaskList`/`TaskOutput` on the agentId, where the dispatch produced
-one, then `git -C <worktree> status --short` and the files the worker was to produce:
-work on disk means collect, not replace (a stalled agent and a slow-but-working one look
-identical, and re-dispatching the second puts two agents on the same files), and
-anything genuinely lost is escalated rather than silently re-dispatched. A synchronous
-dispatch's in-turn result and a background or resumed worker's notification are the only
-waits the lead has; it never waits on anything external.
+worktree and its provisioning status, the board profile where needed, the round's
+commit references, and the findings. When a wake brings no usable report, the lead
+checks ground truth before re-dispatching — `TaskList`/`TaskOutput` on the agentId,
+where the dispatch produced one, then `git -C <worktree> status --short` and the files
+the worker was to produce: work on disk means collect, not replace (a stalled agent and
+a slow-but-working one look identical, and re-dispatching the second puts two agents on
+the same files), and anything genuinely lost is escalated rather than silently
+re-dispatched. A synchronous dispatch's in-turn result and a background or resumed
+worker's notification are the only waits the lead has; it never waits on anything
+external.
 
 **Context discipline.** Workers are handed **paths, not content** — the spec path, the
 worktree path, the provisioning status, and commit refs; a round's findings that exceed
 a short summary go to `.worktrees/<branch>.findings-round-<N>.md`, with the resume
-message carrying that path. The lead also maintains a durable **ledger** at
-`.worktrees/<branch>.ledger.md` — task, step, agentIds, round counters, commits, what
-is awaited — updated before every dispatch and turn end, so after a compaction or
-session restart the ledger plus `git log`, not recollection, say where the pipeline
-stands. Both files live next to the worktree, outside it and gitignored, so no commit
+message, or a fresh dispatch's prompt, carrying that path. The lead also maintains a
+durable **ledger** at `.worktrees/<branch>.ledger.md` — task, step, agentIds, round
+counters, commits, what is awaited — updated before every dispatch and turn end, so
+after a compaction or session restart the ledger plus `git log`, not recollection, say
+where the pipeline stands. Both files live next to the worktree, outside it and
+gitignored, so no commit
 step can sweep them into a story commit.
 
 **The commit model.** The story worktree is the only workspace and the lead is the
@@ -420,8 +422,9 @@ work in a separate context — and the lead owns every gate over it.
 The lead routes qa, acceptance-gate, and PR-review findings back to the same coder —
 **resuming it** when it holds a resumable agentId for it, or dispatching a fresh coder
 carrying the findings when it does not. All are handled the same way: apply the whole
-set in one go and report back to the lead, which re-runs `qa`. A finding is rejected only with a traced input, never a restated conclusion;
-a finding that genuinely conflicts with the spec is escalated as a mismatch, never rejected.
+set in one go and report back to the lead, which re-runs `qa`. A finding is rejected
+only with a traced input, never a restated conclusion; a finding that genuinely
+conflicts with the spec is escalated as a mismatch, never rejected.
 
 When a scenario workaround is forced by a real production dependency misbehaving — a
 **production hazard**, as opposed to a mere **test-harness inconvenience** the fixture
