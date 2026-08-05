@@ -436,10 +436,9 @@ risk reaches the human through the PR rather than only through a comment on a te
 
 ### qa — validates the work, fills test gaps, and reviews the diff
 
-Dispatched by the `lead` after the coder builds, and again after each fix round. Every
-round is a **fresh dispatch** — `qa` is **never resumed** — handed the round's commit
-references (the state the previous round reviewed, and the new round commit) so it reads
-the worktree as it now stands and diffs round N against round N−1. Runs the
+Dispatched by the `lead` after the coder builds, and again after each fix round — each
+fresh dispatch handed the round's commit references (the state the previous round
+reviewed, and the new round commit) so it can diff round N against round N−1. Runs the
 project's validation commands, compares the spec's scenarios against existing tests and
 adds the missing coverage (e2e, frontend, integration, edge cases), then re-runs; and
 **reviews the changed code** against the spec and the project's conventions for defects
@@ -458,10 +457,6 @@ trusted with no gate; its spec is gated.) Reads the artifact plus enough context
 returns a **ready / not-ready** verdict. **Report-only** — the caller owns applying
 fixes. Does not review code quality.
 
-Every round is a **fresh dispatch**; it is **never resumed**, because each gate is
-meant to be an independent critique that re-reads the artifact on its own terms rather
-than anchoring on the verdict it already gave.
-
 Where a criterion rests on a claim about how a **third-party or vendored dependency**
 behaves, it verifies at the **mechanism, not the symptom**: it opens the cited source at
 the cited version and confirms the behavior is what the spec says, because a scenario
@@ -479,15 +474,17 @@ cause or saying where the mechanism is really covered.
 
 Runs in two modes the lead dispatches separately, and **never commits**.
 
+**An edit to one part of a document is an edit to the whole document.** That duty binds
+both modes: the writer reconciles what its edit supersedes rather than leaving the rest
+of the artifact asserting the superseded thing, and both of its report lines name what it
+reconciled beyond the change it was dispatched to make — plus anything it left unfixed,
+with the reason.
+
 - **Spec pass**, before any code exists: authors the task's spec (Goal → Design →
   Requirements with WHEN/THEN scenarios → Tasks) against the acceptance criteria the
   work will be judged on, and hands back the path; the lead has the `auditor` gate it
-  before the build and routes any findings back to the writer to revise. It does so
-  either by resuming the writer when the lead holds a resumable agentId for it, or via
-  a fresh dispatch carrying the findings when it does not — in which case the writer
-  holds only the spec path, the worktree and its provisioning status, the board
-  profile, and the findings, not the earlier round's context. Its authoring rules make
-  a spec's claims about the outside world checkable: a claim about how a
+  before the build and routes any findings back to the writer to revise. Its authoring
+  rules make a spec's claims about the outside world checkable: a claim about how a
   **third-party or vendored dependency** behaves carries the package at the
   **resolved/installed** version plus a file-and-line into that package's own source —
   one citation per distinct mechanism claimed, since a compound sentence can be half
@@ -495,15 +492,36 @@ Runs in two modes the lead dispatches separately, and **never commits**.
   could not be cited and what would settle it, so the round that verifies it knows it
   was never checked. A scenario whose observable outcome could hold with the claimed
   mechanism absent gets that alternative cause named while the spec is written, so a
-  green test is never mistaken for a confirmed claim. It also returns any **board
-  follow-ups** — when a decision the spec settles contradicts relationship or
-  dependency prose recorded on any card (including the card the work came from), it
-  names which card, which sentence, and what it should now say — and **applies the
-  correction itself where your write authority permits it**, reporting what it
-  changed, rather than handing you a fix you already authorised.
+  green test is never mistaken for a confirmed claim. It also
+  returns any **board follow-ups** — when a decision the spec settles contradicts
+  relationship or dependency prose recorded on any card (including the card the work
+  came from), it names which card, which sentence, and what it should now say — and
+  **applies the correction itself where your write authority permits it**, reporting what
+  it changed, rather than handing you a fix you already authorised. Inside the spec, the
+  reconciliation duty is concrete: when an edit supersedes a decision stated somewhere
+  else in the file — an `auditor` finding, a course correction from the lead, or a
+  decision the writer settles while authoring — it names the superseding decision,
+  searches the whole spec for the terms that decision is expressed in, and rewrites or
+  deletes every entry it invalidates **in the same pass**, across Goal, Design, every
+  scenario, the Validation list where the spec carries one, and every Tasks entry.
+  Annotating a superseded entry as historical does not count as reconciling it. The
+  invariant: **a spec never carries two live instructions for one decision** — otherwise
+  the `coder` implements the superseded one and `qa` reports a false finding against a
+  stale checklist.
 - **Docs pass**, after the build is accepted: folds the shipped spec's durable
   content into its permanent home (features / flows / designs), reconciling with what
-  exists, and **removes the spec** (specs are not archived).
+  exists, and **removes the spec** (specs are not archived). Here the unit of review is
+  **the paragraph, and every sentence in it** — not the lines being mechanically edited:
+  touching a prose block, a list item, a table row, or a diagram is vouching for all of
+  it. Every sentence is held to **two** standards, the shipped system *and* the project's
+  stated principles, which is what makes a sentence describing something the project
+  explicitly decided **not** to build correctable rather than merely unverifiable. Where
+  those principles live is discovered from the project's own context, never hardcoded,
+  and a project that states none is reported as such rather than passed silently. A
+  contradiction is fixed even when the edit that surfaced it was unrelated to it. The one
+  thing the writer never does is rewrite the principle: when the principle may be the
+  stale side, or it cannot tell which side is stale, it reports and leaves the sentence
+  standing — what the product is *for* stays yours.
 
 The writer just authors and returns; its spec is gated by the lead's `auditor`, its
 docs trusted. **Does not** implement code, run tests, or commit/branch/PR (the lead does).

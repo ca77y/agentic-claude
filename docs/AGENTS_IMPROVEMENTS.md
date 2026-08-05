@@ -147,3 +147,25 @@ Either rewrite the three snippets in the root `CLAUDE.md` in plain, brace-free, 
 form, or move them into a small checked-in script the guard can accept as a single invocation and
 have `CLAUDE.md` point at it. Whichever form is chosen, keep the expected output (`1`, `1`, and
 `ok` per plugin) stated beside it, since that is what a spec's Tasks entry cites.
+
+### A story that changes an agent definition does not bind the run that ships it
+
+**Area** — `skill:lead`
+
+**Observed** — On SMR-154 the shipped change *was* `writer.md`: six edit sites giving the writer
+a whole-document reconciliation duty. The docs pass that documents that change is itself a
+`writer` dispatch, but a subagent's definition is loaded from the installed plugin at dispatch
+time, not from the worktree — so the docs-pass writer ran with the **pre-change** definition, in
+which docs-pass step 5 is still the old single sentence and `### Reconciling what you touch` does
+not exist. Nothing in the harness or the skill makes that visible from inside the dispatch; the
+only reason the new rules governed this pass is that the lead noticed and wrote *"apply your own
+reconciliation rule to this pass — it is what shipped"* into the prompt by hand. On a run where
+the lead does not think of it, the story's own change silently fails to apply to the pass that
+documents it, and the first artifact written under the new rule is written under the old one.
+
+**Suggested change** — In step 7 (*Docs*), add one conditional: when the shipped diff touches an
+agent definition or skill under `plugins/`, name that file in the docs dispatch and state that the
+**shipped text in the worktree** governs the pass, not the definition the agent is running under.
+The same applies to a `coder`, `qa`, or `auditor` dispatched after such a change lands mid-run.
+This is cheap to state and impossible to notice from inside the dispatch, since an agent cannot
+tell which version of its own definition it was loaded from.
