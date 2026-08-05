@@ -457,6 +457,11 @@ trusted with no gate; its spec is gated.) Reads the artifact plus enough context
 returns a **ready / not-ready** verdict. **Report-only** — the caller owns applying
 fixes. Does not review code quality.
 
+Every round — the spec-readiness gate, the acceptance gate, each re-audit of either, and
+the `analyst`'s advisor gate — is a **fresh dispatch**, for both callers alike; it is
+**never resumed**, because each gate is meant to be an independent critique that re-reads
+the artifact on its own terms rather than anchoring on the verdict it already gave.
+
 Where a criterion rests on a claim about how a **third-party or vendored dependency**
 behaves, it verifies at the **mechanism, not the symptom**: it opens the cited source at
 the cited version and confirms the behavior is what the spec says, because a scenario
@@ -477,8 +482,12 @@ Runs in two modes the lead dispatches separately, and **never commits**.
 - **Spec pass**, before any code exists: authors the task's spec (Goal → Design →
   Requirements with WHEN/THEN scenarios → Tasks) against the acceptance criteria the
   work will be judged on, and hands back the path; the lead has the `auditor` gate it
-  before the build and routes any findings back to the writer to revise. Its authoring
-  rules make a spec's claims about the outside world checkable: a claim about how a
+  before the build and routes any findings back to the writer to revise — resuming it
+  when the lead holds a resumable agentId for it, or via a fresh dispatch carrying the
+  findings when it does not, in which case the writer holds only the spec path, the
+  worktree and its provisioning status, the board profile, and the findings, not the
+  earlier round's context. Its authoring rules make a spec's claims about the outside
+  world checkable: a claim about how a
   **third-party or vendored dependency** behaves carries the package at the
   **resolved/installed** version plus a file-and-line into that package's own source —
   one citation per distinct mechanism claimed, since a compound sentence can be half
