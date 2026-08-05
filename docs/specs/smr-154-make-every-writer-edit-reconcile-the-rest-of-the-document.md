@@ -35,8 +35,8 @@ Both failures share one shape: the writer treats *the lines it is mechanically e
 as the unit of work, when the unit is **the document it just changed**.
 
 **The change.** `plugins/ca77y-engineering/agents/writer.md` gains two named
-reconciliation rules — one binding the spec pass, one binding the docs pass — and a
-report line in both modes naming what was reconciled outside the section dispatched for.
+reconciliation rules — one binding the spec pass, one binding the docs pass — and, in both
+modes, a report obligation naming what it reconciled beyond its assignment.
 The spec-pass rule makes an amendment enumerate and edit what it invalidates in the same
 pass. The docs-pass rule makes the **paragraph** the unit of review and adds the
 project's stated principles as a second standard alongside the shipped tree.
@@ -67,32 +67,35 @@ than surviving pass after pass.
 
 ## Design
 
-### What the file says today, and why it does not cover either failure
+### The baseline this change starts from, and why it covered neither failure
 
-Two places in `plugins/ca77y-engineering/agents/writer.md` are the closest existing
-statements of the duty, and each falls short in a different way.
+*This section describes `writer.md` as it stood at `4c89092`, before the build. It is the
+problem statement, not a description of the shipped file.*
 
-**Spec pass — nothing states the duty at all.** `### Applying a finding` governs how a
+Two places in `plugins/ca77y-engineering/agents/writer.md` were the closest existing
+statements of the duty, and each fell short in a different way.
+
+**Spec pass — nothing stated the duty at all.** `### Applying a finding` governs how a
 finding generalizes to its property, and `### Spec authoring rules` governs what a spec
-must contain. Neither says that editing one section obliges the writer to reconcile the
+must contain. Neither said that editing one section obliges the writer to reconcile the
 others. The single sentence closest to it — *"An instance you cannot close is named in
 your report with the reason"* — is about instances of an audit finding, not about the
-document's own internal consistency. So the amendment failure is not a rule being ignored;
-it is a rule that does not exist.
+document's own internal consistency. So the amendment failure was not a rule being ignored;
+it was a rule that did not exist.
 
-**Docs pass — the duty exists but is scoped away from both failures.** Step 5 reads:
+**Docs pass — the duty existed but was scoped away from both failures.** Step 5 read:
 
 > Keep docs honest while writing: if a diagram or statement no longer reflects the system,
 > update or remove it. Document only what was actually built. Check the docs you touched
 > against the wider tree — contradictions, stale cross-references, duplication, and other
 > docs the merged work now makes wrong — and fix them in the same pass.
 
-Two gaps. **The standard is the shipped tree only** — "no longer reflects the system",
+Two gaps. **The standard was the shipped tree only** — "no longer reflects the system",
 "only what was actually built". The observed failure was a sentence that reflected no
 system at all: it contradicted a *stated principle* about what the phase is deliberately
 not built against. Checked against the tree, such a sentence is merely unverifiable, not
-wrong. **And there is no unit of sweep.** "The docs you touched" is satisfied by a writer
-that read the two paragraphs it edited; nothing says the sentences *inside* an edited
+wrong. **And there was no unit of sweep.** "The docs you touched" is satisfied by a writer
+that read the two paragraphs it edited; nothing said the sentences *inside* an edited
 paragraph are in scope. That is precisely how a sentence survived a pass that rewrote the
 paragraphs on both sides of it.
 
@@ -130,12 +133,13 @@ spec."** It must state, in the definition's own voice:
 
 ### The docs-pass rule
 
-Step 5 of `## Docs pass` is **rewritten in place** to one sentence naming the duty and
-pointing at a new subsection — proposed `### Reconciling what you touch`, placed after the
-numbered list, mirroring how the spec pass carries `### Applying a finding` and
-`### Spec authoring rules` after its own numbered steps. Step 5's current content moves
-into that subsection; it is not left behind as a weaker second statement of the same duty
-(see *Requirement: `writer.md` states each duty exactly once*).
+Step 5 of `## Docs pass` is **rewritten in place** to a pointer at a new subsection —
+proposed `### Reconciling what you touch`, placed after the numbered list, mirroring how
+the spec pass carries `### Applying a finding` and `### Spec authoring rules` after its own
+numbered steps. Step 5 may carry an orienting clause naming the unit, but none of the
+duty's substance: not the two standards, not the discovery rule, not the guard. Step 5's
+current content moves into that subsection; it is not left behind as a weaker second
+statement of the same duty (see *Requirement: `writer.md` states each duty exactly once*).
 
 The subsection must state:
 
@@ -144,9 +148,11 @@ The subsection must state:
   scope, not only the lines being mechanically edited. Editing a paragraph is vouching for
   it.
 - **Two standards, both applied.** The shipped system *and* the project's stated
-  principles: a sentence that contradicts either is corrected or removed. The second
-  standard is the one today's wording lacks, and it is what catches a sentence describing
-  a thing the project has explicitly decided not to build.
+  principles: a sentence that contradicts either is corrected or removed. The principles
+  standard is what makes a sentence describing something the project has explicitly decided
+  not to build *correctable* — checked against the tree alone it is merely unverifiable,
+  not wrong. Written as a standing instruction: the rule must not describe what the
+  definition previously lacked, because that self-reference is false the moment it ships.
 - **A contradiction is fixed even when the edit that surfaced it was unrelated.** The
   reason it is in the paragraph is not the test; whether it is true is.
 - **Where the stated principles live is discovered from project context**, never
@@ -156,21 +162,33 @@ The subsection must state:
   tree alone, so a sweep that could not run is never reported as a sweep that came back
   clean.
 - **The guard: when the principle itself is the stale side, report — do not rewrite it.**
-  A stated principle is a statement of what the product is *for*, and correcting a
-  document to match a doc is not the same as deciding the product changed direction. This
-  mirrors the guard already in the board-follow-up rule — *"the one thing you never do
-  either way is rewrite what the story is for"* — and keeps the writer from silently
-  retiring a principle to make a sentence pass.
+  A stated principle is a statement of what the product is *for*, and **rewriting the
+  principle so it matches a document** is not the same as deciding the product changed
+  direction — the two referents must be distinguishable in the sentence, or the guard
+  states nothing. Concluding the principle is stale therefore means reporting it and
+  leaving the sentence as it stands; the principles side is the human's call. This mirrors
+  the guard already in the board-follow-up rule — *"the one thing you never do either way
+  is rewrite what the story is for"* — and keeps the writer from silently retiring a
+  principle to make a sentence pass.
 - **Diagrams count.** A Mermaid node label or a tree diagram asserting the superseded
   thing is a sentence for this purpose.
 
 ### The report line
 
-`## Final report` gains one line in **both** mode lists — the spec pass's and the docs
-pass's — naming any contradiction found and fixed outside the section the writer was
-dispatched to change, and any left unfixed with the reason. The card's fifth criterion is
+**Both** mode lists in `## Final report` — the spec pass's and the docs pass's — must
+require the writer to report what it reconciled beyond its assignment: any contradiction
+it found and fixed, and any it left unfixed with the reason. The card's fifth criterion is
 unqualified about mode, and both passes can surface one, so a single-mode report line
 would leave half the duty invisible.
+
+The two lines are **not** required to share wording, because the two modes do not share a
+referent. A spec pass is dispatched *at a section*, so the spec-pass line uses the card's
+own phrasing — "outside the section you were dispatched to change" — and that is the line
+criterion 5 is written against. A docs pass is dispatched at a shipped build, not a
+section, so the same phrase has nothing to point at there; its line names the same duty in
+docs-pass terms instead — the docs it changed *only* to reconcile a contradiction the
+shipped work did not require, plus any contradiction left unfixed with its reason. Forcing
+one shared sentence across both would put a dangling referent in the docs-pass list.
 
 ### Reconciling `writer.md` with itself
 
@@ -183,9 +201,9 @@ beside the text it supersedes:
 | Frontmatter `description` | Verify it does not state behaviour this change replaces; change only if it does. Expected: no change — it describes the two modes and the gating model, neither of which moves. State the outcome in the report either way. |
 | `### Applying a finding` | Append one cross-reference clause to its third rule, pointing at the new spec-pass rule by name. No restatement of it. |
 | `### Spec authoring rules` | New rule, first in the section. |
-| `## Docs pass` step 5 | Rewritten to a single sentence naming the duty and pointing at the new subsection. Its current content moves into that subsection — it is not duplicated. |
+| `## Docs pass` step 5 | Rewritten to a pointer at the new subsection, carrying at most an orienting clause and none of the duty's substance. Its current content moves into that subsection — it is not duplicated. |
 | `## Docs pass`, after step 7 | New `### Reconciling what you touch` subsection. |
-| `## Final report` | One new line in each of the two mode lists. |
+| `## Final report` | The duty added to each of the two mode lists, in each mode's own referent — the spec-pass list in the card's phrasing, the docs-pass list in docs-pass terms. Not one shared sentence. |
 
 Nothing else in the file is touched. In particular `## Boundaries` still holds unchanged:
 reconciling a document one is already editing is authoring, not gating, so *"You author the
@@ -401,13 +419,23 @@ Every scenario is verified by reading the shipped
 
 *Card criterion 5.*
 
-#### Scenario: both modes report it
+#### Scenario: the spec-pass list carries the criterion's own wording
 
-- **WHEN** the writer finishes either a spec pass or a docs pass
-- **THEN** `## Final report` requires it to name any contradiction it found and fixed
-  outside the section it was dispatched to change, and any it left unfixed with the reason
-- **VERIFIED BY** confirming the line is present in **both** the `**Spec pass:**` and
-  `**Docs pass:**` report lists
+- **WHEN** the writer finishes a spec pass
+- **THEN** the `**Spec pass:**` list in `## Final report` requires it to name any
+  contradiction it found and fixed **outside the section it was dispatched to change**, and
+  any it left unfixed with the reason
+- **VERIFIED BY** reading the `**Spec pass:**` list for both halves of that obligation
+
+#### Scenario: the docs-pass list carries the same duty in its own referent
+
+- **WHEN** the writer finishes a docs pass
+- **THEN** the `**Docs pass:**` list requires the same duty, phrased for a pass that is
+  dispatched at a build rather than at a section — what it reconciled beyond what the
+  shipped work required, and any contradiction left unfixed with the reason — with no
+  dangling "the section you were dispatched to change"
+- **VERIFIED BY** reading the `**Docs pass:**` list for both halves, and confirming the
+  spec-pass phrase does not appear in it
 
 ### Requirement: `writer.md` states each duty exactly once
 
@@ -416,11 +444,13 @@ Every scenario is verified by reading the shipped
 #### Scenario: the superseded step-5 text is replaced, not duplicated
 
 - **WHEN** the shipped `writer.md` is read end to end
-- **THEN** the docs pass's reconciliation duty is stated in exactly one place, with step 5
-  pointing at it rather than restating it, and the pre-existing step-5 sentences about
-  diagrams, cross-references, and duplication live inside that one place
+- **THEN** the substance of the docs pass's reconciliation duty — the two standards, the
+  discovery rule, and the guard — is stated in exactly one place, with step 5 carrying only
+  a pointer to it (an orienting clause naming the unit is fine; a second, independently
+  readable statement of the duty is not), and the pre-existing step-5 sentences about
+  diagrams, cross-references, and duplication living inside that one place
 - **VERIFIED BY** reading `## Docs pass` step 5 and `### Reconciling what you touch`
-  together and confirming neither restates the other's obligations
+  together and confirming step 5 states none of the three substantive elements on its own
 
 #### Scenario: the spec-pass rule is cross-referenced, not copied
 
@@ -436,9 +466,11 @@ Every scenario is verified by reading the shipped
 #### Scenario: canonical paragraphs and manifests are untouched
 
 - **WHEN** the build's diff is reviewed
-- **THEN** it changes only `plugins/ca77y-engineering/agents/writer.md` (plus the
-  docs-pass-owned `README.md` update, later), both root `CLAUDE.md` drift `grep`s still
-  print `1`, and no `version` field in either manifest of any plugin has changed
+- **THEN** it changes only `plugins/ca77y-engineering/agents/writer.md` — setting aside the
+  append-only `docs/AGENTS_IMPROVEMENTS.md` process-feedback channel every agent is
+  separately permitted to write, and the docs-pass-owned `README.md` update that comes
+  later — both root `CLAUDE.md` drift `grep`s still print `1`, and no `version` field in
+  either manifest of any plugin has changed
 - **VERIFIED BY** `git -C <worktree> diff --stat` against the spec commit, plus running the
   two `grep` pipelines and the manifest-parity loop from the root `CLAUDE.md`
 
@@ -452,17 +484,22 @@ Every scenario is verified by reading the shipped
       report-the-unclosable-entry clause
 - [ ] Append the single cross-reference clause to the third rule of
       `### Applying a finding`, pointing at that rule by name — no restatement
-- [ ] Rewrite `## Docs pass` step 5 to one sentence naming the duty and pointing at
-      `### Reconciling what you touch`; move its current content into that subsection so
-      the duty is stated once
+- [ ] Rewrite `## Docs pass` step 5 to a pointer at `### Reconciling what you touch` that
+      restates none of the duty's substance — no two standards, no discovery rule, no guard;
+      move its current content into that subsection so the duty is stated once
 - [ ] Add `### Reconciling what you touch` after the docs pass's numbered list: paragraph
       as unit, both standards, corrected-even-when-unrelated, discover-the-principles-doc,
-      report-when-a-project-states-none, the do-not-rewrite-a-principle guard, and diagrams
-      counting as sentences
-- [ ] Add the reconciliation line to **both** mode lists in `## Final report`
+      report-when-a-project-states-none, the do-not-rewrite-a-principle guard (naming both
+      referents distinguishably, and saying to leave the sentence alone when the principle
+      is the stale side), and diagrams counting as sentences. Every rule reads as a standing
+      instruction — none describes what the definition previously lacked
+- [ ] Add the duty to **both** mode lists in `## Final report`, in each mode's own
+      referent: the spec-pass list in the card's phrasing, the docs-pass list in docs-pass
+      terms with no dangling "section you were dispatched to change"
 - [ ] Check the frontmatter `description` against the shipped behaviour; edit only if it
       now states something this change replaced, and report the outcome either way
-- [ ] Verify the blast radius: `git diff --stat` shows only `writer.md`; both root
+- [ ] Verify the blast radius: `git diff --stat` shows only `writer.md`, setting aside the
+      append-only `docs/AGENTS_IMPROVEMENTS.md` process-feedback channel; both root
       `CLAUDE.md` drift `grep`s print `1`; the manifest-parity loop prints `ok` for every
       plugin; no `version` field changed
 - [ ] **Docs pass, not the `coder`:** update the root `README.md` `### writer` section to
