@@ -34,8 +34,9 @@ told which issue tracker to use.
   the `clerk` — each in its own subagent context.
 - **The human owns the board.** Agents read cards, and the `analyst` files them; only
   the `lead` moves one, twice, within a write authority the project declares and which
-  defaults to exactly those two transitions. Everything else — terminal states, card
-  content, stale relationships — is reported, never applied. Two human gates punctuate
+  defaults to exactly those two transitions. Terminal states are always the human's;
+  everything else — card content, stale relationships — follows that declaration: applied
+  where it authorises the correction, reported where it does not. Two human gates punctuate
   the flow: approving the analyst's stories, and invoking the `lead`.
 - **Agents discover, they do not assume.** Every agent reads paths, conventions, and
   product context from the target project. Hardcoded paths are a defect.
