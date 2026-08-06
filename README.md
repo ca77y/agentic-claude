@@ -436,9 +436,10 @@ risk reaches the human through the PR rather than only through a comment on a te
 
 ### qa — validates the work, fills test gaps, and reviews the diff
 
-Dispatched by the `lead` after the coder builds, and again after each fix round — each
-fresh dispatch handed the round's commit references (the state the previous round
-reviewed, and the new round commit) so it can diff round N against round N−1. Runs the
+Dispatched by the `lead` after the coder builds, and again after each fix round. Every
+round is a **fresh dispatch** — `qa` is **never resumed** — handed the round's commit
+references (the state the previous round reviewed, and the new round commit) so it reads
+the worktree as it now stands and diffs round N against round N−1. Runs the
 project's validation commands, compares the spec's scenarios against existing tests and
 adds the missing coverage (e2e, frontend, integration, edge cases), then re-runs; and
 **reviews the changed code** against the spec and the project's conventions for defects

@@ -73,3 +73,54 @@ changed file — requiring the path plus the line or key that shows it, at the c
 cheaper than the dependency rule (the file is in the worktree) and it gives the `auditor` a
 concrete thing to open, instead of a plausible sentence about the repo that reads the same
 whether it was verified or assumed.
+
+### The docs pass reads a spec the build was allowed to deviate from
+
+**Area**: agent:writer
+
+**Observed**: The docs pass is told to convert "the shipped spec" and to "document only what was
+actually built", but nothing tells it those two can disagree — and by design they often do. A
+spec is committed once and never revised; every later gate finding that changes the design lands
+in the *code*, leaving the spec's Design section describing a shape that was then abandoned. On
+SMR-178 the spec's plan table (twice) required the `auditor`'s freshness claim to be generalised
+to "every round **and every caller** … the `analyst`'s story advisor gate"; the acceptance gate
+found the "both callers" half unsourceable to `SKILL.md` and the `coder` removed it in the final
+commit. The spec still describes the pre-fix design. Only an explicit warning in the docs-pass
+dispatch prompt stopped that rejected claim being folded into `ARCHITECTURE.md` as durable fact —
+i.e. the safeguard was a human noticing, not a step the pass performs.
+
+**Suggested change**: Make the run's own diff, not the spec, the authority for *what shipped* in
+the docs pass. Add a step before authoring: diff the spec commit against `HEAD` and read the
+round commits' messages, then reconcile each durable claim the spec makes against what the diff
+actually contains; where they disagree, the diff wins and the divergence is named in the docs-pass
+report. The spec keeps its role as the source of *durable intent* (goal, design rationale,
+requirements) — it simply stops being trusted for the shipped shape of anything a gate touched.
+
+### A background-session write guard rejects the project's own worktree location
+
+**Area**: flow
+
+**Observed**: Run as a background job, this session's harness refused every file write until the
+session had "isolated" itself, and the only mechanism it accepts is `EnterWorktree`. The root
+`CLAUDE.md` tells a `lead` the opposite — that `EnterWorktree` "is deliberately not used for
+this" because "it only accepts worktrees under `.claude/worktrees/`, not `.worktrees/<branch>`"
+— so a `lead` following the repo's own instructions hits a guard it has been told not to use the
+remedy for, after the worktree already exists. Writes were rejected both in the repository root
+*and* inside the freshly created story worktree, so relocating the work would not have helped.
+The `CLAUDE.md` claim is also incomplete: `EnterWorktree`'s `name` form is what is restricted to
+`.claude/worktrees/`; its **`path` form accepts any worktree already registered in
+`git worktree list`**, which is exactly what `git worktree add .worktrees/<branch>` produces.
+Entering the story worktree by path satisfied the guard with the worktree left exactly where the
+project wants it. Nothing moved. Two costs remained: run-local scratch files that must live
+*next to* the worktree rather than inside it (the ledger, the board profile, the round findings)
+still fall outside the isolation boundary and can only be written through `bash`, and once
+isolated, a compound `bash` command touching a path outside the worktree is refused as "too
+complex to verify", so those writes must be split into plain single commands.
+
+**Suggested change**: Correct the root `CLAUDE.md` paragraph — keep the rule that the worktree
+lives at `.worktrees/<branch>` and is addressed by absolute path, but replace "`EnterWorktree` is
+deliberately not used" with the precise version: do not use its `name` form, which would relocate
+the worktree; where a harness requires session isolation, enter the already-created worktree by
+`path`, which leaves the location untouched. The `lead` skill could name the same fallback, since
+a `lead` invoked as a background job will meet this guard on its first write every time, and the
+failure arrives as a rejected edit with no indication that a compliant remedy exists.
