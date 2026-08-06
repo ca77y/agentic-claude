@@ -12,9 +12,19 @@ never has a story branch checked out. Remove the worktree and its branch once th
 merges.
 
 Dispatched agents address the worktree by its absolute path, not by cwd: git calls
-carry `-C <path>`, and file tools take an absolute path under `<path>`. `EnterWorktree`
-is deliberately not used for this — it only accepts worktrees under `.claude/worktrees/`,
-not `.worktrees/<branch>` — so do not "fix" the location to match it.
+carry `-C <path>`, and file tools take an absolute path under `<path>`. Do not use
+`EnterWorktree`'s `name` form for this — it creates a second worktree on a new branch
+under `.claude/worktrees/`, leaving this story's tree behind — so do not "fix" the
+location to match it.
+
+Where a harness requires a session to isolate itself before it will write, the remedy
+is the `path` form: enter the worktree that was already created at `.worktrees/<branch>`,
+which the tool accepts on the session's first entry from the launch directory — the
+`lead`'s own session; a dispatched worker, whose working directory was pinned at
+launch, cannot reach this worktree that way and stays on absolute-path addressing.
+`git worktree add` registered `.worktrees/<branch>` in `git worktree list`, which is
+why the tool accepts it. Entering an existing worktree leaves it exactly where this
+project puts it — nothing moves, and the addressing rule above is unchanged.
 
 This repo has no install or bootstrap step of its own (no `package.json`, no lockfile),
 so a story worktree here needs no dependency provisioning — a `lead` running the
