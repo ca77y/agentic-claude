@@ -2,7 +2,7 @@
 
 Load this only when a project's board declaration has to be **written or repaired**. Resolving an existing one needs nothing from this file — `SKILL.md` alone covers that.
 
-`ISSUE_TRACKING.md` is the project's own answer to *how do we track work*. The `board` skill resolves it into a profile; a human maintains it. It is prose a person can read, not config — but every claim in it has to be true enough to bind a call to.
+`ISSUE_TRACKING.md` is the project's own answer to *how do we track work*. Every board-touching agent reads it directly; a human maintains it. It is prose a person can read, not config — but every claim in it has to be true enough to bind a call to.
 
 ## Where it goes, and what it is called
 
@@ -23,7 +23,7 @@ Take them at their word — and do not go hunting for it, and do not write a sec
 
 1. Add the pointer line above to the project's root `CLAUDE.md` (or wherever its always-loaded context lives), with the real path.
 2. Alternatively, pass the path directly when invoking the skill, for a one-off run.
-3. Then invoke the skill again — it will resolve from the existing file, probe it, and report anything the declaration leaves unbound.
+3. Then invoke the skill again — it will read the existing file directly and report what it currently says, including anything the declaration leaves unbound.
 
 Offer to add that line yourself if they want, subject to the same rule as everything else here: only when they invoked the skill directly, never mid-run.
 
@@ -112,8 +112,8 @@ Three shapes, none privileged. Copy the closest and cut what does not apply.
 ## Before calling it done
 
 - **Wire the pointer into the project's loaded context**, per *Where it goes* above. An unpointed declaration is not done — the next run will resolve as if the project had none and offer to author the file you just wrote.
-- **Probe it.** Run the `locate` and `read` bindings against a card that already exists. A declaration nobody has read a card through is a plan, not a resolution — and it will read as correct right up until a status is written into the wrong place.
+- **Verify it against a real card.** Run the `locate` and `read` bindings against a card that already exists. A declaration nobody has read a card through is a plan, not a working one — and it will read as correct right up until a status is written into the wrong place.
 - **Check every operation** the project wants available is bound, and every one it does not is marked *not available* rather than left out.
 - **Check the status values are spelled the way the board spells them**, including case and punctuation.
 - **Check no credential got written down**, including in a URL.
-- Hand the user the file's path, what the probe returned, and the one or two things you had to assume.
+- Hand the user the file's path, what you verified, and the one or two things you had to assume.

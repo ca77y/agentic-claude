@@ -14,7 +14,7 @@ ca77y-agentic/
 |   |   |-- .claude-plugin/plugin.json   # Claude manifest (agents whitelist)
 |   |   |-- plugin.json                  # root manifest, mirrors the Claude one
 |   |   |-- skills/lead/SKILL.md         # the lead skill - the pipeline orchestrator
-|   |   |-- skills/board/SKILL.md        # resolves the project's board into a profile
+|   |   |-- skills/board/SKILL.md        # helps write/repair the ISSUE_TRACKING.md declaration
 |   |   |   `-- references/              # loaded only to author an ISSUE_TRACKING.md
 |   |   `-- agents/*.md                  # analyst, auditor, coder, qa, writer
 |   `-- ca77y-library/
@@ -75,16 +75,25 @@ The library crew is dispatched directly by whichever agent needs library work �
 `researcher` within its own plugin, and the `analyst` across the plugin boundary,
 optionally (see *Two plugins, one optional edge* below).
 
-`board` is the second skill, and the only one nothing dispatches: the `lead` and the
-`analyst` **invoke** it (loading its instructions into their own context, not spawning
-an agent) to resolve how the project tracks work, and it returns a **board profile** —
-bindings for locate/read/search/create/transition, the card shape, the status
-vocabulary, the visibility rule, and the write authority. That profile is the pipeline's
-only interface to a tracker; `writer` and `auditor` receive it in their dispatch, and
-`coder` and `qa` get no board access at all. It keeps the board a *resolved* dependency
-rather than a structural one — repo-local Markdown, a hosted tracker, or nothing changes
-the profile's contents and nothing else in the pipeline. A user can invoke it directly
-to see what resolves.
+`board` is the second skill, and the only one nothing dispatches automatically: the
+`lead` and the `analyst` **read** `docs/ISSUE_TRACKING.md` directly, at that fixed path,
+rather than invoking anything — bindings for locate/read/search/create/transition (plus
+comment and update where the project authorises them), the card shape, the status
+vocabulary, the visibility rule, and the write authority all come straight from that one
+file. `writer` and the `auditor` (when its caller grants it access) reach the board the
+same way; `coder` and `qa` get no board access at all. It keeps the board a *declared*
+dependency rather than a structural one — repo-local Markdown, a hosted tracker, or
+nothing changes what the declaration says and nothing else in the pipeline.
+
+**The skill itself remains, narrowed to authoring.** It no longer resolves anything per
+run — there is nothing left to resolve, since every agent reads the fixed declaration
+itself — but it stays a skill rather than collapsing into a line of prose, because its
+authoring half is substantial: it owns `references/authoring-issue-tracking.md`,
+[`PRODUCT.md`](PRODUCT.md) advertises it as the tool for writing a declaration, and it
+remains a legitimate user-invocable setup and inspection entry point — collapsing it to
+one line would orphan that reference. A user invokes it directly to write or repair the
+declaration, or to see what it currently says; the `lead` and `analyst` invoke it only as
+a fallback, and never as a per-run step, when they find no declaration at all.
 
 ## Two plugins, one optional edge
 
@@ -94,7 +103,7 @@ agent call: `researcher` hands the `analyst` pages, not a return value.
 
 The split was reconsidered and taken because the dependency graph across that seam is
 almost empty. `ca77y-library` references nothing in `ca77y-engineering` — no board
-profile, no auditor, no worktree contract. In the other direction there is exactly one
+declaration, no auditor, no worktree contract. In the other direction there is exactly one
 edge: the `analyst` optionally dispatching `ca77y-library:librarian` and
 `ca77y-library:clerk` for extra library context. That edge is **soft by construction** —
 the `analyst` already reads wiki pages directly, so when the dispatch does not resolve it
@@ -139,11 +148,13 @@ one story per session, with parallel stories as parallel sessions over their own
 per-story worktrees. Flatness is the skill's design, not a machine-enforced cap — no
 depth-limiting environment variable is set anywhere.
 
-The skill keeps its orchestration state on disk, next to the worktree and outside it
-(`.worktrees/<branch>.ledger.md` for the pipeline ledger,
-`.worktrees/<branch>.findings-round-<N>.md` for oversized findings), and hands workers
-**paths, not content** — so a compaction or restart mid-pipeline recovers from the
-ledger plus `git log`, and orchestration files can never enter a story commit.
+The skill keeps its orchestration state on disk, **inside** the story worktree, at
+`tmp/` (`tmp/ledger.md` for the pipeline ledger, `tmp/findings-round-<N>.md` for
+oversized findings), and hands workers **paths, not content** — so a compaction or
+restart mid-pipeline recovers from the ledger plus `git log`, and the committed `tmp/`
+ignore entry keeps orchestration files from ever entering a story commit. See *Run-local
+scratch lives inside the story worktree* below for the rationale and the rejected
+alternatives.
 
 Three alternatives were evaluated against this one and rejected, and are recorded here
 so they are not re-litigated from scratch. **Agent teams** were tried with the flag
@@ -186,9 +197,8 @@ worker's preserved context across rounds — a benefit, not the only route. Ever
 that routes findings back to a worker therefore names two carry-forwards of equal
 standing: resume the worker whose agentId is held, or dispatch a **fresh** worker of the
 same role carrying the spec path, the worktree path and its provisioning status, the
-board profile where that role needs one, the round's commit references, and the findings
-(inline, or by the findings-file path). The only thing the fresh route loses is the
-previous worker's own context.
+round's commit references, and the findings (inline, or by the findings-file path). The
+only thing the fresh route loses is the previous worker's own context.
 
 **Which roles are resumable at all is part of the model, and each definition states its
 own side of it.** The two authoring roles carry context worth preserving across
@@ -196,8 +206,8 @@ rounds, so a findings round reaches the `coder` or the `writer` by whichever rou
 lead has. Both definitions name the two routes as facts of **equal standing**, neither as
 the exception, and give a freshly dispatched worker its inventory in both signs: what the
 dispatch handed it — the findings inline or by path, the spec's path, the worktree and its
-provisioning status, the board profile where the role needs one, the round's commit
-references — and what it does **not** hold, namely the previous round's context, its
+provisioning status, the round's commit references — and what it does **not** hold,
+namely the previous round's context, its
 reasoning and rationale and which findings it already rejected. With the negative half
 stated, the direction that follows is enforceable: read the spec from its path and the
 round's changes from the worktree and the commit references rather than recalling them.
@@ -330,15 +340,43 @@ absolute path exactly as the canonical paragraph above says, and nothing in thei
 changes.
 
 **The write guard itself is a stated assumption, not a documented contract.** No tool
-description documents it; the only record is a single background run that met it and
-reported the refusal. Nothing shipped verifies that `path`-form entry clears it either —
-what was checked was the text of two documents, which an editor writing that text fully
-explains. Both statements are therefore written as *what the remedy is when a harness
-demands isolation*, never as an instruction to isolate: an unguarded session keeps working
-from the launch directory as before. What would settle it is a live background `lead` run
-that meets the guard and reports whether entry by `path` clears it — the treatment
-[`PRODUCT.md`](PRODUCT.md) requires of any behaviour change, validated by running the
-pipeline on a live project rather than by reasoning about prompt text.
+description documents it; the only earlier record was a single background run that met
+it and reported the refusal. This story's own run supplies a second, fresh data point
+rather than leaving the record at that one.
+
+**This run's observation: a background job whose guard never fired.** This session's
+harness context stated it was configured to work **in place** rather than isolating into
+a worktree, and its first write of the run — before any `EnterWorktree` call — succeeded
+outside any worktree. **Dispatch mode: background job. Outcome: the write guard never
+fired.** That is one branch of the guard's four-way partition — *background job, guard
+never fired* — and it settles nothing about whether `path`-form entry clears the guard,
+because the mechanism the guard would gate was never exercised. Recording the mode
+alongside the outcome is what makes "the guard never fired" distinguishable from "the
+guard was never attempted" — a bare outcome, with no mode attached, cannot tell the two
+apart.
+
+**The `path`-form question stays open, and here is why.** "Nothing shipped verifies that
+`path`-form entry clears it either" — the sentence stood at `f87eedc`, and it **stays**:
+the two outcomes that would settle it are a run whose guard fires and finds entry by
+`path` clears it, or one whose guard fires and finds it does not, and this run's guard did
+not fire at all, so it is neither. Of the two branches that leave the question open, a
+**background run whose guard never fired** is the one this run demonstrates; a
+**foreground** run could not have met the guard in the first place, and is not what
+happened here. Should a future run instead meet the guard and find `path`-form entry does
+**not** clear it, that outcome is escalated as a **blocker** on this story, in addition to
+recording which outcome occurred — never shipped as a quietly closed fact — per
+`lead/SKILL.md`'s *Context discipline*. What would settle the open question is a live
+background `lead` run that meets the guard and reports whether entry by `path` clears it —
+the treatment [`PRODUCT.md`](PRODUCT.md) requires of any behaviour change, validated by
+running the pipeline on a live project rather than by reasoning about prompt text.
+
+**The write below was demonstrated, not asserted — and it does not touch the question
+above.** Once this story's `.gitignore` entry landed, the `lead`'s own session performed a
+real file-tool write to `tmp/` inside the story worktree and reported the result. That
+write proves the **relocated scratch location is writable**. It is **not** evidence that
+`path`-form entry clears the write guard, because on this run the guard never fired — a
+write in a session no guard ever applied to would look identical whether or not `path`
+entry clears anything. That mechanism stays the open assumption above.
 
 **Where the remedy is stated.** For this repo's own maintenance, in the root
 [`CLAUDE.md`](../CLAUDE.md)'s Worktrees section, which may name `.worktrees/<branch>`
@@ -351,6 +389,57 @@ every other agent behaviour. It sits deliberately
 **outside** the canonical `**Addressing the story worktree.**` paragraph: the remedy is one
 role's and reachable by no worker, and carrying it inside would force a five-file
 byte-identical edit and put the drift check at risk for no gain.
+
+## Run-local scratch lives inside the story worktree, at `tmp/`
+
+The pipeline ledger and any oversized findings file live at `tmp/ledger.md` and
+`tmp/findings-round-<N>.md`, **inside** the story worktree rather than beside it, kept
+untracked by one committed `.gitignore` entry (`/tmp/`, alongside `.worktrees/`). Neither
+name carries a branch qualifier: the earlier naming scheme — a per-branch filename in one
+shared directory outside every worktree — existed only because that one directory held
+every story's scratch at once, and it also nested unpleasantly whenever a branch name
+itself contained a `/` (a `tokwieci/smr-…` branch produced a further subdirectory). Once
+scratch moves inside its own worktree, each worktree already holds only its own story's
+files, so the qualifier has nothing left to disambiguate.
+
+**The rationale is the write boundary.** A session refused writes until it isolates (see
+above) can write inside the worktree it just entered, and could never write a file
+sitting in the old shared directory beside it — moving scratch inside the boundary is
+what lets the ordinary file tools reach it, with no `bash` escape hatch required for any
+scratch write. The guarantee that a commit step can never sweep either file into a story
+commit is the **committed ignore entry itself**: any non-force staging command skips an
+ignored path outright, a fact stated at that level rather than pinned to one specific
+`git` invocation, since `lead/SKILL.md`'s commit model names no specific one either.
+
+**The cost is durability, and it is real.** Scratch inside the worktree dies with it:
+`git worktree remove` takes it, and this repo removes the worktree once a story's PR
+merges. So `lead/SKILL.md`'s *Invoked on an open PR* recovery step rests on records
+durable by construction instead — the card's handoff comment, the PR description, and
+`git log` — treating a surviving `tmp/ledger.md` as a **bonus**, never something recovery
+depends on. The SMR-184 ledger reached roughly 19 KB, which is exactly why the durable
+record has to be the card and the PR rather than a file that can vanish with its
+worktree.
+
+**Four alternatives were rejected:**
+
+1. **Keep the current location, writing through plain single `bash` commands.** Rejected
+   **on principle**: if the design must reach for a shell escape hatch because the tool
+   that exists for writing files is refused, on a path taken before every dispatch and
+   every turn end, the design itself is broken. It also rests on an unverified claim —
+   that `bash` reaches outside the isolation boundary at all — evidenced only by the one
+   background run above.
+2. **A per-clone `.git/info/exclude` entry.** Unnecessary once a single committed entry
+   is accepted, unverified for linked worktrees, and writing the main repo's `.git/` sits
+   uneasily with the never-write-the-root-checkout rule even though `.git` is not the
+   working tree.
+3. **A pathspec exclusion at commit time** (`git add -A ':(exclude)tmp/'`). Needs no
+   ignore file, but every commit step has to remember it, and forgetting once sweeps
+   scratch into a story commit. The ignore entry buys the same outcome with nothing to
+   forget.
+4. **Reusing the worktree directory's own name inside the worktree.** Rejected: it
+   depends on the target project's own ignore pattern being depth-agnostic rather than
+   anchored, which the toolkit cannot dictate, and a `.worktrees/` nested inside a
+   worktree reads as a mistake to whoever finds it.
 
 ## Two nets around published library prose
 
@@ -460,10 +549,10 @@ and what each changed, instead of one working tree of merged edits.
 
 ## The self-improvement channel
 
-Any agent may append a concrete pipeline improvement to `AGENTS_IMPROVEMENTS.md` at the
-root of the target project's documentation area — resolved from project context, never a
-hardcoded path, created on first use. It is opt-in: an agent writes only when it has
-something specific, and only after reading the file so a point is never duplicated.
+Any agent may append a concrete pipeline improvement to `docs/AGENTS_IMPROVEMENTS.md`, at
+that fixed path in the target project's documentation area, created on first use. It is
+opt-in: an agent writes only when it has something specific, and only after reading the
+file so a point is never duplicated.
 
 The notes are about *how the agents work*, never about the product feature being built.
 They are harvested back into this repository by hand.
@@ -477,7 +566,7 @@ story scaffolds in `_templates/`.
 Its board is **Linear** — the `Agentic Claude` project in team `Smerfy` — declared in
 [`ISSUE_TRACKING.md`](./ISSUE_TRACKING.md): bindings onto the Linear MCP tools, the card
 shape, the two permitted transitions, the visibility rule, and the write authority. That
-declaration is what the `board` skill resolves against when the pipeline runs here, so the
-repo doubles as the worked example of a **hosted** board reached over MCP. The Markdown
-board that preceded it (`docs/tasks/`, 35 cards) was migrated to Linear on 2026-08-03 and
-removed; git history holds the originals.
+declaration is what every board-touching agent reads directly, at its fixed path, when
+the pipeline runs here, so the repo doubles as the worked example of a **hosted** board
+reached over MCP. The Markdown board that preceded it (`docs/tasks/`, 35 cards) was
+migrated to Linear on 2026-08-03 and removed; git history holds the originals.

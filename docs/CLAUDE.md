@@ -8,7 +8,7 @@ Engineering documentation for `ca77y-agentic`: product direction, how the plugin
 docs/
 |-- PRODUCT.md        # Toolkit intent, boundaries, and direction
 |-- ARCHITECTURE.md   # Plugin structure, agent roster, dispatch model
-|-- ISSUE_TRACKING.md # How this repo's board is reached; the board skill resolves it
+|-- ISSUE_TRACKING.md # How this repo's board is reached; read directly, at this path
 |-- issues/           # Known problems with no identified solution on our side
 |-- specs/            # Active specs, one per in-flight unit
 `-- _templates/       # The spec scaffold, and the story scaffold for a Linear issue body

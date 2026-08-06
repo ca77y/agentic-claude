@@ -1,7 +1,8 @@
 # Issue tracking
 
-How this project tracks work. The `ca77y-engineering:board` skill resolves this file into
-a board profile; keep it true, because the pipeline binds real calls to what it says.
+How this project tracks work, read directly at this fixed path — `docs/ISSUE_TRACKING.md`
+— by every board-touching agent, with no per-run resolution step in between. Keep it true,
+because the pipeline binds real calls to what it says.
 
 ## The board
 
@@ -28,6 +29,9 @@ authenticate; no credentials live in this repo.
 - **create** — `save_issue` with `team: "Smerfy"`, `project: "Agentic Claude"`, and
   `state: "Backlog"`.
 - **transition** — `save_issue` with the issue `id` and the target `state`.
+- **comment** — `save_comment` with the issue `id` and a Markdown `body`.
+- **update** — `save_issue` with the issue `id` and the changed fields (`description`,
+  labels, `priority`, or a relation).
 
 ## Card shape
 
@@ -109,3 +113,16 @@ Two rules bound all of that:
 
 Where an agent is unsure whether an edit is a correction or a rewrite of the goal, it
 reports instead of writing. That is the only case left where reporting beats acting.
+
+## What the old per-run artifact used to carry
+
+A generated scratch file used to accompany this declaration on every run, restating it
+and adding four run-local facts. That artifact is gone; here is what happened to each
+fact:
+
+| Fact | Disposition |
+| --- | --- |
+| When and by whom it resolved | **Dropped.** The `lead`'s ledger and the run it belongs to carry it. |
+| The probe call and its result | **Dropped.** There is no probe step anymore. |
+| The card's resolved branch name | **Recorded in the ledger.** It already tracks the branch and the worktree. |
+| `Unresolved: nothing` | **Dropped.** An unbound operation is read from this declaration, directly, at the point of use. |

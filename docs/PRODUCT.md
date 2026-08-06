@@ -25,10 +25,11 @@ told which issue tracker to use.
 
 - **Specs and research live in the target repo.** Both are plain Markdown inside the
   repository the pipeline runs on. No hosted state of the toolkit's own.
-- **The board is resolved, never assumed.** How a project tracks work — repo-local
-  Markdown, Linear, Jira, GitHub Issues, or nothing — is discovered from that project's
-  own context at the start of every run and reached only through the resolved bindings.
-  A tracker detail hardcoded in an agent is a defect.
+- **The board is declared, never assumed.** How a project tracks work — repo-local
+  Markdown, Linear, Jira, GitHub Issues, or nothing — is read from that project's own
+  `ISSUE_TRACKING.md` declaration and reached only through the bindings it records. A
+  tracker detail hardcoded in an agent is a defect — but the declaration's own
+  **location** is a fixed convention, not a tracker detail, so pinning it is not.
 - **Nothing signs off on itself.** The agent that produces an artifact never gates it.
   Code review goes to `qa` (a separate context from the `coder`) locally and to the PR
   review on the opened PR, readiness and acceptance to the `auditor`, library health to
@@ -40,7 +41,10 @@ told which issue tracker to use.
   where it authorises the correction, reported where it does not. Two human gates punctuate
   the flow: approving the analyst's stories, and invoking the `lead`.
 - **Agents discover, they do not assume.** Every agent reads paths, conventions, and
-  product context from the target project. Hardcoded paths are a defect.
+  product context from the target project. Hardcoded paths are a defect — except the two
+  fixed conventions this toolkit itself pins: the tracking declaration always lives at
+  `docs/ISSUE_TRACKING.md`, and the improvements log at `docs/AGENTS_IMPROVEMENTS.md`.
+  Pinning where either file lives asserts nothing about what it says.
 - **Verification is layered, not repeated.** Spec authored + audited → per-scenario tests → qa gap
   fill and local review → acceptance audit → PR review. Each layer checks something
   the previous one cannot.
@@ -64,13 +68,20 @@ A repo the pipeline runs on must be an Obsidian vault with a committed `.obsidia
 the community plugins listed in the root [`README.md`](../README.md) — Templater is
 required for the scaffolds; Dataview, Breadcrumbs, and Excalidraw are recommended. That
 requirement covers the **docs and library** (`docs/specs/`, durable docs, `library/`,
-`docs/_templates/`), not the board.
+`docs/_templates/`, and the `docs/ISSUE_TRACKING.md` declaration itself), not the board.
 
-The board is separate and optional: a project either declares one — canonically in an
-`ISSUE_TRACKING.md` the `board` skill can help write, or anywhere else its context already
-documents itself — or declares none, and the pipeline runs trackerless off the spec. This
-repo tracks its own work in Linear; a repo-local Markdown board instead needs a cards
-directory plus the Tasks and Task Board community plugins.
+The board is separate and optional: a project either declares one — at the fixed path
+`docs/ISSUE_TRACKING.md`, which the `board` skill can help write — or declares none, and
+the pipeline runs trackerless off the spec. Which board it declares, and how the
+pipeline reaches it, stay resolved from the declaration; only the declaration's own
+location is a convention. This repo tracks its own work in Linear; a repo-local Markdown
+board instead needs a cards directory plus the Tasks and Task Board community plugins.
+
+**Two committed `.gitignore` entries are also a setup requirement**, alongside the docs
+and library paths above: one for the target repo's own story-worktree directory, and one
+for `tmp/` inside each story worktree, where the pipeline keeps its run-local ledger and
+findings files untracked. Neither is optional — without both, a commit step can sweep
+run-local scratch, or the worktree itself, into a story commit.
 
 This repository satisfies those requirements itself, so the pipeline can be run on the
 toolkit that defines it.

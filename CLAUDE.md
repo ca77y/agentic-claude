@@ -53,15 +53,14 @@ grep -h '^\*\*Addressing the story worktree\.\*\*' \
   plugins/ca77y-engineering/skills/lead/SKILL.md | sort -u | wc -l
 ```
 
-The same hazard applies to a second, shorter canonical paragraph: **"Working from the
-board profile."**, carried by the two agents that *receive* a resolved board profile
-rather than resolving one — `writer` and `auditor`. (The `lead` skill and the `analyst`
-invoke the `board` skill themselves and carry their own resolver wording, which is
-deliberately different prose; do not try to unify the four.) Edit both copies together
-— this should also print `1`:
+The same hazard applies to a second, shorter canonical paragraph: **"Board access is
+granted by your caller."**, carried by the two agents whose board access varies with who
+dispatched them — `writer` and `auditor`. (The `lead` skill carries its own wording for
+reading the fixed declaration directly, which is deliberately different prose; do not try
+to unify the two.) Edit both copies together — this should also print `1`:
 
 ```bash
-grep -h '^\*\*Working from the board profile\.\*\*' \
+grep -h '^\*\*Board access is granted by your caller\.\*\*' \
   plugins/ca77y-engineering/agents/{writer,auditor}.md | sort -u | wc -l
 ```
 
@@ -90,21 +89,23 @@ grep -rn 'ca77y-library:\(analyst\|auditor\|coder\|qa\|writer\|lead\|board\)' pl
 The rationale for the split is recorded in
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) under *Two plugins, one optional edge*.
 
-## The board is resolved, never hardcoded
+## The tracker is declared, never hardcoded — at a fixed path
 
 No agent may name a tracker, a card path, a status symbol, or a card field as a fact
-about "the project". All of it comes from the `board` skill's resolved **board
-profile** — bindings for locate/read/search/create/transition, the card shape, the
-status vocabulary, the visibility rule, and the write authority. When editing an agent,
-treat any concrete tracker detail as a bug unless it is explicitly framed as *one
-board's realization* of a semantic (the README's Obsidian Tasks example, the analyst's
-format-quirk rule).
+about "the project". All of it comes from the fixed declaration at
+[`docs/ISSUE_TRACKING.md`](docs/ISSUE_TRACKING.md) — bindings for
+locate/read/search/create/transition (plus comment and update where the project
+authorises them), the card shape, the status vocabulary, the visibility rule, and the
+write authority. When editing an agent, treat any concrete tracker detail as a bug
+unless it is explicitly framed as *one board's realization* of a semantic (the
+README's Obsidian Tasks example, the analyst's format-quirk rule).
 
-Work tracking for this repo — the board, its statuses, and what agents may write to it —
-is declared in [`docs/ISSUE_TRACKING.md`](docs/ISSUE_TRACKING.md). That line is not
-decoration: the `board` skill reads the declaration at the path its **context** gives it
-and never searches for one, so a declaration nothing points at is invisible on the runs
-where nobody happens to grep for it. Keep the pointer here whenever the file moves.
+The declaration's own **path** is the one tracker fact this repo *does* hardcode, and
+deliberately: every board-touching agent reads `docs/ISSUE_TRACKING.md` directly, with
+no per-run resolution step and no discovery order in between. That is narrower than it
+sounds — fixing where the declaration lives asserts nothing about the board itself,
+because the declaration is still what says which board, which statuses, and what may be
+written. Keep this pointer here whenever the file moves.
 
 ## The improvements log is cleared as it is converted
 
