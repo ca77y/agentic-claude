@@ -21,10 +21,10 @@ Where a harness requires a session to isolate itself before it will write, the r
 is the `path` form: enter the worktree that was already created at `.worktrees/<branch>`,
 which the tool accepts on the session's first entry from the launch directory — the
 `lead`'s own session; a dispatched worker, whose working directory was pinned at
-launch, cannot use it and stays on absolute-path addressing. `git worktree add`
-registered `.worktrees/<branch>` in `git worktree list`, so entering it this way
-leaves the worktree exactly where this project puts it — nothing moves, and the
-addressing rule above is unchanged.
+launch, cannot reach this worktree that way and stays on absolute-path addressing.
+`git worktree add` registered `.worktrees/<branch>` in `git worktree list`, which is
+why the tool accepts it. Entering an existing worktree leaves it exactly where this
+project puts it — nothing moves, and the addressing rule above is unchanged.
 
 This repo has no install or bootstrap step of its own (no `package.json`, no lockfile),
 so a story worktree here needs no dependency provisioning — a `lead` running the
