@@ -162,3 +162,50 @@ spec as a **one-off migration gate that expires when the migration lands**, so n
 standing check inherits it — and pair it with a residue check over the mechanism's *verbs* (what it
 did, in the words the docs use for it), stated as a read-through rather than a count. A token sweep
 proves the name is gone; only the verb sweep proves the mechanism is.
+
+### A Validation item must state a property, never a reproducible enumeration
+
+**Area**: `agent:writer`
+
+**Observed**: This is the entry *"A cross-file Validation item that counts files must enumerate them"* above,
+overturned rather than narrowed. That entry's remedy offers two branches — enumerate the file set "inline,
+**or** as the exact command that generates it". On `SMR-188`'s respec I took the inline branch and got it
+wrong three separate times, each caught by a different gate round: a five-hit list where the item's own
+command returned seven, because I had assembled it from an exploratory variant scoped to three paths; an
+entry count that changed under its own citation because the same pass appended to the file it counted; and a
+`grep -v '^./docs/specs'` filter that excluded nothing, because that `grep` prints paths with no `./` prefix
+for the anchor to match. After the second of those I filed the remedy "paste the command's verbatim output,
+with the commit it ran at" — and the very next round broke it: a sixteen-hit enumeration became fifteen
+because **this same pass removed the file's only matching line with a later edit of its own.** The output was
+captured faithfully and was still wrong by the time anyone read it.
+
+**Suggested change**: Stop putting reproducible enumerations in a spec. A *Validation* item states the
+**command** and the **property its output must have** — "every hit attributes the check to the auditor or a
+gate" — and nothing else: no counts, no file lists, no line numbers. Where the property is about a count the
+*criterion* itself states, cite the criterion rather than restating the number. The reasoning is stronger than
+provenance, which is why it replaces it: any enumeration of a thing the same pass edits invalidates itself no
+matter how faithfully it was captured, a baseline hit list adds nothing a build cannot recompute, and it is
+the only part of the item that can be wrong. Same rule for a spec's own prose: where a count would fix the
+scope of a sweep ("exactly five places state this"), have the check enumerate them at build time instead.
+
+### The acceptance gate can pass a criterion whose shipped wording does not satisfy it as written
+
+**Area**: `agent:auditor`
+
+**Observed**: On `SMR-188`, a criterion required that a template be "read only when the file is absent". The
+shipped clause loads it "only when you are actually writing **or repairing** a declaration" — and repairing
+operates on a file that is *present*, so the shipped text does not satisfy the criterion as worded. The
+acceptance gate graded that criterion **met**, because the shipped wording matches the criterion's evident
+*intent* — nobody wants to forbid loading a template while repairing a declaration. It surfaced only on a
+later spec pass, when a new rule forced someone to open the clause and read it against the criterion's actual
+words. `auditor.md`'s grading vocabulary is met / partially met / unmet, and all three describe the *work*;
+none of them describes the case where the work is right and the **criterion** is the thing that is wrong. So
+the gate's only honest options were to fail correct work or to pass wording that does not match, and it took
+the second.
+
+**Suggested change**: Give the acceptance gate a fourth outcome for a criterion whose shipped wording is
+defensible but does not satisfy the criterion **as written**: report it as *criterion mis-worded*, naming the
+criterion's own sentence and the shipped sentence side by side, so the `lead` routes it to a `writer` spec
+pass for a criterion correction rather than to the `coder` as a defect. Grading such a criterion "met" hides a
+board-side wording defect behind a green gate, and the discovery is then arbitrary — it depends on some later
+pass happening to open the file.
