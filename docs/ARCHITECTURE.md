@@ -320,6 +320,27 @@ they describe one defect from two sides — a self-check and an audit finding �
 deliberately *not* required to match byte for byte. No drift check covers them and none
 should be added; unifying the wording would fuse two different jobs.
 
+## Three ways an obligation gets repeated
+
+An obligation sometimes has to appear in more than one place. This repo uses three
+arrangements deliberately, and reaching for the wrong one is how wording drifts:
+
+- **Byte-identical duplication, with a drift check.** The worktree contract above: one
+  canonical paragraph, one physical line per file, and a `grep` in the root
+  [`CLAUDE.md`](../CLAUDE.md) that catches the moment two copies differ. Used when every
+  copy must bind identically, because each agent acts on its own copy alone.
+- **Deliberately different wording for two sides of one defect.** The two library nets
+  above: a write-time self-check and an audit finding. No drift check covers them and
+  none should — unifying the wording would fuse two different jobs.
+- **Stated once, pointed at from everywhere else.** Used *within* a single definition,
+  where no drift check exists at all. `writer.md` carries the docs pass's reconciliation
+  duty in one subsection, and the numbered step that used to hold that content is now a
+  pointer at it; `### Applying a finding` likewise cross-references the spec-authoring
+  rule it hands off to instead of restating it. What this avoids is a second,
+  independently readable statement of the same duty in one file: both copies read as
+  live, so an agent obeys whichever it reaches first and an edit to one silently leaves
+  the other asserting the superseded version.
+
 ## The commit model
 
 The `lead` — the orchestrating main session — is the only place commits happen; no

@@ -33,9 +33,11 @@ The project is an **Obsidian vault** and its layout, conventions, spec format, a
 
 **Restate the finding as the general property it is an instance of, before you write the fix.** Write that property out in one sentence, in the form the requirement would take. The finding says *"these three scenarios have no coverage"*; the property is *"every requirement the spec states is backed by a scenario that would fail if it were violated"*. The restatement is what the fix is written against — the named examples only say where to start looking.
 
-**Check the fix against every instance of the property, not against the examples.** Enumerate the instances the property applies to **from the spec itself** — the full set of requirements, scenarios, or card criteria it names — and check the fix against each before calling the finding closed. An instance you cannot close is named in your report with the reason, so it is a stated gap rather than an unnoticed one. Repairing only the named instances leaves the finding's own defect live in the rest of the set, where each later audit round rediscovers one more instance of the same defect.
+**Check the fix against every instance of the property, not against the examples.** Enumerate the instances the property applies to **from the spec itself** — the full set of requirements, scenarios, or card criteria it names — and check the fix against each before calling the finding closed. An instance you cannot close is named in your report with the reason, so it is a stated gap rather than an unnoticed one. Repairing only the named instances leaves the finding's own defect live in the rest of the set, where each later audit round rediscovers one more instance of the same defect. When the fix itself supersedes an existing entry elsewhere in the spec, follow **"An edit to one section of a spec is an edit to the whole spec"** under *Spec authoring rules* to enumerate and reconcile what it invalidates, rather than treating the finding as closed once its named instances are fixed.
 
 ### Spec authoring rules
+
+**An edit to one section of a spec is an edit to the whole spec.** The trigger is any superseding edit, not only an amendment arriving through *Applying a finding* above — a decision you settle mid-authoring and a `lead` course correction produce the same hazard. Name the superseding decision as one sentence, then search the whole spec for the terms that decision is expressed in — the identifiers, the behaviour words, and the negation of both — and read every hit; the enumeration is over the spec's own sections, not only the ones the amendment happened to mention. The sweep list is every other section the spec carries: Goal, Design (including the Boundary, Coordination, and Deviations content wherever this spec's shape places it), every Requirements scenario, the Validation list where the spec carries one, and every Tasks entry. Edit them in the same pass, never as a follow-up — a superseded entry is rewritten or deleted; annotating it as historical ("previously we said X") is not reconciliation unless the document is explicitly a changelog, because a `coder` reading the checklist still finds an instruction there. The invariant: the spec never carries two live instructions for one decision — two sections disagreeing about one decision is a defect regardless of which is newer, and the newer one wins by being applied, not by being later on the page. An entry you cannot reconcile in the same pass is named in your report with the reason, mirroring the wording already used by *Applying a finding* above.
 
 **Every acceptance scenario must be runnable inside the spec's own Boundary.** Check each scenario against the Boundary section you wrote: if the Boundary forbids touching the package that owns the behavior, or scopes test files away from where the scenario would run, that scenario has nowhere to execute and the requirement is unfalsifiable as drafted. Fix it at authoring time — extend the test-infrastructure scope to the package owning the behavior, or restate the scenario at a boundary the spec can reach and say plainly that the wrappers are covered by inspection.
 
@@ -67,9 +69,25 @@ When a task ships, its spec's durable content must be folded into the permanent 
    - UI/UX or system/architecture design → the design docs
    - follow the project's per-document conventions (title, metadata block, scope); use Mermaid for diagrams.
 4. Convert the shipped spec: fold its durable requirements, scenarios, and design into the right permanent home above, reconciling with what already exists. Keep the feature docs as the settled source of truth — merge, do not append blindly.
-5. Keep docs honest while writing: if a diagram or statement no longer reflects the system, update or remove it. Document only what was actually built. Check the docs you touched against the wider tree — contradictions, stale cross-references, duplication, and other docs the merged work now makes wrong — and fix them in the same pass.
+5. Reconcile every paragraph you touch — every sentence in it, not only the lines you edited — per *Reconciling what you touch* below.
 6. **Remove the converted spec** from the specs area once its durable content has a home — specs are not archived.
 7. Report back to the `lead`, which commits everything.
+
+### Reconciling what you touch
+
+**The unit is the paragraph, and every sentence in it.** Touching a paragraph — a prose block, a list item, a table row, or a diagram — puts every sentence in it in scope, not only the lines you are mechanically editing. Editing a paragraph is vouching for it.
+
+**Two standards, both applied.** The shipped system and the project's stated principles: a sentence that contradicts either is corrected or removed. Against the shipped system: if a diagram or statement no longer reflects it, update or remove it, and document only what was actually built. Checked against the shipped tree alone, a sentence describing something the project has explicitly decided not to build is merely unverifiable, not wrong; the principles standard is what makes it correctable.
+
+**A contradiction is fixed even when the edit that surfaced it was unrelated.** The reason it is in the paragraph is not the test; whether it is true is.
+
+**Where the stated principles live is discovered from project context, never hardcoded** — the project's product or principles document where its context names one, and the project's settled source-of-truth docs where it does not. When a project states no principles at all, say so in your report and check against the shipped tree alone, so a sweep that could not run is never reported as a sweep that came back clean.
+
+**The guard: when the principle may be the stale side, report — do not rewrite it.** A stated principle is a statement of what the product is *for*, and rewriting the principle so it matches a document is not the same as deciding the product changed direction. When you cannot tell which side is stale, or conclude the principle is stale, report it and leave the sentence as it stands; the principles side is the human's call, not an edit you make to clear a contradiction. This mirrors the guard already in the board-follow-up rule above — *"the one thing you never do either way is rewrite what the story is for"* — and keeps you from silently retiring a principle to make a sentence pass.
+
+**Diagrams count.** A Mermaid node label or a tree diagram asserting the superseded thing is a sentence for this purpose.
+
+**Check the docs you touched against the wider tree too** — contradictions, stale cross-references, duplication, and other docs the merged work now makes wrong — and fix them in the same pass.
 
 ## Boundaries
 
@@ -83,9 +101,9 @@ When a task ships, its spec's durable content must be folded into the permanent 
 
 **Your report is your return value — on every round.** Dispatched fresh, end your turn with the report as your final message: the `lead` receives that final text directly as the Agent tool's result. Resumed, finish the same way — the report as your final text; delivering it to your dispatcher is the harness's job, not yours. Never `SendMessage` anyone to report or escalate — not your dispatcher, not `main`, not a sibling — and do not treat the `SendMessage` tool description's recipient list as an invitation: a report sent that way bypasses the channel the pipeline actually collects on, and can be silently lost.
 
-**Spec pass:** the spec's file path; the acceptance criteria it was written against; any deviations from the card; how you revised against the auditor's findings if the `lead` routed any; any scope question the `lead` should settle; and any board follow-ups — a settled decision contradicting a card's recorded relationship, named as which card, which sentence (quoted or its substance), and what it should now say.
+**Spec pass:** the spec's file path; the acceptance criteria it was written against; any deviations from the card; how you revised against the auditor's findings if the `lead` routed any; any scope question the `lead` should settle; any contradiction you found and fixed outside the section you were dispatched to change, and any you left unfixed with the reason; and any board follow-ups — a settled decision contradicting a card's recorded relationship, named as which card, which sentence (quoted or its substance), and what it should now say.
 
-**Docs pass:** docs created, updated, and removed (with paths), including other docs updated for consistency; how the spec was converted — which content went to features / flows / designs — and confirmation it was removed; and any documentation gaps, stale diagrams found, or follow-ups.
+**Docs pass:** docs created, updated, and removed (with paths), including — for any change made only to reconcile a contradiction, where that change was not itself required by the shipped work — which doc it was in, what the sentence claimed, and what it contradicted; how the spec was converted — which content went to features / flows / designs — and confirmation it was removed; any contradiction you left unfixed, with the reason; and any documentation gaps, stale diagrams found, or follow-ups.
 
 ## Process feedback
 

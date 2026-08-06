@@ -124,3 +124,48 @@ the worktree; where a harness requires session isolation, enter the already-crea
 `path`, which leaves the location untouched. The `lead` skill could name the same fallback, since
 a `lead` invoked as a background job will meet this guard on its first write every time, and the
 failure arrives as a rejected edit with no indication that a compliant remedy exists.
+
+### The root `CLAUDE.md`'s own verification snippets cannot be run in an isolated session
+
+**Area** — `flow`
+
+**Observed** — The root `CLAUDE.md` ships three copy-pasteable verification snippets that specs
+then require agents to run: the two duplicated-paragraph drift `grep`s and the manifest-parity
+`for` loop. In a worktree-isolated session all three are refused verbatim by the harness guard
+with *"this command is too complex to verify that it stays inside the worktree; break it into
+plain, separate commands"* — the `grep`s because of the `{coder,writer,qa,auditor}.md` brace
+expansion and the trailing pipeline, the parity check because it is a `for` loop with command
+substitution. On SMR-154 the spec's Tasks entry and a Requirements scenario both name these
+snippets as the verification, so `qa` had to hand-translate each into a single plain command
+(explicit file paths instead of braces; one `python3 -c` printing both manifest versions) before
+it could report a result. Absolute `git -C <worktree> …` is accepted, so the canonical addressing
+rule itself is fine — it is specifically these three snippets that do not survive isolation.
+
+**Suggested change** — Make the checks runnable where they are documented, rather than leaving
+each agent to reinvent an isolation-safe equivalent and risk reporting a refusal as a failure.
+Either rewrite the three snippets in the root `CLAUDE.md` in plain, brace-free, one-command-each
+form, or move them into a small checked-in script the guard can accept as a single invocation and
+have `CLAUDE.md` point at it. Whichever form is chosen, keep the expected output (`1`, `1`, and
+`ok` per plugin) stated beside it, since that is what a spec's Tasks entry cites.
+
+### A story that changes an agent definition does not bind the run that ships it
+
+**Area** — `skill:lead`
+
+**Observed** — On SMR-154 the shipped change *was* `writer.md`: six edit sites giving the writer
+a whole-document reconciliation duty. The docs pass that documents that change is itself a
+`writer` dispatch, but a subagent's definition is loaded from the installed plugin at dispatch
+time, not from the worktree — so the docs-pass writer ran with the **pre-change** definition, in
+which docs-pass step 5 is still the old single sentence and `### Reconciling what you touch` does
+not exist. Nothing in the harness or the skill makes that visible from inside the dispatch; the
+only reason the new rules governed this pass is that the lead noticed and wrote *"apply your own
+reconciliation rule to this pass — it is what shipped"* into the prompt by hand. On a run where
+the lead does not think of it, the story's own change silently fails to apply to the pass that
+documents it, and the first artifact written under the new rule is written under the old one.
+
+**Suggested change** — In step 7 (*Docs*), add one conditional: when the shipped diff touches an
+agent definition or skill under `plugins/`, name that file in the docs dispatch and state that the
+**shipped text in the worktree** governs the pass, not the definition the agent is running under.
+The same applies to a `coder`, `qa`, or `auditor` dispatched after such a change lands mid-run.
+This is cheap to state and impossible to notice from inside the dispatch, since an agent cannot
+tell which version of its own definition it was loaded from.
