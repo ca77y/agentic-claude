@@ -315,7 +315,14 @@ relationship with the board. It names the profile in every dispatch that touches
    running the project's own install/bootstrap step. The lead then **records the
    provisioning status**, including *not provisioned, with the reason*, and every
    dispatch into the worktree names it, and **transitions the referenced card to
-   work started**. Everything else happens in that worktree.
+   work started**. Everything else happens in that worktree. Where the harness refuses
+   file writes until the session has isolated itself — a background job typically is —
+   the lead's one compliant move is to enter the worktree it just created with
+   `EnterWorktree`'s **`path`** form, never its `name` form: `name` would create a second
+   worktree in the harness's own directory and leave this story's branch behind, while
+   entering the existing one leaves it exactly where the project puts it, with every
+   dispatch still naming its absolute path. A fix run on an open PR (below) takes the same
+   step after recovering the worktree.
 3. **Spec** — dispatches the `writer` to author the spec, then the `auditor` to gate
    it; routes any findings back to the writer to revise, re-audits fresh, and once
    ready **commits the spec** (commit 1).

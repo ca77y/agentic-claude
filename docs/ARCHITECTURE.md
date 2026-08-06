@@ -310,6 +310,48 @@ the `lead`'s dispatch steps also makes it bind by construction — including sub
 the `lead` does not make itself — and puts the rule in the receiving agent's own
 definition, which is where a "is this result trustworthy?" decision is taken.
 
+**A harness may refuse writes until the session has isolated itself, and only one form of
+entry is compatible with this contract.** `EnterWorktree`'s two forms are not
+interchangeable. The **`name` form creates** a worktree — inside the harness's own
+`.claude/worktrees/` directory, on a new branch — so using it on a story would leave the
+story's own tree and branch behind. That is why relocating a story worktree to satisfy the
+tool is refused outright: `SMR-140` weighed exactly that alignment and settled on
+absolute-path addressing instead. The **`path` form enters** a worktree that already
+exists, and on a session's **first entry from the launch directory** it accepts any path
+registered in `git worktree list` for the owning repository — which is precisely what
+`git worktree add` produces. So a `lead` whose harness refuses file writes until the
+session has isolated itself has a move available that relocates nothing: enter the
+worktree it just created, by `path`.
+
+That move belongs to the `lead`'s own session and to no worker. A dispatched agent's
+working directory is pinned at launch, and from there the `path` form is restricted to
+worktrees under `.claude/worktrees/` — so the workers keep addressing the story worktree by
+absolute path exactly as the canonical paragraph above says, and nothing in their handover
+changes.
+
+**The write guard itself is a stated assumption, not a documented contract.** No tool
+description documents it; the only record is a single background run that met it and
+reported the refusal. Nothing shipped verifies that `path`-form entry clears it either —
+what was checked was the text of two documents, which an editor writing that text fully
+explains. Both statements are therefore written as *what the remedy is when a harness
+demands isolation*, never as an instruction to isolate: an unguarded session keeps working
+from the launch directory as before. What would settle it is a live background `lead` run
+that meets the guard and reports whether entry by `path` clears it — the treatment
+[`PRODUCT.md`](PRODUCT.md) requires of any behaviour change, validated by running the
+pipeline on a live project rather than by reasoning about prompt text.
+
+**Where the remedy is stated.** For this repo's own maintenance, in the root
+[`CLAUDE.md`](../CLAUDE.md)'s Worktrees section, which may name `.worktrees/<branch>`
+concretely. In the product prose it is stated exactly once — in the `lead` skill's
+workspace-creation step, where a `lead` is standing when the guard hits, its first write
+being that step's ledger — with the open-PR fix run's recovery step pointing at it rather
+than restating it, the third arrangement in *Three ways an obligation gets repeated* below.
+The root [`README.md`](../README.md) describes the same step in the user's voice, as it does
+every other agent behaviour. It sits deliberately
+**outside** the canonical `**Addressing the story worktree.**` paragraph: the remedy is one
+role's and reachable by no worker, and carrying it inside would force a five-file
+byte-identical edit and put the drift check at risk for no gain.
+
 ## Two nets around published library prose
 
 A dispatcher that cannot know the vault's state in advance writes an if/then into the
@@ -364,7 +406,10 @@ arrangements deliberately, and reaching for the wrong one is how wording drifts:
   where no drift check exists at all. `writer.md` carries the docs pass's reconciliation
   duty in one subsection, and the numbered step that used to hold that content is now a
   pointer at it; `### Applying a finding` likewise cross-references the spec-authoring
-  rule it hands off to instead of restating it. What this avoids is a second,
+  rule it hands off to instead of restating it. The `lead` skill's isolation step is the
+  same arrangement: the isolation remedy stated once in workspace creation, pointed at
+  from the open-PR fix run's recovery step (see *The story worktree contract* above).
+  What this avoids is a second,
   independently readable statement of the same duty in one file: both copies read as
   live, so an agent obeys whichever it reaches first and an edit to one silently leaves
   the other asserting the superseded version.
