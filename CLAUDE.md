@@ -54,10 +54,11 @@ grep -h '^\*\*Addressing the story worktree\.\*\*' \
 ```
 
 The same hazard applies to a second, shorter canonical paragraph: **"Board access is
-granted by your caller."**, carried by the two agents whose board access varies with who
-dispatched them — `writer` and `auditor`. (The `lead` skill carries its own wording for
-reading the fixed declaration directly, which is deliberately different prose; do not try
-to unify the two.) Edit both copies together — this should also print `1`:
+granted by your caller."**, carried by the two agents whose access is decided by the
+caller that dispatches them, rather than being a fixed fact about the agent — `writer`
+and `auditor`. (The `lead` skill carries its own wording for reading the fixed
+declaration directly, which is deliberately different prose; do not try to unify the
+two.) Edit both copies together — this should also print `1`:
 
 ```bash
 grep -h '^\*\*Board access is granted by your caller\.\*\*' \

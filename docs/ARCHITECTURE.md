@@ -109,26 +109,32 @@ other role is told what it has when it is dispatched:
 | --- | --- |
 | `lead` | read, the two status transitions, comment, PR attachment, and the card-content updates the declaration authorises |
 | `writer`, spec pass | read **and** search |
-| `auditor`, in the `lead`'s spec-readiness and acceptance gates | **none**, and it says so |
+| `auditor`, in the `lead`'s spec-readiness gate | read **and** search |
+| `auditor`, in the `lead`'s acceptance gate | **read** only |
 | `auditor`, in the `analyst`'s story-advisor gate | read and search, granted by that caller |
 | `analyst` | search, read, create |
 | `coder`, `qa` | none |
 
-The `auditor`'s two rows are the point of the model: one definition is dispatched by two
-callers with two different needs, so its access cannot be a fact about the file. In the
-`lead`'s gates it needs none — the acceptance standard is the spec's labelled
-transcription (below), and the readiness gate judges an artifact rather than a board — and
-the definition **states that it has none there**, rather than leaving it to be inferred
-from an absence. In the `analyst`'s advisor gate it keeps read and search, because that
-gate's job includes board-side duplicate detection.
+The `auditor`'s three rows are the point of the model: one definition is dispatched by two
+callers for three different needs, so its access cannot be a fact about the file — and
+none of the three grants is empty. In the `lead`'s spec-readiness gate it needs read and
+search: it performs the mechanical equality check against the card's own criteria (below)
+and the readiness gate's own board-side duplicate detection. In the `lead`'s acceptance
+gate it needs read but not search: the equality check still needs the card's own
+criteria, but grading needs nothing about its siblings, so widening that gate to search
+would let unrelated board content bear on grading. In the `analyst`'s advisor gate it
+keeps read and search, because that gate's job includes board-side duplicate detection
+too.
 
-**One consequence has to be stated rather than left to lapse.** With the `auditor` off the
-board in the readiness gate, a `lead` run's **only** board-side duplicate check is the
-`writer`'s sibling sweep during the spec pass — searching sibling cards for provisioning
-collisions, and for relationship prose a settled decision contradicts. That is why the
-`writer` keeps **search** and not only read, and why a sweep that could not run is
-reported as not run: a run where the sweep was impossible and a run where it came back
-empty are otherwise indistinguishable in a report that states only the result.
+**One consequence has to be stated rather than left to lapse.** A `lead` run's board-side
+duplicate check now has **two** homes: the `writer`'s sibling sweep during the spec pass —
+searching sibling cards for provisioning collisions, and for relationship prose a settled
+decision contradicts — and the `auditor`'s spec-readiness gate, checking whether the
+artifact under review itself duplicates or overlaps work already on the board. Neither
+subsumes the other. That is why the `writer` keeps **search** and not only read, and why a
+sweep that could not run is reported as not run: a run where the sweep was impossible and a
+run where it came back empty are otherwise indistinguishable in a report that states only
+the result.
 
 **The two agents whose access varies carry one canonical paragraph.**
 `**Board access is granted by your caller.**` is byte-identical in `writer.md` and
@@ -145,22 +151,27 @@ not three.
 The spec carries the card's `## Acceptance criteria` **verbatim**, one behaviour per line,
 labelled `AC1`…`ACn`, stamped with the card identifier and the state it was read at.
 [`_templates/spec.md`](_templates/spec.md) carries the section, and the spec's order is
-`Goal → Acceptance criteria (verbatim transcription) → Design → Requirements → Tasks`.
-The section is dropped only where there are no criteria to copy — a trackerless run, or a
-task naming no card, where the spec's own requirements and scenarios are the standard.
+`Goal → Acceptance criteria (verbatim transcription) → Design → Requirements → Tasks →
+Already satisfied criteria`. The transcription section is dropped only where there are no
+criteria to copy — a trackerless run, or a task naming no card, where the spec's own
+requirements and scenarios are the standard; the already-satisfied section is dropped only
+where every criterion needs work.
 
 **What licenses the copy is a check, not a promise that it is faithful.** The standing
 rule elsewhere in the pipeline is to name the card rather than restate its criteria,
 because a paraphrase drifts toward what the work already does. A verbatim copy carries the
-same failure mode unless something proves the drift did not happen — so the `lead` runs a
-**mechanical equality check** between the transcription and the card's own criteria: once
-after the spec pass, and again before **every** acceptance-gate dispatch, including each
-re-audit round, since a fresh auditor each round would otherwise grade an unguarded copy.
-It normalises only the rewrites the board itself performs on save (on this repo's board,
-`-` bullets to `*` and bare URLs wrapped in `<…>`) and nothing else. A mismatch routes to
-a **respec**, never to grading a stale list. Comparing two strings is not judging whether
-a criterion is met, which is what lets the `lead` hold the duty at all without breaching
-the rule that it never judges acceptance.
+same failure mode unless something proves the drift did not happen — so the `auditor` runs
+a **mechanical equality check** between the transcription and the card's own criteria,
+itself, inside each gate that uses it: once inside the spec-readiness gate, before it judges
+the mapping, and again inside the acceptance gate, before it grades any criterion —
+including every re-audit round of either, since a fresh auditor each round would otherwise
+grade an unguarded copy. It normalises only the rewrites the board itself performs on save
+(on this repo's board, `-` bullets to `*` and bare URLs wrapped in `<…>`) and nothing else.
+A mismatch is a **blocking finding** that routes to a **respec**, never to grading a stale
+list. Comparing two strings is not judging whether a criterion is met, which is what lets
+the check sit inside a gate at all without that gate ceasing to be independent of the
+`lead` — and the `lead` itself performs no check of its own over the card's criteria: no
+comparison, no classification, no per-criterion read.
 
 **Ordering matters, because the spec pass may correct a criterion.** The `writer` is
 authorised to fix a criterion the design proves unsatisfiable, on the card, during the
@@ -169,13 +180,19 @@ transcription is taken **after** any such correction: taken before, it would fre
 the spec exactly the criterion the design has just disproved, and the equality check would
 then fail on the precise path the pipeline exists to support.
 
-**Both gates work per label.** The readiness gate checks the mapping both ways — every
-`ACn` maps to at least one requirement or scenario, and a requirement mapped to no `ACn`
-is a finding unless the spec marks it deliberate scope — and a criterion whose owning
-mechanism is **not a build step** maps validly under that rule: documentation the docs
-pass owns, a manual reproduction, or a step only the `lead`'s own session can take. The
-acceptance gate returns a verdict **per `ACn`**, and reads the transcription rather than
-the card.
+**Both gates work per label, and the mapping rule now admits a third disposition.** The
+readiness gate checks the mapping both ways — every `ACn` maps to at least one requirement,
+one scenario, **or an entry in the spec's *Already satisfied criteria* section**, and a
+requirement mapped to no `ACn` is a finding unless the spec marks it deliberate scope — and
+a criterion whose owning mechanism is **not a build step** maps validly under that rule
+too: documentation the docs pass owns, a manual reproduction, or a step only the `lead`'s
+own session can take. The third disposition is verified, not trusted: the gate opens the
+file each entry names, and an entry it cannot verify is a **blocking finding, not a pass**,
+at the same severity as a criterion with no disposition at all — an unchecked section would
+otherwise be a way to retire a criterion without speccing it. The acceptance gate returns a
+verdict **per `ACn`**, and reads the transcription rather than the card; for an `ACn` in the
+already-satisfied section it grades from that section's evidence plus `qa`'s reported
+re-validation result.
 
 **The transcription is run-local; the card stays the durable source.** It dies with the
 spec at the docs pass, so a later fix run against an open PR grades against the card

@@ -302,7 +302,9 @@ an assumed tracker. That, plus two status transitions on that one card — *work
 at workspace creation, *awaiting review* once the PR is open, landed wherever the
 declaration's visibility rule says — is its whole relationship with the board. Board
 access downstream is **caller-granted**: the `writer` always carries read and search into
-every spec pass; the `auditor` carries **none** into either of the lead's own gates; the
+every spec pass; the `auditor` carries **read and search** into the lead's spec-readiness
+gate and **read** into its acceptance gate, and performs the mechanical equality check and
+the readiness gate's board-side duplicate detection itself, in each; the
 `coder` and `qa` get no board access and need none.
 
 1. **Read the task** — the prompt, the referenced card if any, the docs it touches,
@@ -340,26 +342,27 @@ every spec pass; the `auditor` carries **none** into either of the lead's own ga
 6. **Acceptance gate** — the `auditor` verifies the built result meets the task's
    acceptance criteria against the **spec's labelled `AC1`…`ACn` transcription** of the
    card's criteria — the standard either way, whether or not a card exists — carrying
-   **no board access** into this gate at all. What keeps that transcription trustworthy
-   without a second reading of the card is the lead's own **mechanical equality check**
-   (below), run once the spec pass lands and again before this dispatch and every
-   re-audit round. Anything the qa loop left uncommitted — the final clean round's added
+   **read** access into this gate. Before it grades anything, the gate performs the
+   **mechanical equality check** (below) itself, on this dispatch and every re-audit
+   round, which is what keeps that transcription trustworthy without the lead running a
+   check of its own. Anything the qa loop left uncommitted — the final clean round's added
    tests included — is **committed before the first acceptance dispatch**, so it does not
    fuse into the first acceptance fix. Findings route back to the same coder — resumed
    when its agentId is held, or freshly dispatched with the findings when it is not — and
-   each round's fix is likewise **committed before the fresh re-audit**, which re-runs the
-   equality check and is handed the references to diff against. Capped at 3 rounds. Docs
-   do not start while a criterion is unmet.
+   each round's fix is likewise **committed before the fresh re-audit**, which is handed
+   the references to diff against. Capped at 3 rounds. Docs do not start while a criterion
+   is unmet.
 
-   **The mechanical equality check** behind that trust: the spec's acceptance-criteria
-   section is a verbatim, labelled copy of the card's own — `AC1`…`ACn` — never a
-   paraphrase, and a copy earns that exemption only because the lead checks it: character
-   for character, normalising only Linear's `-`-to-`*` bullet rewrite and its
-   `<…>`-wrapping of bare URLs, run once after the spec pass and again before every
-   acceptance-gate dispatch, including every re-audit round. Comparing two strings is not
-   judging whether a criterion is met, so running it does not breach the rule that the
-   lead never judges acceptance itself; a mismatch routes back to the writer for a
-   respec, never to grading a stale list.
+   **The mechanical equality check**, performed by the `auditor` itself inside each gate it
+   runs: the spec's acceptance-criteria section is a verbatim, labelled copy of the card's
+   own — `AC1`…`ACn` — never a paraphrase, and a copy earns that exemption only because the
+   gate checks it: character for character, normalising only Linear's `-`-to-`*` bullet
+   rewrite and its `<…>`-wrapping of bare URLs, run inside the spec-readiness gate before it
+   judges the mapping and inside the acceptance gate before it grades any criterion,
+   including every re-audit round of either. The lead performs no check of its own over
+   the card's criteria — no comparison, no classification, no per-criterion read; a
+   mismatch reported by either gate routes back to the writer for a respec, never to
+   grading a stale list.
 7. **Docs** — a `writer` pass to update docs and convert the shipped spec; the lead
    trusts it, no docs gate.
 8. **Ship** — **commits whatever is still uncommitted** (the ship commit), pushes, and
@@ -487,10 +490,13 @@ Dispatched by the `lead` after the coder builds, and again after each fix round 
 fresh dispatch handed the round's commit references (the state the previous round
 reviewed, and the new round commit) so it can diff round N against round N−1. Runs the
 project's validation commands, compares the spec's scenarios against existing tests and
-adds the missing coverage (e2e, frontend, integration, edge cases), then re-runs; and
-**reviews the changed code** against the spec and the project's conventions for defects
-and quality, since it is a separate context from the one that wrote it. Reports pass/fail
-with evidence, the tests it added, and its review findings — the lead routes them to the
+adds the missing coverage (e2e, frontend, integration, edge cases), then re-runs;
+**re-validates every entry in the spec's *Already satisfied criteria* section** against
+the post-build tree, reporting a broken one as a regression finding and a result per
+`ACn` for the acceptance gate to grade from; and **reviews the changed code** against the
+spec and the project's conventions for defects and quality, since it is a separate context
+from the one that wrote it. Reports pass/fail with evidence, the tests it added, the
+already-satisfied results, and its review findings — the lead routes them to the
 `coder`. **Does not** fix feature code or weaken a failing test to make the suite pass.
 The heavy, independent code review runs again on the **PR** — the Claude GitHub review.
 
@@ -504,12 +510,18 @@ trusted with no gate; its spec is gated.) Reads the artifact plus enough context
 returns a **ready / not-ready** verdict. **Report-only** — the caller owns applying
 fixes. Does not review code quality.
 
-**Board access is granted per dispatch by whoever calls it.** It carries **none** into
-either of the `lead`'s own gates — and says so — gating the acceptance dispatch against
-the spec's labelled `AC1`…`ACn` transcription instead of reading the card itself, kept
-trustworthy by the lead's own mechanical equality check rather than by a second reading
-of the board; the `analyst`'s advisor gate is the one dispatch that grants it **read and
-search**, for that gate's own board-side duplicate and clash detection.
+**Board access is granted per dispatch by whoever calls it.** The `lead`'s spec-readiness
+gate grants it **read and search**; its acceptance gate grants it **read** only, because
+grading a criterion needs that card's own criteria, not its siblings. In both, it performs
+the **mechanical equality check** itself before doing anything else with the transcription
+— comparing the spec's `AC1`…`ACn` copy against the card's own criteria, character for
+character — and, at the spec-readiness gate, the board-side duplicate detection that keeps
+the artifact under review from clashing with something already on the board. It grades the
+transcription, not the card directly: the transcription is the standard, the card is
+evidence about the copy, and a criterion found only on the card is a mismatch finding that
+blocks rather than a criterion graded on the spot. The `analyst`'s advisor gate is a third,
+separate dispatch that grants it **read and search**, for that gate's own board-side
+duplicate and clash detection.
 
 Where a criterion rests on a claim about how a **third-party or vendored dependency**
 behaves, it verifies at the **mechanism, not the symptom**: it opens the cited source at
@@ -538,12 +550,17 @@ with the reason.
 declaration** — its sibling sweep for real board contradictions cannot come from a
 prompt, so the `lead` grants both by default rather than leaving them to be requested.
 
-- **Spec pass**, before any code exists: authors the task's spec (Goal → Design →
-  Requirements with WHEN/THEN scenarios → Tasks) against the acceptance criteria the
+- **Spec pass**, before any code exists: authors the task's spec (Goal → Acceptance
+  criteria (verbatim transcription) → Design → Requirements with WHEN/THEN scenarios →
+  Tasks → Already satisfied criteria) against the acceptance criteria the
   work will be judged on — **transcribing the card's own `## Acceptance criteria`
   verbatim into a labelled `AC1`…`ACn` section, taken after any criterion correction it
-  makes, so the lead's mechanical equality check has something correct to check
-  against** — and hands back the path; the lead has the `auditor` gate it
+  makes, so the auditor's mechanical equality check, run inside each gate that uses this
+  section, has something correct to check against** — and checking each transcribed
+  criterion against code and prose that already exist, placing every one that needs no
+  work in a bottom *Already satisfied criteria* section, per entry naming what satisfies
+  it, what `qa` re-validates against the post-build tree, and whether the task's own
+  changes also touch that surface — and hands back the path; the lead has the `auditor` gate it
   before the build and routes any findings back to the writer to revise. Its authoring
   rules make a spec's claims about the outside world checkable: a claim about how a
   **third-party or vendored dependency** behaves carries the package at the
@@ -679,11 +696,12 @@ Tasks checkbox (`[ ]` Todo · `[/]` In Progress · `[?]` In Review · `[x]` Done
 
 **Specs** live in the specs area only while in flight. They follow Goal → Acceptance
 criteria (the card's own, copied verbatim into `AC1`…`ACn`) → Design → Requirements
-(WHEN/THEN scenarios) → Tasks, are written just-in-time by the `writer`, and are
-**converted into durable docs and removed** by the `writer` when the task ships — they
-are never archived. The spec gets its own commit precisely so it survives in history
-after that removal, and the card stays the durable home of the criteria once the
-transcription goes with the spec.
+(WHEN/THEN scenarios) → Tasks → Already satisfied criteria (every `ACn` needing nothing
+built, checked against the code and prose that already satisfy it), are written
+just-in-time by the `writer`, and are **converted into durable docs and removed** by the
+`writer` when the task ships — they are never archived. The spec gets its own commit
+precisely so it survives in history after that removal, and the card stays the durable
+home of the criteria once the transcription goes with the spec.
 
 **Every check runs in an independent context.** Code review goes to `qa` locally — a
 separate context from the `coder` — and to the PR review on the opened PR, readiness and

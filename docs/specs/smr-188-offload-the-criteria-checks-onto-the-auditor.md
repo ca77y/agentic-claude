@@ -545,22 +545,22 @@ The criteria this delta does not build are **not** covered by items here — the
 
 ## Tasks
 
-- [ ] `auditor.md`: flip the per-gate grant sentence (`:18`) to read-and-search for spec readiness, read for acceptance, with the reason the acceptance gate has no search; keep the `analyst` clause.
-- [ ] `auditor.md`: add the equality duty and the readiness gate's board-side duplicate detection to the spec-gate step (`:24`).
-- [ ] `auditor.md`: add the **third disposition** to that same rule, with the clause making an unverifiable entry a blocking finding rather than a pass.
-- [ ] `auditor.md`: rewrite `## The acceptance gate` per *The trap* — transcription as standard, card as evidence, prompt restatement still refused, mismatch blocks, duty binding every round, and per-`ACn` grading that uses the section's evidence plus `qa`'s result.
-- [ ] `auditor.md`: leave `:16` and `:50` untouched; verify both after editing.
-- [ ] `lead/SKILL.md`: delete `## The mechanical equality check` (`:30-38`), including the carve-out, and remove the check runs from steps 3 (`:104`) and 6 (`:109`).
-- [ ] `lead/SKILL.md`: flip the downstream grants (`:22`), name both duplicate-detection homes (`:28`), re-point the ledger entry (`:58`), reword the routing entry (`:125`).
-- [ ] `lead/SKILL.md`: leave `:54` as it stands — the reversal makes it true again.
-- [ ] `writer.md`: re-attribute the check and the proof in `:50`; add the already-satisfied duty (what satisfies it, what `qa` re-validates, the edit-site flag, and the not-a-dumping-ground clause); name the new section in the spec-shape sentence (`:29`).
-- [ ] `qa.md`: add the re-validation step under `## What you do` after *Validate*, renumber the following steps, and extend the report step with the per-`ACn` result and the edit-site emphasis.
-- [ ] `docs/_templates/spec.md`: re-attribute the licensing note (`:20`); add the `## Already satisfied criteria` scaffold after `## Tasks`.
-- [ ] `docs/_templates/CLAUDE.md`: update the spec order (`:9`).
-- [ ] `README.md`: update `:304-306`, `:340-362`, `:507-512`, `:541`, `:545`, `:680`, and the `qa` section for its new duty.
-- [ ] `docs/ARCHITECTURE.md`: update the access table's `auditor` rows, the per-dispatch rationale, the duplicate-detection consequence, the spec order (`:148`), the check's attribution, and record the third disposition.
-- [ ] Root `CLAUDE.md`: reconcile `:56-58` only.
-- [ ] Run `V1`-`V10`, reporting baseline-unchanged items against their `77532e1` result and the three target-state items against their post-build expectation, never against their quoted baseline.
+- [x] `auditor.md`: flip the per-gate grant sentence (`:18`) to read-and-search for spec readiness, read for acceptance, with the reason the acceptance gate has no search; keep the `analyst` clause.
+- [x] `auditor.md`: add the equality duty and the readiness gate's board-side duplicate detection to the spec-gate step (`:24`).
+- [x] `auditor.md`: add the **third disposition** to that same rule, with the clause making an unverifiable entry a blocking finding rather than a pass.
+- [x] `auditor.md`: rewrite `## The acceptance gate` per *The trap* — transcription as standard, card as evidence, prompt restatement still refused, mismatch blocks, duty binding every round, and per-`ACn` grading that uses the section's evidence plus `qa`'s result.
+- [x] `auditor.md`: leave `:16` and `:50` untouched; verify both after editing.
+- [x] `lead/SKILL.md`: delete `## The mechanical equality check` (`:30-38`), including the carve-out, and remove the check runs from steps 3 (`:104`) and 6 (`:109`).
+- [x] `lead/SKILL.md`: flip the downstream grants (`:22`), name both duplicate-detection homes (`:28`), re-point the ledger entry (`:58`), reword the routing entry (`:125`).
+- [x] `lead/SKILL.md`: leave `:54` as it stands — the reversal makes it true again.
+- [x] `writer.md`: re-attribute the check and the proof in `:50`; add the already-satisfied duty (what satisfies it, what `qa` re-validates, the edit-site flag, and the not-a-dumping-ground clause); name the new section in the spec-shape sentence (`:29`).
+- [x] `qa.md`: add the re-validation step under `## What you do` after *Validate*, renumber the following steps, and extend the report step with the per-`ACn` result and the edit-site emphasis.
+- [x] `docs/_templates/spec.md`: re-attribute the licensing note (`:20`); add the `## Already satisfied criteria` scaffold after `## Tasks`.
+- [x] `docs/_templates/CLAUDE.md`: update the spec order (`:9`).
+- [x] `README.md`: update `:304-306`, `:340-362`, `:507-512`, `:541`, `:545`, `:680`, and the `qa` section for its new duty.
+- [x] `docs/ARCHITECTURE.md`: update the access table's `auditor` rows, the per-dispatch rationale, the duplicate-detection consequence, the spec order (`:148`), the check's attribution, and record the third disposition.
+- [x] Root `CLAUDE.md`: reconcile `:56-58` only.
+- [x] Run `V1`-`V10`, reporting baseline-unchanged items against their `77532e1` result and the three target-state items against their post-build expectation, never against their quoted baseline.
 - [ ] *(Not the `coder`'s: done in this spec pass.)* The card corrections — the six from the reversal, the four criteria added for the new section, and the AC3 correction — plus the `SMR-133` reconciliation. No improvements-log entry was converted, so the ship commit owes no removal trace.
 - [ ] *(Not the `coder`'s: the docs pass.)* Fold this delta into `docs/ARCHITECTURE.md`'s durable record and remove this spec.
 
