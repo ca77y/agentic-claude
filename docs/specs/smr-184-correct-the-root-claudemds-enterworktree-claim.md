@@ -490,16 +490,16 @@ The checks, all read-only, all inside the worktree:
 
 ## Tasks
 
-- [ ] Rewrite `CLAUDE.md:14-17` per *The corrected `CLAUDE.md` paragraph*: keep sentence
+- [x] Rewrite `CLAUDE.md:14-17` per *The corrected `CLAUDE.md` paragraph*: keep sentence
       one and the do-not-relocate instruction, attribute `.claude/worktrees/` to the
       `name` form, state the `path`-form remedy and that the worktree stays at
       `.worktrees/<branch>`. Change nothing else in the Worktrees section.
-- [ ] Add the isolation-fallback bullet to `SKILL.md` step 2, after **Branch and
+- [x] Add the isolation-fallback bullet to `SKILL.md` step 2, after **Branch and
       worktree** — one statement, outside the canonical paragraph, with no
       project-specific path.
-- [ ] Add the one pointer clause in *Invoked on an open PR* to step 2's isolation step
+- [x] Add the one pointer clause in *Invoked on an open PR* to step 2's isolation step
       (the deliberate addition; drop it if the `lead` cut it).
-- [ ] Run the five checks in *Validation*, using the isolated-session equivalents if the
+- [x] Run the five checks in *Validation*, using the isolated-session equivalents if the
       session is isolated, and record each result. Do not edit the snippets in `CLAUDE.md`
       — that is SMR-186.
 - [ ] **Not the `coder`'s task — owned by the docs pass (`writer`, step 7).** Reconcile

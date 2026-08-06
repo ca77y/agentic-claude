@@ -83,6 +83,14 @@ These steps are the default happy path — **guidance, not a script.** Your job 
 2. **Create the workspace.** Four actions, all before any agent is dispatched into it. Everything from here happens in the worktree.
 
    - **Branch and worktree.** Branch off the project's target branch in its own worktree under the repository's worktree directory.
+   - **If the harness will not write until the session is isolated.** Some sessions — a
+     background job in particular — are refused every file write until they have isolated
+     themselves, and `EnterWorktree` is the only mechanism accepted. Enter the worktree you
+     just created **by `path`**, never by `name`: the `name` form creates a second worktree
+     in the harness's own directory and leaves this story's branch behind, while the `path`
+     form takes the worktree where the project already put it. Everything after that is
+     unchanged — the worktree stays where it is, and every dispatch still names its
+     absolute path.
    - **Provision its dependencies.** Wherever the project's dependency layout allows it, by inheriting the main checkout's already-resolved dependency state; otherwise by running the project's own install/bootstrap step, discovered from project context. Inherit rather than reinstall because an install that re-resolves can produce a different dependency layout than the main checkout from the same lockfile, and can break pre-existing tests the task never touched. This is provisioning, **not verification** — running the project's tests, validation, or build stays `qa`'s.
    - **Record the provisioning status** — including **not provisioned, with the reason**, when the project has no install/bootstrap step or provisioning fails — and proceed regardless. Every dispatch into this worktree from here on names that status.
    - **Create the ledger** (per *Context discipline*) with the task, the board profile, the worktree path, and the provisioning status. Then, if the task names a card, **transition it to work started** — the board's own value for it, landed where the profile's visibility rule says — and record that transition, per *The story card*.
@@ -126,7 +134,7 @@ Step 8, and the end of your run. In order:
 
 The review's findings come back to you as a **new invocation** — the user hands you the findings (or the PR) as the task. Treat that as a fix run, not a fresh story:
 
-- **Recover the workspace before anything else.** The ledger at `.worktrees/<branch>.ledger.md` and `git log` are the truth about what already shipped; read them first. If the worktree still exists, reuse it. If it does not, recreate it on the **existing** branch — never branch again, and never open a second PR.
+- **Recover the workspace before anything else.** The ledger at `.worktrees/<branch>.ledger.md` and `git log` are the truth about what already shipped; read them first. If the worktree still exists, reuse it. If it does not, recreate it on the **existing** branch — never branch again, and never open a second PR — including step 2's isolation step if the harness requires it.
 - **Re-resolve the board.** The profile the ledger records was resolved in a session whose available tooling may not be this one's — a tracker's MCP server connected then and absent now leaves a binding that reads as fine and fails on use. Invoke the `ca77y-engineering:board` skill again and treat the recorded profile as a hint the fresh probe confirms or replaces.
 - **The previous run's agents are gone.** Their agentIds died with that session, so every agent this run is a fresh dispatch that must be given the spec path, the worktree, the provisioning status, and the PR's findings. Record each new agentId in the ledger when its dispatch produces one; within this run, a later round can resume a worker only if you hold a resumable agentId for it, exactly as in a fresh run — otherwise carry that round forward with another fresh dispatch and the findings.
 - **Route each finding by owner**, per *When a gate finds a problem*: code to the `coder`, docs to the `writer`, and an issue large enough to invalidate the approach back to the `writer` for a revised spec the `coder` rebuilds against.
