@@ -209,3 +209,26 @@ criterion's own sentence and the shipped sentence side by side, so the `lead` ro
 pass for a criterion correction rather than to the `coder` as a defect. Grading such a criterion "met" hides a
 board-side wording defect behind a green gate, and the discovery is then arbitrary — it depends on some later
 pass happening to open the file.
+
+### An already-satisfied entry must name its region the way a reader finds it, never by line number
+
+**Area**: `agent:writer`
+
+**Observed**: `writer.md`'s new *Already satisfied criteria* duty requires each entry to name **what
+satisfies it** — "the file, or files, that already make it true" — and says nothing about *how* to point
+inside that file. On this rule's first use, ten of forty-nine entries pointed at line numbers
+(`lead/SKILL.md:54-58`, `auditor.md:24`, `analyst.md:44`, `CLAUDE.md:56-58`, …). `qa` opens these in the
+**post-build** tree, and the build had deleted an eight-line section and added a three-line one in one of
+those very files, so several citations landed on a heading or on unrelated prose. The failure is silent in
+the direction that matters: an entry pointing at the wrong line reads as a checkable claim, and a reader who
+resolves it to whatever now sits there can grade a criterion from text that has nothing to do with it. The
+spec pass fixed it by writing a *"Entries name regions, never line numbers"* preamble into its own section —
+per-spec guidance that the next spec does not inherit, since the rule that creates the section carries no
+such requirement.
+
+**Suggested change**: In `writer.md`'s already-satisfied duty, require each entry to address its region the
+way a reader finds it — the section heading, the **bold lead-in**, or a phrase quoted from the text itself —
+and forbid a line number, with the reason stated: `qa` and the acceptance gate open these against the
+post-build tree, where any line number the same pass's edits moved has already rotted. Line citations pinned
+to an immutable commit (the spec's own *Edit sites*) are the exception and stay allowed, which is worth
+saying in the same breath so the two cases are not confused.

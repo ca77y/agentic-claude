@@ -44,6 +44,6 @@ Architecture, data flow, dependencies, risks, and alternatives. Link settled des
 
 Every `ACn` that needs nothing built — already true of the code and prose that exist, checked against them rather than asserted. Drop this section, the same way the transcription section is dropped, when every criterion needs work.
 
-**Entries use `→`, not the `—` the transcription above uses.** The `auditor`'s mechanical equality check greps for the transcription's `- **ACn** — ` lines; reusing that shape here would put every entry in this section in reach of a comparator that greps for it, and this convention is what keeps the two sections apart.
+**Entries use `→`, not the `—` the transcription above uses.** Both sections list `**ACn**`; reusing the transcription's `- **ACn** — ` shape here would put every entry in this section in reach of a comparator that greps for it, and this convention is what keeps the two sections apart.
 
 - **AC1** → what satisfies it (the file, or files, and the commit where a commit is what settled it) · what `qa` re-validates against the post-build tree · whether this task's own changes also touch that surface (an edit site is satisfied *and* at risk)
