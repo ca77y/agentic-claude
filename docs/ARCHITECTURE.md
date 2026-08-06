@@ -91,7 +91,11 @@ itself — but it stays a skill rather than collapsing into a line of prose, bec
 authoring half is substantial: it owns `references/authoring-issue-tracking.md`,
 [`PRODUCT.md`](PRODUCT.md) advertises it as the tool for writing a declaration, and it
 remains a legitimate user-invocable setup and inspection entry point — collapsing it to
-one line would orphan that reference. A user invokes it directly to write or repair the
+one line would orphan that reference. That reference is loaded on the **job**, not on the
+declaration's absence: the skill pulls it in only when it is actually writing **or
+repairing** a declaration — repair operates on a file that is present — and never when it
+is only reading one back, which is what keeps an inspection invocation cheap. A user
+invokes it directly to write or repair the
 declaration, or to see what it currently says; the `lead` may reach it mid-run as a
 **fallback**, never as a per-run step, when it finds no declaration at all — and even then
 the skill refuses to write the file mid-pipeline, putting the recommendation in its report
@@ -173,6 +177,39 @@ list. The check is mechanical, which is why it can sit ahead of grading in the s
 dispatch — and the `lead` itself performs no check of its own over the card's criteria: no
 comparison, no classification, no per-criterion read.
 
+**Why the check lives in the gate and not in the orchestrator.** It sat in the `lead` for
+one iteration and was moved back deliberately, so the reasoning is recorded here rather
+than left in a spec that no longer exists. Three things decided it. The `lead`'s founding
+boundary is that it never does an agent's work, and licensing it to compare the
+transcription against the card took a carve-out written for exactly one caller —
+*comparing two strings is not judging whether a criterion is met* — and a rule that needs
+an exemption for one caller is a rule under strain; the carve-out is deleted rather than
+defended. Every gate round is a **fresh dispatch**, so "on every round, including each
+re-audit round" holds *by construction* once the duty sits inside the gate, where it was
+previously an instruction the orchestrator had to remember twice per loop. And the reader
+that grades against the transcription is then the reader that proved it matches, with no
+trust hop between the checking party and the grading party. One cost is accepted and
+named rather than hidden: the first check now happens inside the readiness gate rather
+than at the spec-commit point, so nothing re-checks the copy between that gate passing and
+the commit — the acceptance gate's own check is the next one.
+
+**A gate that can read the card still grades the copy.** Giving the `auditor` read access
+raises the obvious question of why a frozen copy survives at all, and it survives for
+reasons the access does not touch. The `AC1`…`ACn` labels are the pipeline's addressing
+scheme — what a per-criterion verdict names, what a finding is filed against so the
+`coder` knows which criterion it failed, what the mapping rule is stated over, and what
+the already-satisfied section refers to — and a live card supplies no stable labels. The
+`coder` and `qa` hold **no** board access at all, so the transcription is the only path by
+which a criterion reaches the agents that must satisfy and validate it. And freezing is
+what makes drift *detectable*: a gate grading the live card directly would absorb a
+mid-build criterion edit as the new standard instead of failing on it.
+
+One shipped constraint carries the independence of the whole arrangement: the `auditor`
+**never edits the card it is gating**, whatever the declaration's write authority permits.
+Against a gate with no board access that rule was inert; with read access it is what keeps
+the judge separate from the standard, so it is the one sentence a later change to the
+`auditor`'s access must not quietly relax.
+
 **Ordering matters, because the spec pass may correct a criterion.** The `writer` is
 authorised to fix a criterion the design proves unsatisfiable, on the card, during the
 spec pass — the only safe moment, since no code exists yet to reshape it toward. The
@@ -193,6 +230,25 @@ otherwise be a way to retire a criterion without speccing it. The acceptance gat
 verdict **per `ACn`**, grading against the transcription rather than the card, reading the
 card only as evidence about the copy; for an `ACn` in the already-satisfied section it
 grades from that section's evidence plus `qa`'s reported re-validation result.
+
+**The already-satisfied section is shaped by what checks it.** Each entry names three
+things, because each answers a different reader: **what satisfies it** — the file, or
+files, that already make it true, and the commit where a commit is what settled it, which
+is what makes the entry checkable rather than asserted; **what `qa` re-validates** against
+the post-build tree, an observation and not a promise that the criterion was true once;
+and **whether the task's own changes touch that surface**, since an entry that is also an
+edit site is satisfied *and* at risk, and `qa` needs to know which entries those are
+rather than treating all of them as inert. Re-validation sits with `qa` rather than with
+the acceptance gate because `qa` runs the project's validation against the built tree as
+its whole job, runs *before* the acceptance gate and on every fix round, and an
+already-satisfied criterion the build broke is a regression — and regressions are `qa`'s.
+The asymmetry is the point: parking a criterion here is *cheaper* to write than a
+requirement but *more* exposed to checking, at two gates instead of one, which is what
+stops the section becoming a place to retire work nobody wanted to spec. Entries are
+marked `→` rather than the transcription's `—`, so the transcription's `- **ACn** — `
+lines stay the only lines of that shape in the spec: the equality check is a mechanical
+comparison, and a second `ACn` list sharing that prefix would put every entry in reach of
+a comparator that greps for it.
 
 **The transcription is run-local; the card stays the durable source.** It dies with the
 spec at the docs pass, so a later fix run against an open PR grades against the card
@@ -646,6 +702,41 @@ resolves it" survives any count of the artifact's own name, and did, through a c
 whole tree and judged by hand. There is no mechanical form of it yet, and it is precisely
 what a green name sweep does not cover.
 
+## A spec is written against a tree the same pass is editing
+
+Several gate failures on one card came from a single root: the spec asserted something
+about the tree that the pass's own later edits made false. They are recorded here because
+the shape recurs on any task whose deliverable is the prose being checked, and one of them
+survived a green acceptance grade.
+
+**A *Validation* item states a command and a property, never a reproducible enumeration.**
+"Every hit attributes the check to the `auditor` or to a gate" stays checkable; a hit list,
+an entry count, or a line number is checkable only until the same pass edits what it
+counted. Four rounds on one card failed on enumerations that were captured faithfully and
+were stale by the time anyone read them — the last of them a baseline naming a line the
+pass itself had deleted. A baseline hit list adds nothing a build cannot recompute at check
+time, and it is the only part of an item that can be wrong. Where the property really is
+about a count, cite the criterion that states the number rather than restating it.
+
+**An already-satisfied entry names its region the way a reader finds it.** The section
+heading, the **bold lead-in**, or a phrase quoted from the text itself — never a line
+number, because `qa` and the acceptance gate open these against the **post-build** tree,
+where any line the pass's own edits moved has already rotted: on this rule's first use a
+removed section and an added one shifted a whole region, and entries citing it pointed at a
+heading instead. Line citations pinned to an **immutable commit** — a spec's *Edit sites*,
+read at the commit it was written against — are the exception and stay allowed, because a
+commit cannot rot.
+
+**An entry is verified by opening the region it names, never accepted on its paraphrase.**
+Twice on one card an entry named a real file while the words in the entry were not the
+words in the file, and one of those reached the acceptance gate and was graded *met*: a
+paraphrase bent into agreement with the criterion reads exactly like a verified claim,
+since the file it names is real. That is why the readiness gate's third disposition is
+stated as *open the file and look*, and why an entry it cannot verify is a blocking finding
+rather than a pass (see *The card's acceptance criteria are pinned into the spec* above).
+It is also how a **mis-worded criterion** surfaces at all — the criterion that forced the
+file open was the one that turned out to be wrong, not the shipped text.
+
 ## The commit model
 
 The `lead` — the orchestrating main session — is the only place commits happen; no
@@ -713,3 +804,17 @@ declaration is what every board-touching agent reads directly, at its fixed path
 the pipeline runs here, so the repo doubles as the worked example of a **hosted** board
 reached over MCP. The Markdown board that preceded it (`docs/tasks/`, 35 cards) was
 migrated to Linear on 2026-08-03 and removed; git history holds the originals.
+
+**A run does not exercise the definitions it is editing, and that is easy to forget here.**
+A dispatched agent appears to be loaded from the **installed** plugin rather than from the
+story worktree, so a story that rewrites an agent definition is gated and built by the
+*previous* wording — a run of the pipeline on its own source is never a test of the change
+it ships. The mechanism is an **assumption** about the harness, not something this
+repository can cite: what was actually observed on the run that reversed the criteria
+checks is the consequence, where the spec-readiness `auditor` compared the transcription
+against the live card programmatically in two separate rounds while the wording in the
+worktree gave it no board access to do so with. Two practical rules follow from it: a
+rule shipped by a story cannot be relied on by that same story's own gates —
+where it is needed there, the `lead` grants it explicitly in the dispatch and the spec says
+so — and the first pass that can lean on a newly shipped rule is the next task's. Making
+that hazard visible from inside a run is tracked as its own card (`SMR-187`).

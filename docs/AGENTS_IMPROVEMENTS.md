@@ -232,3 +232,25 @@ and forbid a line number, with the reason stated: `qa` and the acceptance gate o
 post-build tree, where any line number the same pass's edits moved has already rotted. Line citations pinned
 to an immutable commit (the spec's own *Edit sites*) are the exception and stay allowed, which is worth
 saying in the same breath so the two cases are not confused.
+
+### A lesson recorded as durable method and a lesson converted into a card are not the same act
+
+**Area**: `flow`
+
+**Observed**: A docs pass on `SMR-188` recorded three method lessons in `docs/ARCHITECTURE.md` while the
+matching `###` entries here stayed, because each entry's *suggested change* is an edit to an agent
+definition that still needs a card, and only the *reasoning* had found a durable home. The previous docs
+pass on the same story had already done exactly this — `ARCHITECTURE.md`'s "A zero-target bare-word count is
+a one-off migration gate" is the same pairing — so the pattern is established by precedent and written down
+nowhere. Read literally, *The improvements log is cleared as it is converted* points the other way: the
+lesson now has a durable home, so an entry with no card looks converted, and deleting it would discard the
+pending instruction change while leaving its rationale sitting in an architecture doc that no agent obeys.
+The rule's two stated exemptions (a `Duplicate`/`Canceled` card, an analyst declining to file) do not cover
+this case.
+
+**Suggested change**: State in the clear-as-you-convert rule that recording a finding's *reasoning* as
+durable method is not conversion — an entry clears only when a card carries its **suggested change**, or when
+shipped work has already made that change — and that the two often happen in different passes, the docs pass
+taking the rationale and a later triage taking the instruction edit. Say it in the rule rather than leaving
+it to precedent, since the pass positioned to notice the distinction is the one whose own edit creates the
+appearance of conversion.
