@@ -436,9 +436,10 @@ risk reaches the human through the PR rather than only through a comment on a te
 
 ### qa — validates the work, fills test gaps, and reviews the diff
 
-Dispatched by the `lead` after the coder builds, and again after each fix round — each
-fresh dispatch handed the round's commit references (the state the previous round
-reviewed, and the new round commit) so it can diff round N against round N−1. Runs the
+Dispatched by the `lead` after the coder builds, and again after each fix round. Every
+round is a **fresh dispatch** — `qa` is **never resumed** — handed the round's commit
+references (the state the previous round reviewed, and the new round commit) so it reads
+the worktree as it now stands and diffs round N against round N−1. Runs the
 project's validation commands, compares the spec's scenarios against existing tests and
 adds the missing coverage (e2e, frontend, integration, edge cases), then re-runs; and
 **reviews the changed code** against the spec and the project's conventions for defects
@@ -456,6 +457,10 @@ the finished work meets the task's acceptance criteria criterion by criterion; t
 trusted with no gate; its spec is gated.) Reads the artifact plus enough context to judge it on its own terms and
 returns a **ready / not-ready** verdict. **Report-only** — the caller owns applying
 fixes. Does not review code quality.
+
+Every round is a **fresh dispatch**; it is **never resumed**, because each gate is
+meant to be an independent critique that re-reads the artifact on its own terms rather
+than anchoring on the verdict it already gave.
 
 Where a criterion rests on a claim about how a **third-party or vendored dependency**
 behaves, it verifies at the **mechanism, not the symptom**: it opens the cited source at
@@ -477,8 +482,12 @@ Runs in two modes the lead dispatches separately, and **never commits**.
 - **Spec pass**, before any code exists: authors the task's spec (Goal → Design →
   Requirements with WHEN/THEN scenarios → Tasks) against the acceptance criteria the
   work will be judged on, and hands back the path; the lead has the `auditor` gate it
-  before the build and routes any findings back to the writer to revise. Its authoring
-  rules make a spec's claims about the outside world checkable: a claim about how a
+  before the build and routes any findings back to the writer to revise. It does so
+  either by resuming the writer when the lead holds a resumable agentId for it, or via
+  a fresh dispatch carrying the findings when it does not — in which case the writer
+  holds only the spec path, the worktree and its provisioning status, the board
+  profile, and the findings, not the earlier round's context. Its authoring rules make
+  a spec's claims about the outside world checkable: a claim about how a
   **third-party or vendored dependency** behaves carries the package at the
   **resolved/installed** version plus a file-and-line into that package's own source —
   one citation per distinct mechanism claimed, since a compound sentence can be half
@@ -486,12 +495,12 @@ Runs in two modes the lead dispatches separately, and **never commits**.
   could not be cited and what would settle it, so the round that verifies it knows it
   was never checked. A scenario whose observable outcome could hold with the claimed
   mechanism absent gets that alternative cause named while the spec is written, so a
-  green test is never mistaken for a confirmed claim. It also
-  returns any **board follow-ups** — when a decision the spec settles contradicts
-  relationship or dependency prose recorded on any card (including the card the work
-  came from), it names which card, which sentence, and what it should now say — and
-  **applies the correction itself where your write authority permits it**, reporting what
-  it changed, rather than handing you a fix you already authorised.
+  green test is never mistaken for a confirmed claim. It also returns any **board
+  follow-ups** — when a decision the spec settles contradicts relationship or
+  dependency prose recorded on any card (including the card the work came from), it
+  names which card, which sentence, and what it should now say — and **applies the
+  correction itself where your write authority permits it**, reporting what it
+  changed, rather than handing you a fix you already authorised.
 - **Docs pass**, after the build is accepted: folds the shipped spec's durable
   content into its permanent home (features / flows / designs), reconciling with what
   exists, and **removes the spec** (specs are not archived).

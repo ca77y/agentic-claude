@@ -26,3 +26,101 @@ section to enumerate the other sides and state, per side, whether it is being ch
 carried as a named follow-up — rather than only listing files the build must not touch. The
 enumeration is the deliverable; the drift is invisible without it, and "out of scope" currently
 reads the same whether the other side was checked or never looked at.
+
+### A spec's negative constraint reaches the artifact as prose instead of being obeyed
+
+**Area**: flow
+
+**Observed**: SMR-178's spec instructed, as a note to its author, *"Nothing is said about why it
+might not hold one (see Non-goals)"*. The build shipped that instruction as a sentence in the
+agent's own voice — `coder.md:36` now ends *"Nothing here says why the `lead` might not hold one
+for you"* — so a constraint on what to omit became text a dispatched coder reads about itself.
+This is the same defect class SMR-149 shipped two nets for, and its own qa round found it inside
+its own fix (*"Both new passages had explained why the rule sits where it sits — the defect class
+this story exists to stop, appearing in its own fix"*). Those nets landed only in `scribe` and
+`clerk`, scoped to the research library's published pages; nothing covers the `coder` editing an
+agent definition or the `writer` authoring a spec, which is where the pipeline's own prose is
+written.
+
+**Suggested change**: Give the `coder` and the `writer` the receiving-side rule the library crew
+already has, scoped to prose in the artifact's own voice: a spec's non-goals, "verify only" rows,
+and parenthetical notes to the author are constraints to satisfy, never sentences to transcribe —
+a shipped line that narrates what the document does not say, or why a rule sits where it sits, is
+cut to the operative instruction. A cheap tell-sweep catches most of it (*"Nothing here says"*,
+*"this section does not"*, *"see Non-goals"* surviving into the artifact).
+
+### A spec's claims about the project's own files carry no citation discipline
+
+**Area**: flow
+
+**Observed**: The `writer`'s authoring rules require a path-and-line citation for any claim about
+a **third-party or vendored dependency**, and nothing equivalent for a claim about the project's
+own files — even though the latter is what a prose-deliverable spec is almost entirely made of.
+SMR-178's spec states, in *How this is validated* → *Consumers of the changed files*, that the
+agent definitions are loaded "by `plugins/ca77y-engineering/.claude-plugin/plugin.json`, which
+lists each by path in its `agents` array, and by the mirrored root
+`plugins/ca77y-engineering/plugin.json`". The root manifest carries only `name`, `description`
+and `version`; it has no `agents` array. The spec elsewhere claims exactly this discipline for
+itself — *"Every quoted claim above is a claim about this repository's own files, given with a
+path and a line number … and verifiable by reading them"* — but that sentence covers the quoted
+Design claims, not the consumer analysis, so the readiness gate had nothing to check the
+consumer claim against. It reached qa round 2 unchallenged and harmed nothing here only because
+the build changed no file's registration.
+
+**Suggested change**: Extend the citation rule to load-bearing claims about the project's own
+files — the ones a Validation or Boundary section rests on, such as which consumer loads a
+changed file — requiring the path plus the line or key that shows it, at the commit named. It is
+cheaper than the dependency rule (the file is in the worktree) and it gives the `auditor` a
+concrete thing to open, instead of a plausible sentence about the repo that reads the same
+whether it was verified or assumed.
+
+### The docs pass reads a spec the build was allowed to deviate from
+
+**Area**: agent:writer
+
+**Observed**: The docs pass is told to convert "the shipped spec" and to "document only what was
+actually built", but nothing tells it those two can disagree — and by design they often do. A
+spec is committed once and never revised; every later gate finding that changes the design lands
+in the *code*, leaving the spec's Design section describing a shape that was then abandoned. On
+SMR-178 the spec's plan table (twice) required the `auditor`'s freshness claim to be generalised
+to "every round **and every caller** … the `analyst`'s story advisor gate"; the acceptance gate
+found the "both callers" half unsourceable to `SKILL.md` and the `coder` removed it in the final
+commit. The spec still describes the pre-fix design. Only an explicit warning in the docs-pass
+dispatch prompt stopped that rejected claim being folded into `ARCHITECTURE.md` as durable fact —
+i.e. the safeguard was a human noticing, not a step the pass performs.
+
+**Suggested change**: Make the run's own diff, not the spec, the authority for *what shipped* in
+the docs pass. Add a step before authoring: diff the spec commit against `HEAD` and read the
+round commits' messages, then reconcile each durable claim the spec makes against what the diff
+actually contains; where they disagree, the diff wins and the divergence is named in the docs-pass
+report. The spec keeps its role as the source of *durable intent* (goal, design rationale,
+requirements) — it simply stops being trusted for the shipped shape of anything a gate touched.
+
+### A background-session write guard rejects the project's own worktree location
+
+**Area**: flow
+
+**Observed**: Run as a background job, this session's harness refused every file write until the
+session had "isolated" itself, and the only mechanism it accepts is `EnterWorktree`. The root
+`CLAUDE.md` tells a `lead` the opposite — that `EnterWorktree` "is deliberately not used for
+this" because "it only accepts worktrees under `.claude/worktrees/`, not `.worktrees/<branch>`"
+— so a `lead` following the repo's own instructions hits a guard it has been told not to use the
+remedy for, after the worktree already exists. Writes were rejected both in the repository root
+*and* inside the freshly created story worktree, so relocating the work would not have helped.
+The `CLAUDE.md` claim is also incomplete: `EnterWorktree`'s `name` form is what is restricted to
+`.claude/worktrees/`; its **`path` form accepts any worktree already registered in
+`git worktree list`**, which is exactly what `git worktree add .worktrees/<branch>` produces.
+Entering the story worktree by path satisfied the guard with the worktree left exactly where the
+project wants it. Nothing moved. Two costs remained: run-local scratch files that must live
+*next to* the worktree rather than inside it (the ledger, the board profile, the round findings)
+still fall outside the isolation boundary and can only be written through `bash`, and once
+isolated, a compound `bash` command touching a path outside the worktree is refused as "too
+complex to verify", so those writes must be split into plain single commands.
+
+**Suggested change**: Correct the root `CLAUDE.md` paragraph — keep the rule that the worktree
+lives at `.worktrees/<branch>` and is addressed by absolute path, but replace "`EnterWorktree` is
+deliberately not used" with the precise version: do not use its `name` form, which would relocate
+the worktree; where a harness requires session isolation, enter the already-created worktree by
+`path`, which leaves the location untouched. The `lead` skill could name the same fallback, since
+a `lead` invoked as a background job will meet this guard on its first write every time, and the
+failure arrives as a rejected edit with no indication that a compliant remedy exists.

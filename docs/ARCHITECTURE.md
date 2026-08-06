@@ -31,8 +31,10 @@ is packaging, documentation, or vault state.
 Each plugin carries two manifests in different locations so neither harness trips over
 the other:
 
-- `plugins/<plugin>/.claude-plugin/plugin.json` — the manifest Claude Code reads.
-- `plugins/<plugin>/plugin.json` — the root manifest, which mirrors it.
+- `plugins/<plugin>/.claude-plugin/plugin.json` — the manifest Claude Code reads, and the
+  only one that registers agents (it carries the `agents` array).
+- `plugins/<plugin>/plugin.json` — the root manifest, which mirrors it; it carries
+  `name`, `description`, and `version` only.
 
 They must always carry the same `version`. They have silently drifted before; the root
 [`CLAUDE.md`](../CLAUDE.md) carries the check to run before any push that touches a
@@ -44,10 +46,11 @@ Each plugin is its own root with its own `plugin.json`, and scoping must live th
 marketplace entry's component fields are **not** honored as an override — a shared pool
 with marketplace-level whitelists silently loads everything.
 
-The `agents` whitelist in `plugin.json` *replaces* the default `agents/` directory scan.
-Only listed files load, so unrelated Markdown in the plugin is never picked up as a
-phantom agent. Adding an agent file without adding it to both manifests means it does not
-exist at runtime.
+The `agents` whitelist *replaces* the default `agents/` directory scan. Only listed files
+load, so unrelated Markdown in the plugin is never picked up as a phantom agent. That
+whitelist lives in `.claude-plugin/plugin.json` and nowhere else — the root manifest has
+no `agents` array and registers nothing — so adding an agent file without adding it to
+the Claude manifest means it does not exist at runtime.
 
 ## The agent roster
 
@@ -158,6 +161,45 @@ same role carrying the spec path, the worktree path and its provisioning status,
 board profile where that role needs one, the round's commit references, and the findings
 (inline, or by the findings-file path). The only thing the fresh route loses is the
 previous worker's own context.
+
+**Which roles are resumable at all is part of the model, and each definition states its
+own side of it.** The two authoring roles carry context worth preserving across
+rounds, so a findings round reaches the `coder` or the `writer` by whichever route the
+lead has. Both definitions name the two routes as facts of **equal standing**, neither as
+the exception, and give a freshly dispatched worker its inventory in both signs: what the
+dispatch handed it — the findings inline or by path, the spec's path, the worktree and its
+provisioning status, the board profile where the role needs one, the round's commit
+references — and what it does **not** hold, namely the previous round's context, its
+reasoning and rationale and which findings it already rejected. With the negative half
+stated, the direction that follows is enforceable: read the spec from its path and the
+round's changes from the worktree and the commit references rather than recalling them.
+Their reporting contracts are keyed on **the round, however it reached them**, never on
+the route, so a fresh worker never has to infer that a rule written for a resume covers
+the round it is actually running.
+
+The two gates are single-route: every `qa` and every `auditor` round is a **fresh
+dispatch, never a resume**, and both definitions say so outright rather than leaving it
+to be inferred from how the lead happens to dispatch. For `qa` that is exactly what the
+pre-ship round commits serve (see *The commit model*) — a fresh context diffs round N
+against round N−1 instead of recalling it. For the `auditor` it is the point of the gate:
+an independent critique re-reads the artifact on its own terms instead of anchoring on
+the verdict it already gave. Neither file carries a "when resumed …" branch, since a file that states it is
+never resumed cannot also instruct itself on being one; the report-channel rules those
+branches used to carry — the final text *is* the report, and `SendMessage` is never a
+reporting or escalation channel — survive on the single route.
+
+**The routing contract is a semantic mirror, not a byte-identical one.**
+`skills/lead/SKILL.md` is its authority, being the file that actually chooses a route;
+the four worker definitions and the root [`README.md`](../README.md) restate it in each
+reader's own voice. Unlike the worktree paragraph below, those wordings differ **by
+design**, so no `sort -u` check can cover them and the mirror is held by rule instead: a
+definition may assert a routing behaviour only where `SKILL.md` asserts it too, and a
+change to one side enumerates every other side and says, per side, whether it changes now
+or is carried as a named follow-up. The failure this guards against is not documentation
+drift but a worker believing something false about its own situation — a definition
+telling a freshly dispatched coder it was resumed with a build context it never had. A
+mechanical guard is still unbuilt; the proposal is recorded in
+[`AGENTS_IMPROVEMENTS.md`](AGENTS_IMPROVEMENTS.md).
 
 **Why the prescription was removed rather than inverted.** The skill once mandated
 `run_in_background: false` on every fresh dispatch and, six lines later, called a resume
