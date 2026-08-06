@@ -27,8 +27,8 @@ told which issue tracker to use.
   repository the pipeline runs on. No hosted state of the toolkit's own.
 - **The board is declared, never assumed.** How a project tracks work — repo-local
   Markdown, Linear, Jira, GitHub Issues, or nothing — is read from that project's own
-  `ISSUE_TRACKING.md` declaration and reached only through the bindings it records. A
-  tracker detail hardcoded in an agent is a defect — but the declaration's own
+  `docs/ISSUE_TRACKING.md` declaration and reached only through the bindings it records.
+  A tracker detail hardcoded in an agent is a defect — but the declaration's own
   **location** is a fixed convention, not a tracker detail, so pinning it is not.
 - **Nothing signs off on itself.** The agent that produces an artifact never gates it.
   Code review goes to `qa` (a separate context from the `coder`) locally and to the PR

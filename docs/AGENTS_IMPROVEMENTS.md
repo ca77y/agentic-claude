@@ -79,3 +79,26 @@ the exclusions and the reason. A criterion whose own *Validation* command would 
 task touches is a not-ready finding, not a build risk to discover afterwards. This is cheap to
 check because a sweep-shaped criterion always implies a runnable command, and running it against
 the base commit enumerates the file set the tasks have to cover.
+
+### The findings file is the lead's write, but nothing says so where a lead would look
+
+**Area**: `skill:lead`
+
+**Observed**: On SMR-188's qa round 2, the dispatch prompt instructed `qa` to write its own
+findings to `tmp/findings-round-2.md` inside the worktree, describing that as the branch's
+shipped convention. The harness refused the write outright — a subagent is not permitted to
+write report files, and must return findings as text. The shipped text is in fact correct and
+unambiguous *about ownership*: `lead/SKILL.md:54` and `:56` are addressed to the `lead`, and it
+is the `lead` that writes `tmp/findings-round-<N>.md` from the report a worker returns. But
+neither `qa.md` nor `lead/SKILL.md` states that ownership as a rule anyone would notice while
+composing a dispatch, so the misreading is easy and it costs a wasted worker round trip. Worse,
+the refusal is indistinguishable at a glance from the refusal `lead/SKILL.md:56` says to escalate
+as a **blocker on this story** — a lead that took it at face value would have escalated a
+non-event and stalled the run.
+
+**Suggested change**: Two clauses. In `lead/SKILL.md`'s *Paths, not content*, say explicitly that
+the findings file is written **by the lead** from what the worker returns as text, and that a
+dispatched worker is never asked to write it. And qualify the escalation trigger at `:56` so it
+fires on a refusal *of the path or location* — the write guard, isolation, or a permission on
+`tmp/` — rather than on any refusal whatsoever, since a refusal grounded in the caller's role or
+the content's kind says nothing about whether the relocated scratch is writable.

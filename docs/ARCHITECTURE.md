@@ -356,8 +356,11 @@ guard was never attempted" — a bare outcome, with no mode attached, cannot tel
 apart.
 
 **The `path`-form question stays open, and here is why.** "Nothing shipped verifies that
-`path`-form entry clears it either" — the sentence stood at `f87eedc`, and it **stays**:
-the two outcomes that would settle it are a run whose guard fires and finds entry by
+`path`-form entry clears it either" — the sentence stood at `f87eedc`, and it **stays**.
+Both that sentence and the write guard's own existence are written as *what the remedy is
+when a harness demands isolation*, never as an instruction to isolate: an unguarded
+session keeps working from the launch directory as before. The two outcomes that would
+settle the open question are a run whose guard fires and finds entry by
 `path` clears it, or one whose guard fires and finds it does not, and this run's guard did
 not fire at all, so it is neither. Of the two branches that leave the question open, a
 **background run whose guard never fired** is the one this run demonstrates; a

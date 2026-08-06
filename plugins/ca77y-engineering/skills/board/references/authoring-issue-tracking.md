@@ -1,6 +1,6 @@
 # Authoring `ISSUE_TRACKING.md`
 
-Load this only when a project's board declaration has to be **written or repaired**. Resolving an existing one needs nothing from this file — `SKILL.md` alone covers that.
+Load this only when a project's board declaration has to be **written or repaired**. Reading back an existing one needs nothing from this file — `SKILL.md` alone covers that.
 
 `ISSUE_TRACKING.md` is the project's own answer to *how do we track work*. Every board-touching agent reads it directly; a human maintains it. It is prose a person can read, not config — but every claim in it has to be true enough to bind a call to.
 

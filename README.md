@@ -118,17 +118,17 @@ pipeline's whole interface to your tracker.
 
 **Declare your board in `docs/ISSUE_TRACKING.md`** — the bindings, the card shape, the
 statuses, and what the pipeline may write. That path is fixed, on purpose: every
-board-touching agent reads it directly, with no
-discovery step and nothing to search for. Fixing *where the declaration lives* asserts
-nothing about your tracker — the declaration is still what says which board, which
-statuses, and what may be written; only its own location stops being a variable.
+board-touching agent reads it directly, with no discovery step and nothing to search
+for. Fixing *where the declaration lives* asserts nothing about your tracker — the
+declaration is still what says which board, which statuses, and what may be written;
+only its own location stops being a variable.
 
 Don't have one yet? `/ca77y-engineering:board` helps: invoked directly, it interviews
-you, writes the file, and verifies it against a real card. Invoked *during* a `lead` or
-`analyst` run that finds no declaration, it never writes anything mid-pipeline — that
-run instead proceeds without one (below), and relays the recommendation to write one in
-its report, because a project document that appears mid-pipeline is a side effect you
-didn't ask for.
+you, writes the file, and verifies it against a real card. Invoked *during* a `lead` run
+that finds no declaration, it never writes anything mid-pipeline — that run instead
+proceeds without one (below), and relays the recommendation to write one in its report,
+because a project document that appears mid-pipeline is a side effect you didn't ask
+for.
 
 **A missing declaration does not block a run.** With none at `docs/ISSUE_TRACKING.md`,
 the pipeline runs trackerless: acceptance criteria come from the spec's requirements and

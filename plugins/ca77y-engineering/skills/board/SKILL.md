@@ -10,7 +10,7 @@ You help a project answer **how do we track work**, by writing, repairing, or re
 ## Two ways you are invoked
 
 - **Directly, by the user** — to set a project up, repair a declaration, or see what it currently says. Do the work below, and write the file when asked to.
-- **Mid-run, by a `lead` or `analyst` that found no declaration.** This is a fallback, not a per-run step — the pipeline reads `docs/ISSUE_TRACKING.md` directly and never invokes you to resolve one. When a caller does reach you here, **do not write the file mid-run**: put the recommendation — and a draft, when you have enough to write one — in your report, and let the user decide. A project document that appears during someone's pipeline run is a side effect they did not ask for.
+- **Mid-run, by a `lead` that found no declaration.** This is a fallback, not a per-run step — the pipeline reads `docs/ISSUE_TRACKING.md` directly and never invokes you to resolve one. When a caller does reach you here, **do not write the file mid-run**: put the recommendation — and a draft, when you have enough to write one — in your report, and let the user decide. A project document that appears during someone's pipeline run is a side effect they did not ask for.
 
 ## What the declaration answers
 
