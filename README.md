@@ -116,9 +116,9 @@ pipeline's whole interface to your tracker.
 | **Visibility** | where a write must land to be seen **now** — for a repo-local board, the root checkout left uncommitted; for a hosted one, the bound call |
 | **Write authority** | the exhaustive list of operations the pipeline may perform. **Declared by your project; defaults to the two status transitions and nothing else** — grant more (comment, attach the PR, update a card) and the pipeline uses it, applying authorised fixes rather than reporting them |
 
-**Declare your board in `docs/ISSUE_TRACKING.md`** (or at your repo root, if you keep no
-docs area) — the bindings, the card shape, the statuses, and what the pipeline may write.
-That path is fixed, on purpose: every board-touching agent reads it directly, with no
+**Declare your board in `docs/ISSUE_TRACKING.md`** — the bindings, the card shape, the
+statuses, and what the pipeline may write. That path is fixed, on purpose: every
+board-touching agent reads it directly, with no
 discovery step and nothing to search for. Fixing *where the declaration lives* asserts
 nothing about your tracker — the declaration is still what says which board, which
 statuses, and what may be written; only its own location stops being a variable.
@@ -177,10 +177,13 @@ under `.obsidian/`. Add them back only if you keep your cards as Markdown in the
 
 **Two committed ignore entries are also part of the setup.** Your repo needs a
 `.gitignore` entry for whatever directory holds its story worktrees (this repo uses
-`.worktrees/`) and one for `tmp/` inside each story worktree, where the pipeline keeps
+`.worktrees/`) and one for `/tmp/` inside each story worktree, where the pipeline keeps
 its run-local ledger and findings files. Both matter for the same reason: without them, a
 commit step can sweep either into a story commit. Name the worktree-directory entry to
-match whatever you actually call it; `tmp/` is fixed.
+match whatever you actually call it; `/tmp/` is fixed, and **anchored** deliberately —
+unanchored would also silently ignore any unrelated nested `tmp/` your project already
+tracks on purpose, while anchored matches only the scratch directory this design creates
+at the worktree's own root.
 
 The expected vault layout in the target repo: `docs/specs/` (in-flight specs),
 `docs/features|flows|designs/` (durable docs), `library/` (the research wiki),
@@ -348,14 +351,15 @@ every spec pass; the `auditor` carries **none** into either of the lead's own ga
    equality check and is handed the references to diff against. Capped at 3 rounds. Docs
    do not start while a criterion is unmet.
 
-**The mechanical equality check.** The spec's acceptance-criteria section is a verbatim,
-labelled copy of the card's own — `AC1`…`ACn` — never a paraphrase, and a copy earns that
-exemption only because the lead checks it: character for character, normalising only
-Linear's `-`-to-`*` bullet rewrite and its `<…>`-wrapping of bare URLs, run once after the
-spec pass and again before every acceptance-gate dispatch, including every re-audit
-round. Comparing two strings is not judging whether a criterion is met, so running it
-does not breach the rule that the lead never judges acceptance itself; a mismatch routes
-back to the writer for a respec, never to grading a stale list.
+   **The mechanical equality check** behind that trust: the spec's acceptance-criteria
+   section is a verbatim, labelled copy of the card's own — `AC1`…`ACn` — never a
+   paraphrase, and a copy earns that exemption only because the lead checks it: character
+   for character, normalising only Linear's `-`-to-`*` bullet rewrite and its
+   `<…>`-wrapping of bare URLs, run once after the spec pass and again before every
+   acceptance-gate dispatch, including every re-audit round. Comparing two strings is not
+   judging whether a criterion is met, so running it does not breach the rule that the
+   lead never judges acceptance itself; a mismatch routes back to the writer for a
+   respec, never to grading a stale list.
 7. **Docs** — a `writer` pass to update docs and convert the shipped spec; the lead
    trusts it, no docs gate.
 8. **Ship** — **commits whatever is still uncommitted** (the ship commit), pushes, and

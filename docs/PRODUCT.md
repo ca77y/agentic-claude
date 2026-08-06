@@ -79,18 +79,22 @@ board instead needs a cards directory plus the Tasks and Task Board community pl
 
 **Two committed `.gitignore` entries are also a setup requirement**, alongside the docs
 and library paths above: one for the target repo's own story-worktree directory, and one
-for `tmp/` inside each story worktree, where the pipeline keeps its run-local ledger and
+for `/tmp/` inside each story worktree, where the pipeline keeps its run-local ledger and
 findings files untracked. Neither is optional — without both, a commit step can sweep
-run-local scratch, or the worktree itself, into a story commit.
+run-local scratch, or the worktree itself, into a story commit. The `tmp/` entry is
+**anchored** (`/tmp/`, not `tmp/`) deliberately: unanchored would also silently ignore an
+unrelated nested `tmp/` a target project already tracks on purpose (a fixture directory,
+say), while anchored matches only the scratch directory this design creates at the
+worktree's own root.
 
 This repository satisfies those requirements itself, so the pipeline can be run on the
 toolkit that defines it.
 
 ## Direction
 
-- **Harvest the feedback loop.** Agents append pipeline improvements to a project-level
-  `AGENTS_IMPROVEMENTS.md`. Those notes are the primary input for the next version of the
-  agent definitions; harvesting them is recurring work, not a one-off.
+- **Harvest the feedback loop.** Agents append pipeline improvements to
+  `docs/AGENTS_IMPROVEMENTS.md`. Those notes are the primary input for the next version
+  of the agent definitions; harvesting them is recurring work, not a one-off.
 - **Keep the roster shrinking, not growing.** The pipeline went from a story/unit split
   with per-unit worktrees to a single-task/single-PR flow because the split never paid
   for itself. Prefer removing a stage over adding one.

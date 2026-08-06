@@ -422,7 +422,8 @@ worktree.
 
 **Four alternatives were rejected:**
 
-1. **Keep the current location, writing through plain single `bash` commands.** Rejected
+1. **Keep the previous location — the shared directory beside every worktree — writing
+   through plain single `bash` commands.** Rejected
    **on principle**: if the design must reach for a shell escape hatch because the tool
    that exists for writing files is refused, on a path taken before every dispatch and
    every turn end, the design itself is broken. It also rests on an unverified claim —

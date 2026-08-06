@@ -56,3 +56,26 @@ one agent but its content is an observation only the `lead` can supply, the spec
 and says how the observation reaches the editing agent (the dispatch prompt) and what the
 editing agent writes if it has not arrived. Both should keep the existing requirement of a
 Tasks entry marked as not the `coder`'s task.
+
+### A sweep-shaped criterion maps validly to a task list that covers only some of the files it sweeps
+
+**Area**: `agent:auditor`
+
+**Observed**: On SMR-188's build, `AC1` was sweep-shaped — "no shipped instruction tells a reader
+to discover that path from context" — and the spec's task list enumerated per-file edits (T1–T24).
+`auditor.md:24`'s spec-gate rule checks the mapping **both ways** between each `ACn` and the
+requirements/scenarios, and that mapping was satisfied: `AC1` had requirements, and every
+requirement had an `ACn`. But no rule checks that the *task list* covers every file the sweep
+would reach. `plugins/ca77y-engineering/skills/board/references/authoring-issue-tracking.md` was
+tasked at T3 for one named sentence only, so four separate sentences in that same file kept
+teaching the discovery-from-context model `AC1` abolishes, and the build shipped them.
+Requirement↔criterion mapping is the wrong altitude to catch this: the criterion was mapped, the
+requirement was mapped, and the gap was between the requirement and the files.
+
+**Suggested change**: Add one clause to the spec gate: where a criterion is phrased as a sweep
+over a file class — "no shipped instruction", "no `.md` under `plugins/`", "all N files carrying
+X" — verify the Tasks list either names every file that sweep reaches, or names the file set with
+the exclusions and the reason. A criterion whose own *Validation* command would fail on a file no
+task touches is a not-ready finding, not a build risk to discover afterwards. This is cheap to
+check because a sweep-shaped criterion always implies a runnable command, and running it against
+the base commit enumerates the file set the tasks have to cover.

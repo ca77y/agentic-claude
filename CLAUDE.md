@@ -105,7 +105,8 @@ deliberately: every board-touching agent reads `docs/ISSUE_TRACKING.md` directly
 no per-run resolution step and no discovery order in between. That is narrower than it
 sounds — fixing where the declaration lives asserts nothing about the board itself,
 because the declaration is still what says which board, which statuses, and what may be
-written. Keep this pointer here whenever the file moves.
+written. The path is fixed, so the file does not move; this link is a convenience for a
+human reader, not the mechanism any agent relies on.
 
 ## The improvements log is cleared as it is converted
 

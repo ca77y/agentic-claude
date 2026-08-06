@@ -28,7 +28,7 @@ Beyond the bindings, the declaration records the **card shape** (identity, type,
 
 `references/authoring-issue-tracking.md`, next to this file, covers each of these in full, with a template and three worked examples. **Load it only when you are actually writing or repairing a declaration** — inspecting one that already reads cleanly never needs it, and pulling it in on every invocation costs context for nothing.
 
-**If the user tells you a declaration already exists but you cannot find it, do not go hunting the repo.** Stop and route them through the fix in that same reference — getting the path into the project's loaded context — rather than searching, because a declaration that is only sometimes loaded is worse than one that is honestly absent.
+**If the user tells you a declaration already exists but it is not at `docs/ISSUE_TRACKING.md`, do not go hunting the repo for it.** Stop and route them through the fix in that same reference — move the file to the fixed path, or write a new one there that points at what they already have — rather than searching, because a declaration anywhere else is one no agent will ever read.
 
 **Write the file only when the user invoked you directly, or has explicitly asked for it.**
 
