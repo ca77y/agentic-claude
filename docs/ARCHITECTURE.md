@@ -198,8 +198,8 @@ change to one side enumerates every other side and says, per side, whether it ch
 or is carried as a named follow-up. The failure this guards against is not documentation
 drift but a worker believing something false about its own situation — a definition
 telling a freshly dispatched coder it was resumed with a build context it never had. A
-mechanical guard is still unbuilt; the proposal is recorded in
-[`AGENTS_IMPROVEMENTS.md`](AGENTS_IMPROVEMENTS.md).
+mechanical guard is still unbuilt; making the rule bind is tracked as `SMR-183` on the
+board (see [`ISSUE_TRACKING.md`](ISSUE_TRACKING.md)).
 
 **Why the prescription was removed rather than inverted.** The skill once mandated
 `run_in_background: false` on every fresh dispatch and, six lines later, called a resume
