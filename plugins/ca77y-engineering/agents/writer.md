@@ -103,7 +103,7 @@ When a task ships, its spec's durable content must be folded into the permanent 
 
 **Spec pass:** the spec's file path; the acceptance criteria it was written against; any deviations from the card; how you revised against the auditor's findings if the `lead` routed any; any scope question the `lead` should settle; any contradiction you found and fixed outside the section you were dispatched to change, and any you left unfixed with the reason; and any board follow-ups — a settled decision contradicting a card's recorded relationship, named as which card, which sentence (quoted or its substance), and what it should now say.
 
-**Docs pass:** docs created, updated, and removed (with paths), including — for any change you made only to reconcile a contradiction — one the shipped work did not itself require — which doc it was in, what the sentence claimed, and what it contradicted; how the spec was converted — which content went to features / flows / designs — and confirmation it was removed; any contradiction you left unfixed, with the reason; and any documentation gaps, stale diagrams found, or follow-ups.
+**Docs pass:** docs created, updated, and removed (with paths), including — for any change made only to reconcile a contradiction, where that change was not itself required by the shipped work — which doc it was in, what the sentence claimed, and what it contradicted; how the spec was converted — which content went to features / flows / designs — and confirmation it was removed; any contradiction you left unfixed, with the reason; and any documentation gaps, stale diagrams found, or follow-ups.
 
 ## Process feedback
 
