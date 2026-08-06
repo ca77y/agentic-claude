@@ -1,8 +1,9 @@
 # ca77y-agentic
 
-Personal agentic toolkit for **Claude Code**. It bundles an idea-to-shipped
-development pipeline **and** a research-library crew into a single plugin — all
-agents run natively as Claude Code subagents. There is no second harness.
+Personal agentic toolkit for **Claude Code**. It ships an idea-to-shipped
+development pipeline **and** a research-library crew as two plugins you can install
+together or separately — all agents run natively as Claude Code subagents. There is no
+second harness.
 
 ## Overview
 
@@ -14,21 +15,27 @@ Markdown cards in the repo, Linear, Jira, GitHub Issues, or nothing at all. The
 pipeline resolves it from the project's own context at the start of every run and
 hardcodes none of it — see [Bring your own board](#bring-your-own-board).
 
-The toolkit is **one plugin**, `ca77y-engineering`, holding two rosters and two skills:
+The toolkit is **two plugins**, each its own roster:
 
-- The **pipeline** — `researcher → analyst → lead → writer → coder → writer`, with
+- **`ca77y-engineering`** — the pipeline `analyst → lead → writer → coder → writer`, with
   `qa` (validation plus the local code review) and the `auditor` gating native to
   Claude, and the independent code review running on the opened PR. The `lead` is a
   **skill run in the main session** (`/ca77y-engineering:lead <task>`), not a
   subagent; every other pipeline role is a subagent it dispatches directly, flat.
-- The **board skill** (`/ca77y-engineering:board`) — resolves *how this project
-  tracks work* and hands the pipeline a **board profile** to work from: the bindings
-  for reading, searching, creating, and transitioning cards, the card shape and status
-  vocabulary, and what the pipeline is permitted to write. The `lead` and the `analyst`
-  invoke it before touching a card; you can run it yourself to see what resolves.
-- The **library crew** — `librarian`, `scribe`, `clerk` — that maintains the
-  project's Markdown research library. The crew runs as native Claude subagents,
-  dispatched directly by the agents that need library work.
+  It also carries the **board skill** (`/ca77y-engineering:board`), which resolves *how
+  this project tracks work* and hands the pipeline a **board profile** to work from: the
+  bindings for reading, searching, creating, and transitioning cards, the card shape and
+  status vocabulary, and what the pipeline is permitted to write. The `lead` and the
+  `analyst` invoke it before touching a card; you can run it yourself to see what resolves.
+- **`ca77y-library`** — the research crew `researcher → librarian · scribe · clerk`
+  that grows and maintains the project's Markdown research library: deep dives that
+  produce cited wiki entries, cited answers out of the wiki, raw-note ingestion, and
+  library health audits.
+
+**The two are independent installs.** `ca77y-library` needs nothing else. The pipeline
+runs fine without it — the `analyst` reads library wiki pages directly — and reaches for
+`ca77y-library:librarian` and `ca77y-library:clerk` when they are there. Install one, or
+both.
 
 Every check runs **natively in Claude** — the local code review (`qa`), readiness and
 acceptance audits (`auditor`), and library health (`clerk`), plus the independent code
@@ -42,9 +49,11 @@ per-unit worktrees, and nothing to merge.
 The end-to-end flow:
 
 ```
- idea / topic                                                       shipped PR
-      │                                                                  ▲
-      ▼                                                                  │
+   ca77y-library     │  ca77y-engineering
+                     │
+ idea / topic        │                                              shipped PR
+      │              │                                                   ▲
+      ▼              │                                                   │
 ┌────────────┐   wiki   ┌──────────┐  story   ┌────────────┐  task  ┌──────────┐
 │ researcher │ ───────▶ │ analyst  │ ───────▶ │ lead skill │ ─────▶ │  writer  │ spec
 └────────────┘  pages   └──────────┘  cards   │ (the main  │        │  coder   │ build
@@ -57,6 +66,12 @@ The end-to-end flow:
    │ clerk     │                                    └──▶ then hands the PR off to you
    └───────────┘
 ```
+
+The two plugins meet at the `researcher → analyst` handoff, and the wiki pages in the
+repository are the interface — not a call between them. The only live cross-plugin
+dispatch is the `analyst` optionally pulling extra context from `librarian`/`clerk`;
+without `ca77y-library` installed it reads the wiki pages itself and says so in its
+report.
 
 Two **human gates** punctuate the flow: you approve the analyst's stories before
 anything is built, and you explicitly invoke the `lead` skill
@@ -76,7 +91,7 @@ relays it where you did not; the `lead`'s report says which happened for each.
 
 These tools run as **Claude Code** ([code.claude.com](https://code.claude.com))
 subagents. Everything the pipeline needs — research, code review, readiness
-audits, and the research library — is handled by agents in this one plugin,
+audits, and the research library — is handled by agents in these two plugins,
 using the tools and models available in Claude Code. No external CLI, no second
 harness, no dispatcher bridge.
 
@@ -183,27 +198,32 @@ hardcode paths.
 
 ## Install
 
-The whole plugin goes in Claude Code.
-
-### Claude Code — `ca77y-engineering`
+Both plugins go in Claude Code, from the same marketplace. Install either on its own,
+or both.
 
 ```bash
 claude plugin marketplace add ca77y/agents
-claude plugin install ca77y-engineering@ca77y-agentic
+claude plugin install ca77y-engineering@ca77y-agentic   # the pipeline
+claude plugin install ca77y-library@ca77y-agentic       # the research library crew
 ```
+
+Neither requires the other. `ca77y-library` is entirely self-contained.
+`ca77y-engineering` uses `ca77y-library:librarian` and `ca77y-library:clerk` when they
+resolve and works from the wiki pages directly when they do not — so installing the
+pipeline alone costs you the deep-research front end, not a broken pipeline.
 
 ## The pipeline at a glance
 
 `researcher → analyst → lead → writer → coder → writer`, with `qa` (validation plus the
 local code review) and the `auditor` gating natively in Claude, and the independent code
 review on the opened PR. The `lead` is a skill the main session runs; everything else is
-a subagent. The library crew — `librarian`, `scribe`,
-`clerk` — runs as native subagents too, dispatched directly by whoever needs the
-library work.
+a subagent. The first stage — `researcher`, and the `librarian`, `scribe`, `clerk` crew
+behind it — is the separate `ca77y-library` plugin; everything from `analyst` onward is
+`ca77y-engineering`.
 
 | Stage | Agent | In | Out |
 | --- | --- | --- | --- |
-| Research | `researcher` | a topic | a cited wiki entry + raw sources in the library |
+| Research ᴸ | `researcher` | a topic | a cited wiki entry + raw sources in the library |
 | Analysis | `analyst` | wiki pages + your input | board-ready **story cards** (fit-proven) |
 | Board resolution | `board` (skill) | the project's own context | a **board profile**: bindings, card shape, status vocabulary, write authority |
 | Orchestration | `lead` (skill, main session) | one task (a prompt, maybe naming a card) | a single open PR, gated and handed off for review |
@@ -212,15 +232,17 @@ library work.
 | Validation & review | `qa` | the work in progress | pass/fail + filled test gaps + code-review findings |
 | Readiness & acceptance | `auditor` | the spec, the built work vs its criteria, or a story card | ready / not-ready verdict |
 | Docs | `writer` | the finished task | durable docs; spec converted & removed |
-| Library lookup | `librarian` | a research question | cited synthesis from the Markdown library |
-| Library write | `scribe` | raw notes / a synthesis target | wiki pages + index/taxonomy/log updates |
-| Library audit | `clerk` | the library vault | health findings (links, citations, taxonomy) |
+| Library lookup ᴸ | `librarian` | a research question | cited synthesis from the Markdown library |
+| Library write ᴸ | `scribe` | raw notes / a synthesis target | wiki pages + index/taxonomy/log updates |
+| Library audit ᴸ | `clerk` | the library vault | health findings (links, citations, taxonomy) |
+
+ᴸ ships in the **`ca77y-library`** plugin; every other row is **`ca77y-engineering`**.
 
 ---
 
 ## The agents in detail
 
-### researcher — deep-dive research that grows the library
+### researcher — deep-dive research that grows the library  ·  `ca77y-library`
 
 Takes a research topic and runs an agent-steered deep dive, ending in durable
 library knowledge — not tickets or code.
@@ -526,7 +548,7 @@ with the reason.
 The writer just authors and returns; its spec is gated by the lead's `auditor`, its
 docs trusted. **Does not** implement code, run tests, or commit/branch/PR (the lead does).
 
-### librarian — cited answers from the library
+### librarian — cited answers from the library  ·  `ca77y-library`
 
 Answers research and product-context questions from the project's Markdown research
 library. Reads synthesized wiki first, verifies important claims against raw notes,
@@ -534,7 +556,7 @@ and returns cited synthesis. Read-and-report by default — it does not edit lib
 files unless you explicitly ask. Discovers the library layout from `library/README.md`
 and the `_meta/` files; never inspects secrets.
 
-### scribe — ingests raw notes into the wiki
+### scribe — ingests raw notes into the wiki  ·  `ca77y-library`
 
 Ingests raw Markdown research notes into the synthesized wiki without destroying
 provenance. Preserves raw notes, extracts durable concepts/claims, writes or updates
@@ -561,7 +583,7 @@ preserved under `library/raw/`, and never a legitimate quotation of source mater
 Every hit is resolved into a statement of fact or removed before the pass may be
 reported done.
 
-### clerk — audits library health
+### clerk — audits library health  ·  `ca77y-library`
 
 Audits the project's Markdown research library for duplicate wiki pages, stale index
 entries, broken links, uncited claims, missing taxonomy tags, unsynthesized raw notes,
@@ -670,20 +692,23 @@ product feature being built; you harvest the accumulated notes back into this to
 ```
 ca77y-agentic/
 ├── .claude-plugin/
-│   └── marketplace.json                  # lists the plugin
+│   └── marketplace.json                  # lists both plugins
 └── plugins/
-    └── ca77y-engineering/
+    ├── ca77y-engineering/
+    │   ├── .claude-plugin/plugin.json    # Claude manifest (agents whitelist)
+    │   ├── plugin.json                   # root manifest (mirrors the Claude one)
+    │   ├── skills/
+    │   │   ├── lead/SKILL.md             # the lead — the pipeline orchestrator,
+    │   │   │                             #   run in the main session
+    │   │   └── board/SKILL.md            # resolves the project's board into a
+    │   │                                 #   board profile the pipeline works from
+    │   └── agents/                       # pipeline subagents:
+    │                                     #   analyst, auditor, coder, qa, writer
+    └── ca77y-library/
         ├── .claude-plugin/plugin.json    # Claude manifest (agents whitelist)
         ├── plugin.json                   # root manifest (mirrors the Claude one)
-        ├── skills/
-        │   ├── lead/SKILL.md             # the lead — the pipeline orchestrator,
-        │   │                             #   run in the main session
-        │   └── board/SKILL.md            # resolves the project's board into a
-        │                                 #   board profile the pipeline works from
-        └── agents/                       # all subagent definitions:
-                                          #   analyst, auditor, clerk, coder,
-                                          #   librarian, qa, researcher, scribe,
-                                          #   writer
+        └── agents/                       # library subagents:
+                                          #   clerk, librarian, researcher, scribe
 ```
 
 Each plugin carries two manifests: Claude reads `.claude-plugin/plugin.json`; the root

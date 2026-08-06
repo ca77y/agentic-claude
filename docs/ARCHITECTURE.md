@@ -8,21 +8,25 @@ that shape them.
 
 ```text
 ca77y-agentic/
-|-- .claude-plugin/marketplace.json      # marketplace entry, lists the plugin
+|-- .claude-plugin/marketplace.json      # marketplace entry, lists both plugins
 |-- plugins/
-|   `-- ca77y-engineering/
+|   |-- ca77y-engineering/
+|   |   |-- .claude-plugin/plugin.json   # Claude manifest (agents whitelist)
+|   |   |-- plugin.json                  # root manifest, mirrors the Claude one
+|   |   |-- skills/lead/SKILL.md         # the lead skill - the pipeline orchestrator
+|   |   |-- skills/board/SKILL.md        # resolves the project's board into a profile
+|   |   |   `-- references/              # loaded only to author an ISSUE_TRACKING.md
+|   |   `-- agents/*.md                  # analyst, auditor, coder, qa, writer
+|   `-- ca77y-library/
 |       |-- .claude-plugin/plugin.json   # Claude manifest (agents whitelist)
 |       |-- plugin.json                  # root manifest, mirrors the Claude one
-|       |-- skills/lead/SKILL.md         # the lead skill - the pipeline orchestrator
-|       |-- skills/board/SKILL.md        # resolves the project's board into a profile
-|       |   `-- references/              # loaded only to author an ISSUE_TRACKING.md
-|       `-- agents/*.md                  # the agent definitions
+|       `-- agents/*.md                  # clerk, librarian, researcher, scribe
 |-- docs/                                # this documentation (work is tracked in Linear)
 |-- .obsidian/                           # vendored vault config and plugins
 `-- CLAUDE.md                            # repo maintenance rules
 ```
 
-The agent Markdown files under `plugins/ca77y-engineering/agents/` and the skills under
+The agent Markdown files under `plugins/*/agents/` and the skills under
 `plugins/ca77y-engineering/skills/` **are the product**. Everything else
 is packaging, documentation, or vault state.
 
@@ -54,12 +58,12 @@ the Claude manifest means it does not exist at runtime.
 
 ## The agent roster
 
-Nine agents and two skills in one plugin, in two groups:
+Nine agents and two skills across **two plugins**, one group each:
 
-| Group | Agents | Role |
+| Plugin | Agents | Role |
 | --- | --- | --- |
-| Pipeline | the `lead` and `board` **skills**, plus `researcher`, `analyst`, `writer`, `coder`, `qa`, `auditor` | idea → shipped PR |
-| Library crew | `librarian`, `scribe`, `clerk` | maintains the target project's Markdown research library |
+| `ca77y-engineering` | the `lead` and `board` **skills**, plus `analyst`, `writer`, `coder`, `qa`, `auditor` | idea → shipped PR |
+| `ca77y-library` | `researcher`, `librarian`, `scribe`, `clerk` | grows and maintains the target project's Markdown research library |
 
 The flow is `researcher → analyst → lead → writer → coder → writer`, with `qa`
 (validation plus the local code review) and the `auditor` gating, and the independent
@@ -67,7 +71,9 @@ code review running on the opened PR. The `lead` is not an agent: it is a **skil
 user invokes in the main session** (`/ca77y-engineering:lead <task>`), and the main
 session then orchestrates. Under it, `writer`, `coder`, `qa`, and `auditor` are all
 **leaves it dispatches directly** — no pipeline agent dispatches or resumes another.
-The library crew is dispatched directly by whichever agent needs library work.
+The library crew is dispatched directly by whichever agent needs library work — the
+`researcher` within its own plugin, and the `analyst` across the plugin boundary,
+optionally (see *Two plugins, one optional edge* below).
 
 `board` is the second skill, and the only one nothing dispatches: the `lead` and the
 `analyst` **invoke** it (loading its instructions into their own context, not spawning
@@ -80,10 +86,32 @@ rather than a structural one — repo-local Markdown, a hosted tracker, or nothi
 the profile's contents and nothing else in the pipeline. A user can invoke it directly
 to see what resolves.
 
-It stays **one plugin**. Splitting the library crew out was considered and rejected: the
-seam between the two groups is a file — a wiki page — not an agent call, but the
-`analyst` dispatches `librarian` and `clerk` directly, so a split would flip the
-dependency rather than remove it.
+## Two plugins, one optional edge
+
+The library crew ships as its own plugin, `ca77y-library`, installable with or without
+the pipeline. The seam is a **file** — a wiki page in the target repository — not an
+agent call: `researcher` hands the `analyst` pages, not a return value.
+
+The split was reconsidered and taken because the dependency graph across that seam is
+almost empty. `ca77y-library` references nothing in `ca77y-engineering` — no board
+profile, no auditor, no worktree contract. In the other direction there is exactly one
+edge: the `analyst` optionally dispatching `ca77y-library:librarian` and
+`ca77y-library:clerk` for extra library context. That edge is **soft by construction** —
+the `analyst` already reads wiki pages directly, so when the dispatch does not resolve it
+reads them itself and reports that it worked without the librarian.
+
+That softness is the invariant to protect, because nothing in a plugin manifest can
+declare a dependency on another plugin. Two rules follow:
+
+- **`ca77y-library` must never dispatch or assume a `ca77y-engineering` agent or skill.**
+  It is the standalone half; keep it that way.
+- **Every `ca77y-engineering` → `ca77y-library` dispatch must degrade.** A new one is
+  only allowed where the caller has a documented fallback and reports having used it.
+  A hard cross-plugin call would make the pipeline silently broken for anyone who
+  installed it alone.
+
+What the split buys: two independently versioned rosters, and a smaller agent set loaded
+into the context of a session that only wants one of them.
 
 ## A flat topology — the orchestrator is the main session
 

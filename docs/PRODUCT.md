@@ -6,8 +6,9 @@ What `ca77y-agentic` is for, what it deliberately is not, and where it is going.
 
 A personal agentic toolkit for Claude Code that carries an idea from raw research to a
 reviewed pull request, and grows a durable research library along the way. It ships as
-**one plugin** — `ca77y-engineering` — whose agents run natively as Claude Code
-subagents.
+**two plugins** — `ca77y-engineering` (the pipeline) and `ca77y-library` (the research
+crew) — whose agents run natively as Claude Code subagents. Either installs on its own:
+the library crew depends on nothing, and the pipeline's one edge into it is optional.
 
 The organizing promise is **one task in, one PR out**: the `lead` takes a single task,
 optionally naming a story card, and ships it as a single reviewed pull request. No

@@ -55,6 +55,31 @@ grep -h '^\*\*Working from the board profile\.\*\*' \
   plugins/ca77y-engineering/agents/{writer,auditor}.md | sort -u | wc -l
 ```
 
+## Two plugins — keep the cross-plugin edge soft
+
+The repo ships `ca77y-engineering` (pipeline: `analyst`, `auditor`, `coder`, `qa`,
+`writer`, plus the `lead` and `board` skills) and `ca77y-library` (research crew:
+`researcher`, `librarian`, `scribe`, `clerk`). They install independently, and **no
+plugin manifest can declare a dependency on another plugin** — so the only thing keeping
+that true is how the agents are written:
+
+- `ca77y-library` must never dispatch or assume a `ca77y-engineering` agent or skill.
+- Every `ca77y-engineering` → `ca77y-library` dispatch must **degrade**: the caller needs
+  a documented fallback and must report having used it. Today there is exactly one such
+  edge — the `analyst` optionally pulling `ca77y-library:librarian` / `:clerk` — and
+  adding a hard one silently breaks the pipeline for anyone who installed it alone.
+
+Dispatch names are plugin-qualified, so **moving an agent between plugins means rewriting
+every `ca77y-<plugin>:<agent>` string that names it.** This should print nothing:
+
+```bash
+grep -rn 'ca77y-engineering:\(researcher\|librarian\|scribe\|clerk\)' plugins/
+grep -rn 'ca77y-library:\(analyst\|auditor\|coder\|qa\|writer\|lead\|board\)' plugins/
+```
+
+The rationale for the split is recorded in
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) under *Two plugins, one optional edge*.
+
 ## The board is resolved, never hardcoded
 
 No agent may name a tracker, a card path, a status symbol, or a card field as a fact
