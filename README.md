@@ -677,11 +677,13 @@ Tasks checkbox (`[ ]` Todo · `[/]` In Progress · `[?]` In Review · `[x]` Done
 `[-]` Cancelled), `#type` tags, `🔺⏫🔼🔽` priority, and `🆔`/`⛔` dependency markers —
 **one realization of the semantics above, not the semantics themselves.**
 
-**Specs** live in the specs area only while in flight. They follow Goal → Design →
-Requirements (WHEN/THEN scenarios) → Tasks, are written just-in-time by the `writer`,
-and are **converted into durable docs and removed** by the `writer` when the task
-ships — they are never archived. The spec gets its own commit precisely so it
-survives in history after that removal.
+**Specs** live in the specs area only while in flight. They follow Goal → Acceptance
+criteria (the card's own, copied verbatim into `AC1`…`ACn`) → Design → Requirements
+(WHEN/THEN scenarios) → Tasks, are written just-in-time by the `writer`, and are
+**converted into durable docs and removed** by the `writer` when the task ships — they
+are never archived. The spec gets its own commit precisely so it survives in history
+after that removal, and the card stays the durable home of the criteria once the
+transcription goes with the spec.
 
 **Every check runs in an independent context.** Code review goes to `qa` locally — a
 separate context from the `coder` — and to the PR review on the opened PR, readiness and

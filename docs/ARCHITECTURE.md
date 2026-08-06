@@ -80,8 +80,8 @@ optionally (see *Two plugins, one optional edge* below).
 rather than invoking anything — bindings for locate/read/search/create/transition (plus
 comment and update where the project authorises them), the card shape, the status
 vocabulary, the visibility rule, and the write authority all come straight from that one
-file. `writer` and the `auditor` (when its caller grants it access) reach the board the
-same way; `coder` and `qa` get no board access at all. It keeps the board a *declared*
+file. Every other role reaches it the same way, with whatever access its caller granted —
+see *Board access is granted per dispatch* below. It keeps the board a *declared*
 dependency rather than a structural one — repo-local Markdown, a hosted tracker, or
 nothing changes what the declaration says and nothing else in the pipeline.
 
@@ -92,8 +92,95 @@ authoring half is substantial: it owns `references/authoring-issue-tracking.md`,
 [`PRODUCT.md`](PRODUCT.md) advertises it as the tool for writing a declaration, and it
 remains a legitimate user-invocable setup and inspection entry point — collapsing it to
 one line would orphan that reference. A user invokes it directly to write or repair the
-declaration, or to see what it currently says; the `lead` and `analyst` invoke it only as
-a fallback, and never as a per-run step, when they find no declaration at all.
+declaration, or to see what it currently says; the `lead` may reach it mid-run as a
+**fallback**, never as a per-run step, when it finds no declaration at all — and even then
+the skill refuses to write the file mid-pipeline, putting the recommendation in its report
+instead. The `analyst` has no such route at all: its definition states outright that
+reading the declaration is a file read with no skill to invoke, and where the declaration
+is absent it returns its shaped stories in its report rather than reaching for anything.
+
+## Board access is granted per dispatch, not held by role
+
+Which agents can reach the board is a property of **the dispatch**, not of the agent. The
+`lead` reads the declaration itself and holds whatever the declaration grants it. Every
+other role is told what it has when it is dispatched:
+
+| Role | Board access |
+| --- | --- |
+| `lead` | read, the two status transitions, comment, PR attachment, and the card-content updates the declaration authorises |
+| `writer`, spec pass | read **and** search |
+| `auditor`, in the `lead`'s spec-readiness and acceptance gates | **none**, and it says so |
+| `auditor`, in the `analyst`'s story-advisor gate | read and search, granted by that caller |
+| `analyst` | search, read, create |
+| `coder`, `qa` | none |
+
+The `auditor`'s two rows are the point of the model: one definition is dispatched by two
+callers with two different needs, so its access cannot be a fact about the file. In the
+`lead`'s gates it needs none — the acceptance standard is the spec's labelled
+transcription (below), and the readiness gate judges an artifact rather than a board — and
+the definition **states that it has none there**, rather than leaving it to be inferred
+from an absence. In the `analyst`'s advisor gate it keeps read and search, because that
+gate's job includes board-side duplicate detection.
+
+**One consequence has to be stated rather than left to lapse.** With the `auditor` off the
+board in the readiness gate, a `lead` run's **only** board-side duplicate check is the
+`writer`'s sibling sweep during the spec pass — searching sibling cards for provisioning
+collisions, and for relationship prose a settled decision contradicts. That is why the
+`writer` keeps **search** and not only read, and why a sweep that could not run is
+reported as not run: a run where the sweep was impossible and a run where it came back
+empty are otherwise indistinguishable in a report that states only the result.
+
+**The two agents whose access varies carry one canonical paragraph.**
+`**Board access is granted by your caller.**` is byte-identical in `writer.md` and
+`auditor.md`, guarded by the second `grep` in the root [`CLAUDE.md`](../CLAUDE.md) — the
+first arrangement in *Three ways an obligation gets repeated* below. One statement is true
+of both without divergence: your access is whatever the caller named, you read the
+declaration yourself at its fixed path, and where the caller named nothing you have none
+and say so. The `lead` skill deliberately does **not** join that pair — it reads the
+declaration unconditionally, and says so in its own voice — so the pair stays two files,
+not three.
+
+## The card's acceptance criteria are pinned into the spec
+
+The spec carries the card's `## Acceptance criteria` **verbatim**, one behaviour per line,
+labelled `AC1`…`ACn`, stamped with the card identifier and the state it was read at.
+[`_templates/spec.md`](_templates/spec.md) carries the section, and the spec's order is
+`Goal → Acceptance criteria (verbatim transcription) → Design → Requirements → Tasks`.
+The section is dropped only where there are no criteria to copy — a trackerless run, or a
+task naming no card, where the spec's own requirements and scenarios are the standard.
+
+**What licenses the copy is a check, not a promise that it is faithful.** The standing
+rule elsewhere in the pipeline is to name the card rather than restate its criteria,
+because a paraphrase drifts toward what the work already does. A verbatim copy carries the
+same failure mode unless something proves the drift did not happen — so the `lead` runs a
+**mechanical equality check** between the transcription and the card's own criteria: once
+after the spec pass, and again before **every** acceptance-gate dispatch, including each
+re-audit round, since a fresh auditor each round would otherwise grade an unguarded copy.
+It normalises only the rewrites the board itself performs on save (on this repo's board,
+`-` bullets to `*` and bare URLs wrapped in `<…>`) and nothing else. A mismatch routes to
+a **respec**, never to grading a stale list. Comparing two strings is not judging whether
+a criterion is met, which is what lets the `lead` hold the duty at all without breaching
+the rule that it never judges acceptance.
+
+**Ordering matters, because the spec pass may correct a criterion.** The `writer` is
+authorised to fix a criterion the design proves unsatisfiable, on the card, during the
+spec pass — the only safe moment, since no code exists yet to reshape it toward. The
+transcription is taken **after** any such correction: taken before, it would freeze into
+the spec exactly the criterion the design has just disproved, and the equality check would
+then fail on the precise path the pipeline exists to support.
+
+**Both gates work per label.** The readiness gate checks the mapping both ways — every
+`ACn` maps to at least one requirement or scenario, and a requirement mapped to no `ACn`
+is a finding unless the spec marks it deliberate scope — and a criterion whose owning
+mechanism is **not a build step** maps validly under that rule: documentation the docs
+pass owns, a manual reproduction, or a step only the `lead`'s own session can take. The
+acceptance gate returns a verdict **per `ACn`**, and reads the transcription rather than
+the card.
+
+**The transcription is run-local; the card stays the durable source.** It dies with the
+spec at the docs pass, so a later fix run against an open PR grades against the card
+again. The live drift window is therefore readiness gate → build: between the build and
+the gate that judges it, the declaration already forbids editing a criterion at all.
 
 ## Two plugins, one optional edge
 
@@ -488,10 +575,12 @@ should be added; unifying the wording would fuse two different jobs.
 An obligation sometimes has to appear in more than one place. This repo uses three
 arrangements deliberately, and reaching for the wrong one is how wording drifts:
 
-- **Byte-identical duplication, with a drift check.** The worktree contract above: one
-  canonical paragraph, one physical line per file, and a `grep` in the root
-  [`CLAUDE.md`](../CLAUDE.md) that catches the moment two copies differ. Used when every
-  copy must bind identically, because each agent acts on its own copy alone.
+- **Byte-identical duplication, with a drift check.** One canonical paragraph, one
+  physical line per file, and a `grep` in the root [`CLAUDE.md`](../CLAUDE.md) that
+  catches the moment two copies differ. Used when every copy must bind identically,
+  because each agent acts on its own copy alone. Two paragraphs use it: the worktree
+  contract above, across five files, and the caller-granted board-access paragraph across
+  `writer.md` and `auditor.md`.
 - **Deliberately different wording for two sides of one defect.** The two library nets
   above: a write-time self-check and an audit finding. No drift check covers them and
   none should — unifying the wording would fuse two different jobs.
@@ -506,6 +595,39 @@ arrangements deliberately, and reaching for the wrong one is how wording drifts:
   independently readable statement of the same duty in one file: both copies read as
   live, so an agent obeys whichever it reaches first and an edit to one silently leaves
   the other asserting the superseded version.
+
+## Verifying that a mechanism was really removed
+
+Removing a mechanism from the toolkit is a documentation problem as much as an editing
+one, and the two halves fail differently. The mechanism's **name** occurs in a countable
+number of places; the **claims about it** occur wherever prose happens to describe how
+something is reached. Three lessons from the run that removed the per-run
+board-resolution artifact are worth keeping, because the next such removal meets all
+three again.
+
+**A name sweep has to be wrap-aware and file-type-agnostic.** A per-line `grep` misses a
+phrase split across a line break — two occurrences hid exactly that way on the last
+removal, one in the root [`CLAUDE.md`](../CLAUDE.md) and one in this file — and an
+`--include='*.md'` sweep misses both plugin manifests, whose `description` strings
+describe skills in prose. The sweep that works normalises every whitespace run to one
+space *before* matching, and selects files from `git ls-files` by extension rather than by
+a glob over one type.
+
+**A zero-target bare-word count is a one-off migration gate, never a standing check.** It
+is the stronger of the two sweeps *during* a removal, because a bare word cannot be split
+by a line break at all and so cannot be fooled by wrapping. But it has no allow-list by
+construction: the moment the migration lands, the next piece of ordinary prose that
+happens to use the word fails it — which happened twice on the last removal, to prose that
+was perfectly correct. Retire such a count with the migration rather than promoting it to
+a drift check.
+
+**Neither sweep finds a claim that never uses the word.** A removed mechanism can still be
+asserted in prose naming none of the removed tokens — "how the board is reached; the skill
+resolves it" survives any count of the artifact's own name, and did, through a clean
+`TOTAL 0`. So a removal also needs a **residue sweep over the verbs**: what the mechanism
+*did*, in the words the docs use for it (resolve, discover, probe, cache), read across the
+whole tree and judged by hand. There is no mechanical form of it yet, and it is precisely
+what a green name sweep does not cover.
 
 ## The commit model
 

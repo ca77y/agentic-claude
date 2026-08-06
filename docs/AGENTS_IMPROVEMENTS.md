@@ -124,3 +124,41 @@ reader who independently rediscovers the membership, and the failure mode is sil
 glob that misses a member still satisfies the item's stated shape. This is the same hazard as the
 sweep-shaped-criterion entry above, one layer down: there the tasks under-covered a file set the
 criterion swept, here the check itself does.
+
+### A known-stale file placed out of bounds needs a named owner, not just an exclusion
+
+**Area**: `agent:writer`
+
+**Observed**: On SMR-188 the spec's *Boundary* listed `docs/README.md` as out of bounds and a
+finding if touched, while that file carried a sentence the story's own part 2 falsified. The build
+correctly left it alone, both gates correctly passed — the criteria say nothing about it — and the
+stale sentence shipped, surfacing only because `qa` noticed it in round 3 and routed it to the docs
+pass by hand. The Boundary is written as a permission list, so a file on the out-of-bounds side
+carries no obligation at all, even when the spec's author already knows the merged work makes it
+wrong.
+
+**Suggested change**: In the *Boundary*'s out-of-bounds list, distinguish "unaffected, do not
+touch" from "affected, but not this pass's job". For the second kind, name the owner the way the
+*Criteria no build step can satisfy* table already does — usually the docs pass — and give it a
+Tasks entry marked as not the `coder`'s. An out-of-bounds file that the spec's own Design proves
+stale is a scheduled edit, not an exclusion, and the pass that keeps it out of the build is the one
+positioned to say who fixes it.
+
+### A zero-target token count is a migration gate, and must be retired as one
+
+**Area**: `agent:writer`
+
+**Observed**: SMR-188 removed a mechanism whose name occurred 108 times, and its *Validation*
+carried a bare-word occurrence count with a target of zero and, by design, no allow-list — sound as
+the wrap-immune half of a migration sweep, since a bare word cannot be split across a line break.
+Both `qa` rounds then tripped it on prose that was perfectly correct, because the removed token is
+also an ordinary English word, and the docs pass had to keep checking its own new sentences against
+a check whose real job had already finished. Worse, a clean `TOTAL 0` was read as "the mechanism is
+gone" while a stale sentence asserting that mechanism in none of the counted words survived
+untouched.
+
+**Suggested change**: When a spec's *Validation* includes a zero-target token count, mark it in the
+spec as a **one-off migration gate that expires when the migration lands**, so no later pass or
+standing check inherits it — and pair it with a residue check over the mechanism's *verbs* (what it
+did, in the words the docs use for it), stated as a read-through rather than a count. A token sweep
+proves the name is gone; only the verb sweep proves the mechanism is.
