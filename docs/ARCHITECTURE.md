@@ -136,7 +136,8 @@ sweep that could not run is reported as not run: a run where the sweep was impos
 run where it came back empty are otherwise indistinguishable in a report that states only
 the result.
 
-**The two agents whose access varies carry one canonical paragraph.**
+**The two agents whose access is decided by the caller that dispatches them, rather
+than being a fixed fact about the agent, carry one canonical paragraph.**
 `**Board access is granted by your caller.**` is byte-identical in `writer.md` and
 `auditor.md`, guarded by the second `grep` in the root [`CLAUDE.md`](../CLAUDE.md) — the
 first arrangement in *Three ways an obligation gets repeated* below. One statement is true
@@ -168,9 +169,8 @@ including every re-audit round of either, since a fresh auditor each round would
 grade an unguarded copy. It normalises only the rewrites the board itself performs on save
 (on this repo's board, `-` bullets to `*` and bare URLs wrapped in `<…>`) and nothing else.
 A mismatch is a **blocking finding** that routes to a **respec**, never to grading a stale
-list. Comparing two strings is not judging whether a criterion is met, which is what lets
-the check sit inside a gate at all without that gate ceasing to be independent of the
-`lead` — and the `lead` itself performs no check of its own over the card's criteria: no
+list. The check is mechanical, which is why it can sit ahead of grading in the same
+dispatch — and the `lead` itself performs no check of its own over the card's criteria: no
 comparison, no classification, no per-criterion read.
 
 **Ordering matters, because the spec pass may correct a criterion.** The `writer` is
@@ -190,9 +190,9 @@ own session can take. The third disposition is verified, not trusted: the gate o
 file each entry names, and an entry it cannot verify is a **blocking finding, not a pass**,
 at the same severity as a criterion with no disposition at all — an unchecked section would
 otherwise be a way to retire a criterion without speccing it. The acceptance gate returns a
-verdict **per `ACn`**, and reads the transcription rather than the card; for an `ACn` in the
-already-satisfied section it grades from that section's evidence plus `qa`'s reported
-re-validation result.
+verdict **per `ACn`**, grading against the transcription rather than the card, reading the
+card only as evidence about the copy; for an `ACn` in the already-satisfied section it
+grades from that section's evidence plus `qa`'s reported re-validation result.
 
 **The transcription is run-local; the card stays the durable source.** It dies with the
 spec at the docs pass, so a later fix run against an open PR grades against the card

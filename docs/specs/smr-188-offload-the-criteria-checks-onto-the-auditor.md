@@ -34,10 +34,11 @@
 > at status `In Review`, **after** this spec pass's criterion corrections were applied to the card
 > (see *Deviations from the card*). This is a **copy, not a summary** — one card bullet per `ACn`
 > line, in card order, `n = 68` — **retaken from a fresh live read after four criteria were added to
-> the card, and again after **AC3** was corrected in that same pass**, per part 5's own ordering rule.
-> Both retakes were fresh live reads. The four additions landed at the end of
-> the card's list and the AC3 correction changed wording in place, so **no label shifted** in either
-> retake and every citation in this spec still points where it did.
+> the card, and again after **AC3** and **AC48** were each corrected in this same pass**, per part 5's
+> own ordering rule.
+> Every retake was a fresh live read. The four additions landed at the end of
+> the card's list and both corrections changed wording in place, so **no label shifted** in any retake
+> and every citation in this spec still points where it did.
 > Producing it is copy-paste, not research. What licenses the copy is
 > not a promise that it is faithful but the `auditor`'s mechanical equality check against the card,
 > performed in each gate that uses this section — see *Design*. Which of these criteria this delta
@@ -90,7 +91,7 @@
 - **AC45** — The stated method writes the ledger and each findings file with the ordinary file tools, and needs no `bash` command for any scratch write.
 - **AC46** — The shipped wording names the mechanism that guarantees no commit step can sweep a scratch file into a story commit.
 - **AC47** — The resolution requires exactly one committed ignore entry in a target project, documented as a setup requirement alongside the entry for that project's worktree directory.
-- **AC48** — A file-tool write to `tmp/` inside the story worktree, made after the session has entered that worktree by `path`, is performed during this story's own run rather than asserted.
+- **AC48** — A file-tool write to `tmp/` inside the story worktree is performed during this story's own run rather than asserted, and the shipped record states what that write does and does not establish.
 - **AC49** — `docs/ARCHITECTURE.md` records that write's outcome together with the dispatch mode the run was invoked in, so that "the guard never fired" is distinguishable from "the guard was never attempted".
 - **AC50** — `docs/ARCHITECTURE.md` stops stating that nothing shipped verifies whether `path`-form entry clears the write guard on either outcome that settles the question — the run met the guard and entering by `path` cleared it, or the run met the guard and entering by `path` did not clear it — and it records which of the two occurred.
 - **AC51** — On either outcome that does not settle the question — a background run whose guard never fired, or a foreground run that could not have met it — `docs/ARCHITECTURE.md` states that the question is still open and names which of the two left it open.
@@ -287,6 +288,12 @@ Also rewritten on the card as prose: the `## Why` paragraph; Scope part 5's chec
 **AC3 corrected, and the mistake that found it is on the record.** AC3 read *"The template used to author a missing declaration is read only when the file is absent."* The shipped design does not satisfy that as written: `board/SKILL.md`'s clause says the authoring reference is loaded *"only when you are actually writing **or repairing** a declaration"*, and **repairing operates on a file that is present** — the skill's *Two ways you are invoked* distinguishes the two paths explicitly. There is also no separate template artifact to read: the template lives inside `references/authoring-issue-tracking.md`, the very file that clause governs. Forbidding the load while repairing is not what anyone wants, so this is a **criterion-correction case, not a build defect** — the wording was narrower than the design intends. Corrected on the card on **2026-08-07** to: *"The authoring reference that carries the declaration template is loaded only when the skill is writing or repairing a declaration, never when it is only reading one back."* The transcription above was retaken afterwards, per part 5's ordering rule; only AC3's wording changed and no label moved.
 
 **How it was found, and what I got wrong first.** An earlier revision of this spec put AC3 in *Already satisfied criteria* with an entry claiming the skill "reads its template only at create time" — a paraphrase of the shipped clause bent into agreement with the criterion. That is precisely the failure R9 exists to catch, and I committed it on the rule's first use: the entry named a file, so it looked verifiable, but the words I put in the entry were not the words in the file. The spec gate caught it by opening the clause. Two things follow. **The section's value is demonstrated rather than argued** — a criterion parked there gets opened and read, which is how a mis-worded criterion surfaced at all. And **the acceptance gate had already graded AC3 as met** against wording that does not satisfy it as written, which is a genuine gate miss on shipped work, logged as such in `docs/AGENTS_IMPROVEMENTS.md`.
+
+**AC48 corrected, and the reason is stronger than over-specification.** AC48 required the `tmp/` write to be *"made **after the session has entered that worktree by** `path`"*. **That qualifier and AC51 cannot both be satisfied on the branch that actually occurred.** This run was a background job whose write guard never fired, so it made no `EnterWorktree` call at all — and AC51 declares that branch legitimate, asking only that the record state the question is still open and name which branch left it open. A run cannot simultaneously satisfy AC51's guard-never-fired branch and demonstrate a write *after* a `path` entry it had no reason to make. That is two of the card's own statements being mutually exclusive against the real system, which is the case *Deviations from the card* exists for.
+
+The qualifier was written when the guard was expected to fire — an assumption about **how** the demonstration would happen, not about what it had to prove. What AC48 is for, that the write was **performed rather than asserted**, was satisfied: one `Write` call, no `bash`, verified ignored and unswept. Corrected on the card on **2026-08-07** to: *"A file-tool write to `tmp/` inside the story worktree is performed during this story's own run rather than asserted, and the shipped record states what that write does and does not establish."* The second clause is the part the qualifier was reaching for — that the demonstration must not overclaim — and the shipped record already satisfies it, stating the write proves the location **writable** and is **not** evidence about the guard.
+
+**The residual gap is stated, not closed.** Nothing on this branch evidences the isolated-session case the relocation was designed for. That gap belongs to AC50 and AC51, which record the question as open and name this run's branch; only a future run whose guard actually fires can close it. I considered leaving AC48 out of the section with the deviation stated instead — the alternative offered — and rejected it: an unsatisfiable criterion left on the card would fail the next acceptance gate for the same reason, and the demonstration AC48 asks for genuinely happened.
 
 **Corrected on a sibling card.** `SMR-133`'s first criterion read "The `lead` classifies each acceptance criterion as code-satisfied or documentation-satisfied before the gate runs" — the logical opposite of AC26. Corrected to name the `auditor` in the gate, with a dated note pointing at that card's own Scope, which already contemplated `auditor.md` as the owner. A second, unrelated staleness there was **reported and not edited**: its third criterion routes a documentation NOT-READY to "the `writer`'s own auditor gate", which `SMR-145` records no longer exists.
 
@@ -568,6 +575,8 @@ The criteria this delta does not build are **not** covered by items here — the
 
 Forty-nine of the sixty-eight transcribed criteria need nothing built: they were satisfied on this branch by the shipped commits `a8af0ee`…`77532e1`, and this delta's only obligation is not to break them. Each entry names the surface that satisfies it — which is what `qa` re-validates against the post-build tree under R10 — and flags whether this delta also edits that surface.
 
+**Entries name regions, never line numbers.** `qa` opens these in the **post-build** tree, so a line number written here rots the moment the build edits the file above it — which is exactly what happened on this delta: removing an eight-line section and adding a three-line one moved the whole scratch region, and entries citing it pointed at a heading instead. The *Validation* preamble's own rule — no counts, no file lists, no line numbers — applies here in full, and this is the correction of having applied it to the items and not to these entries. So an entry names its region the way a reader finds it: the **bold lead-in**, the section heading, or a quoted phrase from the text itself. The line citations under *Edit sites* in the Design stay, because they are pinned to `77532e1` — an immutable commit cannot rot.
+
 **Entry marker.** Entries here use `→`, not the `—` the transcription uses, so the transcription's `- **ACn** — ` lines stay the only lines with that shape. The `auditor`'s equality check compares the transcription against the card mechanically; a section that reused the same prefix would put 49 extra lines in reach of a comparator that greps for it.
 
 **On provenance:** the commit range is the branch's, not a per-criterion claim. Attributing each criterion to one commit would be exactly the fabricated precision that failed this spec's earlier gate rounds; where a single criterion's origin matters, `git log -S` on the named file settles it. The **file** is the load-bearing part of every entry, because the file is what `qa` opens.
@@ -579,20 +588,20 @@ Forty-nine of the sixty-eight transcribed criteria need nothing built: they were
 - **AC2** → `plugins/ca77y-engineering/skills/lead/SKILL.md`'s *An absent declaration does not stop the run*. *Edit site: the file, not this region.*
 - **AC3** → `plugins/ca77y-engineering/skills/board/SKILL.md`'s clause governing when `references/authoring-issue-tracking.md` is loaded — "only when you are actually writing or repairing a declaration". **`qa` opens that clause and reads it against the criterion as worded, not as intended.** This entry is here only because the criterion was corrected in this same pass: as it read before, it required the load to happen only when the declaration is *absent*, which the shipped clause does not do and should not — repairing operates on a present file. See *Deviations from the card*.
 - **AC4** → the same `lead/SKILL.md` paragraph as AC2, which needs no skill invocation. *Edit site: the file, not this region.*
-- **AC5** → `lead/SKILL.md:26` and `plugins/ca77y-engineering/agents/analyst.md`, neither instructing a per-run `board` invocation. *Edit site: `lead/SKILL.md`, not this region.*
+- **AC5** → `lead/SKILL.md`'s *An absent declaration does not stop the run* paragraph and `plugins/ca77y-engineering/agents/analyst.md`, neither instructing a per-run `board` invocation. *Edit site: `lead/SKILL.md`, not this paragraph.*
 - **AC6** → `docs/ARCHITECTURE.md`'s *The skill itself remains, narrowed to authoring*. *Edit site: the file, not this region.*
 - **AC7** → `plugins/ca77y-engineering/skills/board/SKILL.md`, which names `references/authoring-issue-tracking.md` and which job loads it.
 - **AC8** → `plugins/ca77y-engineering/skills/board/SKILL.md`'s frontmatter `description`.
 - **AC12** → `docs/CLAUDE.md`'s layout entry for `ISSUE_TRACKING.md`.
-- **AC13** → no shipped instruction to probe a binding, and none forbidding a write through an unprobed one. `qa` runs `grep -rn -i --exclude-dir=specs 'probe' --include='*.md' .` and reads every hit: the property is that **no hit is an instruction** — the surviving uses are a statement that the step is gone, the unrelated write-guard question, a verb list naming the removed mechanism, and a reproduction note. The check is the reading, not the number of hits.
+- **AC13** → no shipped instruction to probe a binding, and none forbidding a write through an unprobed one. `qa` runs `grep -rn -i --exclude-dir=specs 'probe' --include='*.md' .` and reads every hit: the property is that **no hit is an instruction** — the surviving uses are a statement that the step is gone, an unrelated observation that a controlled probe would settle the dispatch-mode/agentId-resumability question, a verb list naming the removed mechanism, and a reproduction note. The check is the reading, not the number of hits.
 - **AC14** → `docs/ISSUE_TRACKING.md`'s *Operations*, which binds `comment` and `update`.
 - **AC15** → `docs/ISSUE_TRACKING.md`'s *What the old per-run artifact used to carry* table.
 
 ### Satisfied by the improvements-log path migration — some carriers are edit sites
 
 - **AC16** → the phrase is absent from `plugins/`: `grep -rn 'discover that folder from context' plugins/` → no output.
-- **AC17** → the *Process feedback* paragraph, in every file carrying it, each naming `docs/AGENTS_IMPROVEMENTS.md` at that fixed path. **`qa` re-enumerates the carriers with the `grep` the root `CLAUDE.md` documents rather than working from a list**, since this delta edits some of them. *Edit sites: yes — `auditor.md`, `writer.md` and `lead/SKILL.md` all carry it.*
-- **AC18** → those same carriers resolving to exactly two distinct variants, by the `grep -h … | sort -u` the root `CLAUDE.md` documents — the count that matters here is the criterion's own, not one this spec restates. *Edit sites: yes, the same three — the likeliest entry in this whole section to break, since an edit to any carrier can split a cluster.*
+- **AC17** → the *Process feedback* paragraph, in every file carrying it, each naming `docs/AGENTS_IMPROVEMENTS.md` at that fixed path. **`qa` enumerates the carriers itself** with `grep -rl '^When you hit real friction in the \*\*pipeline itself\*\*' plugins/`, rather than working from a list here — the root `CLAUDE.md` documents drift checks for two other canonical paragraphs but none for this one. *Edit sites: yes — `auditor.md`, `writer.md` and `lead/SKILL.md` all carry it.*
+- **AC18** → those same carriers resolving to exactly two distinct variants — the count that matters is the criterion's own, not one this spec restates. `qa` pipes the same paragraph `grep -h` over the carriers it just enumerated through `sort -u | wc -l`; there is no root-`CLAUDE.md` snippet for this paragraph to reuse. *Edit sites: yes, the same three — the likeliest entry in this whole section to break, since an edit to any carrier can split a cluster.*
 - **AC19** → the root `CLAUDE.md` § *The improvements log is cleared as it is converted*, byte-identical to `f87eedc`; V5 is the check. *Edit site: the file, not this section — and this pass acts on that rule, which is not licence to edit it.*
 - **AC20** → `README.md` and `docs/ARCHITECTURE.md`, neither asserting the improvements-log path is context-resolved. *Edit sites: both files, other regions.*
 
@@ -601,28 +610,28 @@ Forty-nine of the sixty-eight transcribed criteria need nothing built: they were
 - **AC9** → no `.md` under `plugins/`, `docs/`, or the root refers to a board profile; V7 is the check. *Edit sites: several files, so `qa` re-runs V7 rather than assuming.*
 - **AC10** → `plugins/ca77y-engineering/plugin.json` and `plugins/ca77y-engineering/.claude-plugin/plugin.json` descriptions.
 - **AC11** → the same two manifests carrying one `version`; V4 is the check.
-- **AC35** → `plugins/ca77y-engineering/agents/analyst.md:44`, which names no profile in its advisor-gate dispatch.
+- **AC35** → `plugins/ca77y-engineering/agents/analyst.md`'s *Run the advisor gate* step, which names no profile in its dispatch.
 
 ### Satisfied by the shipped access model — mostly adjacent to edit sites
 
-- **AC30** → `auditor.md:24`'s not-a-build-step provision. *Edit site: **yes**, this exact rule gains the third disposition — R9 must extend it, not replace it.*
-- **AC33** → the canonical paragraph at `auditor.md:16`, stating access is caller-granted. *Edit site: the file; the paragraph itself is verified unedited by V1.*
-- **AC34** → `analyst.md:44`, granting read and search to the advisor gate, and that run's duplicate detection.
-- **AC38** → `writer.md:12` and `:14`, retaining read and search. *Edit site: the file, not these lines.*
-- **AC39** → two different observations, because the two files satisfy it differently. `coder.md:22` states its zero board access in a sentence `qa` can open and read. **`qa.md` states nothing, and that is the check**: `grep -i 'board' plugins/ca77y-engineering/agents/qa.md` returns no output at all, so there is no board mention to be wrong. *Edit site: **`qa.md` is**, under R10 — so this is among the entries most likely to break, and the grep returning nothing is exactly what proves the new validation step introduced no board access.*
+- **AC30** → the not-a-build-step provision inside `auditor.md`'s spec-gate step under *What you do* — the clause beginning "A criterion whose owning mechanism is not a build step". *Edit site: **yes**, this exact rule gains the third disposition — R9 must extend it, not replace it.*
+- **AC33** → `auditor.md`'s canonical **Board access is granted by your caller.** paragraph, stating access is caller-granted. *Edit site: the file; the paragraph itself is verified unedited by V1.*
+- **AC34** → `analyst.md`'s *Run the advisor gate* step, granting it read and search, and that run's duplicate detection.
+- **AC38** → `writer.md`'s canonical **Board access is granted by your caller.** paragraph and the **In the spec pass, that access is always read and search.** sentence beneath it. *Edit site: the file, not these two paragraphs.*
+- **AC39** → two different observations, because the two files satisfy it differently. `coder.md`'s own statement that it carries no board access is a sentence `qa` can open and read. **`qa.md` states nothing, and that is the check**: `grep -i 'board' plugins/ca77y-engineering/agents/qa.md` returns no output at all, so there is no board mention to be wrong. *Edit site: **`qa.md` is**, under R10 — so this is among the entries most likely to break, and the grep returning nothing is exactly what proves the new validation step introduced no board access.*
 - **AC40** → the pair byte-identical across `writer.md` and `auditor.md`; V1 is the check. *Edit site: both files.*
-- **AC41** → the root `CLAUDE.md`'s second drift snippet, matching the paragraph's opening; V1 is the check. *Edit site: `CLAUDE.md:56-58`, the prose above the snippet — the snippet itself must not change.*
+- **AC41** → the root `CLAUDE.md`'s drift snippet for the caller-granted paragraph, whose pattern matches that paragraph's opening; V1 is the check. *Edit site: **yes** — the prose immediately above that snippet, in the same section. The snippet itself must not change.*
 - **AC43** → all four output-asserting snippets in the root `CLAUDE.md`; V1-V4 are the checks. *Edit site: as AC41.*
 
 ### Satisfied by part 7's scratch relocation — none is an edit site for its own content
 
-- **AC44** → `lead/SKILL.md:54-58`, naming the directory, both filenames and the file tools. *Edit site: **yes**, `:58` — `qa` re-reads the whole region.*
-- **AC45** → the same region's "no `bash` for any scratch write". *Edit site: as AC44.*
-- **AC46** → the same region's committed-ignore-entry guard. *Edit site: as AC44.*
+- **AC44** → `lead/SKILL.md`'s *Context discipline* section, across its **Paths, not content**, **Run-local scratch lives inside the story worktree, at `tmp/`** and **The ledger** lead-ins, which together name the directory, both filenames and the file tools. *Edit site: **yes** — the ledger paragraph is one of this delta's edit sites, and the region moved when the equality-check section was removed above it, so `qa` re-reads all three paragraphs by their lead-ins.*
+- **AC45** → the same *Run-local scratch* paragraph's "no scratch write ever needs `bash`". *Edit site: as AC44.*
+- **AC46** → the same paragraph's **committed ignore entry itself** clause, naming `/tmp/` in this repository's `.gitignore`. *Edit site: as AC44.*
 - **AC47** → `docs/PRODUCT.md` § *Requirements it places on target repos*, stating both ignore entries, and the agreeing `README.md` setup prose.
 - **AC48** → `docs/ARCHITECTURE.md`'s write-guard record, holding the demonstrated file-tool write; closed by this story's earlier run, not re-demonstrated here.
 - **AC49** → the same record, carrying the outcome and the dispatch mode together.
-- **AC50** → the same record, on which settling outcome occurred.
+- **AC50** → the same record's *The `path`-form question stays open* paragraph. The obligation is **conditional and its condition did not occur**: the criterion binds only on an outcome that settles the question, and this run's guard never fired, so the "Nothing shipped verifies…" sentence correctly **stays** and the record says which of the two settling outcomes would have retired it. AC51's branch is the live one — read the two entries together.
 - **AC51** → the same record, on the non-settling outcomes.
 - **AC52** → the same record's escalation clause.
 - **AC53** → `docs/ARCHITECTURE.md`'s scratch rationale and its four rejected alternatives. *Edit site: the file, other regions.*
@@ -632,7 +641,7 @@ Forty-nine of the sixty-eight transcribed criteria need nothing built: they were
 - **AC57** → this repository's committed `.gitignore`, carrying `/tmp/` beside `.worktrees/`.
 - **AC58** → `docs/PRODUCT.md` § *Requirements it places on target repos*, and the agreeing `README.md` prose.
 - **AC59** → no shipped instruction placing scratch outside the worktree. *Edit sites: several files, so `qa` re-runs the phrase search rather than assuming.*
-- **AC60** → `lead/SKILL.md:56`'s durability sentence, naming the card comment, the PR description and `git log`. *Edit site: **yes**, the same region as AC44.*
+- **AC60** → the same *Run-local scratch* paragraph's durability sentence — "Scratch inside the worktree does not outlive it" — naming the card's handoff comment, the PR description and `git log`. *Edit site: **yes**, the same region as AC44.*
 
 ### Satisfied by the tenet reconciliation — the per-entry flags say which are edit sites
 
