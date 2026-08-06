@@ -71,6 +71,29 @@ decoration: the `board` skill reads the declaration at the path its **context** 
 and never searches for one, so a declaration nothing points at is invisible on the runs
 where nobody happens to grep for it. Keep the pointer here whenever the file moves.
 
+## The improvements log is cleared as it is converted
+
+[`docs/AGENTS_IMPROVEMENTS.md`](docs/AGENTS_IMPROVEMENTS.md) is an append-only log of
+friction in the pipeline itself. Triage turns each `###` entry into a card on the board —
+and **removing the entry is part of converting it, not a follow-up.** Do it in the same
+pass and the same commit, automatically, without asking first: an entry that already has
+a card is noise, and one left behind is re-triaged by the next run and filed a second
+time under a new identifier.
+
+The rule is per entry, not per batch — clear each one as its card lands, so a run that
+converts four of seven findings leaves exactly the three it did not. Retire an entry the
+same way, with no card, when shipped work has already resolved or foreclosed it. Either
+way the removal commit's message names what settled it: the card identifier, or the
+commit that made it moot. That message is the only surviving trace of the finding, so it
+carries the identifier — never delete an entry without one.
+
+Two entries do **not** clear. A finding whose card was filed and then marked `Duplicate`
+or `Canceled` was never converted, so its entry stays. And a finding an analyst declined
+to file — because it judged the fit analysis against it — stays too, with the reason
+recorded, rather than vanishing because someone ran a triage pass over it.
+
+An empty file is the expected steady state, not a sign the log is unused.
+
 ## Version management is a manual human process
 
 Bumping any plugin's `version` is **a deliberate human decision, never an automated
