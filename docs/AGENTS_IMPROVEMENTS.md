@@ -102,3 +102,25 @@ dispatched worker is never asked to write it. And qualify the escalation trigger
 fires on a refusal *of the path or location* — the write guard, isolation, or a permission on
 `tmp/` — rather than on any refusal whatsoever, since a refusal grounded in the caller's role or
 the content's kind says nothing about whether the relocated scratch is writable.
+
+### A cross-file *Validation* item that counts files must enumerate them
+
+**Area**: `agent:writer`
+
+**Observed**: On SMR-188, a *Validation* item asked for a whole-paragraph comparison of one shared
+paragraph "across the ten files", giving the expected result (exactly two variants, in a 7/3
+split) but never listing the ten paths. The obvious way to collect them — globbing the agent
+definitions under `plugins/*/agents/` — yields **nine**, because the tenth carrier is a skill file,
+not an agent. Nine files still produce two variants and still show a 3-file minority cluster, so
+the under-covered run reports a clean pass that looks exactly like the correct one; only the
+majority count differs, from 7 to 6, and nothing in the item says 7 is the number to expect per
+cluster rather than just the split's shape. `qa` caught it here only by separately grepping the
+tree for the paragraph and finding a tenth carrier the glob had missed.
+
+**Suggested change**: When a *Validation* item asserts a count or a partition **over a file set**,
+have the spec enumerate that set — inline, or as the exact command that generates it — rather than
+naming its size in prose. A stated cardinality with no stated membership is checkable only by a
+reader who independently rediscovers the membership, and the failure mode is silent: a plausible
+glob that misses a member still satisfies the item's stated shape. This is the same hazard as the
+sweep-shaped-criterion entry above, one layer down: there the tasks under-covered a file set the
+criterion swept, here the check itself does.
