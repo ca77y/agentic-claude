@@ -191,7 +191,11 @@ that grades against the transcription is then the reader that proved it matches,
 trust hop between the checking party and the grading party. One cost is accepted and
 named rather than hidden: the first check now happens inside the readiness gate rather
 than at the spec-commit point, so nothing re-checks the copy between that gate passing and
-the commit — the acceptance gate's own check is the next one.
+the commit — the acceptance gate's own check is the next one. That window is also why the
+spec-commit **format step** runs before the gate rather than immediately before the
+commit (see *The commit model*): a formatter can rewrite text inside the transcription
+block, and run in that window it would edit the copy after the only check standing
+between it and history.
 
 **A gate that can read the card still grades the copy.** Giving the `auditor` read access
 raises the obvious question of why a frozen copy survives at all, and it survives for
@@ -290,7 +294,9 @@ running the `lead` skill. It dispatches every pipeline agent directly — `write
 every worker is a leaf at depth 1. Each leaf does its one job and returns; the lead
 **trusts that result** and never does the work itself, never re-checks it, and never
 steps in when a dispatch fails (it retries or escalates). The `writer`'s docs are
-trusted outright; its spec is gated by the lead's `auditor` before the build.
+trusted outright; its spec is gated by the lead's `auditor` before the build. The single
+carve-out is commit hygiene on the lead's own spec commit — the step-3 format step and
+lint floor, which touch no build and grade no criterion; see *The commit model*.
 
 The flatness exists because the harness does not support a nested orchestrator: a
 subagent's children detach regardless of `run_in_background`, their completion
@@ -664,7 +670,12 @@ arrangements deliberately, and reaching for the wrong one is how wording drifts:
   rule it hands off to instead of restating it. The `lead` skill's isolation step is the
   same arrangement: the isolation remedy stated once in workspace creation, pointed at
   from the open-PR fix run's recovery step (see *The story worktree contract* above).
-  What this avoids is a second,
+  The spec-commit format step and lint floor are the same again, and there the
+  single-statement property is not just tidiness but the criterion itself — *the
+  definition names one owner* — so the rule lives whole in step 3 and *Boundaries*,
+  *When a gate finds a problem*, and *Final handoff* carry only what each needs
+  (the carve-out, the two routings, the outcomes to report) with the mechanism named
+  once. What this avoids is a second,
   independently readable statement of the same duty in one file: both copies read as
   live, so an agent obeys whichever it reaches first and an edit to one silently leaves
   the other asserting the superseded version.
@@ -744,7 +755,8 @@ worker commits. Work happens in one worktree on one story
 branch under the repo's worktree directory; the repo root stays on its base branch, and
 that worktree is provisioned at creation (above).
 
-The commits a run produces, in order: the spec; one per **pre-ship round** — the
+The commits a run produces, in order: the spec; the **spec-format-fix commit**, on the
+runs where the lint floor below finds something to fix; one per **pre-ship round** — the
 `coder`'s initial build, then each `qa` and acceptance-gate fix round; the **ship
 commit**, carrying whatever is still uncommitted at PR time (by then mainly the docs and
 the spec's removal); then one per PR-review fix round. The count therefore varies with
@@ -780,6 +792,118 @@ A consequence worth stating: an interrupted run now has each completed round in 
 just in the worktree. The worktree already made an interruption lossless; the round
 commits also make the work *legible* after one — the history shows which rounds landed
 and what each changed, instead of one working tree of merged edits.
+
+**Commit 1 is formatted before it lands, and linted once after.** The spec commit used to
+be the one commit in a run that nothing had ever checked. The `writer` creates no commits
+and the `lead` committed without formatting, so nothing
+between them owned the project's format step — and on any project whose gate covers
+documentation, that commit could turn the gate red before the `coder` wrote a line. The
+first agent to meet the failure was `qa`, at step 5, two agents and one build
+downstream, and it had to bisect back to a document nobody had told it about before it
+could report the build honestly.
+
+Both halves of the fix are the `lead`'s and are stated once, in `lead/SKILL.md` step 3.
+It runs the project's **format step** over commit 1's path set before **every** dispatch
+of the spec-readiness gate — including each re-audit round, so every gate judges the
+bytes that would be committed if it passed — and the project's **lint command** once as
+a **floor** after commit 1 and before the `coder` is dispatched at step 4. The
+alternative — the `writer` returning a spec already formatted to the project's style —
+is deliberately not taken, because a `writer`-side rule covers only text that `writer`
+itself last wrote, while a rule anchored at the collection point covers every route a
+revision can arrive by; naming both would leave the owner ambiguous, which is the whole
+defect.
+
+**The scope is commit 1's path set, not the spec path.** The set is every non-ignored
+path the worktree shows as modified or added at that point: the spec, plus whatever else
+the spec pass left behind. In practice the other member is
+`docs/AGENTS_IMPROVEMENTS.md` — every worker's *Process feedback* rule directs an append
+there inside the story worktree, and that path is tracked, while the pipeline's own
+`tmp/` scratch is ignored and never joins the set. This is the normal case rather than an
+edge one, and stating the rules over the spec path alone left a real hole: commit 1 can
+land a document that fails the gate without the spec being it. The same set serves three
+rules — the format step's scope, its collateral check, and the floor's attribution — so
+it is defined once. The set is read afresh from the worktree's status each time it is
+needed, including **immediately before staging**, since the `auditor` carries the same
+*Process feedback* rule and a path can join while the gate is in flight; where it grew,
+the format step runs over the **newly added paths only**, never over the spec the gate
+has just judged.
+
+**The collateral check is before-and-after, not a snapshot.** The `lead` captures the
+modified-path set immediately before invoking the format command and compares after; only
+a **newly** modified path is collateral, and it stops and reports rather than committing
+it. A snapshot rule — *after the step, nothing but the spec is modified* — halts on
+writes the format step never made, which is what a path already modified when the step
+began, `docs/AGENTS_IMPROVEMENTS.md` being the usual one, always is.
+
+**The format step sits before the gate, not immediately before the commit.** Step 3's
+closing clause — *the gate that just passed already proved the transcription matches the
+card, so there is nothing left for you to check first* — forbids inserting anything
+between the passed gate and the commit that re-checks the criteria or modifies the spec,
+so formatting there would make the file argue with itself two screens apart. Placing the
+step earlier is not merely compatible, it is better: nothing writes to the spec between
+the format step and commit 1 (the gate reads and returns a verdict), so every path the
+commit lands still carries that step's output wherever the step ran at all — and it puts
+the one dangerous interaction in front of the agent that owns detecting it. A Markdown
+formatter can rewrite text *inside* the verbatim transcription block; run before the
+gate, that surfaces as the `auditor`'s mechanical equality check failing, routed to the
+`writer` for a respec, capped by the 3× rule. Run after, the same rewrite would be
+committed and then rejected by the *acceptance* gate at the far end of the run, for a
+purely cosmetic reason. One route escapes the gate and is named rather than left
+implicit: a `writer` fix made in response to the floor, after commit 1. It is
+re-formatted like any other spec edit, re-enters the spec-readiness gate where it touched
+the transcription block, and where it did not, the acceptance gate's own equality check
+is the stated backstop.
+
+**Both commands are the project's, and both take the same three outcomes.** The rule
+names no tool — not a formatter, not a linter, not a package-manager script — and
+discovers each command from project context, the same way the rest of the pipeline
+discovers a project's validation commands. The outcomes are: **defined and runnable**,
+run it and act on the result, using the path-scoped form where the command accepts paths
+and the check-only form where it cannot be scoped, never a repo-wide write; **not
+defined**, a stated outcome rather than a failure, skipped and said so in the handoff,
+and never a reason to invent a command — a gate that exists only in CI is this case, and
+reporting it as such is what keeps *`qa` found no spec-caused failure* from being read as
+*the spec was checked and passed*; and **defined but not trustworthy here**, where the
+worktree's dependency provisioning is absent or negative and the command depends on it,
+or the command will not run — reported as unrunnable rather than concluded clean, with
+the standing ban on a fetch-and-run substitute still in force. The floor takes all three,
+not merely the absence handling, and that matters most for the third: an unprovisioned
+lint run typically emits output naming the file it was pointed at, which a naive
+attribution would read as a commit-1 failure and misroute to the `writer` as a spec
+defect. Trustworthiness is therefore settled **before** attribution, and an untrusted run
+is attributed to nobody.
+
+**The floor runs unscoped but attributes narrowly.** A repo-wide lint is not
+automatically attributable — a base branch that was not already clean fails on files the
+run never touched. At this point attribution is still cheap, because the run has landed
+exactly one commit and its path set is known: a failure naming **any** path commit 1
+landed is this run's, routed to the `writer` and committed as the spec-format-fix commit
+before the `coder` is dispatched; a failure naming **only** paths outside commit 1 is
+pre-existing, recorded and relayed in the handoff, never routed, never fixed, and never
+allowed to stop the run. Silently fixing the second kind would put collateral into a
+story branch that did not ask for it. The floor runs **once per run**, at that one point
+— not per round.
+
+**Why this carve-out survives where the equality-check one did not.** *The card's
+acceptance criteria are pinned into the spec* records a carve-out to the `lead`'s founding
+boundary being deleted rather than defended, on the reasoning that a rule needing an
+exemption for one caller is a rule under strain. The distinction is what the exemption
+lets the `lead` do. That one licensed it to *compare a criterion against the card* — a
+judgement, on the standard the gates grade against. These two are commit hygiene on the
+`lead`'s **own** commit: bounded by a path set it already owns, writing only inside it,
+looking at no build, replacing no `qa` round, and reading no criterion. The format step
+**authors nothing** — it is a mechanical normalisation of files about to be committed,
+and where its output would change a document's *content* rather than its formatting, that
+is explicitly not the `lead`'s to reconcile: the `auditor` surfaces it and the `writer`
+fixes it.
+
+**This repository cannot exercise either step, and says so.** It defines no format and no
+lint command — no `package.json`, no lockfile, no `Makefile`, no formatter or linter
+config, and no CI workflow that runs one — so every run of the pipeline here takes the
+*not defined* outcome for both. That is the correct behaviour rather than a gap, but it
+does mean the mechanism ships unexercised on its own repo; the same caveat as *A run does
+not exercise the definitions it is editing* below, from a second direction. Exercising it
+against a project that does define a format/lint command is a follow-up.
 
 ## The self-improvement channel
 
