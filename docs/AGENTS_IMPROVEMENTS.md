@@ -306,3 +306,26 @@ non-vacuity requirement stated in the item itself: an item whose property is uni
 over a command's hits says what a **zero-hit** result means — pass, fail, or *re-derive the anchor*
 — so an empty result can never be reported as a green check by default. Baseline-unchanged items
 are unaffected, since their anchor is by construction text that survives.
+
+### A tree-wide grep item that requires every hit to be in bounds collides with the improvements log
+
+**Area**: `agent:writer`
+
+**Observed**: On `SMR-189` the spec's `V7` reads *"`grep -rn --exclude-dir=specs 'mis-worded'
+--include='*.md' .` → every hit is in a file this spec's *Boundary* lists as in bounds, and no hit
+is in `docs/ISSUE_TRACKING.md`"*. By round 2 the grep hit `docs/AGENTS_IMPROVEMENTS.md`, because a
+`qa` process-feedback entry quoted a spec sentence containing the new term — and the *Boundary*
+lists that file under **out of bounds**, so the item read as failed on a write every agent in the
+pipeline is under a standing duty to make and which the same *Boundary* bullet explicitly permits
+("adds one only on fresh friction of its own"). The item's real intent — the new vocabulary has not
+leaked into a surface that needs reconciling, and none of it reached the declaration — was
+satisfied throughout. The collision is structural rather than particular to this card: any
+prose task whose validation greps the whole tree for the term it introduces will trip on its own
+improvements log the moment an agent files friction that quotes the spec.
+
+**Suggested change**: When a Validation item runs a tree-wide command whose property is *every hit
+is in an in-bounds file*, it must exclude the append-only process-feedback log from the command
+(`--exclude-dir` or an equivalent), or state in the item itself that a hit there is expected and
+does not fail the check. More generally: a *Boundary* that both places a file out of bounds **and**
+permits a specific write to it should say which of the two a Validation item is quantifying over,
+so `qa` is not left deciding whether a permitted write is a failure.
