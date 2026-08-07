@@ -229,7 +229,42 @@ at the same severity as a criterion with no disposition at all — an unchecked 
 otherwise be a way to retire a criterion without speccing it. The acceptance gate returns a
 verdict **per `ACn`**, grading against the transcription rather than the card, reading the
 card only as evidence about the copy; for an `ACn` in the already-satisfied section it
-grades from that section's evidence plus `qa`'s reported re-validation result.
+grades from that section's evidence plus `qa`'s reported re-validation result. Its
+vocabulary is **four labels and no more — met, partially met, unmet, and mis-worded** —
+the fourth for a criterion whose shipped work does what the design intends while the
+criterion *as worded* does not describe it; the first three all grade the work, and
+without a fourth the gate facing that case has to either fail correct work or pass
+wording the work does not satisfy. And **every verdict it returns names the observation
+that establishes it, `met` included** — the file and region read and what it said, or,
+for a criterion in the already-satisfied section, that section's evidence plus `qa`'s
+re-validation result. That obligation is what makes a `met` checkable rather than
+asserted, and it is also how a criterion satisfied only because its antecedent never
+arose says so in its own words: it is graded met with an observation recording that the
+antecedent was false and nothing was exercised, rather than earning a fifth label.
+
+**Why the fourth label is a verdict and not a correction.** The obvious repair — let the
+gate fix the wording it found wrong — is barred from both ends: the `auditor` never edits
+the card it is gating (above), and the declaration forbids correcting a criterion in the
+window between the build and the gate that judges it. So the outcome cannot close inside
+the run that finds it. The gate reports it in the verdict it returns — naming which
+sub-case applies and quoting the criterion's own sentence beside the shipped text, since a
+paraphrase bent into agreement is exactly how this defect hides — the `lead` escalates it
+to the human in the PR description, the final handoff, and a comment on the card, and the
+correction lands in a **later run's spec pass**, the window where correcting a criterion
+is legal because no code exists yet to reshape it toward. That escalation is also the one
+gate outcome a run proceeds past: the gate's own verdict is still *not ready*, and every
+criterion graded unmet or partially met blocks exactly as before, but a run whose work is
+right and whose wording is not ships having escalated rather than looping on a finding no
+round can clear. Because the label is an escape hatch — an auditor that merely could not
+verify something could reach for it instead of failing — it is bounded on all four sides:
+failing work, a wrong design, and a criterion the gate could not verify are each graded
+unmet (or reported unverified, the existing mechanism-verification mode) rather than
+mis-worded, and its severity ranks *with* unmet, never below it. The same defect one gate
+earlier — the spec's Design, or the region an already-satisfied entry names, contradicting
+a criterion as worded — is a readiness finding routed straight to the `writer`'s spec
+pass, because there the window is still open. The declaration records only that
+consequence and names no verdict label: the vocabulary lives in the `auditor`'s own
+definition, and a second copy of it in a document about write authority would drift.
 
 **The already-satisfied section is shaped by what checks it.** Each entry names three
 things, because each answers a different reader: **what satisfies it** — the file, or
@@ -734,8 +769,13 @@ paraphrase bent into agreement with the criterion reads exactly like a verified 
 since the file it names is real. That is why the readiness gate's third disposition is
 stated as *open the file and look*, and why an entry it cannot verify is a blocking finding
 rather than a pass (see *The card's acceptance criteria are pinned into the spec* above).
-It is also how a **mis-worded criterion** surfaces at all — the criterion that forced the
-file open was the one that turned out to be wrong, not the shipped text.
+It is also where a criterion whose own *wording* was the defect was first caught — the
+criterion that forced the file open was the one that turned out to be wrong, not the
+shipped text. That is no longer where such a criterion has to be discovered: both gates
+now carry a named outcome for it — **mis-worded** at the acceptance gate, a finding routed
+to the `writer`'s spec pass at the readiness gate, both stated in that same section — and
+this duty is one place that outcome gets reached from, not the incidental route it once
+was.
 
 ## The commit model
 
