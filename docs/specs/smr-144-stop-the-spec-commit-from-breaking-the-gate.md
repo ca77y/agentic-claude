@@ -732,11 +732,11 @@ Every task below is the `coder`'s unless marked otherwise. All edits are in
       trustworthy), and the statement that nothing modifies the spec between it and commit 1.
       Leave the existing closing clause ("…nothing left for you to check first") intact and
       unmoved. Satisfies R1.1, R1.2, R1.6, R2.1, R5.1, R5.2, R5.3, R6.1.
-- [ ] **T1a** *(amended 2026-08-07, `qa` round 1)* — Restate T1's step as operating over **commit
+- [x] **T1a** *(amended 2026-08-07, `qa` round 1)* — Restate T1's step as operating over **commit
       1's path set** rather than the spec path: define the set where step 3 first uses it, add the
       pre-staging re-read that formats only paths which joined it during the gate, and replace the
       collateral snapshot with the before-and-after capture. Satisfies R1.1, R1.3, R1.4, R6.2.
-- [ ] **T1b** *(added 2026-08-07, spec gate round 2)* — Workflow step 3, in the floor's fix path:
+- [x] **T1b** *(added 2026-08-07, spec gate round 2)* — Workflow step 3, in the floor's fix path:
       state that a `writer` fix made in response to the floor is re-formatted before its commit;
       that where the fix touched the *Acceptance criteria (verbatim transcription)* block the
       `lead` re-enters the spec-readiness gate before committing it; and that where it did not, the
@@ -747,26 +747,26 @@ Every task below is the `coder`'s unless marked otherwise. All edits are in
       dispatch — once per run, with the attribution rule (a path commit 1 landed → `writer`, plus
       its own commit; paths outside commit 1 → recorded as pre-existing and relayed), and the
       CI-only case. Satisfies R3.1, R3.2, R4.1, R4.2.
-- [ ] **T2a** *(amended 2026-08-07, `qa` round 1)* — Restate the attribution rule over commit 1's
+- [x] **T2a** *(amended 2026-08-07, `qa` round 1)* — Restate the attribution rule over commit 1's
       path set and its complement, so no path falls between the branches, and spell out the floor's
       own not-trustworthy branch — settled before attribution, routed to nobody. Satisfies R3.3,
       R3.4, R3.5, R5.4.
 - [x] **T3** — *The commit model*: state the format precondition on commit 1's bullet, and add the
       spec-format-fix commit to the model. Satisfies R7.1.
-- [ ] **T3a** *(amended 2026-08-07, `qa` round 1)* — Condition that bullet on the project defining
+- [x] **T3a** *(amended 2026-08-07, `qa` round 1)* — Condition that bullet on the project defining
       a format command, so neither the precondition nor "carries that step's output" is asserted
       unconditionally. Satisfies R7.1.
 - [x] **T4** — *Boundaries*: add the carve-out, reconciled with the existing "never do an agent's
       work" and "do not run or re-run tests" lines. Satisfies R7.2, R8.1.
 - [x] **T5** — *When a gate finds a problem*: route a floor failure naming a path commit 1 landed
       to the `writer`. Satisfies the first half of R7.3.
-- [ ] **T5a** *(amended 2026-08-07, `qa` round 1)* — Restate that bullet over a commit-1 path, and
+- [x] **T5a** *(amended 2026-08-07, `qa` round 1)* — Restate that bullet over a commit-1 path, and
       add the second writer-routed failure the new steps produce: a check-only format failure at
       step 3, fixed before commit 1 and folded into it, with no separate commit. Satisfies the
       first half of R7.3.
 - [x] **T6** — *Final handoff*: report the floor's outcome, and include the spec-format-fix commit
       in the commit enumeration. Satisfies the second half of R7.3.
-- [ ] **T6a** *(amended 2026-08-07, `qa` round 1)* — Add *unrunnable* to the floor outcomes the
+- [x] **T6a** *(amended 2026-08-07, `qa` round 1)* — Add *unrunnable* to the floor outcomes the
       handoff reports, alongside ran-clean, failed-and-how-it-closed, and skipped-with-the-reason.
       Satisfies the second half of R7.3.
 - [x] **T7** — Read the frontmatter `description` and the whole of `SKILL.md`; change the
@@ -774,7 +774,7 @@ Every task below is the `coder`'s unless marked otherwise. All edits are in
       describing the old sequence. Satisfies R7.4.
 - [x] **T8** — Confirm the owner is named exactly once and that `writer.md`, `coder.md`, `qa.md`,
       and `auditor.md` are untouched. Satisfies R2.2.
-- [ ] **T9a** *(amended 2026-08-07, `qa` round 1 — wording and presentation, no contract change)* —
+- [x] **T9a** *(amended 2026-08-07, `qa` round 1 — wording and presentation, no contract change)* —
       Apply `qa`'s F4, F7, and F9: state the owner sentence as *the rejected alternative* rather
       than as a claim about what the `writer` returns (R2.1 already asks for this,
       and `writer.md` is a stated non-goal, so the built sentence overreaches); break step 3's
