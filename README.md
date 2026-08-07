@@ -358,11 +358,16 @@ the readiness gate's board-side duplicate detection itself, in each; the
    round, which is what keeps that transcription trustworthy without the lead running a
    check of its own. Anything the qa loop left uncommitted — the final clean round's added
    tests included — is **committed before the first acceptance dispatch**, so it does not
-   fuse into the first acceptance fix. Findings route back to the same coder — resumed
-   when its agentId is held, or freshly dispatched with the findings when it is not — and
-   each round's fix is likewise **committed before the fresh re-audit**, which is handed
-   the references to diff against. Capped at 3 rounds. Docs do not start while a criterion
-   is unmet.
+   fuse into the first acceptance fix. **Unmet and partially met** findings route back to
+   the same coder — resumed when its agentId is held, or freshly dispatched with the
+   findings when it is not — and each round's fix is likewise **committed before the fresh
+   re-audit**, which is handed the references to diff against. Capped at 3 rounds. Docs do
+   not start while a criterion is unmet or partially met. A criterion graded
+   **mis-worded** — the work is right and the wording is not — goes to neither the coder
+   nor a respec, since neither can reword a card inside this window: the lead escalates it
+   to the human, in the PR description, the final handoff, and a comment on the card, and
+   proceeds to the docs pass and the PR. That is the one gate outcome a run ships past,
+   and the correction lands in a later run's spec pass.
 
    **The mechanical equality check**, performed by the `auditor` itself inside each gate it
    runs: the spec's acceptance-criteria section is a verbatim, labelled copy of the card's
@@ -488,7 +493,9 @@ work in a separate context — and the lead owns every gate over it.
 
 The lead routes qa, acceptance-gate, and PR-review findings back to the same coder —
 **resuming it** when it holds a resumable agentId for it, or dispatching a fresh coder
-carrying the findings when it does not. All are handled the same way: apply the whole
+carrying the findings when it does not. (The one exception is an acceptance-gate criterion
+graded **mis-worded**, which is escalated to the human rather than routed here — the coder
+holds no board access and cannot reword a card.) All are handled the same way: apply the whole
 set in one go and report back to the lead, which re-runs `qa`. A finding is rejected
 only with a traced input, never a restated conclusion; a finding that genuinely
 conflicts with the spec is escalated as a mismatch, never rejected.
@@ -527,6 +534,34 @@ the finished work meets the task's acceptance criteria criterion by criterion; t
 trusted with no gate; its spec is gated.) Reads the artifact plus enough context to judge it on its own terms and
 returns a **ready / not-ready** verdict. **Report-only** — the caller owns applying
 fixes. Does not review code quality.
+
+**At the acceptance gate it grades each criterion in one of four labels, and no more —
+met, partially met, unmet, and mis-worded.** The fourth is for a criterion whose shipped
+work does what the design intends while the criterion *as worded* does not describe it;
+the other three all grade the work, so without it the gate has to either fail correct work
+or pass wording the work does not satisfy. It names which sub-case applies — the criterion
+is narrower or broader than the design intends, it contradicts a specific other `ACn`, or
+its antecedent cannot arise in any run — and quotes the criterion's own sentence beside the
+shipped text rather than paraphrasing either. Four bars stop it becoming a cheap way out:
+failing work, a wrong design, and a criterion it could not verify are graded **unmet**
+(or reported unverified, the existing mechanism-verification mode) and never mis-worded,
+and its severity ranks *with* unmet, never below it. It cannot correct the criterion — it
+never edits the card it is gating, and the declaration bars any correction between the
+build and the gate that judges it — so it reports the defect in the verdict it returns,
+the lead escalates it to the human, and the fix lands in a **later run's spec pass**,
+where correcting a criterion is legal because no code exists yet to reshape it toward.
+The same defect one gate earlier — the spec's Design, or the region an already-satisfied
+entry names, contradicting a criterion as worded — is a readiness finding routed straight
+to the `writer`, since there that window is still open.
+
+**Every verdict it returns names its evidence, `met` included** — the file and region it
+read and what it said, or, for a criterion in the spec's *Already satisfied criteria*
+section, that section's evidence plus `qa`'s re-validation result. A criterion satisfied
+only because its antecedent never arose is graded met with an observation saying the
+antecedent was false and nothing was exercised, so the vacuous case is visible in what the
+observation says instead of needing a fifth label. The obligation is also what keeps
+mis-worded honest: a gate that must name an observation for every verdict cannot quietly
+relabel a criterion it failed to check.
 
 **Board access is granted per dispatch by whoever calls it.** The `lead`'s spec-readiness
 gate grants it **read and search**; its acceptance gate grants it **read** only, because

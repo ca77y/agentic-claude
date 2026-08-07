@@ -109,7 +109,11 @@ Two rules bound all of that:
   never in the window between the build and the gate that judges it. The `writer`
   corrects a criterion during the spec pass and records the deviation; the `lead` marks
   criteria verified only after the acceptance gate has passed; the `auditor` never edits
-  what it gates. A criterion edited by the work it governs is not a criterion.
+  what it gates. A criterion edited by the work it governs is not a criterion. Where a
+  gate finds a criterion's own wording defective inside that window, it does not correct
+  it there either: it reports the defect in the verdict it returns, and the run escalates
+  it to the human, unresolved — the correction happens in a later run's spec pass, on the
+  corrected card.
 
 Where an agent is unsure whether an edit is a correction or a rewrite of the goal, it
 reports instead of writing. That is the only case left where reporting beats acting.
