@@ -1,5 +1,5 @@
 {
   "name": "ca77y-engineering",
   "description": "Idea-to-shipped development pipeline: analyst, the lead skill (run in the main session, takes one task end to end — no splitting), the board skill (helps a project write or repair the ISSUE_TRACKING.md declaration the pipeline reads directly, at a fixed path, on every run), coder, qa (validation plus the local code review), writer (specs + docs), auditor. Research and the Markdown research library live in the companion ca77y-library plugin, used when installed. Root manifest mirrors .claude-plugin/plugin.json.",
-  "version": "2.3.0"
+  "version": "2.4.0"
 }
