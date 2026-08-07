@@ -254,3 +254,29 @@ identifier, made by the human or by the `lead` run that next starts, and explici
 unrelated story's branch. Where the analyst cannot commit at all, have it report the pending removal (file,
 entry heading, card identifier) in its final report so the clearing is a named handoff rather than an
 uncommitted edit in a tree that is about to be deleted.
+
+### The writer's fixed spec-pass board access and its duty to apply card corrections disagree
+
+**Area**: `agent:writer`
+
+**Observed**: On `SMR-189`'s spec pass I had to correct four stale sentences on the card's
+`## References` and add a shared-region note to a sibling card. `writer.md` requires exactly that —
+"an authorised correction is applied, not described — a fix you were allowed to make and merely
+reported is work handed back to the human for no reason", and "Where the declaration's write
+authority permits updating a card, apply the correction to both sides yourself" — and
+`docs/ISSUE_TRACKING.md` § *What the pipeline may write* does authorise it ("a stale relationship
+… **fix it on the issue**"). But the same file's two access statements say something narrower: the
+canonical *Board access is granted by your caller* paragraph says "your own board access for this
+dispatch is whatever your caller named", and the sentence right after it fixes the spec pass at
+"**read and search**", justified by the sibling sweep. A strict reader of those two sentences has
+no `update` binding at all and would report every correction instead of applying it, which is the
+outcome both rules exist to prevent. The `lead` skill dispatches with exactly that wording, so
+the narrow reading is the one that arrives in the prompt.
+
+**Suggested change**: State the spec pass's fixed access as **read, search, and whatever card-content
+authority the declaration grants the `writer`** — one clause, in the same sentence that fixes read
+and search — rather than leaving the update authority to be inferred from the declaration by a
+reader who has just been told their access is whatever the caller named. Same edit in the `lead`
+skill's *Reading the tracking declaration*, which restates the writer's grant, so the two agree.
+Keep the caller-granted default-deny for every other dispatch; this is about the one pass the
+declaration itself names as the legal window for a criterion correction.
