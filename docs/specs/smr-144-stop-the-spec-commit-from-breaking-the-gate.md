@@ -562,30 +562,30 @@ format/lint command is therefore a **follow-up**, recorded in the handoff rather
 Every task below is the `coder`'s unless marked otherwise. All edits are in
 `plugins/ca77y-engineering/skills/lead/SKILL.md`; no other file under `plugins/` changes.
 
-- [ ] **T1** — Workflow step 3: add the format step on collection of every `writer` spec-pass
+- [x] **T1** — Workflow step 3: add the format step on collection of every `writer` spec-pass
       round, before the (re-)audit dispatch — path-scoped or check-only, the project's own command
       discovered from project context, the three outcomes (runnable / not defined / not
       trustworthy), and the statement that nothing modifies the spec between it and commit 1.
       Leave the existing closing clause ("…nothing left for you to check first") intact and
       unmoved. Satisfies R1, R5, R6.
-- [ ] **T2** — Workflow step 3: add the post-commit-1 lint floor before the step-4 `coder`
+- [x] **T2** — Workflow step 3: add the post-commit-1 lint floor before the step-4 `coder`
       dispatch — once per run, with the attribution rule (spec path → `writer`, plus its own
       commit; untouched paths → recorded as pre-existing and relayed), and the CI-only case.
       Satisfies R3, R4.
-- [ ] **T3** — *The commit model*: state the format precondition on commit 1's bullet, and add the
+- [x] **T3** — *The commit model*: state the format precondition on commit 1's bullet, and add the
       spec-format-fix commit to the model. Satisfies R7's first scenario.
-- [ ] **T4** — *Boundaries*: add the carve-out, reconciled with the existing "never do an agent's
+- [x] **T4** — *Boundaries*: add the carve-out, reconciled with the existing "never do an agent's
       work" and "do not run or re-run tests" lines. Satisfies R7's second scenario and R8.
-- [ ] **T5** — *When a gate finds a problem*: route a floor failure naming the spec path to the
+- [x] **T5** — *When a gate finds a problem*: route a floor failure naming the spec path to the
       `writer`. Satisfies the first half of R7's third scenario.
-- [ ] **T6** — *Final handoff*: report the floor's outcome, and include the spec-format-fix commit
+- [x] **T6** — *Final handoff*: report the floor's outcome, and include the spec-format-fix commit
       in the commit enumeration. Satisfies the second half of R7's third scenario.
-- [ ] **T7** — Read the frontmatter `description` and the whole of `SKILL.md`; change the
+- [x] **T7** — Read the frontmatter `description` and the whole of `SKILL.md`; change the
       description only if it now misstates what the skill does, and fix any other sentence left
       describing the old sequence. Satisfies R7's fourth scenario.
-- [ ] **T8** — Confirm the owner is named exactly once and that `writer.md`, `coder.md`, `qa.md`,
+- [x] **T8** — Confirm the owner is named exactly once and that `writer.md`, `coder.md`, `qa.md`,
       and `auditor.md` are untouched. Satisfies R2.
-- [ ] **T9** — Run V2 and V3 (the root `CLAUDE.md` duplication greps and the manifest-parity
+- [x] **T9** — Run V2 and V3 (the root `CLAUDE.md` duplication greps and the manifest-parity
       loop) and V5 (the tool-name grep); report the actual output. Satisfies part of *Validation*.
 - [ ] **T10** — *(Not the `coder`'s task — the `writer`'s docs pass, step 7.)* Update the root
       `README.md` (the lead's pipeline step 3 and its **The commit model** paragraph) and
