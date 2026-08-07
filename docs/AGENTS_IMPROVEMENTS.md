@@ -280,3 +280,29 @@ reader who has just been told their access is whatever the caller named. Same ed
 skill's *Reading the tracking declaration*, which restates the writer's grant, so the two agree.
 Keep the caller-granted default-deny for every other dispatch; this is about the one pass the
 declaration itself names as the legal window for a criterion correction.
+
+### A Validation item whose grep pattern is a string the build rewords passes vacuously
+
+**Area**: `agent:writer`
+
+**Observed**: On `SMR-189` the spec's `V9` reads *"`grep -rn --exclude-dir=specs 'as concrete unmet
+criteria' --include='*.md' .` → every hit sits in text that also excludes the mis-worded outcome
+from what routes to the `coder`"*. It obeys the standing rule above — it states a command and a
+property, with no count, no file list and no line number — and it still cannot fail: the build's
+own mandated edit rewrote that exact phrase to *"as a concrete criterion to close"*, so the grep
+returns **zero hits** and the universally-quantified property over an empty set is true. A `qa`
+round that ran `V9` verbatim and reported it green would be reporting nothing. The pattern was
+quoted from the **pre-build** text of the very sentence the task exists to rewrite, and the item's
+own *Edit sites* section names that sentence as an edit target, so the spec contained both halves
+of the contradiction. This is the same shape as the vacuous-`met` hole `SMR-189` closes one layer
+up — a check satisfied only because its antecedent never arose — and the spec pass has no rule
+against it.
+
+**Suggested change**: Add one clause to the Validation rule: a **target-state** item must anchor
+its command on text the build is expected to **produce**, never on text the build is expected to
+**remove or reword** — and where an item's pattern also appears in that spec's *Edit sites* as a
+string being changed, that is a defect in the item, not a risk to discover at `qa`. Pair it with a
+non-vacuity requirement stated in the item itself: an item whose property is universally quantified
+over a command's hits says what a **zero-hit** result means — pass, fail, or *re-derive the anchor*
+— so an empty result can never be reported as a green check by default. Baseline-unchanged items
+are unaffected, since their anchor is by construction text that survives.
