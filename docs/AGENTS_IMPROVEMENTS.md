@@ -188,28 +188,6 @@ matter how faithfully it was captured, a baseline hit list adds nothing a build 
 the only part of the item that can be wrong. Same rule for a spec's own prose: where a count would fix the
 scope of a sweep ("exactly five places state this"), have the check enumerate them at build time instead.
 
-### The acceptance gate can pass a criterion whose shipped wording does not satisfy it as written
-
-**Area**: `agent:auditor`
-
-**Observed**: On `SMR-188`, a criterion required that a template be "read only when the file is absent". The
-shipped clause loads it "only when you are actually writing **or repairing** a declaration" — and repairing
-operates on a file that is *present*, so the shipped text does not satisfy the criterion as worded. The
-acceptance gate graded that criterion **met**, because the shipped wording matches the criterion's evident
-*intent* — nobody wants to forbid loading a template while repairing a declaration. It surfaced only on a
-later spec pass, when a new rule forced someone to open the clause and read it against the criterion's actual
-words. `auditor.md`'s grading vocabulary is met / partially met / unmet, and all three describe the *work*;
-none of them describes the case where the work is right and the **criterion** is the thing that is wrong. So
-the gate's only honest options were to fail correct work or to pass wording that does not match, and it took
-the second.
-
-**Suggested change**: Give the acceptance gate a fourth outcome for a criterion whose shipped wording is
-defensible but does not satisfy the criterion **as written**: report it as *criterion mis-worded*, naming the
-criterion's own sentence and the shipped sentence side by side, so the `lead` routes it to a `writer` spec
-pass for a criterion correction rather than to the `coder` as a defect. Grading such a criterion "met" hides a
-board-side wording defect behind a green gate, and the discovery is then arbitrary — it depends on some later
-pass happening to open the file.
-
 ### An already-satisfied entry must name its region the way a reader finds it, never by line number
 
 **Area**: `agent:writer`
@@ -254,3 +232,25 @@ shipped work has already made that change — and that the two often happen in d
 taking the rationale and a later triage taking the instruction edit. Say it in the rule rather than leaving
 it to precedent, since the pass positioned to notice the distinction is the one whose own edit creates the
 appearance of conversion.
+
+### An entry cleared while filing a card from inside another story's worktree has nowhere to be committed
+
+**Area**: `flow`
+
+**Observed**: Filing `SMR-189` cleared this file's entry *"The acceptance gate can pass a criterion whose
+shipped wording does not satisfy it as written"*, and the deletion is sitting **uncommitted** in the
+`SMR-188` story worktree (`911619b`), because that is the tree the analyst was working in. Neither
+disposition is right. Committed there, it lands inside `SMR-188`'s PR #18 — whose own References state
+*"`docs/AGENTS_IMPROVEMENTS.md` carries no entry this story converts or retires"* — and the removal commit's
+message would name a card that PR is not about, defeating the rule that the message is the finding's only
+surviving trace. Left uncommitted, the entry survives `git worktree remove` and is re-triaged and filed a
+second time under a new identifier, which is the exact failure the clear-as-you-convert rule exists to
+prevent. The root `CLAUDE.md` rule says removal happens "in the same pass and the same commit" as the
+conversion, but the pass that converts is an `analyst` run that owns no branch and creates no commits.
+
+**Suggested change**: Say in the clear-as-you-convert rule where the removal commit goes when the converting
+pass is not a `lead` run — the default being a commit on the repository's target branch naming the new card
+identifier, made by the human or by the `lead` run that next starts, and explicitly **not** folded into an
+unrelated story's branch. Where the analyst cannot commit at all, have it report the pending removal (file,
+entry heading, card identifier) in its final report so the clearing is a named handoff rather than an
+uncommitted edit in a tree that is about to be deleted.
