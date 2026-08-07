@@ -14,7 +14,7 @@ ca77y-agentic/
 |   |   |-- .claude-plugin/plugin.json   # Claude manifest (agents whitelist)
 |   |   |-- plugin.json                  # root manifest, mirrors the Claude one
 |   |   |-- skills/lead/SKILL.md         # the lead skill - the pipeline orchestrator
-|   |   |-- skills/board/SKILL.md        # resolves the project's board into a profile
+|   |   |-- skills/board/SKILL.md        # helps write/repair the ISSUE_TRACKING.md declaration
 |   |   |   `-- references/              # loaded only to author an ISSUE_TRACKING.md
 |   |   `-- agents/*.md                  # analyst, auditor, coder, qa, writer
 |   `-- ca77y-library/
@@ -75,16 +75,185 @@ The library crew is dispatched directly by whichever agent needs library work �
 `researcher` within its own plugin, and the `analyst` across the plugin boundary,
 optionally (see *Two plugins, one optional edge* below).
 
-`board` is the second skill, and the only one nothing dispatches: the `lead` and the
-`analyst` **invoke** it (loading its instructions into their own context, not spawning
-an agent) to resolve how the project tracks work, and it returns a **board profile** —
-bindings for locate/read/search/create/transition, the card shape, the status
-vocabulary, the visibility rule, and the write authority. That profile is the pipeline's
-only interface to a tracker; `writer` and `auditor` receive it in their dispatch, and
-`coder` and `qa` get no board access at all. It keeps the board a *resolved* dependency
-rather than a structural one — repo-local Markdown, a hosted tracker, or nothing changes
-the profile's contents and nothing else in the pipeline. A user can invoke it directly
-to see what resolves.
+`board` is the second skill, and the only one nothing dispatches automatically: the
+`lead` and the `analyst` **read** `docs/ISSUE_TRACKING.md` directly, at that fixed path,
+rather than invoking anything — bindings for locate/read/search/create/transition (plus
+comment and update where the project authorises them), the card shape, the status
+vocabulary, the visibility rule, and the write authority all come straight from that one
+file. Every other role reaches it the same way, with whatever access its caller granted —
+see *Board access is granted per dispatch* below. It keeps the board a *declared*
+dependency rather than a structural one — repo-local Markdown, a hosted tracker, or
+nothing changes what the declaration says and nothing else in the pipeline.
+
+**The skill itself remains, narrowed to authoring.** It no longer resolves anything per
+run — there is nothing left to resolve, since every agent reads the fixed declaration
+itself — but it stays a skill rather than collapsing into a line of prose, because its
+authoring half is substantial: it owns `references/authoring-issue-tracking.md`,
+[`PRODUCT.md`](PRODUCT.md) advertises it as the tool for writing a declaration, and it
+remains a legitimate user-invocable setup and inspection entry point — collapsing it to
+one line would orphan that reference. That reference is loaded on the **job**, not on the
+declaration's absence: the skill pulls it in only when it is actually writing **or
+repairing** a declaration — repair operates on a file that is present — and never when it
+is only reading one back, which is what keeps an inspection invocation cheap. A user
+invokes it directly to write or repair the
+declaration, or to see what it currently says; the `lead` may reach it mid-run as a
+**fallback**, never as a per-run step, when it finds no declaration at all — and even then
+the skill refuses to write the file mid-pipeline, putting the recommendation in its report
+instead. The `analyst` has no such route at all: its definition states outright that
+reading the declaration is a file read with no skill to invoke, and where the declaration
+is absent it returns its shaped stories in its report rather than reaching for anything.
+
+## Board access is granted per dispatch, not held by role
+
+Which agents can reach the board is a property of **the dispatch**, not of the agent. The
+`lead` reads the declaration itself and holds whatever the declaration grants it. Every
+other role is told what it has when it is dispatched:
+
+| Role | Board access |
+| --- | --- |
+| `lead` | read, the two status transitions, comment, PR attachment, and the card-content updates the declaration authorises |
+| `writer`, spec pass | read **and** search |
+| `auditor`, in the `lead`'s spec-readiness gate | read **and** search |
+| `auditor`, in the `lead`'s acceptance gate | **read** only |
+| `auditor`, in the `analyst`'s story-advisor gate | read and search, granted by that caller |
+| `analyst` | search, read, create |
+| `coder`, `qa` | none |
+
+The `auditor`'s three rows are the point of the model: one definition is dispatched by two
+callers for three different needs, so its access cannot be a fact about the file — and
+none of the three grants is empty. In the `lead`'s spec-readiness gate it needs read and
+search: it performs the mechanical equality check against the card's own criteria (below)
+and the readiness gate's own board-side duplicate detection. In the `lead`'s acceptance
+gate it needs read but not search: the equality check still needs the card's own
+criteria, but grading needs nothing about its siblings, so widening that gate to search
+would let unrelated board content bear on grading. In the `analyst`'s advisor gate it
+keeps read and search, because that gate's job includes board-side duplicate detection
+too.
+
+**One consequence has to be stated rather than left to lapse.** A `lead` run's board-side
+duplicate check now has **two** homes: the `writer`'s sibling sweep during the spec pass —
+searching sibling cards for provisioning collisions, and for relationship prose a settled
+decision contradicts — and the `auditor`'s spec-readiness gate, checking whether the
+artifact under review itself duplicates or overlaps work already on the board. Neither
+subsumes the other. That is why the `writer` keeps **search** and not only read, and why a
+sweep that could not run is reported as not run: a run where the sweep was impossible and a
+run where it came back empty are otherwise indistinguishable in a report that states only
+the result.
+
+**The two agents whose access is decided by the caller that dispatches them, rather
+than being a fixed fact about the agent, carry one canonical paragraph.**
+`**Board access is granted by your caller.**` is byte-identical in `writer.md` and
+`auditor.md`, guarded by the second `grep` in the root [`CLAUDE.md`](../CLAUDE.md) — the
+first arrangement in *Three ways an obligation gets repeated* below. One statement is true
+of both without divergence: your access is whatever the caller named, you read the
+declaration yourself at its fixed path, and where the caller named nothing you have none
+and say so. The `lead` skill deliberately does **not** join that pair — it reads the
+declaration unconditionally, and says so in its own voice — so the pair stays two files,
+not three.
+
+## The card's acceptance criteria are pinned into the spec
+
+The spec carries the card's `## Acceptance criteria` **verbatim**, one behaviour per line,
+labelled `AC1`…`ACn`, stamped with the card identifier and the state it was read at.
+[`_templates/spec.md`](_templates/spec.md) carries the section, and the spec's order is
+`Goal → Acceptance criteria (verbatim transcription) → Design → Requirements → Tasks →
+Already satisfied criteria`. The transcription section is dropped only where there are no
+criteria to copy — a trackerless run, or a task naming no card, where the spec's own
+requirements and scenarios are the standard; the already-satisfied section is dropped only
+where every criterion needs work.
+
+**What licenses the copy is a check, not a promise that it is faithful.** The standing
+rule elsewhere in the pipeline is to name the card rather than restate its criteria,
+because a paraphrase drifts toward what the work already does. A verbatim copy carries the
+same failure mode unless something proves the drift did not happen — so the `auditor` runs
+a **mechanical equality check** between the transcription and the card's own criteria,
+itself, inside each gate that uses it: once inside the spec-readiness gate, before it judges
+the mapping, and again inside the acceptance gate, before it grades any criterion —
+including every re-audit round of either, since a fresh auditor each round would otherwise
+grade an unguarded copy. It normalises only the rewrites the board itself performs on save
+(on this repo's board, `-` bullets to `*` and bare URLs wrapped in `<…>`) and nothing else.
+A mismatch is a **blocking finding** that routes to a **respec**, never to grading a stale
+list. The check is mechanical, which is why it can sit ahead of grading in the same
+dispatch — and the `lead` itself performs no check of its own over the card's criteria: no
+comparison, no classification, no per-criterion read.
+
+**Why the check lives in the gate and not in the orchestrator.** It sat in the `lead` for
+one iteration and was moved back deliberately, so the reasoning is recorded here rather
+than left in a spec that no longer exists. Three things decided it. The `lead`'s founding
+boundary is that it never does an agent's work, and licensing it to compare the
+transcription against the card took a carve-out written for exactly one caller —
+*comparing two strings is not judging whether a criterion is met* — and a rule that needs
+an exemption for one caller is a rule under strain; the carve-out is deleted rather than
+defended. Every gate round is a **fresh dispatch**, so "on every round, including each
+re-audit round" holds *by construction* once the duty sits inside the gate, where it was
+previously an instruction the orchestrator had to remember twice per loop. And the reader
+that grades against the transcription is then the reader that proved it matches, with no
+trust hop between the checking party and the grading party. One cost is accepted and
+named rather than hidden: the first check now happens inside the readiness gate rather
+than at the spec-commit point, so nothing re-checks the copy between that gate passing and
+the commit — the acceptance gate's own check is the next one.
+
+**A gate that can read the card still grades the copy.** Giving the `auditor` read access
+raises the obvious question of why a frozen copy survives at all, and it survives for
+reasons the access does not touch. The `AC1`…`ACn` labels are the pipeline's addressing
+scheme — what a per-criterion verdict names, what a finding is filed against so the
+`coder` knows which criterion it failed, what the mapping rule is stated over, and what
+the already-satisfied section refers to — and a live card supplies no stable labels. The
+`coder` and `qa` hold **no** board access at all, so the transcription is the only path by
+which a criterion reaches the agents that must satisfy and validate it. And freezing is
+what makes drift *detectable*: a gate grading the live card directly would absorb a
+mid-build criterion edit as the new standard instead of failing on it.
+
+One shipped constraint carries the independence of the whole arrangement: the `auditor`
+**never edits the card it is gating**, whatever the declaration's write authority permits.
+Against a gate with no board access that rule was inert; with read access it is what keeps
+the judge separate from the standard, so it is the one sentence a later change to the
+`auditor`'s access must not quietly relax.
+
+**Ordering matters, because the spec pass may correct a criterion.** The `writer` is
+authorised to fix a criterion the design proves unsatisfiable, on the card, during the
+spec pass — the only safe moment, since no code exists yet to reshape it toward. The
+transcription is taken **after** any such correction: taken before, it would freeze into
+the spec exactly the criterion the design has just disproved, and the equality check would
+then fail on the precise path the pipeline exists to support.
+
+**Both gates work per label, and the mapping rule now admits a third disposition.** The
+readiness gate checks the mapping both ways — every `ACn` maps to at least one requirement,
+one scenario, **or an entry in the spec's *Already satisfied criteria* section**, and a
+requirement mapped to no `ACn` is a finding unless the spec marks it deliberate scope — and
+a criterion whose owning mechanism is **not a build step** maps validly under that rule
+too: documentation the docs pass owns, a manual reproduction, or a step only the `lead`'s
+own session can take. The third disposition is verified, not trusted: the gate opens the
+file each entry names, and an entry it cannot verify is a **blocking finding, not a pass**,
+at the same severity as a criterion with no disposition at all — an unchecked section would
+otherwise be a way to retire a criterion without speccing it. The acceptance gate returns a
+verdict **per `ACn`**, grading against the transcription rather than the card, reading the
+card only as evidence about the copy; for an `ACn` in the already-satisfied section it
+grades from that section's evidence plus `qa`'s reported re-validation result.
+
+**The already-satisfied section is shaped by what checks it.** Each entry names three
+things, because each answers a different reader: **what satisfies it** — the file, or
+files, that already make it true, and the commit where a commit is what settled it, which
+is what makes the entry checkable rather than asserted; **what `qa` re-validates** against
+the post-build tree, an observation and not a promise that the criterion was true once;
+and **whether the task's own changes touch that surface**, since an entry that is also an
+edit site is satisfied *and* at risk, and `qa` needs to know which entries those are
+rather than treating all of them as inert. Re-validation sits with `qa` rather than with
+the acceptance gate because `qa` runs the project's validation against the built tree as
+its whole job, runs *before* the acceptance gate and on every fix round, and an
+already-satisfied criterion the build broke is a regression — and regressions are `qa`'s.
+The asymmetry is the point: parking a criterion here is *cheaper* to write than a
+requirement but *more* exposed to checking, at two gates instead of one, which is what
+stops the section becoming a place to retire work nobody wanted to spec. Entries are
+marked `→` rather than the transcription's `—`, so the transcription's `- **ACn** — `
+lines stay the only lines of that shape in the spec: the equality check is a mechanical
+comparison, and a second `ACn` list sharing that prefix would put every entry in reach of
+a comparator that greps for it.
+
+**The transcription is run-local; the card stays the durable source.** It dies with the
+spec at the docs pass, so a later fix run against an open PR grades against the card
+again. The live drift window is therefore readiness gate → build: between the build and
+the gate that judges it, the declaration already forbids editing a criterion at all.
 
 ## Two plugins, one optional edge
 
@@ -94,7 +263,7 @@ agent call: `researcher` hands the `analyst` pages, not a return value.
 
 The split was reconsidered and taken because the dependency graph across that seam is
 almost empty. `ca77y-library` references nothing in `ca77y-engineering` — no board
-profile, no auditor, no worktree contract. In the other direction there is exactly one
+declaration, no auditor, no worktree contract. In the other direction there is exactly one
 edge: the `analyst` optionally dispatching `ca77y-library:librarian` and
 `ca77y-library:clerk` for extra library context. That edge is **soft by construction** —
 the `analyst` already reads wiki pages directly, so when the dispatch does not resolve it
@@ -139,11 +308,13 @@ one story per session, with parallel stories as parallel sessions over their own
 per-story worktrees. Flatness is the skill's design, not a machine-enforced cap — no
 depth-limiting environment variable is set anywhere.
 
-The skill keeps its orchestration state on disk, next to the worktree and outside it
-(`.worktrees/<branch>.ledger.md` for the pipeline ledger,
-`.worktrees/<branch>.findings-round-<N>.md` for oversized findings), and hands workers
-**paths, not content** — so a compaction or restart mid-pipeline recovers from the
-ledger plus `git log`, and orchestration files can never enter a story commit.
+The skill keeps its orchestration state on disk, **inside** the story worktree, at
+`tmp/` (`tmp/ledger.md` for the pipeline ledger, `tmp/findings-round-<N>.md` for
+oversized findings), and hands workers **paths, not content** — so a compaction or
+restart mid-pipeline recovers from the ledger plus `git log`, and the committed `tmp/`
+ignore entry keeps orchestration files from ever entering a story commit. See *Run-local
+scratch lives inside the story worktree* below for the rationale and the rejected
+alternatives.
 
 Three alternatives were evaluated against this one and rejected, and are recorded here
 so they are not re-litigated from scratch. **Agent teams** were tried with the flag
@@ -186,9 +357,8 @@ worker's preserved context across rounds — a benefit, not the only route. Ever
 that routes findings back to a worker therefore names two carry-forwards of equal
 standing: resume the worker whose agentId is held, or dispatch a **fresh** worker of the
 same role carrying the spec path, the worktree path and its provisioning status, the
-board profile where that role needs one, the round's commit references, and the findings
-(inline, or by the findings-file path). The only thing the fresh route loses is the
-previous worker's own context.
+round's commit references, and the findings (inline, or by the findings-file path). The
+only thing the fresh route loses is the previous worker's own context.
 
 **Which roles are resumable at all is part of the model, and each definition states its
 own side of it.** The two authoring roles carry context worth preserving across
@@ -196,8 +366,8 @@ rounds, so a findings round reaches the `coder` or the `writer` by whichever rou
 lead has. Both definitions name the two routes as facts of **equal standing**, neither as
 the exception, and give a freshly dispatched worker its inventory in both signs: what the
 dispatch handed it — the findings inline or by path, the spec's path, the worktree and its
-provisioning status, the board profile where the role needs one, the round's commit
-references — and what it does **not** hold, namely the previous round's context, its
+provisioning status, the round's commit references — and what it does **not** hold,
+namely the previous round's context, its
 reasoning and rationale and which findings it already rejected. With the negative half
 stated, the direction that follows is enforceable: read the spec from its path and the
 round's changes from the worktree and the commit references rather than recalling them.
@@ -330,15 +500,46 @@ absolute path exactly as the canonical paragraph above says, and nothing in thei
 changes.
 
 **The write guard itself is a stated assumption, not a documented contract.** No tool
-description documents it; the only record is a single background run that met it and
-reported the refusal. Nothing shipped verifies that `path`-form entry clears it either —
-what was checked was the text of two documents, which an editor writing that text fully
-explains. Both statements are therefore written as *what the remedy is when a harness
-demands isolation*, never as an instruction to isolate: an unguarded session keeps working
-from the launch directory as before. What would settle it is a live background `lead` run
-that meets the guard and reports whether entry by `path` clears it — the treatment
-[`PRODUCT.md`](PRODUCT.md) requires of any behaviour change, validated by running the
-pipeline on a live project rather than by reasoning about prompt text.
+description documents it; the only earlier record was a single background run that met
+it and reported the refusal. This story's own run supplies a second, fresh data point
+rather than leaving the record at that one.
+
+**This run's observation: a background job whose guard never fired.** This session's
+harness context stated it was configured to work **in place** rather than isolating into
+a worktree, and its first write of the run — before any `EnterWorktree` call — succeeded
+outside any worktree. **Dispatch mode: background job. Outcome: the write guard never
+fired.** That is one branch of the guard's four-way partition — *background job, guard
+never fired* — and it settles nothing about whether `path`-form entry clears the guard,
+because the mechanism the guard would gate was never exercised. Recording the mode
+alongside the outcome is what makes "the guard never fired" distinguishable from "the
+guard was never attempted" — a bare outcome, with no mode attached, cannot tell the two
+apart.
+
+**The `path`-form question stays open, and here is why.** "Nothing shipped verifies that
+`path`-form entry clears it either" — the sentence stood at `f87eedc`, and it **stays**.
+Both that sentence and the write guard's own existence are written as *what the remedy is
+when a harness demands isolation*, never as an instruction to isolate: an unguarded
+session keeps working from the launch directory as before. The two outcomes that would
+settle the open question are a run whose guard fires and finds entry by
+`path` clears it, or one whose guard fires and finds it does not, and this run's guard did
+not fire at all, so it is neither. Of the two branches that leave the question open, a
+**background run whose guard never fired** is the one this run demonstrates; a
+**foreground** run could not have met the guard in the first place, and is not what
+happened here. Should a future run instead meet the guard and find `path`-form entry does
+**not** clear it, that outcome is escalated as a **blocker** on this story, in addition to
+recording which outcome occurred — never shipped as a quietly closed fact — per
+`lead/SKILL.md`'s *Context discipline*. What would settle the open question is a live
+background `lead` run that meets the guard and reports whether entry by `path` clears it —
+the treatment [`PRODUCT.md`](PRODUCT.md) requires of any behaviour change, validated by
+running the pipeline on a live project rather than by reasoning about prompt text.
+
+**The write below was demonstrated, not asserted — and it does not touch the question
+above.** Once this story's `.gitignore` entry landed, the `lead`'s own session performed a
+real file-tool write to `tmp/` inside the story worktree and reported the result. That
+write proves the **relocated scratch location is writable**. It is **not** evidence that
+`path`-form entry clears the write guard, because on this run the guard never fired — a
+write in a session no guard ever applied to would look identical whether or not `path`
+entry clears anything. That mechanism stays the open assumption above.
 
 **Where the remedy is stated.** For this repo's own maintenance, in the root
 [`CLAUDE.md`](../CLAUDE.md)'s Worktrees section, which may name `.worktrees/<branch>`
@@ -351,6 +552,58 @@ every other agent behaviour. It sits deliberately
 **outside** the canonical `**Addressing the story worktree.**` paragraph: the remedy is one
 role's and reachable by no worker, and carrying it inside would force a five-file
 byte-identical edit and put the drift check at risk for no gain.
+
+## Run-local scratch lives inside the story worktree, at `tmp/`
+
+The pipeline ledger and any oversized findings file live at `tmp/ledger.md` and
+`tmp/findings-round-<N>.md`, **inside** the story worktree rather than beside it, kept
+untracked by one committed `.gitignore` entry (`/tmp/`, alongside `.worktrees/`). Neither
+name carries a branch qualifier: the earlier naming scheme — a per-branch filename in one
+shared directory outside every worktree — existed only because that one directory held
+every story's scratch at once, and it also nested unpleasantly whenever a branch name
+itself contained a `/` (a `tokwieci/smr-…` branch produced a further subdirectory). Once
+scratch moves inside its own worktree, each worktree already holds only its own story's
+files, so the qualifier has nothing left to disambiguate.
+
+**The rationale is the write boundary.** A session refused writes until it isolates (see
+above) can write inside the worktree it just entered, and could never write a file
+sitting in the old shared directory beside it — moving scratch inside the boundary is
+what lets the ordinary file tools reach it, with no `bash` escape hatch required for any
+scratch write. The guarantee that a commit step can never sweep either file into a story
+commit is the **committed ignore entry itself**: any non-force staging command skips an
+ignored path outright, a fact stated at that level rather than pinned to one specific
+`git` invocation, since `lead/SKILL.md`'s commit model names no specific one either.
+
+**The cost is durability, and it is real.** Scratch inside the worktree dies with it:
+`git worktree remove` takes it, and this repo removes the worktree once a story's PR
+merges. So `lead/SKILL.md`'s *Invoked on an open PR* recovery step rests on records
+durable by construction instead — the card's handoff comment, the PR description, and
+`git log` — treating a surviving `tmp/ledger.md` as a **bonus**, never something recovery
+depends on. The SMR-184 ledger reached roughly 19 KB, which is exactly why the durable
+record has to be the card and the PR rather than a file that can vanish with its
+worktree.
+
+**Four alternatives were rejected:**
+
+1. **Keep the previous location — the shared directory beside every worktree — writing
+   through plain single `bash` commands.** Rejected
+   **on principle**: if the design must reach for a shell escape hatch because the tool
+   that exists for writing files is refused, on a path taken before every dispatch and
+   every turn end, the design itself is broken. It also rests on an unverified claim —
+   that `bash` reaches outside the isolation boundary at all — evidenced only by the one
+   background run above.
+2. **A per-clone `.git/info/exclude` entry.** Unnecessary once a single committed entry
+   is accepted, unverified for linked worktrees, and writing the main repo's `.git/` sits
+   uneasily with the never-write-the-root-checkout rule even though `.git` is not the
+   working tree.
+3. **A pathspec exclusion at commit time** (`git add -A ':(exclude)tmp/'`). Needs no
+   ignore file, but every commit step has to remember it, and forgetting once sweeps
+   scratch into a story commit. The ignore entry buys the same outcome with nothing to
+   forget.
+4. **Reusing the worktree directory's own name inside the worktree.** Rejected: it
+   depends on the target project's own ignore pattern being depth-agnostic rather than
+   anchored, which the toolkit cannot dictate, and a `.worktrees/` nested inside a
+   worktree reads as a mistake to whoever finds it.
 
 ## Two nets around published library prose
 
@@ -395,10 +648,12 @@ should be added; unifying the wording would fuse two different jobs.
 An obligation sometimes has to appear in more than one place. This repo uses three
 arrangements deliberately, and reaching for the wrong one is how wording drifts:
 
-- **Byte-identical duplication, with a drift check.** The worktree contract above: one
-  canonical paragraph, one physical line per file, and a `grep` in the root
-  [`CLAUDE.md`](../CLAUDE.md) that catches the moment two copies differ. Used when every
-  copy must bind identically, because each agent acts on its own copy alone.
+- **Byte-identical duplication, with a drift check.** One canonical paragraph, one
+  physical line per file, and a `grep` in the root [`CLAUDE.md`](../CLAUDE.md) that
+  catches the moment two copies differ. Used when every copy must bind identically,
+  because each agent acts on its own copy alone. Two paragraphs use it: the worktree
+  contract above, across five files, and the caller-granted board-access paragraph across
+  `writer.md` and `auditor.md`.
 - **Deliberately different wording for two sides of one defect.** The two library nets
   above: a write-time self-check and an audit finding. No drift check covers them and
   none should — unifying the wording would fuse two different jobs.
@@ -413,6 +668,74 @@ arrangements deliberately, and reaching for the wrong one is how wording drifts:
   independently readable statement of the same duty in one file: both copies read as
   live, so an agent obeys whichever it reaches first and an edit to one silently leaves
   the other asserting the superseded version.
+
+## Verifying that a mechanism was really removed
+
+Removing a mechanism from the toolkit is a documentation problem as much as an editing
+one, and the two halves fail differently. The mechanism's **name** occurs in a countable
+number of places; the **claims about it** occur wherever prose happens to describe how
+something is reached. Three lessons from the run that removed the per-run
+board-resolution artifact are worth keeping, because the next such removal meets all
+three again.
+
+**A name sweep has to be wrap-aware and file-type-agnostic.** A per-line `grep` misses a
+phrase split across a line break — two occurrences hid exactly that way on the last
+removal, one in the root [`CLAUDE.md`](../CLAUDE.md) and one in this file — and an
+`--include='*.md'` sweep misses both plugin manifests, whose `description` strings
+describe skills in prose. The sweep that works normalises every whitespace run to one
+space *before* matching, and selects files from `git ls-files` by extension rather than by
+a glob over one type.
+
+**A zero-target bare-word count is a one-off migration gate, never a standing check.** It
+is the stronger of the two sweeps *during* a removal, because a bare word cannot be split
+by a line break at all and so cannot be fooled by wrapping. But it has no allow-list by
+construction: the moment the migration lands, the next piece of ordinary prose that
+happens to use the word fails it — which happened twice on the last removal, to prose that
+was perfectly correct. Retire such a count with the migration rather than promoting it to
+a drift check.
+
+**Neither sweep finds a claim that never uses the word.** A removed mechanism can still be
+asserted in prose naming none of the removed tokens — "how the board is reached; the skill
+resolves it" survives any count of the artifact's own name, and did, through a clean
+`TOTAL 0`. So a removal also needs a **residue sweep over the verbs**: what the mechanism
+*did*, in the words the docs use for it (resolve, discover, probe, cache), read across the
+whole tree and judged by hand. There is no mechanical form of it yet, and it is precisely
+what a green name sweep does not cover.
+
+## A spec is written against a tree the same pass is editing
+
+Several gate failures on one card came from a single root: the spec asserted something
+about the tree that the pass's own later edits made false. They are recorded here because
+the shape recurs on any task whose deliverable is the prose being checked, and one of them
+survived a green acceptance grade.
+
+**A *Validation* item states a command and a property, never a reproducible enumeration.**
+"Every hit attributes the check to the `auditor` or to a gate" stays checkable; a hit list,
+an entry count, or a line number is checkable only until the same pass edits what it
+counted. Four rounds on one card failed on enumerations that were captured faithfully and
+were stale by the time anyone read them — the last of them a baseline naming a line the
+pass itself had deleted. A baseline hit list adds nothing a build cannot recompute at check
+time, and it is the only part of an item that can be wrong. Where the property really is
+about a count, cite the criterion that states the number rather than restating it.
+
+**An already-satisfied entry names its region the way a reader finds it.** The section
+heading, the **bold lead-in**, or a phrase quoted from the text itself — never a line
+number, because `qa` and the acceptance gate open these against the **post-build** tree,
+where any line the pass's own edits moved has already rotted: on this rule's first use a
+removed section and an added one shifted a whole region, and entries citing it pointed at a
+heading instead. Line citations pinned to an **immutable commit** — a spec's *Edit sites*,
+read at the commit it was written against — are the exception and stay allowed, because a
+commit cannot rot.
+
+**An entry is verified by opening the region it names, never accepted on its paraphrase.**
+Twice on one card an entry named a real file while the words in the entry were not the
+words in the file, and one of those reached the acceptance gate and was graded *met*: a
+paraphrase bent into agreement with the criterion reads exactly like a verified claim,
+since the file it names is real. That is why the readiness gate's third disposition is
+stated as *open the file and look*, and why an entry it cannot verify is a blocking finding
+rather than a pass (see *The card's acceptance criteria are pinned into the spec* above).
+It is also how a **mis-worded criterion** surfaces at all — the criterion that forced the
+file open was the one that turned out to be wrong, not the shipped text.
 
 ## The commit model
 
@@ -460,10 +783,10 @@ and what each changed, instead of one working tree of merged edits.
 
 ## The self-improvement channel
 
-Any agent may append a concrete pipeline improvement to `AGENTS_IMPROVEMENTS.md` at the
-root of the target project's documentation area — resolved from project context, never a
-hardcoded path, created on first use. It is opt-in: an agent writes only when it has
-something specific, and only after reading the file so a point is never duplicated.
+Any agent may append a concrete pipeline improvement to `docs/AGENTS_IMPROVEMENTS.md`, at
+that fixed path in the target project's documentation area, created on first use. It is
+opt-in: an agent writes only when it has something specific, and only after reading the
+file so a point is never duplicated.
 
 The notes are about *how the agents work*, never about the product feature being built.
 They are harvested back into this repository by hand.
@@ -477,7 +800,21 @@ story scaffolds in `_templates/`.
 Its board is **Linear** — the `Agentic Claude` project in team `Smerfy` — declared in
 [`ISSUE_TRACKING.md`](./ISSUE_TRACKING.md): bindings onto the Linear MCP tools, the card
 shape, the two permitted transitions, the visibility rule, and the write authority. That
-declaration is what the `board` skill resolves against when the pipeline runs here, so the
-repo doubles as the worked example of a **hosted** board reached over MCP. The Markdown
-board that preceded it (`docs/tasks/`, 35 cards) was migrated to Linear on 2026-08-03 and
-removed; git history holds the originals.
+declaration is what every board-touching agent reads directly, at its fixed path, when
+the pipeline runs here, so the repo doubles as the worked example of a **hosted** board
+reached over MCP. The Markdown board that preceded it (`docs/tasks/`, 35 cards) was
+migrated to Linear on 2026-08-03 and removed; git history holds the originals.
+
+**A run does not exercise the definitions it is editing, and that is easy to forget here.**
+A dispatched agent appears to be loaded from the **installed** plugin rather than from the
+story worktree, so a story that rewrites an agent definition is gated and built by the
+*previous* wording — a run of the pipeline on its own source is never a test of the change
+it ships. The mechanism is an **assumption** about the harness, not something this
+repository can cite: what was actually observed on the run that reversed the criteria
+checks is the consequence, where the spec-readiness `auditor` compared the transcription
+against the live card programmatically in two separate rounds while the wording in the
+worktree gave it no board access to do so with. Two practical rules follow from it: a
+rule shipped by a story cannot be relied on by that same story's own gates —
+where it is needed there, the `lead` grants it explicitly in the dispatch and the spec says
+so — and the first pass that can lean on a newly shipped rule is the next task's. Making
+that hazard visible from inside a run is tracked as its own card (`SMR-187`).

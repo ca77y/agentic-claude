@@ -11,6 +11,9 @@
 # Story worktrees
 .worktrees/
 
+# Run-local pipeline scratch, at the root of each story worktree
+/tmp/
+
 # Python bytecode from hook scripts
 __pycache__/
 *.pyc
