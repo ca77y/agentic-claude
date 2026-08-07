@@ -299,3 +299,28 @@ say that the improvements log is a pipeline write rather than part of the story'
 step that inspects the worktree's modified-path set (a format step's collateral check, a lint
 floor's attribution) needs that distinction stated once, centrally, rather than each such step
 rediscovering it.
+
+### The commit steps assume a shell form an isolated session is refused
+
+**Area**: `skill:lead`
+
+**Observed**: *Context discipline* settles how run-local scratch is written — ordinary file tools,
+never `bash` — but says nothing about the one write that genuinely needs a shell: the commit
+message. A `lead` running as a background job is isolated in the story worktree, and that guard
+rejects any bash call it cannot verify stays inside the worktree, which includes a heredoc. On
+SMR-144 the obvious form — `git commit -F - <<'EOF'` with the message inline — was refused with
+*"too complex to verify that it stays inside the worktree; break it into plain, separate
+commands"*, and the same refusal would meet `git commit -m $'…\n\n…'` or any other single call
+that composes the message and the commit together. Every one of this run's seven commits therefore
+took three calls: write the message to `tmp/` with a file tool, `git add` the paths, then
+`git commit -F tmp/<file>`. That is fine once discovered, but it is discovered by having a commit
+refused mid-run, and a `lead` that reaches for `-m` with a one-line summary instead — the form that
+does survive the guard — silently ships commits whose bodies never explain the round they carry,
+which *The commit model* explicitly requires them to.
+
+**Suggested change**: State the working form once in *The commit model*, beside the rule that each
+round's message names its findings: write the message to `tmp/` with a file tool and pass it as
+`git commit -F <path>`, keeping each bash call a single plain command. It costs one sentence, it
+generalises (the same guard rejects compound calls for every agent, not only the `lead`), and it
+belongs next to the requirement it protects — a message rich enough to name a round's findings is
+exactly the message too long for the shell form a `lead` would otherwise reach for.
