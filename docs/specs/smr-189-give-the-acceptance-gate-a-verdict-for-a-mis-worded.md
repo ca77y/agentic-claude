@@ -555,19 +555,19 @@ Run from the story worktree at its absolute path. No test runner and no install 
 
 ## Tasks
 
-- [ ] `auditor.md`: add the fourth outcome to the grading instruction — the label, its definition, the three sub-cases with the *any run* versus *this run* distinction, and the side-by-side quoting requirement.
-- [ ] `auditor.md`: add the four bars — failing work, wrong design, cannot-verify, and the severity statement — with "reported unverified" named as the existing mechanism-verification mode rather than a fifth grade.
-- [ ] `auditor.md`: add the at-this-gate properties — does not pass, not met, no correction here, escalation carried in the returned verdict — each pointing at the existing constraint it rests on rather than restating it.
-- [ ] `auditor.md`: add the evidence obligation on every verdict, the vacuous-met rule, and the four-labels-only statement.
-- [ ] `auditor.md`: extend the no-card branch with the clause limiting this outcome to card-backed runs.
-- [ ] `auditor.md`: extend the spec-gate duty with the readiness-gate half — the finding, its route to the `writer`'s spec pass, and why that window is the legal one.
-- [ ] `auditor.md`: leave `:14`, `:16`, `:18`, `:39`, `:49` and `:54` untouched; verify each after editing.
-- [ ] `lead/SKILL.md`: reword step 6's finding enumeration and its routing sentence — the carve-out, the escalation, the terminal disposition, that every other outcome still blocks, and why a mid-run respec cannot carry the correction.
-- [ ] `lead/SKILL.md`: add the routing-map row in § *When a gate finds a problem*, leaving the 3× rule untouched.
-- [ ] `lead/SKILL.md`: add the escalation to § *Ship and hand off* (PR description, and the card comment through the declaration's `comment` binding) and to § *Final handoff*.
-- [ ] `lead/SKILL.md`: reconcile the Boundary shipping rule with the disposition, without weakening the bar on shipping with a criterion unmet.
-- [ ] `docs/ISSUE_TRACKING.md`: add the window consequence to the "Never edit an acceptance criterion" bullet — no verdict labels, prohibition untouched.
-- [ ] Run V1–V10, reporting baseline-unchanged items against their `31988b7` result and target-state items against their post-build expectation.
+- [x] `auditor.md`: add the fourth outcome to the grading instruction — the label, its definition, the three sub-cases with the *any run* versus *this run* distinction, and the side-by-side quoting requirement.
+- [x] `auditor.md`: add the four bars — failing work, wrong design, cannot-verify, and the severity statement — with "reported unverified" named as the existing mechanism-verification mode rather than a fifth grade.
+- [x] `auditor.md`: add the at-this-gate properties — does not pass, not met, no correction here, escalation carried in the returned verdict — each pointing at the existing constraint it rests on rather than restating it.
+- [x] `auditor.md`: add the evidence obligation on every verdict, the vacuous-met rule, and the four-labels-only statement.
+- [x] `auditor.md`: extend the no-card branch with the clause limiting this outcome to card-backed runs.
+- [x] `auditor.md`: extend the spec-gate duty with the readiness-gate half — the finding, its route to the `writer`'s spec pass, and why that window is the legal one.
+- [x] `auditor.md`: leave `:14`, `:16`, `:18`, `:39`, `:49` and `:54` untouched; verify each after editing.
+- [x] `lead/SKILL.md`: reword step 6's finding enumeration and its routing sentence — the carve-out, the escalation, the terminal disposition, that every other outcome still blocks, and why a mid-run respec cannot carry the correction.
+- [x] `lead/SKILL.md`: add the routing-map row in § *When a gate finds a problem*, leaving the 3× rule untouched.
+- [x] `lead/SKILL.md`: add the escalation to § *Ship and hand off* (PR description, and the card comment through the declaration's `comment` binding) and to § *Final handoff*.
+- [x] `lead/SKILL.md`: reconcile the Boundary shipping rule with the disposition, without weakening the bar on shipping with a criterion unmet.
+- [x] `docs/ISSUE_TRACKING.md`: add the window consequence to the "Never edit an acceptance criterion" bullet — no verdict labels, prohibition untouched.
+- [x] Run V1–V10, reporting baseline-unchanged items against their `31988b7` result and target-state items against their post-build expectation.
 - [ ] *(Not the `coder`'s: done in this spec pass.)* The four card `## References` corrections and the `SMR-133` shared-region note — see *Deviations from the card*. No acceptance criterion was edited.
 - [ ] *(Not the `coder`'s: done in this spec pass.)* The `docs/AGENTS_IMPROVEMENTS.md` entry on the spec pass's board-access wording.
 - [ ] *(Not the `coder`'s: the docs pass, at step 7.)* `docs/ARCHITECTURE.md` — the *Both gates work per label…* paragraph and the *An entry is verified by opening the region it names…* paragraph (**AC35**, **AC36**, **AC37**).
