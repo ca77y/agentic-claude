@@ -254,3 +254,78 @@ identifier, made by the human or by the `lead` run that next starts, and explici
 unrelated story's branch. Where the analyst cannot commit at all, have it report the pending removal (file,
 entry heading, card identifier) in its final report so the clearing is a named handoff rather than an
 uncommitted edit in a tree that is about to be deleted.
+
+### The writer's fixed spec-pass board access and its duty to apply card corrections disagree
+
+**Area**: `agent:writer`
+
+**Observed**: On `SMR-189`'s spec pass I had to correct four stale sentences on the card's
+`## References` and add a shared-region note to a sibling card. `writer.md` requires exactly that —
+"an authorised correction is applied, not described — a fix you were allowed to make and merely
+reported is work handed back to the human for no reason", and "Where the declaration's write
+authority permits updating a card, apply the correction to both sides yourself" — and
+`docs/ISSUE_TRACKING.md` § *What the pipeline may write* does authorise it ("a stale relationship
+… **fix it on the issue**"). But the same file's two access statements say something narrower: the
+canonical *Board access is granted by your caller* paragraph says "your own board access for this
+dispatch is whatever your caller named", and the sentence right after it fixes the spec pass at
+"**read and search**", justified by the sibling sweep. A strict reader of those two sentences has
+no `update` binding at all and would report every correction instead of applying it, which is the
+outcome both rules exist to prevent. The `lead` skill dispatches with exactly that wording, so
+the narrow reading is the one that arrives in the prompt.
+
+**Suggested change**: State the spec pass's fixed access as **read, search, and whatever card-content
+authority the declaration grants the `writer`** — one clause, in the same sentence that fixes read
+and search — rather than leaving the update authority to be inferred from the declaration by a
+reader who has just been told their access is whatever the caller named. Same edit in the `lead`
+skill's *Reading the tracking declaration*, which restates the writer's grant, so the two agree.
+Keep the caller-granted default-deny for every other dispatch; this is about the one pass the
+declaration itself names as the legal window for a criterion correction.
+
+### A Validation item whose grep pattern is a string the build rewords passes vacuously
+
+**Area**: `agent:writer`
+
+**Observed**: On `SMR-189` the spec's `V9` reads *"`grep -rn --exclude-dir=specs 'as concrete unmet
+criteria' --include='*.md' .` → every hit sits in text that also excludes the mis-worded outcome
+from what routes to the `coder`"*. It obeys the standing rule above — it states a command and a
+property, with no count, no file list and no line number — and it still cannot fail: the build's
+own mandated edit rewrote that exact phrase to *"as a concrete criterion to close"*, so the grep
+returns **zero hits** and the universally-quantified property over an empty set is true. A `qa`
+round that ran `V9` verbatim and reported it green would be reporting nothing. The pattern was
+quoted from the **pre-build** text of the very sentence the task exists to rewrite, and the item's
+own *Edit sites* section names that sentence as an edit target, so the spec contained both halves
+of the contradiction. This is the same shape as the vacuous-`met` hole `SMR-189` closes one layer
+up — a check satisfied only because its antecedent never arose — and the spec pass has no rule
+against it.
+
+**Suggested change**: Add one clause to the Validation rule: a **target-state** item must anchor
+its command on text the build is expected to **produce**, never on text the build is expected to
+**remove or reword** — and where an item's pattern also appears in that spec's *Edit sites* as a
+string being changed, that is a defect in the item, not a risk to discover at `qa`. Pair it with a
+non-vacuity requirement stated in the item itself: an item whose property is universally quantified
+over a command's hits says what a **zero-hit** result means — pass, fail, or *re-derive the anchor*
+— so an empty result can never be reported as a green check by default. Baseline-unchanged items
+are unaffected, since their anchor is by construction text that survives.
+
+### A tree-wide grep item that requires every hit to be in bounds collides with the improvements log
+
+**Area**: `agent:writer`
+
+**Observed**: On `SMR-189` the spec's `V7` reads *"`grep -rn --exclude-dir=specs 'mis-worded'
+--include='*.md' .` → every hit is in a file this spec's *Boundary* lists as in bounds, and no hit
+is in `docs/ISSUE_TRACKING.md`"*. By round 2 the grep hit `docs/AGENTS_IMPROVEMENTS.md`, because a
+`qa` process-feedback entry quoted a spec sentence containing the new term — and the *Boundary*
+lists that file under **out of bounds**, so the item read as failed on a write every agent in the
+pipeline is under a standing duty to make and which the same *Boundary* bullet explicitly permits
+("adds one only on fresh friction of its own"). The item's real intent — the new vocabulary has not
+leaked into a surface that needs reconciling, and none of it reached the declaration — was
+satisfied throughout. The collision is structural rather than particular to this card: any
+prose task whose validation greps the whole tree for the term it introduces will trip on its own
+improvements log the moment an agent files friction that quotes the spec.
+
+**Suggested change**: When a Validation item runs a tree-wide command whose property is *every hit
+is in an in-bounds file*, it must exclude the append-only process-feedback log from the command
+(`--exclude-dir` or an equivalent), or state in the item itself that a hit there is expected and
+does not fail the check. More generally: a *Boundary* that both places a file out of bounds **and**
+permits a specific write to it should say which of the two a Validation item is quantifying over,
+so `qa` is not left deciding whether a permitted write is a failure.
