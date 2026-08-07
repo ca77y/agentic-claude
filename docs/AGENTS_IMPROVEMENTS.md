@@ -254,3 +254,25 @@ identifier, made by the human or by the `lead` run that next starts, and explici
 unrelated story's branch. Where the analyst cannot commit at all, have it report the pending removal (file,
 entry heading, card identifier) in its final report so the clearing is a named handoff rather than an
 uncommitted edit in a tree that is about to be deleted.
+
+### Deviations has no entry shape for a criterion satisfied by property but not by literal mechanism
+
+**Area**: `agent:writer`
+
+**Observed**: On SMR-144's spec pass, one criterion prescribed a *mechanism* ("the `lead` formats
+it immediately before commit 1") whose literal placement the design had to depart from — an
+existing sentence in the file being edited forbids inserting anything between the spec gate and
+commit 1 — while fully preserving the *property* the criterion buys (the bytes committed are the
+format step's output). `writer.md`'s rule covers only "a criterion the design cannot satisfy as
+written", which this is not: it is satisfiable, just not by the route the criterion's wording
+sketches. Nothing said whether that belongs in *Deviations from the card*, in Design, or nowhere,
+and the choice matters because the acceptance gate reads the card's wording, not the design's
+reasoning. The pass had to invent a "None, but two things were examined and deliberately not
+treated as deviations" shape to keep the gate from reading the departure as a silent narrowing.
+
+**Suggested change**: Extend the Deviations rule with a second entry shape: where the design
+departs from a criterion's *prescribed mechanism* while preserving the property that mechanism
+exists to buy, record it in the same section — the criterion's own sentence, the property named
+explicitly, the requirement or scenario that pins the property, and why the literal route was not
+taken — and say plainly that this is not a criterion correction, so no card edit follows from it.
+Distinguish it from the existing unsatisfiable-criterion case, which does license a card edit.
