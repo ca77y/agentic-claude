@@ -276,3 +276,26 @@ exists to buy, record it in the same section — the criterion's own sentence, t
 explicitly, the requirement or scenario that pins the property, and why the literal route was not
 taken — and say plainly that this is not a criterion correction, so no card edit follows from it.
 Distinguish it from the existing unsatisfiable-criterion case, which does license a card edit.
+
+### A process-feedback append is a tracked write into the story worktree that no rule assigns to a commit
+
+**Area**: `flow`
+
+**Observed**: Every worker's *Process feedback* rule — identical prose in `coder.md`, `writer.md`,
+`qa.md`, `auditor.md` and `lead/SKILL.md` — directs an append to `docs/AGENTS_IMPROVEMENTS.md`
+**inside the story worktree**. That path is tracked, unlike `tmp/` scratch which `.gitignore`
+exempts, so the append is uncommitted work sitting in the tree when the `lead` next commits, and
+nothing anywhere says which commit carries it. In practice it rides along silently: SMR-144's
+commit 1 (`d026da7`) landed the spec **and** a 22-line improvements entry the `writer` had filed
+during the same pass, which the commit message then had to explain in a separate paragraph. The
+cost is not cosmetic — SMR-144's own design reasons from "at this point in a run the worktree
+contains exactly one changed file: the spec", a premise the same pipeline's process-feedback rule
+routinely falsifies, and the build shipped a rule that would halt a run on it.
+
+**Suggested change**: State in the `lead`'s *The commit model* which commit carries a
+process-feedback append — the simplest being that it rides the next commit the `lead` makes and is
+named in that commit's message — and, wherever a rule reasons about "what this run has changed",
+say that the improvements log is a pipeline write rather than part of the story's own diff. Any
+step that inspects the worktree's modified-path set (a format step's collateral check, a lint
+floor's attribution) needs that distinction stated once, centrally, rather than each such step
+rediscovering it.

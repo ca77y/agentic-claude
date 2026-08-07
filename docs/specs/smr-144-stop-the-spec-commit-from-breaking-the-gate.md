@@ -20,14 +20,17 @@ failure back to a document nobody told it about before it can report the build h
 **The change.** `SKILL.md` gains one named owner and one floor, both the `lead`'s:
 
 - **The owner.** After collecting each `writer` spec-pass round and **before** dispatching the
-  `auditor`'s spec-readiness gate, the `lead` runs the project's format step, scoped to the spec
-  path. Because nothing modifies the spec between the last format run and commit 1 — the gate
-  reads, it does not write — the bytes that land in commit 1 are always that step's output.
+  `auditor`'s spec-readiness gate, the `lead` runs the project's format step over **commit 1's
+  path set** — every path that commit will land, not the spec alone. Because nothing modifies the
+  spec between the last format run and commit 1 — the gate reads, it does not write — the spec's
+  committed bytes are that step's output wherever the step ran at all.
 - **The floor.** Once commit 1 lands and before the `coder` is dispatched, the `lead` runs the
   project's lint command once, and attributes what it reports.
 
-Both commands are whatever the project defines, discovered from project context; where the
-project defines neither, both steps are stated as skipped rather than treated as failures.
+Both commands are whatever the project defines, discovered from project context, and both take the
+same three-way branch: run it, or state it as skipped because the project defines none, or report
+it as unrunnable here. Only the first produces a result anyone acts on; the other two are stated
+outcomes, never treated as failures and never a reason to invent a command.
 
 **User value.** A spec commit stops being able to redden a gate that no later agent can
 attribute. The failure, where it happens at all, surfaces at step 3 — while it is unambiguously
@@ -84,19 +87,55 @@ Every criterion is closed by the `coder`'s build; none needs the docs pass or a 
 no criterion carries a non-`coder` owning mechanism. (T10 *is* a non-`coder` task, but no
 criterion depends on it — see the task itself.)
 
-| Criterion | Requirements that close it | Tasks |
-| --- | --- | --- |
-| `AC1` | R1 (all four scenarios), R6 | T1 |
-| `AC2` | R2, plus R1's first scenario for where the owner acts | T1, T8 |
-| `AC3` | R3 | T2, T3, T5, T6 |
-| `AC4` | R5 | T1, T2, T9 |
-| `AC5` | R4, resting on R3's first scenario for the ordering | T2 |
+**The map is stated at scenario granularity, deliberately.** A requirement-level entry ("R1") is
+what let a scenario added by the round-1 amendment claim coverage no task delivered: the entry kept
+reading as true while the requirement grew underneath it. Every row below names scenarios, every
+task's *Satisfies* line names scenarios, and the invariant to check is mechanical — **every
+scenario `Rn.m` appears in at least one task's *Satisfies* line, and no row claims a scenario no
+task names.**
 
-R7 and R8 close no criterion on their own: R7 keeps the rest of `SKILL.md` from contradicting the
-new sequence — without it `AC2`'s "unambiguous" fails, because a reader finds two accounts of what
-happens around commit 1 — and R8 keeps the change from quietly widening the `lead`'s authority
-over the card's criteria, which no criterion asks for and *The criteria checks are the auditor's*
-forbids.
+| Criterion | Scenarios that close it | Tasks |
+| --- | --- | --- |
+| `AC1` | R1.1–R1.6, R6.1–R6.2 | T1, T1a, T1b |
+| `AC2` | R2.1–R2.2, R1.1 (where the owner acts), and all of R7 (below) | T1, T1a, T8, T9a, T3, T3a, T4, T5, T5a, T6, T6a, T7 |
+| `AC3` | R3.1–R3.5 | T2, T2a, T3, T3a, T5, T5a, T6, T6a |
+| `AC4` | R5.1–R5.4 | T1, T2, T2a, T9 |
+| `AC5` | R4.1–R4.2, resting on R3.1 for the ordering | T2 |
+
+**R7 is listed under `AC2`, and R8 under nothing.** `AC2` demands the owner be *unambiguous*, and a
+document that names the `lead` in step 3 while *The commit model*, *When a gate finds a problem*,
+*Boundaries*, and *Final handoff* still describe the old sequence is not unambiguous — a reader
+finds two accounts of what happens around commit 1. So R7 is part of what closes `AC2` rather than
+a tidiness requirement standing beside it, and its tasks appear in that row. R8 genuinely closes no
+criterion: it is a guard, keeping the change from widening the `lead`'s authority over the card's
+criteria — something no criterion asks for and *The criteria checks are the auditor's* forbids.
+A guard that closes no criterion is still built, via T4.
+
+### Commit 1's path set
+
+Three rules below — the format step's scope, its collateral check, and the floor's attribution —
+are all stated over one term, so define it once.
+
+**Commit 1's path set** is every non-ignored path the worktree shows as modified or added when the
+`lead` reaches step 3's commit: the spec, plus whatever else the spec pass left behind. In practice
+the other member is `docs/AGENTS_IMPROVEMENTS.md` — every worker's *Process feedback* rule,
+`SKILL.md`'s own included, directs an append there **inside the story worktree**, and that path is
+tracked; only `/tmp/` scratch is exempt, via this repository's committed `.gitignore` entry. The
+`lead` determines the set by reading the worktree's status, which already excludes ignored paths.
+
+**This is the normal case, not an accident, and it is measured rather than assumed.** This story's
+own commit 1, `d026da7`, landed `docs/AGENTS_IMPROVEMENTS.md` (+22 lines) alongside the spec — this
+spec pass's own process-feedback append. An earlier draft of this document asserted the opposite
+("the worktree contains exactly one changed file: the spec") and `qa` round 1 falsified it against
+that commit. Every rule below is stated over the set for that reason, and the two rules that were
+written over "the spec path" are corrected rather than annotated.
+
+**The set can grow after the format step.** The `auditor` runs between the format step and commit 1
+and carries the same *Process feedback* rule, so a path can join the set while the gate is in
+flight. The rule that resolves it without disturbing the gate: re-read the set immediately before
+staging, and where it grew, run the format step over **the newly added paths only** — never over
+the spec, whose bytes the gate has just judged. A non-spec path cannot affect the transcription, so
+this touches nothing *The criteria checks are the auditor's* protects.
 
 ### The owner is the `lead`
 
@@ -128,17 +167,29 @@ spec-readiness gate is dispatched — and the reason is a hard constraint in the
 > transcription matches the card, so there is nothing left for you to check first.
 
 That clause, and *The criteria checks are the auditor's* which it belongs to, forbid inserting
-anything between the passed gate and the commit. A format step placed there would contradict a
-sentence two screens up in the same file — the exact "two live instructions for one decision"
-defect the pipeline already treats as blocking.
+between the passed gate and the commit anything that re-checks the card's criteria or modifies the
+spec. Formatting the spec there would contradict a sentence two screens up in the same file — the
+exact "two live instructions for one decision" defect the pipeline already treats as blocking. The
+pre-staging re-read named above stays inside that bound, and deliberately so: it may format only
+paths that joined commit 1's path set while the gate was in flight, never the spec, and a non-spec
+path cannot bear on the transcription.
 
 Placing it before the gate is strictly better, not merely compatible:
 
-- **The invariant `AC1` actually asks for still holds.** `AC1` wants commit 1 never to land a
-  document that fails the project's own gate. Nothing writes to the spec between the format step
-  and commit 1: the `auditor` reads and returns a verdict, and the `lead` commits. Any `writer`
-  revision restarts the cycle — revise, re-format, re-gate — so the committed bytes are always
-  the format step's output. This is stated as R1's third scenario rather than left implicit.
+- **The invariant `AC1` actually asks for still holds.** `AC1` wants commit 1 never to land *a*
+  document that fails the project's own gate — a document, not only the spec, which is why the
+  step's scope is commit 1's path set. Nothing writes to the **spec** between the format step and
+  commit 1: the `auditor` reads and returns a verdict, and the `lead` commits. Any `writer`
+  revision restarts the cycle — revise, re-format, re-gate — and a path that *joins* the set during
+  the gate is formatted before staging, per *Commit 1's path set*. So every path commit 1 lands
+  carries the format step's output, wherever that step ran at all. This is stated as R1's third
+  scenario rather than left implicit.
+- **The one route that escapes the gate is named and backstopped.** A `writer` fix made *after*
+  commit 1, in response to the floor, does not pass back through the spec-readiness gate. It is
+  re-formatted like any other spec edit; where it touched the *Acceptance criteria (verbatim
+  transcription)* block, the `lead` re-enters the spec-readiness gate before committing the fix,
+  and where it did not, the acceptance gate's own equality check is the named backstop. Naming the
+  backstop is the point — an unstated one is exactly how a late failure becomes a surprise.
 - **It puts the one dangerous interaction in front of the agent that owns detecting it.** A
   Markdown formatter can rewrite text *inside* the verbatim transcription block. If it does, the
   transcription no longer matches the card, and the `auditor`'s mechanical equality check — which
@@ -159,7 +210,7 @@ Placing it before the gate is strictly better, not merely compatible:
 > settle it: a path-and-line reference into a resolved `prettier` (or equivalent) install on a
 > project that has one, read at the version that project pins. The design does not depend on the
 > claim being true — if no formatter ever touches the block, the gate simply passes — only on it
-> being *possible*, which is what R1's fourth scenario covers.
+> being *possible*, which is what R1.6 covers.
 
 ### The floor, and making its failures attributable
 
@@ -169,15 +220,23 @@ before the step-4 `coder` dispatch. Once per run, not once per round.
 A repo-wide lint is not automatically attributable: a base branch that was already not clean makes
 the command fail on files this run has never touched. [SMR-156](https://linear.app/ca77y/issue/SMR-156)
 records exactly that hazard from the other side (a mandated repo-wide format command rewriting
-eleven files no in-flight unit owned). At this point in a run the attribution is available for
-free, because the worktree contains exactly one changed file: the spec. So:
+eleven files no in-flight unit owned). At this point in a run the attribution is still cheap,
+because the run has landed exactly one commit and its path set is known. That set — not "the spec
+path" — is what the branches are stated over:
 
-- A reported failure **naming the spec's own path** is this run's. It routes to the `writer` — a
-  spec problem, per *When a gate finds a problem* — and the fix is committed as its own commit
-  before the `coder` is dispatched.
-- A reported failure naming **only paths this run has not touched** is pre-existing. It is
-  recorded and relayed in the handoff, and it does not stop the run or route to anyone. Silently
-  "fixing" it would put collateral into a story branch that never asked for it.
+- A reported failure naming **any path commit 1 landed** is this run's. It routes to the `writer` —
+  a spec-pass problem, per *When a gate finds a problem* — and the fix is committed as its own
+  commit before the `coder` is dispatched.
+- A reported failure naming **only paths outside commit 1** is pre-existing. It is recorded and
+  relayed in the handoff, and it does not stop the run or route to anyone. Silently "fixing" it
+  would put collateral into a story branch that never asked for it.
+- A run the `lead` **could not trust** is neither of those, and attribution is not applied to it at
+  all — see the third discovery outcome below.
+
+Those two branches plus the fall-through are the whole space, which is the point. An earlier draft
+stated the first over "the spec path" and the second over "paths this run has not touched", which
+left `docs/AGENTS_IMPROVEMENTS.md` — a path commit 1 lands that is not the spec — matching neither,
+and the `lead` with no instruction.
 
 If [SMR-169](https://linear.app/ca77y/issue/SMR-169) lands first, the `lead` will already hold a
 measured base-commit validation result recorded at workspace creation, and the floor should
@@ -201,18 +260,35 @@ commands are in your context". Three outcomes, all stated:
    (`npx`-style) is already forbidden by that same paragraph and stays forbidden: a fetched CLI is
    not the project's toolchain, and its errors read exactly like a real defect in the file.
 
+**Both steps take all three outcomes, not two.** The floor does not inherit "the format step's
+absence handling" — it takes the same three-way branch. Outcome 3 matters most there and is the
+easiest to lose: a lint command that fails because dependencies are unprovisioned typically emits
+output naming the file it was pointed at, which the attribution rule above would otherwise read as
+a commit-1-path failure and misroute to the `writer` as a spec defect. So trustworthiness is
+settled **before** attribution is applied, and an untrusted run is attributed to nobody, reported
+as an unrunnable check rather than as a clean one.
+
 A fourth case is worth naming because it bounds `AC5` honestly: a project whose gate exists
 **only in CI**, with no locally runnable command, cannot be checked by the `lead` at all. That is
 outcome 2 as far as the steps go, and the handoff says so — so the run reports "no local gate to
 check" rather than implying the spec was checked and passed.
 
-### Keeping the format command inside the spec's own boundary
+### Keeping the format command inside commit 1's own boundary
 
-The format step must not write outside the file it is formatting. The definition requires the
-**path-scoped** form where the project's command accepts a path; where it cannot be scoped to a
-path, the `lead` runs the **check-only** form instead and routes a failure to the `writer`, rather
-than running a repo-wide write. After the step, the worktree must show no path other than the spec
-modified; anything else is collateral, and the `lead` stops and reports rather than committing it.
+The format step must not write outside the paths it is formatting. The definition requires the
+**path-scoped** form where the project's command accepts paths; where it cannot be scoped, the
+`lead` runs the **check-only** form instead and routes a failure to the `writer`, rather than
+running a repo-wide write.
+
+The collateral check is a **before-and-after comparison**, not a snapshot: the `lead` captures the
+worktree's modified-path set immediately before invoking the format command and compares it after,
+and only a path that is **newly** modified is collateral — stop and report. The captured set *is*
+commit 1's path set, so one mechanism serves both the step's scope and its collateral check.
+
+The snapshot form — "after the step the worktree shows no path other than the spec modified" — was
+the earlier formulation, and it was wrong for the same reason the attribution rule was: it halts on
+writes the format step did not make. Under it, this story's own run would have stopped at step 3,
+because `docs/AGENTS_IMPROVEMENTS.md` was already modified before the step ran.
 
 ### Sections of `SKILL.md` that must move together
 
@@ -222,9 +298,9 @@ pipeline already treats as blocking. All of these move in the same pass:
 
 | Section | What changes |
 | --- | --- |
-| Workflow step 3 | the format step before each (re-)audit dispatch; the floor after commit 1, before step 4; the existing "nothing left for you to check first" clause left intact and unmoved |
-| *The commit model* | commit 1's bullet states the format precondition; the model gains the spec-format-fix commit that a floor failure produces |
-| *When a gate finds a problem* | a floor failure naming the spec path routes to the `writer` |
+| Workflow step 3 | the format step over commit 1's path set before each (re-)audit dispatch, the re-read of the set before staging, and the floor after commit 1, before step 4; the existing "nothing left for you to check first" clause left intact and unmoved |
+| *The commit model* | commit 1's bullet states the format precondition, conditioned on the project defining a format command; the model gains the spec-format-fix commit that a floor failure produces |
+| *When a gate finds a problem* | **both** writer-routed failures the new steps can produce: a check-only format failure at step 3 (fixed before commit 1 and folded into it, no separate commit), and a floor failure naming a commit-1 path (its own commit) |
 | *Boundaries* | the carve-out (below) |
 | *Final handoff* | the floor's outcome is reported; the commit enumeration includes a spec-format-fix commit |
 | frontmatter `description` | read it; change it only if it now misstates what the skill does |
@@ -238,7 +314,7 @@ the file ships arguing with itself. The carve-out to state, narrowly:
 - Both steps are **commit hygiene on the `lead`'s own commit**, not `qa`'s validation of the
   build. `qa` validates what the `coder` built; neither of these looks at the build, and neither
   replaces or pre-empts a `qa` round.
-- The format step **authors nothing**. It is a mechanical normalisation of a file the `lead` is
+- The format step **authors nothing**. It is a mechanical normalisation of the files the `lead` is
   about to commit. Where a formatter's output would change the document's *content* rather than
   its formatting, that is not the `lead`'s to reconcile: the `auditor`'s equality check surfaces
   it and the `writer` fixes it.
@@ -247,17 +323,38 @@ the file ships arguing with itself. The carve-out to state, narrowly:
 
 ### Deviations from the card
 
-**None.** All five criteria are satisfiable as written, and the transcription above is the card's
-text unmodified. Two things were examined and deliberately *not* treated as deviations:
+**One, added 2026-08-07 after `qa` round 1** — a widening, not a narrowing. All five criteria
+remain satisfiable, the card's `## Acceptance criteria` is unchanged, and the transcription above
+is its text unmodified.
+
+- **`AC1`'s "over the spec path", widened to commit 1's path set.** The criterion prescribes the
+  scope ("running the project's format/lint step over the spec path") and then states what that
+  scope is supposed to buy ("so commit 1 never lands a document that fails the project's own
+  gate"). `qa` round 1 proved the two halves come apart: commit 1 also lands
+  `docs/AGENTS_IMPROVEMENTS.md`, so formatting the spec alone leaves the consequent false — commit
+  1 *can* land a document that fails the gate. The choice was between honouring the literal scope
+  and recording the gap as a bounded limitation, or widening the scope so the consequent holds.
+  **This spec widens.** Reasons: the consequent is what the criterion is *for*, and a limitation
+  would leave `AC1` gradeable as unmet on its own words ("never lands"); the alternative merely
+  moves the failure one file over and one step later, into a floor-driven fix commit; and widening
+  is a strict superset of what the criterion asks — every path the literal reading covers is still
+  covered, so nothing is silently retired. The cost is that the format step may rewrite
+  pre-existing lines in a file the story only appended to; that collateral is confined to a file
+  commit 1 already carries, and R6.2's before-and-after check keeps it from reaching any other path.
+  No card edit follows: the criterion is satisfiable, and rewriting its scope clause would be
+  editing a criterion to match a design decision.
+
+Two further things were examined and deliberately *not* treated as deviations:
 
 - `AC2`'s "immediately before commit 1" is a description of the option being chosen, not a
-  placement mandate that the design breaks. The property it exists to buy — the committed bytes
-  are the format step's output — is preserved exactly, and is pinned by R1's third scenario. The
+  placement mandate that the design breaks. The property it exists to buy — every path commit 1
+  lands carries the format step's output, where a format command exists to run — is preserved
+  exactly, and is pinned by R1.3 and R1.4. The
   reasoning is above, and it was also written back onto the card's `## Scope` note (below) so the
   acceptance gate meets it there too.
 - `AC5` is an ordering property, not a behaviour, and is falsifiable by reading `SKILL.md`'s step
   order. Where a project has no locally runnable gate, nobody discovers a spec-commit gate failure
-  locally and the criterion holds vacuously; R4's second scenario makes the pipeline *say* which
+  locally and the criterion holds vacuously; R4.2 makes the pipeline *say* which
   of the two it is, so a vacuous pass is never reported as a real one.
 
 **No *Already satisfied criteria* section**, deliberately. Each of the five was checked against
@@ -310,6 +407,15 @@ None of these have landed. The collisions are real and the reuse direction is st
   and reproducible* (`Backlog`).** Same hazard (a writing command escaping its boundary), a
   different owner: that card scopes commands a *spec* prescribes; this one scopes a command the
   `lead` itself invokes. No file overlap; the rationale above cites its evidence.
+- **[SMR-138](https://linear.app/ca77y/issue/SMR-138) — *Define what a spec's verbatim file fence
+  is normative about* (`Backlog`).** Its description already cross-links this story — "both stem
+  from the project formatter treating the spec as a source file" — so the loop is closed from this
+  side here. **Not a collision:** it changes `writer.md`'s fence semantics (what a spec's verbatim
+  block promises when the formatter rewrites embedded code differently from the real file); this
+  story changes `SKILL.md`'s commit sequencing. No shared file and no shared rule. What they share
+  is the premise, which this spec cites as evidence under *Where the format step sits* — the
+  formatter treats a spec as just another source file, so anything a spec states verbatim is
+  exposed to it. Either can land first, in either order, with no reuse obligation.
 - **[SMR-187](https://linear.app/ca77y/issue/SMR-187) — *Make a shipped agent-definition change
   govern the run that ships it* (`Backlog`).** Relevant to *this* story's validation rather than
   to its design: the change ships as prose in `SKILL.md`, and the run that ships it will not
@@ -342,16 +448,26 @@ path under it:
   here.
 - **V3** — The root `CLAUDE.md` manifest-parity loop prints `ok` for both plugins, with both
   versions unchanged from `master` (`git -C <worktree> diff master -- 'plugins/*/plugin.json' 'plugins/*/.claude-plugin/plugin.json'` is empty).
-- **V4** — The `coder`'s changed-file set is exactly
-  `plugins/ca77y-engineering/skills/lead/SKILL.md` (plus this spec, committed as commit 1). No
-  formatter, linter, or config is added to this repository; `writer.md`, `qa.md`, `coder.md`, and
-  `auditor.md` are unchanged.
+- **V4** — Under `plugins/`, the `coder`'s changed-file set is exactly
+  `plugins/ca77y-engineering/skills/lead/SKILL.md`; `writer.md`, `qa.md`, `coder.md`, and
+  `auditor.md` are unchanged, and no formatter, linter, or config is added to this repository.
+  Outside `plugins/`, the run's own tree legitimately also carries this spec and any
+  `docs/AGENTS_IMPROVEMENTS.md` append a worker made — that is the *Process feedback* rule
+  working, not collateral, and V4 checks only that nothing else appears.
 - **V5** — Grep `SKILL.md` for `prettier`, `eslint`, `make lint`, `pnpm`, `npm`, and `npx`: the
   new prose names no concrete tool (`AC4`), and introduces no fetch-and-run invocation.
 - **V6** — Confirm `SKILL.md` step 3 still carries the sentence "the gate that just passed already
   proved the transcription matches the card, so there is nothing left for you to check first",
-  unmoved and un-negated, and that no new step is described as happening between the passed gate
-  and commit 1.
+  unmoved and un-negated, and that nothing described as happening between the passed gate and
+  commit 1 either checks the card's criteria or modifies the spec. The pre-staging re-read is
+  inside that bound: it may format only paths that joined commit 1's path set after the format
+  step ran, never the spec.
+- **V7** — Coverage, checked mechanically rather than asserted: every scenario label `Rn.m` in
+  *Requirements* appears in at least one task's *Satisfies* line, no *Satisfies* line names a
+  scenario that does not exist, and every scenario a criterion's row in *How each criterion is
+  satisfied* claims is one a task names. Run it against the spec as it stands, not against
+  recollection — the round-2 gate found `R1.5` covered by no task precisely because the map was
+  written at requirement granularity and stayed nominally true while the requirement grew.
 
 **Not validated by this run, and why.** The steps themselves go unexercised, for two independent
 reasons: this repository defines no format or lint command (above), and a skill's body is read
@@ -379,7 +495,13 @@ format/lint command is therefore a **follow-up**, recorded in the handoff rather
   which `AC4` forbids).
 - **Risk: the carve-out is read as licence.** "The `lead` may run the project's tooling" could be
   stretched into the `lead` running the test suite and pre-empting `qa`. Mitigated by stating the
-  carve-out as two named steps over one named path at two named moments, and by R8's scenario.
+  carve-out as two named steps over one named path set at two named moments, and by R8.1.
+- **Risk: the widened format scope rewrites lines the story did not author.** Formatting commit 1's
+  path set means the format step can normalise pre-existing content in `docs/AGENTS_IMPROVEMENTS.md`
+  — a file this story only appended to. Accepted: the collateral is confined to a file commit 1
+  already carries, R6.2's before-and-after check keeps it from reaching any other path, and the
+  alternative is knowingly committing a document the project's gate rejects. It is also visible in
+  the commit's own diff, which is where a human would look for it.
 - **Alternative rejected — the `writer` as owner.** Symmetrical with `SMR-171`'s docs-pass step
   and it would put both formatting duties in one file. Rejected because it covers only text the
   `writer` itself last wrote, and because `AC1`/`AC3` both put the surrounding obligations on the
@@ -394,14 +516,16 @@ format/lint command is therefore a **follow-up**, recorded in the handoff rather
 
 ## Requirements
 
-### Requirement (R1): The `lead` formats the spec before the gate that precedes commit 1
+### Requirement (R1): The `lead` formats commit 1's path set before the gate that precedes it
 
 #### Scenario: format on collection, before the gate
 
 - **WHEN** the `lead` collects a `writer` spec-pass report and is about to dispatch the
   `auditor`'s spec-readiness gate
-- **THEN** `SKILL.md` directs it to first run the project's format step, scoped to the spec path,
-  and only then dispatch the gate
+- **THEN** `SKILL.md` directs it to first run the project's format step over **commit 1's path
+  set** — the worktree's non-ignored modified and added paths, which is the spec plus whatever
+  else the spec pass left behind, `docs/AGENTS_IMPROVEMENTS.md` in particular — and only then
+  dispatch the gate
 
 #### Scenario: every round, not only the first
 
@@ -412,10 +536,27 @@ format/lint command is therefore a **follow-up**, recorded in the handoff rather
 
 #### Scenario: the committed bytes are the format step's output
 
-- **WHEN** the gate passes and the `lead` commits the spec
-- **THEN** `SKILL.md` states that nothing modifies the spec between the format step and commit 1 —
-  the gate reads and returns a verdict — so commit 1 always carries the format step's output, and
-  no step is inserted between the passed gate and the commit
+- **WHEN** the gate passes and the `lead` commits
+- **THEN** `SKILL.md` states that nothing modifies the **spec** between the format step and commit
+  1 — the gate reads and returns a verdict — so every path commit 1 lands carries the format
+  step's output **where the project defines a format command**, and nothing inserted between the
+  passed gate and the commit either checks the card's criteria or modifies the spec
+
+#### Scenario: a path that joins the set during the gate
+
+- **WHEN** an agent appends to `docs/AGENTS_IMPROVEMENTS.md`, or otherwise adds a path to commit
+  1's path set, while the spec-readiness gate is in flight
+- **THEN** `SKILL.md` directs the `lead` to re-read the set immediately before staging and run the
+  format step over the **newly added paths only** — never over the spec — so the set the commit
+  lands is formatted without re-opening anything the gate judged
+
+#### Scenario: a floor-driven fix is re-formatted and backstopped
+
+- **WHEN** a `writer` fix lands in response to the post-commit-1 floor
+- **THEN** `SKILL.md` directs the `lead` to re-run the format step over it before committing it,
+  to re-enter the spec-readiness gate when the fix touched the *Acceptance criteria (verbatim
+  transcription)* block, and — where it did not — to name the acceptance gate's own equality check
+  as the backstop
 
 #### Scenario: a formatter that alters the transcription is caught by the gate
 
@@ -451,18 +592,26 @@ format/lint command is therefore a **follow-up**, recorded in the handoff rather
 - **THEN** the floor is not re-run — `SKILL.md` states it as a single run at that one point, not a
   per-round step
 
-#### Scenario: a failure naming the spec path
+#### Scenario: a failure naming a path commit 1 landed
 
-- **WHEN** the floor reports a failure that names the spec's own path
+- **WHEN** the floor reports a failure naming **any** path commit 1 landed — the spec, or
+  `docs/AGENTS_IMPROVEMENTS.md`, or anything else in that commit
 - **THEN** it routes to the `writer` per *When a gate finds a problem*, the fix is committed as its
   own commit before the `coder` is dispatched, and *The commit model* and *Final handoff* both
   account for that commit
 
-#### Scenario: a failure naming only untouched paths
+#### Scenario: a failure naming only paths outside commit 1
 
-- **WHEN** the floor reports failures only in files this run has not touched
+- **WHEN** the floor reports failures only in paths commit 1 did not land
 - **THEN** `SKILL.md` directs the `lead` to record them as pre-existing and relay them in the
   handoff — not to route them to any agent, not to fix them, and not to stop the run
+
+#### Scenario: no path falls between the two branches
+
+- **WHEN** reading the floor's attribution rule as shipped
+- **THEN** the two branches are stated over commit 1's path set and its complement, so a path that
+  is neither the spec nor untouched by the run — `docs/AGENTS_IMPROVEMENTS.md` being the case `qa`
+  round 1 found — matches exactly one of them rather than falling through both
 
 ### Requirement (R4): `qa` is not the first to discover a spec-commit gate failure
 
@@ -505,27 +654,40 @@ format/lint command is therefore a **follow-up**, recorded in the handoff rather
 - **THEN** `SKILL.md` directs the `lead` to report that rather than conclude the spec is clean, and
   the existing ban on a fetch-and-run substitute is left in force
 
-### Requirement (R6): The format command cannot write outside the spec path
+#### Scenario: the floor takes all three outcomes, not two
+
+- **WHEN** reading how the post-commit-1 floor handles a command it cannot trust
+- **THEN** `SKILL.md` states the not-trustworthy branch for the **floor** explicitly — the floor
+  does not merely inherit "the same absence handling" — and settles trustworthiness **before**
+  attribution, so an unprovisioned lint run whose error output names a file it was pointed at is
+  reported as an unrunnable check rather than routed to the `writer` as a spec defect
+
+### Requirement (R6): The format command cannot write outside commit 1's path set
 
 #### Scenario: scoped, or check-only
 
 - **WHEN** the `lead` invokes the project's format command
-- **THEN** `SKILL.md` requires the path-scoped form where the command accepts a path, and the
-  check-only form — with a failure routed to the `writer` — where it cannot be scoped, rather than
-  a repo-wide write
+- **THEN** `SKILL.md` requires the path-scoped form where the command accepts paths, and the
+  check-only form — with a failure routed to the `writer`, fixed before commit 1 and folded into
+  it — where it cannot be scoped, rather than a repo-wide write
 
-#### Scenario: collateral stops the run
+#### Scenario: only a newly modified path is collateral
 
-- **WHEN** after the format step the worktree shows any path other than the spec modified
-- **THEN** `SKILL.md` directs the `lead` to stop and report rather than commit it
+- **WHEN** the `lead` runs the format step
+- **THEN** `SKILL.md` directs it to capture the worktree's modified-path set immediately **before**
+  invoking the command and compare after, treating only a **newly** modified path as collateral —
+  stop and report — so a path already modified when the step began, which is what
+  `docs/AGENTS_IMPROVEMENTS.md` normally is, does not halt the run
 
 ### Requirement (R7): `SKILL.md` states one commit sequence, everywhere
 
 #### Scenario: the commit model agrees
 
 - **WHEN** reading *The commit model*
-- **THEN** commit 1's bullet states the format precondition, and the enumeration of a run's commits
-  includes the spec-format-fix commit a floor failure can produce
+- **THEN** commit 1's bullet states the format precondition **conditioned on the project defining a
+  format command** — so neither the precondition nor "carries that step's output" is asserted
+  unconditionally, since on a project with no format command both would be false — and the
+  enumeration of a run's commits includes the spec-format-fix commit a floor failure can produce
 
 #### Scenario: the boundaries agree
 
@@ -538,9 +700,11 @@ format/lint command is therefore a **follow-up**, recorded in the handoff rather
 #### Scenario: routing and handoff agree
 
 - **WHEN** reading *When a gate finds a problem* and *Final handoff*
-- **THEN** the first routes a floor failure naming the spec path to the `writer`, and the second
-  reports the floor's outcome — ran clean, failed and how it closed, or skipped with the reason —
-  and enumerates the spec-format-fix commit alongside the run's other commits
+- **THEN** the first lists **both** writer-routed failures the new steps can produce — a check-only
+  format failure at step 3, fixed before commit 1 and folded into it, and a floor failure naming a
+  path commit 1 landed, which gets its own commit — and the second reports the floor's outcome
+  (ran clean, failed and how it closed, skipped with the reason, or unrunnable) and enumerates the
+  spec-format-fix commit alongside the run's other commits
 
 #### Scenario: no section is left describing the old sequence
 
@@ -567,24 +731,56 @@ Every task below is the `coder`'s unless marked otherwise. All edits are in
       discovered from project context, the three outcomes (runnable / not defined / not
       trustworthy), and the statement that nothing modifies the spec between it and commit 1.
       Leave the existing closing clause ("…nothing left for you to check first") intact and
-      unmoved. Satisfies R1, R5, R6.
+      unmoved. Satisfies R1.1, R1.2, R1.6, R2.1, R5.1, R5.2, R5.3, R6.1.
+- [ ] **T1a** *(amended 2026-08-07, `qa` round 1)* — Restate T1's step as operating over **commit
+      1's path set** rather than the spec path: define the set where step 3 first uses it, add the
+      pre-staging re-read that formats only paths which joined it during the gate, and replace the
+      collateral snapshot with the before-and-after capture. Satisfies R1.1, R1.3, R1.4, R6.2.
+- [ ] **T1b** *(added 2026-08-07, spec gate round 2)* — Workflow step 3, in the floor's fix path:
+      state that a `writer` fix made in response to the floor is re-formatted before its commit;
+      that where the fix touched the *Acceptance criteria (verbatim transcription)* block the
+      `lead` re-enters the spec-readiness gate before committing it; and that where it did not, the
+      acceptance gate's own equality check is the named backstop. Nothing in the built `SKILL.md`
+      covers this — the scenario and its Design prose were added by the round-1 amendment and no
+      task claimed them. Satisfies R1.5.
 - [x] **T2** — Workflow step 3: add the post-commit-1 lint floor before the step-4 `coder`
-      dispatch — once per run, with the attribution rule (spec path → `writer`, plus its own
-      commit; untouched paths → recorded as pre-existing and relayed), and the CI-only case.
-      Satisfies R3, R4.
+      dispatch — once per run, with the attribution rule (a path commit 1 landed → `writer`, plus
+      its own commit; paths outside commit 1 → recorded as pre-existing and relayed), and the
+      CI-only case. Satisfies R3.1, R3.2, R4.1, R4.2.
+- [ ] **T2a** *(amended 2026-08-07, `qa` round 1)* — Restate the attribution rule over commit 1's
+      path set and its complement, so no path falls between the branches, and spell out the floor's
+      own not-trustworthy branch — settled before attribution, routed to nobody. Satisfies R3.3,
+      R3.4, R3.5, R5.4.
 - [x] **T3** — *The commit model*: state the format precondition on commit 1's bullet, and add the
-      spec-format-fix commit to the model. Satisfies R7's first scenario.
+      spec-format-fix commit to the model. Satisfies R7.1.
+- [ ] **T3a** *(amended 2026-08-07, `qa` round 1)* — Condition that bullet on the project defining
+      a format command, so neither the precondition nor "carries that step's output" is asserted
+      unconditionally. Satisfies R7.1.
 - [x] **T4** — *Boundaries*: add the carve-out, reconciled with the existing "never do an agent's
-      work" and "do not run or re-run tests" lines. Satisfies R7's second scenario and R8.
-- [x] **T5** — *When a gate finds a problem*: route a floor failure naming the spec path to the
-      `writer`. Satisfies the first half of R7's third scenario.
+      work" and "do not run or re-run tests" lines. Satisfies R7.2, R8.1.
+- [x] **T5** — *When a gate finds a problem*: route a floor failure naming a path commit 1 landed
+      to the `writer`. Satisfies the first half of R7.3.
+- [ ] **T5a** *(amended 2026-08-07, `qa` round 1)* — Restate that bullet over a commit-1 path, and
+      add the second writer-routed failure the new steps produce: a check-only format failure at
+      step 3, fixed before commit 1 and folded into it, with no separate commit. Satisfies the
+      first half of R7.3.
 - [x] **T6** — *Final handoff*: report the floor's outcome, and include the spec-format-fix commit
-      in the commit enumeration. Satisfies the second half of R7's third scenario.
+      in the commit enumeration. Satisfies the second half of R7.3.
+- [ ] **T6a** *(amended 2026-08-07, `qa` round 1)* — Add *unrunnable* to the floor outcomes the
+      handoff reports, alongside ran-clean, failed-and-how-it-closed, and skipped-with-the-reason.
+      Satisfies the second half of R7.3.
 - [x] **T7** — Read the frontmatter `description` and the whole of `SKILL.md`; change the
       description only if it now misstates what the skill does, and fix any other sentence left
-      describing the old sequence. Satisfies R7's fourth scenario.
+      describing the old sequence. Satisfies R7.4.
 - [x] **T8** — Confirm the owner is named exactly once and that `writer.md`, `coder.md`, `qa.md`,
-      and `auditor.md` are untouched. Satisfies R2.
+      and `auditor.md` are untouched. Satisfies R2.2.
+- [ ] **T9a** *(amended 2026-08-07, `qa` round 1 — wording and presentation, no contract change)* —
+      Apply `qa`'s F4, F7, and F9: state the owner sentence as *the rejected alternative* rather
+      than as a claim about what the `writer` returns (R2.1 already asks for this,
+      and `writer.md` is a stated non-goal, so the built sentence overreaches); break step 3's
+      single paragraph into sub-bullets the way step 2 already does, without moving any wording V6
+      pins; and add a parenthetical pointer at the preamble's "you do not write specs, build, run
+      tests, review code" to the carve-out in *Boundaries*. Satisfies R2.1.
 - [x] **T9** — Run V2 and V3 (the root `CLAUDE.md` duplication greps and the manifest-parity
       loop) and V5 (the tool-name grep); report the actual output. Satisfies part of *Validation*.
 - [ ] **T10** — *(Not the `coder`'s task — the `writer`'s docs pass, step 7.)* Update the root
