@@ -28,7 +28,7 @@ project puts it — nothing moves, and the addressing rule above is unchanged.
 
 This repo has no install or bootstrap step of its own (no `package.json`, no lockfile),
 so a story worktree here needs no dependency provisioning — a `lead` running the
-pipeline on this repo records the status as *not provisioned: no install step* and
+pipeline on this repo records the status as *no dependencies required* and
 proceeds.
 
 That addressing convention — together with the rest of the worktree contract every

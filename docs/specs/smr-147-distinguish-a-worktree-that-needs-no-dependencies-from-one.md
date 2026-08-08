@@ -280,17 +280,17 @@ Two things this deliberately did **not** do: it did not quietly narrow the crite
 
 ## Tasks
 
-- [ ] Rewrite the canonical paragraph in `plugins/ca77y-engineering/agents/coder.md` to the normative text in *The paragraph, in full*, as a single physical line.
-- [ ] Apply the identical line to `plugins/ca77y-engineering/agents/writer.md`.
-- [ ] Apply the identical line to `plugins/ca77y-engineering/agents/qa.md`.
-- [ ] Apply the identical line to `plugins/ca77y-engineering/agents/auditor.md`.
-- [ ] Apply the identical line to `plugins/ca77y-engineering/skills/lead/SKILL.md`.
-- [ ] Rewrite `E-emit` — the *"Record the provisioning status"* bullet in `SKILL.md` step 2 — to name all three values, to state `no dependencies required` as what it records when it detects no install or bootstrap step, and to state `provisioning failed`, with the reason, for the other case; keep "proceed regardless" and keep the sentence that every later dispatch names the status. Leave the neighbouring provisioning-mechanics bullets untouched.
-- [ ] Rewrite `E-fmt` — the format step's *"Defined but not trustworthy here"* outcome in `SKILL.md` step 3 — to trigger on `provisioning failed` or an absent status, and to say that `no dependencies required` is not that case.
-- [ ] Reword `E-floor` — the *"Settle trustworthiness before attribution"* sentence in `SKILL.md` step 3 — so it names the failed-or-absent case instead of *"unprovisioned"*. Leave the floor's delegation to the format step's three outcomes as it stands.
-- [ ] Rewrite `E-aud` — the unreadable-source clause in `auditor.md`'s dependency-claim rule — to trigger on `provisioning failed` or an absent status.
-- [ ] Update `E-md` — the root `CLAUDE.md`'s Worktrees sentence — to say the `lead` records `no dependencies required` for this repo. Do not touch the fenced snippets or the prose describing them.
-- [ ] Run `V1`, `V2`, `V3`, `V4`, `V5`, `V6`, `V7` and `V8` and report each result, reading `V2` per the isolation assumption recorded in *Validation*.
+- [x] Rewrite the canonical paragraph in `plugins/ca77y-engineering/agents/coder.md` to the normative text in *The paragraph, in full*, as a single physical line.
+- [x] Apply the identical line to `plugins/ca77y-engineering/agents/writer.md`.
+- [x] Apply the identical line to `plugins/ca77y-engineering/agents/qa.md`.
+- [x] Apply the identical line to `plugins/ca77y-engineering/agents/auditor.md`.
+- [x] Apply the identical line to `plugins/ca77y-engineering/skills/lead/SKILL.md`.
+- [x] Rewrite `E-emit` — the *"Record the provisioning status"* bullet in `SKILL.md` step 2 — to name all three values, to state `no dependencies required` as what it records when it detects no install or bootstrap step, and to state `provisioning failed`, with the reason, for the other case; keep "proceed regardless" and keep the sentence that every later dispatch names the status. Leave the neighbouring provisioning-mechanics bullets untouched.
+- [x] Rewrite `E-fmt` — the format step's *"Defined but not trustworthy here"* outcome in `SKILL.md` step 3 — to trigger on `provisioning failed` or an absent status, and to say that `no dependencies required` is not that case.
+- [x] Reword `E-floor` — the *"Settle trustworthiness before attribution"* sentence in `SKILL.md` step 3 — so it names the failed-or-absent case instead of *"unprovisioned"*. Leave the floor's delegation to the format step's three outcomes as it stands.
+- [x] Rewrite `E-aud` — the unreadable-source clause in `auditor.md`'s dependency-claim rule — to trigger on `provisioning failed` or an absent status.
+- [x] Update `E-md` — the root `CLAUDE.md`'s Worktrees sentence — to say the `lead` records `no dependencies required` for this repo. Do not touch the fenced snippets or the prose describing them.
+- [x] Run `V1`, `V2`, `V3`, `V4`, `V5`, `V6`, `V7` and `V8` and report each result, reading `V2` per the isolation assumption recorded in *Validation*.
 - [ ] **Not the `coder`'s — the docs pass owns this.** Update `D1`, `D2` and `D3` in `README.md` to the three-value vocabulary and the branched receiver rule.
 - [ ] **Not the `coder`'s — the docs pass owns this.** Update `D4` and `D5` in `docs/ARCHITECTURE.md`: the status-recording sentence and the handover/receiver paragraph in *The story worktree contract*, and the lint floor's third outcome including its *"unprovisioned"* wording.
 - [ ] **Not the `coder`'s — the docs pass owns this.** Re-run `V5` and `V6` after the docs edits, where the expected result tightens to no hit anywhere outside `docs/specs/` and `docs/AGENTS_IMPROVEMENTS.md`.
