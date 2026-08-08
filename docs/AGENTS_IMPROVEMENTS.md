@@ -426,3 +426,29 @@ Validation rules that where the project's spec format defines no such section th
 named subsection of the section the format does define — and name which one. The cost of leaving it
 open is not that a spec omits validation; it is that every spec places it differently, which is
 exactly the condition the pinned order exists to prevent.
+
+### A line-based grep over hard-wrapped prose under-reports, and the missing hits look like a pass
+
+**Area**: `agent:writer`
+
+**Observed**: On `SMR-147` the spec's `V5` and `V6` sweep the tree for retired phrases
+(`absent or negative`, `not provisioned`, `unprovisioned`) with `grep -rn … --include='*.md'`, and
+the *Tasks* list has the docs pass re-run both after its edits, where the expected result tightens
+to no hit anywhere. Run verbatim at `qa` round 2 the commands returned **three** hits across
+`README.md` and `docs/ARCHITECTURE.md`; a whitespace-normalized sweep of the same two files
+returned **seven**. The difference is entirely line wrapping — both files are hard-wrapped at ~80
+columns, and four of the seven occurrences straddle a newline (`not\nprovisioned`, `absent or\nnegative`),
+which a line-oriented pattern cannot match. Every miss is in the docs pass's own scope, so a docs
+pass that edits the three visible hits and re-runs the item gets a clean zero and ships four stale
+sentences. The failure is silent in the worst direction: the check that is supposed to certify the
+migration finished is the thing that hides the remainder, and no reader of the green result can tell
+under-reporting from completion.
+
+**Suggested change**: In the `writer`'s Validation rules, require an item that greps **prose** in a
+hard-wrapped format to state a wrap-immune command — normalize whitespace before matching
+(`tr '\n' ' '`, `pcregrep -M`, or a per-file read) — or to anchor on a single word that cannot be
+split, with the multi-word form named only as a locator. Say why in the rule: a bare-word anchor
+survives wrapping, which is exactly the property the existing zero-target-token-count entry above
+relies on, and a multi-word phrase does not. Where an item is a **migration gate** whose whole
+purpose is proving a phrase is gone, the wrap-immune form is not optional, because a partial match
+set is indistinguishable from a completed migration.
