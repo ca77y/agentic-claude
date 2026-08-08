@@ -326,9 +326,20 @@ the readiness gate's board-side duplicate detection itself, in each; the
    entering the existing one leaves it exactly where the project puts it, with every
    dispatch still naming its absolute path. A fix run on an open PR (below) takes the same
    step after recovering the worktree.
-3. **Spec** — dispatches the `writer` to author the spec, then the `auditor` to gate
-   it; routes any findings back to the writer to revise, re-audits fresh, and once
-   ready **commits the spec** (commit 1).
+3. **Spec** — dispatches the `writer` to author the spec, then **runs the project's
+   format step** over everything commit 1 will land — the spec plus whatever else the
+   spec pass left behind, typically an `AGENTS_IMPROVEMENTS.md` append — and only then
+   dispatches the `auditor` to gate it; routes any findings back to the writer to
+   revise, re-formats and re-audits fresh, and once ready **commits the spec**
+   (commit 1). Immediately after, and before the coder is dispatched, it runs the
+   project's **lint command once as a floor**: a failure naming a path commit 1 landed
+   routes to the writer and is fixed in its own commit, while a failure only outside
+   that set is recorded as pre-existing and relayed, never silently fixed. Both
+   commands are whatever the project defines, discovered from project context — no tool
+   is named — and each has three outcomes: it ran, it is **not defined** (a stated
+   outcome, never a reason to invent one), or it is defined but **not trustworthy
+   here**, reported as unrunnable and attributed to nobody. See **The commit model**
+   below.
 4. **Build** — dispatches **one** `coder` with the spec's path, and **records its
    agentId when the dispatch produces one**. The coder implements and reports; the
    lead trusts that reported state.
@@ -418,16 +429,20 @@ outlive the worktree it is inside — see the hand-off below for what recovery r
 instead.
 
 **The commit model.** The story worktree is the only workspace and the lead is the
-only one that commits. It commits the spec; then one commit per **pre-ship round**
-— the coder's initial build, then each `qa` and acceptance-gate fix round; then the
-**ship commit** with whatever is still uncommitted at PR time (mainly docs and the
-spec's removal); then one per PR-review fix round. The count varies with how many
-rounds ran. The pre-ship round commits exist because every `qa` and acceptance
-dispatch is a **fresh** context: they give it two commit references to diff round N
-against round N−1, instead of one undifferentiated tree in which the build and every
-round are folded together. They stay local until the PR opens. Committing the spec
-separately is what keeps it in history at all, since the docs pass later converts and
-deletes it.
+only one that commits. It commits the spec — carrying the step-3 format step's output
+for every path that commit lands, where the project defines a format command at all;
+then, only on a run where the lint floor finds something, a **spec-format-fix commit**;
+then one commit per **pre-ship round** — the coder's initial build, then each `qa` and
+acceptance-gate fix round; then the **ship commit** with whatever is still uncommitted
+at PR time (mainly docs and the spec's removal); then one per PR-review fix round. The
+count varies with how many rounds ran. The pre-ship round commits exist because every
+`qa` and acceptance dispatch is a **fresh** context: they give it two commit references
+to diff round N against round N−1, instead of one undifferentiated tree in which the
+build and every round are folded together. They stay local until the PR opens.
+Committing the spec separately is what keeps it in history at all, since the docs pass
+later converts and deletes it — and formatting it and linting after it are what stop
+that commit, the one commit no downstream gate was ever pointed at, from reddening the
+project's own gate with no agent able to attribute the failure.
 
 **The PR review, and the hand-off.** The lead does **not** wait for the review. It
 opens the PR, transitions the card to awaiting review, reports the PR as open and not yet reviewed,
@@ -452,7 +467,10 @@ orchestrator, and it runs in the main session: it dispatches `writer`, `coder`, 
 and `auditor` directly, and no pipeline agent dispatches or resumes another — every
 worker is a leaf at depth 1. Each leaf does its one job and returns, and the lead
 **trusts that result**: it never writes, tests, reviews, or judges the work itself, and
-if a dispatch fails it retries or escalates rather than stepping in. The flatness is
+if a dispatch fails it retries or escalates rather than stepping in. The one carve-out
+is commit hygiene on its **own** commit — the step-3 format step and lint floor, bounded
+to what commit 1 lands; neither looks at the build, replaces a `qa` round, or reads an
+acceptance criterion. The flatness is
 deliberate: the harness does not support a nested orchestrator — a subagent's children
 detach, their completion notifications route to the root session, and a resumed child's
 report never reaches a subagent parent (see

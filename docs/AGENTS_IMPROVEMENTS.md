@@ -255,6 +255,76 @@ unrelated story's branch. Where the analyst cannot commit at all, have it report
 entry heading, card identifier) in its final report so the clearing is a named handoff rather than an
 uncommitted edit in a tree that is about to be deleted.
 
+### Deviations has no entry shape for a criterion satisfied by property but not by literal mechanism
+
+**Area**: `agent:writer`
+
+**Observed**: On SMR-144's spec pass, one criterion prescribed a *mechanism* ("the `lead` formats
+it immediately before commit 1") whose literal placement the design had to depart from — an
+existing sentence in the file being edited forbids inserting anything between the spec gate and
+commit 1 — while fully preserving the *property* the criterion buys (the bytes committed are the
+format step's output). `writer.md`'s rule covers only "a criterion the design cannot satisfy as
+written", which this is not: it is satisfiable, just not by the route the criterion's wording
+sketches. Nothing said whether that belongs in *Deviations from the card*, in Design, or nowhere,
+and the choice matters because the acceptance gate reads the card's wording, not the design's
+reasoning. The pass had to invent a "None, but two things were examined and deliberately not
+treated as deviations" shape to keep the gate from reading the departure as a silent narrowing.
+
+**Suggested change**: Extend the Deviations rule with a second entry shape: where the design
+departs from a criterion's *prescribed mechanism* while preserving the property that mechanism
+exists to buy, record it in the same section — the criterion's own sentence, the property named
+explicitly, the requirement or scenario that pins the property, and why the literal route was not
+taken — and say plainly that this is not a criterion correction, so no card edit follows from it.
+Distinguish it from the existing unsatisfiable-criterion case, which does license a card edit.
+
+### A process-feedback append is a tracked write into the story worktree that no rule assigns to a commit
+
+**Area**: `flow`
+
+**Observed**: Every worker's *Process feedback* rule — identical prose in `coder.md`, `writer.md`,
+`qa.md`, `auditor.md` and `lead/SKILL.md` — directs an append to `docs/AGENTS_IMPROVEMENTS.md`
+**inside the story worktree**. That path is tracked, unlike `tmp/` scratch which `.gitignore`
+exempts, so the append is uncommitted work sitting in the tree when the `lead` next commits, and
+nothing anywhere says which commit carries it. In practice it rides along silently: SMR-144's
+commit 1 (`d026da7`) landed the spec **and** a 22-line improvements entry the `writer` had filed
+during the same pass, which the commit message then had to explain in a separate paragraph. The
+cost is not cosmetic — SMR-144's own design reasons from "at this point in a run the worktree
+contains exactly one changed file: the spec", a premise the same pipeline's process-feedback rule
+routinely falsifies, and the build shipped a rule that would halt a run on it.
+
+**Suggested change**: State in the `lead`'s *The commit model* which commit carries a
+process-feedback append — the simplest being that it rides the next commit the `lead` makes and is
+named in that commit's message — and, wherever a rule reasons about "what this run has changed",
+say that the improvements log is a pipeline write rather than part of the story's own diff. Any
+step that inspects the worktree's modified-path set (a format step's collateral check, a lint
+floor's attribution) needs that distinction stated once, centrally, rather than each such step
+rediscovering it.
+
+### The commit steps assume a shell form an isolated session is refused
+
+**Area**: `skill:lead`
+
+**Observed**: *Context discipline* settles how run-local scratch is written — ordinary file tools,
+never `bash` — but says nothing about the one write that genuinely needs a shell: the commit
+message. A `lead` running as a background job is isolated in the story worktree, and that guard
+rejects any bash call it cannot verify stays inside the worktree, which includes a heredoc. On
+SMR-144 the obvious form — `git commit -F - <<'EOF'` with the message inline — was refused with
+*"too complex to verify that it stays inside the worktree; break it into plain, separate
+commands"*, and the same refusal would meet `git commit -m $'…\n\n…'` or any other single call
+that composes the message and the commit together. Every one of this run's seven commits therefore
+took three calls: write the message to `tmp/` with a file tool, `git add` the paths, then
+`git commit -F tmp/<file>`. That is fine once discovered, but it is discovered by having a commit
+refused mid-run, and a `lead` that reaches for `-m` with a one-line summary instead — the form that
+does survive the guard — silently ships commits whose bodies never explain the round they carry,
+which *The commit model* explicitly requires them to.
+
+**Suggested change**: State the working form once in *The commit model*, beside the rule that each
+round's message names its findings: write the message to `tmp/` with a file tool and pass it as
+`git commit -F <path>`, keeping each bash call a single plain command. It costs one sentence, it
+generalises (the same guard rejects compound calls for every agent, not only the `lead`), and it
+belongs next to the requirement it protects — a message rich enough to name a round's findings is
+exactly the message too long for the shell form a `lead` would otherwise reach for.
+
 ### The writer's fixed spec-pass board access and its duty to apply card corrections disagree
 
 **Area**: `agent:writer`
