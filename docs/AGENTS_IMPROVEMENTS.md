@@ -399,3 +399,48 @@ is in an in-bounds file*, it must exclude the append-only process-feedback log f
 does not fail the check. More generally: a *Boundary* that both places a file out of bounds **and**
 permits a specific write to it should say which of the two a Validation item is quantifying over,
 so `qa` is not left deciding whether a permitted write is a failure.
+
+### A drift check that compares copies to each other cannot see a uniform rewrite
+
+**Area**: `flow`
+
+**Observed**: On `SMR-157` the spec's Validation items 2 and 3 are the root `CLAUDE.md` drift checks
+— `grep -h '^\*\*Addressing the story worktree\.\*\*' <five files> | sort -u | wc -l` printing `1`,
+and the two-carrier equivalent for *"Board access is granted by your caller."*. Both printed `1`,
+which the items read as *the canonical paragraph is undisturbed*. They do not establish that. The
+property they measure is **the copies agree with each other**, which is equally true if the build
+rewrote the paragraph identically in all five carriers — precisely the `SMR-147` collision the same
+spec's *Coordination* section warns about, where a concurrent story is rewriting that paragraph and
+"whichever lands second must not re-flow or re-wrap" it. A uniform rewrite is the realistic failure
+mode here, because every carrier is edited by the same pass with the same replacement text; the
+check is blind to exactly the case it was written to catch.
+
+**Suggested change**: A cross-file *consistency* check and a cross-file *immutability* check are
+different properties and need different commands. Where a spec's Boundary declares a byte-identical
+paragraph out of bounds, pair the `sort -u | wc -l` item with one pinned to the base commit —
+`git diff <base> <head> -- <dir>/ | grep '^[+-]\*\*<lead-in>'` returning nothing — so the item fails
+on a uniform rewrite rather than passing on it. Generally: whenever a Validation item's property is
+*X did not change*, it must compare against a named prior state, never against sibling copies of X.
+
+### Nothing tells the `lead` to stop restating in a dispatch prompt what the definitions now carry
+
+**Area**: `flow`
+
+**Observed**: `SMR-157` exists to move a standing dispatch-prompt override ("there is NO test suite,
+NO test runner, NO build — do not hunt for one") out of ephemeral prompts and into `coder.md` and
+`qa.md`. The `qa` dispatch for the build itself still carried that override in prose — a paragraph
+restating the prose-deliverable branch and instructing `qa` to apply the spec's R3/R4 branch —
+even though the worktree under review is the one that adds the branch to `qa.md`. The spec's
+*Non-goals* reasons only about whether the `lead` skill's existing sentence ("`qa` runs the
+project's validation") stays *correct* once `qa.md` carries the fallback; it does not address
+whether the `lead` will stop *emitting* the override. Nothing in `skills/lead/SKILL.md` owns that
+behaviour either way, so the restatement outlives the change that made it redundant. The cost is
+not the duplication: it is that a definition can silently rot without anyone noticing, because
+every run's prompt patches it before the agent reads it.
+
+**Suggested change**: When a card's stated value is *"the override that used to live in a dispatch
+prompt becomes text in the product"*, the spec should carry a Requirements scenario for the
+retirement side too — the dispatching agent no longer restates it — and not only for the receiving
+definition. Failing that, add a standing rule where dispatch prompts are composed: before restating
+a behavioural rule in a dispatch prompt, check whether the dispatched agent's own definition
+already states it, and cite the definition rather than paraphrasing it.
