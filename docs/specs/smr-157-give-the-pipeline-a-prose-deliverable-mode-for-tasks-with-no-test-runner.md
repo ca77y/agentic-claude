@@ -266,14 +266,14 @@ This project defines **no test runner, no build, and no validation command** —
 
 ## Tasks
 
-- [ ] Add the prose-deliverable rule to `writer.md`'s `### Spec authoring rules` (R1.1–R1.3).
-- [ ] Reconcile `writer.md`'s existing code-shaped sentences with it — the consumer rule and the opening of *"Behaviour asserted outside Requirements gets no test."* (R1.4).
-- [ ] Add the named branch to `coder.md` step 2, with its two-fact trigger and the per-scenario inspectable assertion (R2.1–R2.4).
-- [ ] State the validation fallback in `coder.md`, and reconcile the `## Rules` bullet *"Report up once qa is green"* (R3.2, R3.3).
-- [ ] State the validation fallback at `qa.md`'s validate step (R3.1), and confirm neither file defers it to a dispatch prompt (R3.4).
-- [ ] Give `qa.md`'s gap-filling steps their prose form, and state which steps the branch does and does not change (R4.1–R4.3).
-- [ ] State the expected-outcome rule for a missing runner in both `coder.md` and `qa.md`, keeping the untrustworthy-command case distinct (R5.1, R5.2).
-- [ ] Check both files read with the branch as the exception and the code path as the default, including the mixed-deliverable case (R6.1, R6.2).
-- [ ] Run the *Validation* list and record each result, including each scenario's quoted satisfying line.
+- [x] Add the prose-deliverable rule to `writer.md`'s `### Spec authoring rules` (R1.1–R1.3).
+- [x] Reconcile `writer.md`'s existing code-shaped sentences with it — the consumer rule and the opening of *"Behaviour asserted outside Requirements gets no test."* (R1.4).
+- [x] Add the named branch to `coder.md` step 2, with its two-fact trigger and the per-scenario inspectable assertion (R2.1–R2.4).
+- [x] State the validation fallback in `coder.md`, and reconcile the `## Rules` bullet *"Report up once qa is green"* (R3.2, R3.3).
+- [x] State the validation fallback at `qa.md`'s validate step (R3.1), and confirm neither file defers it to a dispatch prompt (R3.4).
+- [x] Give `qa.md`'s gap-filling steps their prose form, and state which steps the branch does and does not change (R4.1–R4.3).
+- [x] State the expected-outcome rule for a missing runner in both `coder.md` and `qa.md`, keeping the untrustworthy-command case distinct (R5.1, R5.2).
+- [x] Check both files read with the branch as the exception and the code path as the default, including the mixed-deliverable case (R6.1, R6.2).
+- [x] Run the *Validation* list and record each result, including each scenario's quoted satisfying line.
 - [ ] **Not the `coder`'s task** — the docs pass mirrors the branch into the root `README.md`'s `coder`, `qa`, and `writer` sections and its *"Verification is layered"* paragraph, per `docs/CLAUDE.md` and the `lead`'s scope decision in *Non-goals*.
 - [ ] **Not the `coder`'s task** — the docs pass folds this spec's durable content into `docs/ARCHITECTURE.md` (the branch, its trigger, and why the three-outcome vocabulary is reused rather than duplicated) and removes the spec, per `docs/CLAUDE.md`.
