@@ -45,9 +45,11 @@ told which issue tracker to use.
   fixed conventions this toolkit itself pins: the tracking declaration always lives at
   `docs/ISSUE_TRACKING.md`, and the improvements log at `docs/AGENTS_IMPROVEMENTS.md`.
   Pinning where either file lives asserts nothing about what it says.
-- **Verification is layered, not repeated.** Spec authored + audited → per-scenario tests → qa gap
-  fill and local review → acceptance audit → PR review. Each layer checks something
-  the previous one cannot.
+- **Verification is layered, not repeated.** Spec authored + audited → per-scenario tests →
+  qa gap fill and local review → acceptance audit → PR review. Each layer checks something
+  the previous one cannot. Where a deliverable is prose and the project has no test runner,
+  the middle two layers change medium rather than dropping out: one inspectable assertion
+  per scenario, and the gaps in the spec's own Validation checklist.
 
 ## Boundaries
 

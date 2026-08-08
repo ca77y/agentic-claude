@@ -27,6 +27,8 @@ The problem, proposed change, user value, and explicit non-goals.
 
 Architecture, data flow, dependencies, risks, and alternatives. Link settled design in `docs/ARCHITECTURE.md` instead of repeating it.
 
+State the **boundary** here too — what this task may and may not touch, and **the deliverable's medium**. Where the deliverable is a document rather than code, say so plainly ("the deliverable is a non-code artifact: `<what>`"): that sentence is what the `coder`'s and `qa`'s prose-deliverable branch keys off, and without it they build to the code default.
+
 ## Requirements
 
 ### Requirement: <observable capability>
