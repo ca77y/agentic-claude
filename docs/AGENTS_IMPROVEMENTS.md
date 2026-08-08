@@ -399,3 +399,30 @@ is in an in-bounds file*, it must exclude the append-only process-feedback log f
 does not fail the check. More generally: a *Boundary* that both places a file out of bounds **and**
 permits a specific write to it should say which of the two a Validation item is quantifying over,
 so `qa` is not left deciding whether a permitted write is a failure.
+
+### The mandated spec section order has no slot for the Validation list the rules keep legislating
+
+**Area**: `flow`
+
+**Observed**: On `SMR-147` the spec pass had to place its *Validation* items somewhere, and the two
+authorities disagree about where. `docs/_templates/spec.md` and `docs/_templates/CLAUDE.md` pin the
+canonical order as `Goal -> Acceptance criteria (verbatim transcription) -> Design -> Requirements
+-> Tasks -> Already satisfied criteria`, say "pipeline agents parse that contract", and carry no
+*Validation* heading at all. The `writer`'s own rules meanwhile legislate that list repeatedly —
+the whole-spec reconciliation sweep names "the Validation list where the spec carries one" as a
+section to sweep, and a separate rule *requires* Validation scenarios to reach every consumer of
+what a task changes. Four of the entries already in this log (`A cross-file *Validation* item that
+counts files must enumerate them`, `A Validation item must state a property, never a reproducible
+enumeration`, `A Validation item whose grep pattern is a string the build rewords passes vacuously`,
+`A tree-wide grep item that requires every hit to be in bounds collides with the improvements log`)
+are refinements of how those items must be written, so the section is plainly load-bearing in
+practice. It has no home in the template, so each spec invents one: `SMR-147` nested it as a `###`
+under *Design* to avoid adding a top-level section to a parsed order. A reader or gate looking for
+Validation has to guess which spec put it where.
+
+**Suggested change**: Settle it in one direction and say so once. Either give the template an
+explicit `## Validation` section with a fixed position in the order, or state in the `writer`'s
+Validation rules that where the project's spec format defines no such section the items live as a
+named subsection of the section the format does define — and name which one. The cost of leaving it
+open is not that a spec omits validation; it is that every spec places it differently, which is
+exactly the condition the pinned order exists to prevent.
