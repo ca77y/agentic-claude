@@ -864,9 +864,11 @@ land a document that fails the gate without the spec being it. The same set serv
 rules — the format step's scope, its collateral check, and the floor's attribution — so
 it is defined once. The set is read afresh from the worktree's status each time it is
 needed, including **immediately before staging**, since the `auditor` carries the same
-*Process feedback* rule and a path can join while the gate is in flight; where it grew,
-the format step runs over the **newly added paths only**, never over the spec the gate
-has just judged.
+*Process feedback* rule and can append to `docs/AGENTS_IMPROVEMENTS.md` — normally
+already a member of the set from the writer's own pass — or add a new path, while the
+gate is in flight; the format step runs over whatever is **newly added or newly
+modified among the set's non-spec members**, never over the spec the gate has just
+judged.
 
 **The collateral check is before-and-after, not a snapshot.** The `lead` captures the
 modified-path set immediately before invoking the format command and compares after; only
