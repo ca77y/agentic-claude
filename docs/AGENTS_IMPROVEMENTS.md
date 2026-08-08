@@ -444,3 +444,25 @@ retirement side too — the dispatching agent no longer restates it — and not 
 definition. Failing that, add a standing rule where dispatch prompts are composed: before restating
 a behavioural rule in a dispatch prompt, check whether the dispatched agent's own definition
 already states it, and cite the definition rather than paraphrasing it.
+
+### A fix round routinely lands edits outside the spec's named edit sites, and nothing says whether that is in bounds
+
+**Area**: `flow`
+
+**Observed**: On `SMR-157` the spec's *Boundary* names edit sites per file — for `coder.md`,
+*"`## The loop` step 2 … and the `## Rules` bullet"*. Round 1's blocking `qa` finding was about a
+sentence in `coder.md`'s `## Output` section, which is not a named edit site, and the only correct
+fix for it edits that section. So the fix that closes the gate necessarily leaves the Boundary's
+own list stale. Re-validating in round 2 I had to decide, with nothing in the spec or in `qa.md`
+to decide from, whether an `## Output` edit was a boundary violation or an implied amendment — and
+the spec's Validation item that guards the boundary quantifies over the changed **file** set, which
+cannot see the difference either. The `writer`'s *"An edit to one section of a spec is an edit to
+the whole spec"* rule covers the spec pass, and `qa` never reaches the spec; nobody owns
+reconciling an edit-site list against what the fix rounds actually changed.
+
+**Suggested change**: State once, where edit sites are defined, that the list is the **planned**
+regions and not an exclusive permission — a region a routed finding forces open is in bounds, and
+the exclusive list is the separate *Must not touch* one. Then either have the `lead` amend the
+Boundary's edit-site list when it commits a fix round that lands outside it, or say explicitly that
+the list is not re-validated after round 0, so `qa` and the acceptance gate stop treating a stale
+list as evidence.

@@ -44,7 +44,7 @@ PR-review findings (which carry the independent code review) reach you the same 
 From here, both routes are identical — and every kind of finding is handled the same way:
 
 1. Take the **full set of findings at once** and apply them all in one go.
-2. Pin each behavioural fix with the scenario test that fails without it.
+2. Pin each behavioural fix with the scenario test that fails without it, or, in the prose-deliverable branch, the inspectable assertion the fix re-satisfies.
 3. Report the finished fixes back to the `lead`, which re-runs `qa`.
 
 **Every behavioural fix needs a test that fails without it.** Per finding, name either the test that goes red when the fix is reverted, or the concrete reason nothing can reach it. Rounds that close a finding with a production-code change plus a rationale comment leave the fix pinned by nothing — the next refactor cannot tell it from no fix at all. Adding tests for the round's *test-quality* findings does not cover its behavioural ones.
@@ -73,7 +73,7 @@ From here, both routes are identical — and every kind of finding is handled th
 
 **Your report is your return value — on every round.** Dispatched fresh, end your turn with the report as your final message: the `lead` receives that final text directly as the Agent tool's result. Resumed, finish the same way — the report as your final text; delivering it to your dispatcher is the harness's job, not yours. Never `SendMessage` anyone to report or escalate — not your dispatcher, not `main`, not a sibling — and do not treat the `SendMessage` tool description's recipient list as an invitation: a report sent that way bypasses the channel the pipeline actually collects on, and can be silently lost along with the blocker or spec mismatch it carried.
 
-Report to the `lead`: files changed, tasks completed, scenario tests added (or the inspectable assertions, in the prose-deliverable branch), any production hazard worked around (as a finding naming the dependency and version, the observed behaviour, and the affected spec scenario or acceptance step), any external docs consulted, and any blocker or spec mismatch. On a findings round, however it reached you: which findings you applied and how, the test pinning each behavioural fix, any evidence-backed rejection with its trace, and any further production hazard worked around in that round. This hazard-reporting obligation applies to every report you send the `lead` — the initial build report and each findings-round reply — not only the first.
+Report to the `lead`: files changed, tasks completed, scenario tests added (or the inspectable assertions, in the prose-deliverable branch), any production hazard worked around (as a finding naming the dependency and version, the observed behaviour, and the affected spec scenario or acceptance step), any external docs consulted, and any blocker or spec mismatch. On a findings round, however it reached you: which findings you applied and how, the test pinning each behavioural fix (or, in the prose-deliverable branch, the inspectable assertion the fix re-satisfies), any evidence-backed rejection with its trace, and any further production hazard worked around in that round. This hazard-reporting obligation applies to every report you send the `lead` — the initial build report and each findings-round reply — not only the first.
 
 ## Process feedback
 
