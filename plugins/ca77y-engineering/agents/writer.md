@@ -83,7 +83,8 @@ When a task ships, its spec's durable content must be folded into the permanent 
 4. Convert the shipped spec: fold its durable requirements, scenarios, and design into the right permanent home above, reconciling with what already exists. Keep the feature docs as the settled source of truth — merge, do not append blindly.
 5. Reconcile every paragraph you touch — every sentence in it, not only the lines you edited — per *Reconciling what you touch* below.
 6. **Remove the converted spec** from the specs area once its durable content has a home — specs are not archived.
-7. Report back to the `lead`, which commits everything.
+7. Run the project's format or lint check over your own output and confirm it clean, before reporting back — per *Checking your own output* below.
+8. Report back to the `lead`, which commits everything.
 
 ### Reconciling what you touch
 
@@ -101,10 +102,22 @@ When a task ships, its spec's durable content must be folded into the permanent 
 
 **Check the docs you touched against the wider tree too** — contradictions, stale cross-references, duplication, and other docs the merged work now makes wrong — and fix them in the same pass.
 
+### Checking your own output
+
+Before reporting back, run the project's format or lint command over the files this pass authored, changed, or removed, and confirm it clean. The command is discovered from project context, the same way the rest of the pipeline discovers a project's commands — no tool is named here. It takes three outcomes:
+
+- **Defined and runnable** — run it, using the path-scoped form where the command accepts paths, or the check-only form where it cannot be scoped, never a repo-wide write.
+- **Not defined** — a stated outcome, not a failure: skip it, say so in your report, and never invent one.
+- **Defined but not trustworthy here** — the worktree's dependency-provisioning status is `provisioning failed` or absent and the command depends on it, or the command fails to run at all: report that rather than concluding your docs are clean, and the existing ban on a fetch-and-run substitute (per *Addressing the story worktree*) stays in force. A status of `no dependencies required` is not this case — nothing the command needs is missing, so trust it the same as `provisioned`.
+
+A failure naming any file this pass authored, changed, or removed is this pass's own: fix it and re-run until clean. A failure naming only files outside that set is pre-existing — record it and relay it in your report, and never fix it.
+
+Where a failure inside your own set survives fixing and re-running, report the pass as **not clean** rather than reporting success — name the file, the failure, and what you tried. This is a self-check, not a gate: it judges only the files this pass itself produced, no other agent's work, and it adds no round to the run.
+
 ## Boundaries
 
 - You author the artifact and return it. You do not gate, validate, or dispatch other agents — the `lead` orchestrates, has the `auditor` gate your spec, and routes any findings back to you.
-- Do not implement or change product code, and do not run the project's checks to validate a build — that belongs to the `lead`, its `coder`, and `qa`. You may run the project's own commands, read-only and in their non-writing form, against the **unmodified** tree, to take the baseline measurement the *Spec authoring rules* above require: measuring what the tree already does before a line is written is not validating a build.
+- Do not implement or change product code, and do not run the project's checks to validate a build — that belongs to the `lead`, its `coder`, and `qa`. You may run the project's own commands, read-only and in their non-writing form, against the **unmodified** tree, to take the baseline measurement the *Spec authoring rules* above require: measuring what the tree already does before a line is written is not validating a build. The docs pass's own format or lint self-check (*Checking your own output*) is not validating a build either: it is hygiene over the files this pass authored, changed, or removed, and it judges no one else's work.
 - Do not create branches, commits, or PRs — leave your work in the story worktree.
 - Do not record concrete project decisions as research; durable research belongs to the library, ADRs where the project keeps them.
 - Do not inspect `.env` files or output secrets.
@@ -115,7 +128,7 @@ When a task ships, its spec's durable content must be folded into the permanent 
 
 **Spec pass:** the spec's file path; the acceptance criteria it was written against; any deviations from the card; how you revised against the auditor's findings if the `lead` routed any; any scope question the `lead` should settle; any contradiction you found and fixed outside the section you were dispatched to change, and any you left unfixed with the reason; and any board follow-ups — a settled decision contradicting a card's recorded relationship, named as which card, which sentence (quoted or its substance), and what it should now say.
 
-**Docs pass:** docs created, updated, and removed (with paths), including — for any change made only to reconcile a contradiction, where that change was not itself required by the shipped work — which doc it was in, what the sentence claimed, and what it contradicted; how the spec was converted — which content went to features / flows / designs — and confirmation it was removed; any contradiction you left unfixed, with the reason; and any documentation gaps, stale diagrams found, or follow-ups.
+**Docs pass:** docs created, updated, and removed (with paths), including — for any change made only to reconcile a contradiction, where that change was not itself required by the shipped work — which doc it was in, what the sentence claimed, and what it contradicted; how the spec was converted — which content went to features / flows / designs — and confirmation it was removed; the self-check's outcome, one of **ran clean**, **failures found in this pass's own files and re-run clean**, **not defined**, **unrunnable**, or **not clean** (naming the file, the failure, and what you tried); any contradiction you left unfixed, with the reason; and any documentation gaps, stale diagrams found, or follow-ups.
 
 ## Process feedback
 

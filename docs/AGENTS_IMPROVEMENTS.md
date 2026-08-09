@@ -571,3 +571,29 @@ for board statuses. Replace "keep the feature docs as the settled source of trut
 whichever document the project's conventions name as the settled source of truth for that kind", and
 require the pass to report which destinations it resolved to when the project defines none of the
 named ones.
+
+### A spec that mandates byte-identical cross-file reuse leaves the reuse itself mechanically unchecked
+
+**Area**: `agent:writer`
+
+**Observed**: On `SMR-171` the spec's *Reusing SMR-144's wording* section is the change's central
+mechanic: `writer.md` must carry `SKILL.md` step 3's three outcome bullets "with only these
+substitutions, and no others", and the spec supplies the substitution table. That is the single
+most falsifiable property in the whole build — it is a string transformation with a named source,
+a named target and a closed list of edits — and the *Validation* list leaves it to item 6,
+*"reading the two files end to end"*. Nothing in the list would fail on a fourth, unlisted
+substitution, a dropped clause, or a re-wrapped sentence; only a human reading two long paragraphs
+side by side would. Validating the round, I had to build the check the spec should have carried
+(extract the source bullets, strip the list indent, `diff` against the target bullets, and confirm
+the only differing spans are the table's) before I could say anything about the property at all.
+The general shape: a spec whose Boundary or Design mandates that text in file A be a
+substitution of text in file B has stated a machine-checkable invariant and then validated it by
+eye.
+
+**Suggested change**: Extend the Validation rule with a clause for **derived text**: where a spec
+requires one file's passage to reproduce another's under a named substitution set, the Validation
+list carries a command that demonstrates it — extract both passages by their stable anchors and
+`diff` them, with the item stating that the only permitted differing spans are the substitution
+table's rows. This is distinct from the existing byte-identical drift checks (`sort -u | wc -l`),
+which only apply where the copies are *identical*; the derived-text case is the one those checks
+cannot express, and today it silently falls back to prose.

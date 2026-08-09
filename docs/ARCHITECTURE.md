@@ -144,7 +144,7 @@ the result.
 than being a fixed fact about the agent, carry one canonical paragraph.**
 `**Board access is granted by your caller.**` is byte-identical in `writer.md` and
 `auditor.md`, guarded by the second `grep` in the root [`CLAUDE.md`](../CLAUDE.md) — the
-first arrangement in *Three ways an obligation gets repeated* below. One statement is true
+first arrangement in *Four ways an obligation gets repeated* below. One statement is true
 of both without divergence: your access is whatever the caller named, you read the
 declaration yourself at its fixed path, and where the caller named nothing you have none
 and say so. The `lead` skill deliberately does **not** join that pair — it reads the
@@ -329,9 +329,11 @@ running the `lead` skill. It dispatches every pipeline agent directly — `write
 every worker is a leaf at depth 1. Each leaf does its one job and returns; the lead
 **trusts that result** and never does the work itself, never re-checks it, and never
 steps in when a dispatch fails (it retries or escalates). The `writer`'s docs are
-trusted outright; its spec is gated by the lead's `auditor` before the build. The single
-carve-out is commit hygiene on the lead's own spec commit — the step-3 format step and
-lint floor, which touch no build and grade no criterion; see *The commit model*.
+trusted outright; its spec is gated by the lead's `auditor` before the build. The
+carve-outs are commit hygiene on the lead's **own** commits — the step-3 format step and
+lint floor over commit 1, and the step-8 validation run over the tree immediately before
+the ship commit — and each of them routes a failure by owner rather than judging the work
+itself; none grades a criterion or replaces a `qa` round. See *The commit model*.
 
 The flatness exists because the harness does not support a nested orchestrator: a
 subagent's children detach regardless of `run_in_background`, their completion
@@ -598,7 +600,7 @@ entry clears anything. That mechanism stays the open assumption above.
 concretely. In the product prose it is stated exactly once — in the `lead` skill's
 workspace-creation step, where a `lead` is standing when the guard hits, its first write
 being that step's ledger — with the open-PR fix run's recovery step pointing at it rather
-than restating it, the third arrangement in *Three ways an obligation gets repeated* below.
+than restating it, the third arrangement in *Four ways an obligation gets repeated* below.
 The root [`README.md`](../README.md) describes the same step in the user's voice, as it does
 every other agent behaviour. It sits deliberately
 **outside** the canonical `**Addressing the story worktree.**` paragraph: the remedy is one
@@ -695,9 +697,9 @@ they describe one defect from two sides — a self-check and an audit finding �
 deliberately *not* required to match byte for byte. No drift check covers them and none
 should be added; unifying the wording would fuse two different jobs.
 
-## Three ways an obligation gets repeated
+## Four ways an obligation gets repeated
 
-An obligation sometimes has to appear in more than one place. This repo uses three
+An obligation sometimes has to appear in more than one place. This repo uses four
 arrangements deliberately, and reaching for the wrong one is how wording drifts:
 
 - **Byte-identical duplication, with a drift check.** One canonical paragraph, one
@@ -725,6 +727,25 @@ arrangements deliberately, and reaching for the wrong one is how wording drifts:
   independently readable statement of the same duty in one file: both copies read as
   live, so an agent obeys whichever it reaches first and an edit to one silently leaves
   the other asserting the superseded version.
+- **Derived text — one wording carried into another file under a closed substitution
+  set.** Used where the same obligation binds two roles in different files, so pointing is
+  impossible: an agent is loaded with its own definition alone and cannot follow a pointer
+  into another agent's file. The three-outcome vocabulary for discovering a project's
+  command is the case: `SKILL.md` step 3 states it, and `writer.md`'s *Checking your own
+  output* carries the same sentences with exactly three substitutions — *say so in the
+  handoff* → *say so in your report*, *concluding the spec is clean* → *concluding your
+  docs are clean*, and *over commit 1's path set* → *over the files this pass authored,
+  changed, or removed* — with the outcome labels and the `no dependencies required` clause
+  crossing unchanged. Note that both of the other cross-file arrangements are unavailable
+  here rather than merely unattractive: byte-identity is **false by construction**, since
+  the two passages govern different commands, different scopes, and different report
+  surfaces, so a `sort -u | wc -l` check would fail on a correct pair; and the two-sides
+  arrangement above deliberately lets wording diverge, which is the opposite of what a
+  reused vocabulary needs. **No mechanical check covers it today**, and that is a real
+  hole rather than a design choice: the property is machine-checkable in principle —
+  extract both passages by their stable anchors, `diff` them, and permit only the
+  substitution set's spans — but nothing does it, so a fourth unlisted substitution or a
+  dropped clause is caught only by reading the two passages side by side.
 
 ## Verifying that a mechanism was really removed
 
@@ -988,7 +1009,9 @@ The commits a run produces, in order: the spec; the **spec-format-fix commit**, 
 runs where the lint floor below finds something to fix; one per **pre-ship round** — the
 `coder`'s initial build, then each `qa` and acceptance-gate fix round; the **ship
 commit**, carrying whatever is still uncommitted at PR time (by then mainly the docs and
-the spec's removal); then one per PR-review fix round. The count therefore varies with
+the spec's removal, plus any fix the ship-time validation run below surfaces — that run
+happens *before* this commit is created, precisely so its fix folds in rather than
+becoming a commit of its own); then one per PR-review fix round. The count therefore varies with
 how many rounds ran, rather than being fixed at two. The spec gets its own commit
 precisely because the docs pass later folds it into durable docs and deletes it; without
 that commit it would never appear in history.
@@ -1022,8 +1045,9 @@ just in the worktree. The worktree already made an interruption lossless; the ro
 commits also make the work *legible* after one — the history shows which rounds landed
 and what each changed, instead of one working tree of merged edits.
 
-**Commit 1 is formatted before it lands, and linted once after.** The spec commit used to
-be the one commit in a run that nothing had ever checked. The `writer` creates no commits
+**Commit 1 is formatted before it lands, and linted once after.** The spec commit was one
+of the two commits in a run that nothing had ever checked — the ship commit, below, is the
+other, and it was closed later and separately. The `writer` creates no commits
 and the `lead` committed without formatting, so nothing
 between them owned the project's format step — and on any project whose gate covers
 documentation, that commit could turn the gate red before the `coder` wrote a line. The
@@ -1105,9 +1129,14 @@ worktree status is *provisioning failed* or absent typically emits output naming
 file it was pointed at, which a naive
 attribution would read as a commit-1 failure and misroute to the `writer` as a spec
 defect. Trustworthiness is therefore settled **before** attribution, and an untrusted run
-is attributed to nobody. The `coder`'s and `qa`'s **validation** now takes the same three
-outcomes, for the same reason — stated in those definitions rather than in a dispatch
-prompt (see *When the deliverable is prose, not code* above).
+is attributed to nobody. Every other command the pipeline discovers now takes the same
+three outcomes, for the same reason, stated in each definition rather than in a dispatch
+prompt: the `coder`'s and `qa`'s **validation** (see *When the deliverable is prose, not
+code* above), the `writer`'s **docs-pass self-check**, and the `lead`'s **ship-time
+validation run**. One vocabulary across all of them is what keeps its second and third
+outcomes from collapsing into each other — *not defined* reported as a stated outcome, and
+*defined but not trustworthy here* reported as unrunnable rather than waved through as
+clean.
 
 **The floor runs unscoped but attributes narrowly.** A repo-wide lint is not
 automatically attributable — a base branch that was not already clean fails on files the
@@ -1120,26 +1149,85 @@ allowed to stop the run. Silently fixing the second kind would put collateral in
 story branch that did not ask for it. The floor runs **once per run**, at that one point
 — not per round.
 
-**Why this carve-out survives where the equality-check one did not.** *The card's
+**The ship commit was the other one nothing had ever read, and it is now validated before
+it is created.** Formatting and linting commit 1 closed the front of the run; the back of
+it stayed open, for two reasons that compound. The **docs pass writes after `qa`'s last
+round and after the acceptance gate**, so the one pass whose whole output is documentation
+produced files no agent in the run was positioned to read — on a project whose gate covers
+documentation, that could turn a PR red with the run already over. And an
+**acceptance-gate fix round's commit** is committed and then judged only by the `auditor`,
+which grades criteria and runs no validation, so it too is unread unless a further `qa`
+round happens to follow. What each commit is checked by:
+
+| Commit | What checks it |
+| --- | --- |
+| Commit 1, the spec | step 3's format step (before every gate dispatch) and the post-commit-1 lint floor |
+| The spec-format-fix commit (conditional) | re-formatted before it is committed |
+| The `coder`'s build | committed before the **first** `qa` dispatch, so `qa` validates it |
+| A `qa` fix round | committed, then the next fresh `qa` round validates it |
+| An **acceptance-gate** fix round | the `auditor`, which runs no validation — nothing else, unless a later `qa` round follows |
+| The **ship** commit | the step-8 validation run, over the whole tree, before the commit exists |
+
+**Two steps close it, one on each side, and the pairing is the design.** The `writer`'s
+docs pass ends with a **self-check** over the files that pass authored, changed, or
+removed (`### Checking your own output` in `writer.md`), and the `lead`'s *Ship and hand
+off* step 1 runs the project's **validation once over the whole worktree** before the ship
+commit is created. Neither subsumes the other: the writer's is scoped by **authorship**,
+so it catches a break while the pass that made it is still loaded and can fix it, and a
+failure naming only files outside its own set is relayed as pre-existing rather than
+fixed; the lead's is scoped to the **tree**, so it catches this class whichever agent
+introduced it — including the acceptance-round commit above, which a run over one commit's
+path set would miss. That tree scope is also why the card's own framing of the ship commit
+as *the only commit no validation has ever seen* is close but not exact, and why the step
+was built over the tree anyway: the inexactness is in the appositive, not in the ask.
+
+**Neither step is a gate, and the surrounding statements are unchanged because of it.**
+The `writer`'s docs stay trusted — `SKILL.md` step 7 still says there is no
+docs-consistency gate, and `writer.md` still says its docs are trusted with no gate — and
+the acceptance gate is still the **last gate the lead runs**, with the mis-worded
+escalation still the one gate outcome a run ships past. A self-check judges only the files
+the pass itself produced, adds no round, and reviews nobody else's work; the ship-time run
+routes a failure **by owner** — docs to the `writer`, code to the `coder`, per *When a gate
+finds a problem* — with the fix folding into the ship commit, and attributes a failure
+naming only untouched paths to nobody. The 3× rule bounds retries on either; a failure that
+survives it is named in the PR description and the handoff rather than looped on. This is
+also why the arrangement does not violate *Nothing signs off on itself*
+([`PRODUCT.md`](PRODUCT.md)): the writer is not gating its own artifact, it is running a
+mechanical command over files it just wrote, and the artifact's only judge is still the
+human reading the PR.
+
+**Why these carve-outs survive where the equality-check one did not.** *The card's
 acceptance criteria are pinned into the spec* records a carve-out to the `lead`'s founding
 boundary being deleted rather than defended, on the reasoning that a rule needing an
 exemption for one caller is a rule under strain. The distinction is what the exemption
 lets the `lead` do. That one licensed it to *compare a criterion against the card* — a
-judgement, on the standard the gates grade against. These two are commit hygiene on the
-`lead`'s **own** commit: bounded by a path set it already owns, writing only inside it,
-looking at no build, replacing no `qa` round, and reading no criterion. The format step
+judgement, on the standard the gates grade against. All three of these are commit hygiene
+on the `lead`'s **own** commits: they read no criterion, replace no `qa` round, and
+pre-empt no gate that already ran, and each routes a failure by owner instead of judging
+the work itself. The step-3 pair is bounded by a path set the `lead` already owns, writing
+only inside it and looking at no build; the step-8 run is scoped differently — over the
+whole tree, immediately before the ship commit, with any fix folding into that same commit
+— but it is hygiene on the commit it is about to create in exactly the same sense, and it
+runs at a point where every gate has already returned. The format step
 **authors nothing** — it is a mechanical normalisation of files about to be committed,
 and where its output would change a document's *content* rather than its formatting, that
 is explicitly not the `lead`'s to reconcile: the `auditor` surfaces it and the `writer`
 fixes it.
 
-**This repository cannot exercise either step, and says so.** It defines no format and no
-lint command — no `package.json`, no lockfile, no `Makefile`, no formatter or linter
-config, and no CI workflow that runs one — so every run of the pipeline here takes the
-*not defined* outcome for both. That is the correct behaviour rather than a gap, but it
-does mean the mechanism ships unexercised on its own repo; the same caveat as *A run does
-not exercise the definitions it is editing* below, from a second direction. Exercising it
-against a project that does define a format/lint command is a follow-up.
+**This repository cannot exercise any of these steps, and says so.** It defines no format,
+lint, or validation command — no `package.json`, no lockfile, no `Makefile`, no formatter
+or linter config, and no CI workflow that runs one — so every run of the pipeline here
+takes the *not defined* outcome for the step-3 format step, the lint floor, the `writer`'s
+docs-pass self-check, and the step-8 ship-time run alike. The `grep` drift and
+cross-plugin checks in the root [`CLAUDE.md`](../CLAUDE.md) are **not** a substitute: they
+are targeted verification snippets for specific paragraphs and dispatch names, not a
+project-wide gate, and
+pressing them into service as "the project's lint command" would report a check that was
+never run. Taking *not defined* is the correct behaviour rather than a gap, but it does
+mean each of these mechanisms ships unexercised on its own repo; the same caveat as *A run
+does not exercise the definitions it is editing* below, from a second direction.
+Exercising them against a project that does define a format, lint, or validation command
+is a follow-up.
 
 ## The self-improvement channel
 
@@ -1168,8 +1256,10 @@ migrated to Linear on 2026-08-03 and removed; git history holds the originals.
 **Almost every task here is a prose deliverable**, which is why the branch above exists:
 the product is a set of Markdown definitions, and the repo defines no test runner, no
 build, and no validation command (no `package.json`, no lockfile). A run on this
-repository therefore takes the *not defined* outcome for validation as well as for format
-and lint, the `coder` records inspectable assertions instead of scenario tests, and the
+repository therefore takes the *not defined* outcome everywhere the pipeline discovers a
+command — validation, the step-3 format step and lint floor, the `writer`'s docs-pass
+self-check, and the step-8 ship-time run — the `coder` records inspectable assertions
+instead of scenario tests, and the
 spec's own *Validation* section is what `qa` runs. That is the mode working, not a gap —
 and it is why adding a test runner here to make the pipeline comfortable would falsify the
 very case the branch was written for.
