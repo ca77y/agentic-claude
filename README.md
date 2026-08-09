@@ -667,7 +667,18 @@ prompt, so the `lead` grants both by default rather than leaving them to be requ
   rather than by a heading, so your own spec shape is left alone — and then writes every
   scenario's **THEN** as an observation a reader can make in the changed artifact itself,
   with Validation reaching the artifact's real consumers (manifests, loaders, frontmatter,
-  the changed-file set) in place of a build. Its authoring
+  the changed-file set) in place of a build. **When a spec enumerates the edit sites
+  inside a definition file — an agent or a skill — that file's own frontmatter
+  `description` is one of them**, read during the same enumeration rather than in a later
+  pass: where the task changes behaviour the `description` also states, it is either
+  inside the scope the `coder` is dispatched to or handed to a named owning mechanism
+  with a Tasks entry marked as not the `coder`'s task, and where it states nothing the
+  change falsifies, the spec records that it was checked — so a checked field stays
+  distinguishable from one never opened. That field is what other agents read when
+  choosing a dispatch, so a stale one is wrong product surface rather than only stale
+  prose, and a `coder` scoped to the enumerated sites is right to leave anything outside
+  them alone — which is why the disposition is made while the spec is written, by its
+  author and never by the `coder`. Its authoring
   rules make a spec's claims about the outside world checkable: a claim about how a
   **third-party or vendored dependency** behaves carries the package at the
   **resolved/installed** version plus a file-and-line into that package's own source —
