@@ -452,3 +452,70 @@ survives wrapping, which is exactly the property the existing zero-target-token-
 relies on, and a multi-word phrase does not. Where an item is a **migration gate** whose whole
 purpose is proving a phrase is gone, the wrap-immune form is not optional, because a partial match
 set is indistinguishable from a completed migration.
+
+### A drift check that compares copies to each other cannot see a uniform rewrite
+
+**Area**: `flow`
+
+**Observed**: On `SMR-157` the spec's Validation items 2 and 3 are the root `CLAUDE.md` drift checks
+— `grep -h '^\*\*Addressing the story worktree\.\*\*' <five files> | sort -u | wc -l` printing `1`,
+and the two-carrier equivalent for *"Board access is granted by your caller."*. Both printed `1`,
+which the items read as *the canonical paragraph is undisturbed*. They do not establish that. The
+property they measure is **the copies agree with each other**, which is equally true if the build
+rewrote the paragraph identically in all five carriers — precisely the `SMR-147` collision the same
+spec's *Coordination* section warns about, where a concurrent story is rewriting that paragraph and
+"whichever lands second must not re-flow or re-wrap" it. A uniform rewrite is the realistic failure
+mode here, because every carrier is edited by the same pass with the same replacement text; the
+check is blind to exactly the case it was written to catch.
+
+**Suggested change**: A cross-file *consistency* check and a cross-file *immutability* check are
+different properties and need different commands. Where a spec's Boundary declares a byte-identical
+paragraph out of bounds, pair the `sort -u | wc -l` item with one pinned to the base commit —
+`git diff <base> <head> -- <dir>/ | grep '^[+-]\*\*<lead-in>'` returning nothing — so the item fails
+on a uniform rewrite rather than passing on it. Generally: whenever a Validation item's property is
+*X did not change*, it must compare against a named prior state, never against sibling copies of X.
+
+### Nothing tells the `lead` to stop restating in a dispatch prompt what the definitions now carry
+
+**Area**: `flow`
+
+**Observed**: `SMR-157` exists to move a standing dispatch-prompt override ("there is NO test suite,
+NO test runner, NO build — do not hunt for one") out of ephemeral prompts and into `coder.md` and
+`qa.md`. The `qa` dispatch for the build itself still carried that override in prose — a paragraph
+restating the prose-deliverable branch and instructing `qa` to apply the spec's R3/R4 branch —
+even though the worktree under review is the one that adds the branch to `qa.md`. The spec's
+*Non-goals* reasons only about whether the `lead` skill's existing sentence ("`qa` runs the
+project's validation") stays *correct* once `qa.md` carries the fallback; it does not address
+whether the `lead` will stop *emitting* the override. Nothing in `skills/lead/SKILL.md` owns that
+behaviour either way, so the restatement outlives the change that made it redundant. The cost is
+not the duplication: it is that a definition can silently rot without anyone noticing, because
+every run's prompt patches it before the agent reads it.
+
+**Suggested change**: When a card's stated value is *"the override that used to live in a dispatch
+prompt becomes text in the product"*, the spec should carry a Requirements scenario for the
+retirement side too — the dispatching agent no longer restates it — and not only for the receiving
+definition. Failing that, add a standing rule where dispatch prompts are composed: before restating
+a behavioural rule in a dispatch prompt, check whether the dispatched agent's own definition
+already states it, and cite the definition rather than paraphrasing it.
+
+### A fix round routinely lands edits outside the spec's named edit sites, and nothing says whether that is in bounds
+
+**Area**: `flow`
+
+**Observed**: On `SMR-157` the spec's *Boundary* names edit sites per file — for `coder.md`,
+*"`## The loop` step 2 … and the `## Rules` bullet"*. Round 1's blocking `qa` finding was about a
+sentence in `coder.md`'s `## Output` section, which is not a named edit site, and the only correct
+fix for it edits that section. So the fix that closes the gate necessarily leaves the Boundary's
+own list stale. Re-validating in round 2 I had to decide, with nothing in the spec or in `qa.md`
+to decide from, whether an `## Output` edit was a boundary violation or an implied amendment — and
+the spec's Validation item that guards the boundary quantifies over the changed **file** set, which
+cannot see the difference either. The `writer`'s *"An edit to one section of a spec is an edit to
+the whole spec"* rule covers the spec pass, and `qa` never reaches the spec; nobody owns
+reconciling an edit-site list against what the fix rounds actually changed.
+
+**Suggested change**: State once, where edit sites are defined, that the list is the **planned**
+regions and not an exclusive permission — a region a routed finding forces open is in bounds, and
+the exclusive list is the separate *Must not touch* one. Then either have the `lead` amend the
+Boundary's edit-site list when it commits a fix round that lands outside it, or say explicitly that
+the list is not re-validated after round 0, so `qa` and the acceptance gate stop treating a stale
+list as evidence.

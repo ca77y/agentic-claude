@@ -224,7 +224,7 @@ behind it — is the separate `ca77y-library` plugin; everything from `analyst` 
 | Orchestration | `lead` (skill, main session) | one task (a prompt, maybe naming a card) | a single open PR, gated and handed off for review |
 | Spec | `writer` | the task | a validated spec in the specs area |
 | Build | `coder` | the validated spec | the finished work in the story worktree |
-| Validation & review | `qa` | the work in progress | pass/fail + filled test gaps + code-review findings |
+| Validation & review | `qa` | the work in progress | pass/fail + filled test (or checklist) gaps + code-review findings |
 | Readiness & acceptance | `auditor` | the spec, the built work vs its criteria, or a story card | ready / not-ready verdict |
 | Docs | `writer` | the finished task | durable docs; spec converted & removed |
 | Library lookup ᴸ | `librarian` | a research question | cited synthesis from the Markdown library |
@@ -492,6 +492,22 @@ work in a separate context — and the lead owns every gate over it.
    consulting current third-party docs via context7 when external behavior matters.
 3. **Report up** — no commit, no push, no PR. The lead then runs `qa` over the build.
 
+**The prose-deliverable branch.** Step 2's default is the code case, and it is replaced
+only when **both** facts hold: the spec's Boundary declares the deliverable a non-code
+artifact, *and* the project has no test runner or validation command. Then "one scenario
+test per scenario" becomes **one inspectable assertion per Requirements scenario** — the
+file, the region a reader finds it by (a heading, a bold lead-in, a quoted phrase; never a
+line number), and the exact quoted sentence that satisfies it, one entry keyed to each
+scenario's own name, with a scenario nothing satisfies named as missing rather than
+dropped. Finding no runner in that mode is the **expected** result, reported and moved
+past — never escalated, and never a reason to invent one or add a test file the Boundary
+forbids. A project that *does* define a validation command whose output the worktree's
+provisioning makes untrustworthy is a distinct case, reported as unrunnable. A partly-code
+deliverable on a project with a test runner leaves the second fact false, so its code
+still gets scenario tests. Where the project defines a validation command it is `qa`'s to
+run; where it defines none, the spec's own stated Validation procedure is what the coder's
+work is checked against before it reports up.
+
 The lead routes qa, acceptance-gate, and PR-review findings back to the same coder —
 **resuming it** when it holds a resumable agentId for it, or dispatching a fresh coder
 carrying the findings when it does not. (The one exception is an acceptance-gate criterion
@@ -525,6 +541,17 @@ from the one that wrote it. Reports pass/fail with evidence, the tests it added,
 already-satisfied results, and its review findings — the lead routes them to the
 `coder`. **Does not** fix feature code or weaken a failing test to make the suite pass.
 The heavy, independent code review runs again on the **PR** — the Claude GitHub review.
+
+**Where the project defines no validation command** — the prose-deliverable case above —
+the spec's own **Validation checklist is the validation**: qa runs every check it lists
+and captures real output, and its gap-filling becomes finding the read-only checks that
+checklist should have had and did not, running them, and reporting them **as additions to
+the checklist** rather than as new test files (the spec stays the writer's to amend).
+Finding no command there is the expected outcome, never a silent pass and never a missing
+prerequisite; a command that exists but cannot be trusted in this worktree is reported as
+unrunnable instead. Only its validate, gap-find, add, and re-run steps branch — the
+already-satisfied re-validation, the diff review, and the report are observations over
+files either way.
 
 ### auditor — independent readiness & acceptance gate (native, in Claude)
 
@@ -616,7 +643,13 @@ prompt, so the `lead` grants both by default rather than leaving them to be requ
   work in a bottom *Already satisfied criteria* section, per entry naming what satisfies
   it, what `qa` re-validates against the post-build tree, and whether the task's own
   changes also touch that surface — and hands back the path; the lead has the `auditor` gate it
-  before the build and routes any findings back to the writer to revise. Its authoring
+  before the build and routes any findings back to the writer to revise. **When the
+  deliverable is a document rather than code it says so in the Boundary content** — the
+  declaration the coder's and qa's prose branch keys off, named by what that content *is*
+  rather than by a heading, so your own spec shape is left alone — and then writes every
+  scenario's **THEN** as an observation a reader can make in the changed artifact itself,
+  with Validation reaching the artifact's real consumers (manifests, loaders, frontmatter,
+  the changed-file set) in place of a build. Its authoring
   rules make a spec's claims about the outside world checkable: a claim about how a
   **third-party or vendored dependency** behaves carries the package at the
   **resolved/installed** version plus a file-and-line into that package's own source —
@@ -768,6 +801,13 @@ signs off on it — the review always runs as a separate subagent.
 ready-to-build → `coder` writes per-scenario tests → `qa` fills coverage gaps and reviews
 the diff → the `auditor` gates the result against its acceptance criteria → the PR opens →
 the Claude GitHub review reviews it, and its findings come back through another `lead` run.
+The layers hold when the deliverable is **prose rather than code** — a spec, a doc, an
+agent definition, on a project with no test runner: the two middle layers change medium,
+not existence. Per-scenario tests become **one inspectable assertion per scenario** (the
+file, the region, and the quoted sentence that satisfies it), and the coverage gap `qa`
+fills becomes the read-only checks the spec's own Validation checklist should have had.
+Both facts must hold together for that substitution — the spec declares the medium *and*
+the project has no runner — so a task with a real test suite is untouched by it.
 The two `auditor` gates divide a spec's **dependency claims** between them: at readiness
 it checks each such claim is either cited or explicitly marked an assumption, and that a
 scenario which could pass with the claimed mechanism absent names that alternative cause
