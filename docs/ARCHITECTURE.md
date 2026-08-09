@@ -748,6 +748,75 @@ resolves it" survives any count of the artifact's own name, and did, through a c
 whole tree and judged by hand. There is no mechanical form of it yet, and it is precisely
 what a green name sweep does not cover.
 
+## When the deliverable is prose, not code
+
+The build and validation steps were written for a repo with a test runner: the `coder`
+writes one scenario test per spec scenario, and `qa` runs the project's validation
+commands over the result. A toolkit whose deliverable is a Markdown agent definition has
+neither, so on those tasks all three worker definitions were wrong about the medium, and
+every run paid to override them in an ephemeral dispatch prompt the next `lead` never
+saw. That override is now text in the product: `writer.md`, `coder.md`, and `qa.md` each
+carry a named **prose-deliverable branch**, stated once per definition.
+
+**The trigger is a conjunction of two independently observable facts**, so no agent has
+to guess: the spec's Boundary content declares the deliverable a non-code artifact,
+**and** the project's context supplies no test runner or validation command. Both must
+hold. A deliverable that is only partly a document, on a project that has a test runner,
+leaves the second fact false — so its code portions keep their per-scenario tests, and a
+document in the change set never converts the whole task into a prose build.
+
+**The first fact is new, and it is the `writer`'s half.** Without a declaration the
+`coder`'s trigger is unreachable: it cannot infer "non-code artifact" from a spec that
+never says so, and inferring it from the file extensions in the Tasks list is exactly the
+guesswork the branch exists to remove. So the `writer`'s authoring rules require the
+medium stated as a plain sentence in the Boundary content, in words a later agent can key
+a branch off, and require every scenario's **THEN** to name an observation a reader can
+make in the changed artifact itself rather than output a build would produce. That
+content is referred to by **what it is**, never by a fixed heading name, so a project
+whose spec shape places Boundary elsewhere is unaffected. Validation takes the matching
+substitution: for a document deliverable the artifact's real consumers — the manifests
+and loaders that read the file, its frontmatter, and the Boundary's changed-file set —
+are what Validation must reach, in place of a build or typecheck step. It is written as
+an extension of the existing consumer rule, not a second rule beside it.
+
+**One inspectable assertion replaces one scenario test.** For each Requirements scenario
+the `coder` records the file, the region a reader finds it by (a heading, a bold lead-in,
+or a quoted phrase — never a line number, which the same pass's own later edits move),
+and the exact quoted sentence in the changed artifact that satisfies it. The entry is
+**per scenario, keyed to that scenario's own name**, because a quotation is otherwise
+satisfiable by any plausible-looking line elsewhere in the file — the prose analogue of
+the adjacent-test trap the `coder`'s pinning rule already warns about. A scenario nothing
+satisfies is named as missing rather than omitted. Findings rounds take the same
+substitution: a behavioural fix is pinned by the inspectable assertion it re-satisfies
+where no test can exist to go red.
+
+**The spec's own Validation checklist is what `qa` runs.** Where the project defines no
+validation command, the checklist **is** the validation: `qa` runs every check it lists
+and captures real output for each, the same way it would from a command — not a pass, and
+not a missing prerequisite. Its gap-filling keeps its shape and changes its medium: the
+gap becomes read-only checks the checklist should have had and did not — a real consumer
+it never names, a criterion no line accounts for — which `qa` runs itself and reports **as
+additions to that checklist**, never as new test files, leaving the spec for the `writer`
+to amend. The branch reaches its validate, gap-find, add, and re-run steps only;
+re-validating the spec's *Already satisfied criteria*, reviewing the diff, and reporting
+need no branch, because each is already an observation made over files in the worktree in
+either mode.
+
+**A missing runner is an expected outcome, not a blocker — and it is the same
+three-outcome vocabulary the spec-commit format and lint steps use** (see *The commit
+model* below). Extending that vocabulary rather than inventing a parallel one is what
+keeps its second and third outcomes apart, which matters more here than anywhere: **not
+defined** is recorded and reported as the expected result, never escalated, and never a
+reason to invent a command, add a test file the Boundary forbids, or keep searching;
+**defined but not trustworthy here** — the worktree's provisioning is absent or negative,
+or the command will not run — is reported as unrunnable, never concluded clean and never
+folded into the first. Collapsing them is how an unprovisioned worktree's failed command
+gets waved through as "this project just has no runner".
+
+**The code path is the default and the branch is the exception**, stated that way round in
+all three definitions. Where a project has a test suite, per-scenario tests and a `qa` run
+are exactly what they were.
+
 ## A spec is written against a tree the same pass is editing
 
 Several gate failures on one card came from a single root: the spec asserted something
@@ -913,7 +982,9 @@ not merely the absence handling, and that matters most for the third: an unprovi
 lint run typically emits output naming the file it was pointed at, which a naive
 attribution would read as a commit-1 failure and misroute to the `writer` as a spec
 defect. Trustworthiness is therefore settled **before** attribution, and an untrusted run
-is attributed to nobody.
+is attributed to nobody. The `coder`'s and `qa`'s **validation** now takes the same three
+outcomes, for the same reason — stated in those definitions rather than in a dispatch
+prompt (see *When the deliverable is prose, not code* above).
 
 **The floor runs unscoped but attributes narrowly.** A repo-wide lint is not
 automatically attributable — a base branch that was not already clean fails on files the
@@ -970,6 +1041,15 @@ declaration is what every board-touching agent reads directly, at its fixed path
 the pipeline runs here, so the repo doubles as the worked example of a **hosted** board
 reached over MCP. The Markdown board that preceded it (`docs/tasks/`, 35 cards) was
 migrated to Linear on 2026-08-03 and removed; git history holds the originals.
+
+**Almost every task here is a prose deliverable**, which is why the branch above exists:
+the product is a set of Markdown definitions, and the repo defines no test runner, no
+build, and no validation command (no `package.json`, no lockfile). A run on this
+repository therefore takes the *not defined* outcome for validation as well as for format
+and lint, the `coder` records inspectable assertions instead of scenario tests, and the
+spec's own *Validation* section is what `qa` runs. That is the mode working, not a gap —
+and it is why adding a test runner here to make the pipeline comfortable would falsify the
+very case the branch was written for.
 
 **A run does not exercise the definitions it is editing, and that is easy to forget here.**
 A dispatched agent appears to be loaded from the **installed** plugin rather than from the
