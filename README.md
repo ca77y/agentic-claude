@@ -228,7 +228,7 @@ behind it — is the separate `ca77y-library` plugin; everything from `analyst` 
 | Readiness & acceptance | `auditor` | the spec, the built work vs its criteria, or a story card | ready / not-ready verdict |
 | Docs | `writer` | the finished task | durable docs (format/lint self-checked); spec converted & removed |
 | Library lookup ᴸ | `librarian` | a research question | cited synthesis from the Markdown library |
-| Library write ᴸ | `scribe` | raw notes / a synthesis target | wiki pages + index/taxonomy/log updates |
+| Library write ᴸ | `scribe` | raw notes / a synthesis target | wiki pages + index/taxonomy/log updates — or, in raw-note-only mode, raw notes alone |
 | Library audit ᴸ | `clerk` | the library vault | health findings (links, citations, taxonomy) |
 
 ᴸ ships in the **`ca77y-library`** plugin; every other row is **`ca77y-engineering`**.
@@ -251,12 +251,16 @@ library knowledge — not tickets or code.
    baseline and let gaps steer the web dive.
 3. **Decomposes** complex topics into subquestions, dispatching **one child
    `researcher` per subquestion** (sequential fallback if nesting is unavailable).
-4. **Runs the deep dive**: spawns explore subagents, follows leads recursively,
+4. **Runs the deep dive**: chases leads directly by default (fanning out only for two
+   or more independent lead clusters), follows leads recursively,
    prefers primary sources, and keeps going until leads stop producing new signal.
-5. **Persists** anything of durable value as raw source notes (via the `scribe`),
-   eagerly and in parallel-safe distinct files.
+5. **Persists** anything of durable value as raw source notes (dispatching the
+   `scribe` in **raw-note-only mode**), eagerly and in parallel-safe distinct files —
+   children and parent alike, so nothing writes the shared files mid-run.
 6. **Synthesizes** one new/updated wiki entry — *parent only*, serialized — citing
-   the raw notes, and updates the index/taxonomy/log.
+   the raw notes, and updates `_meta/index.md`, `_meta/taxonomy.md`, and `_meta/log.md`,
+   handing the full-ingest `scribe` the raw-note paths not yet synthesized into a wiki
+   page that its children and its own step 5 returned.
 7. **Verifies library health** (`clerk` audit) and fixes issues before reporting.
 
 Output: a cited synthesis, the new wiki entry + raw-source paths, contradictions and
@@ -864,9 +868,14 @@ and the `_meta/` files; never inspects secrets.
 Ingests raw Markdown research notes into the synthesized wiki without destroying
 provenance. Preserves raw notes, extracts durable concepts/claims, writes or updates
 the matching wiki page, and updates links, taxonomy, the index, and the maintenance
-log. Follows the Obsidian authoring conventions in `library/_meta/librarian.md` for
-every file it touches — resolving each wikilink target against a real filename or a
-declared alias (never a page's `title:`) and placing `^block-id` anchors only in
+log — its **full-ingest** default, which raw-note-only mode (below) suppresses down
+to the raw notes alone. Handed a set of raw-note paths to index, it reports which of
+them it incorporated into a wiki page and which it left un-indexed (a concept not
+durable enough to reuse stays behind), so the caller can name the gap instead of
+assuming the whole set was absorbed. Follows the Obsidian authoring conventions in
+`library/_meta/librarian.md` for every file it touches — resolving each wikilink
+target against a real filename or a declared alias (never a page's `title:`) and
+placing `^block-id` anchors only in
 Obsidian's valid forms. A dispatch conditional whose truth depends on vault state
 ("if a dedicated page exists, link to it; if not, state …") is an instruction to the
 scribe, not content: it settles the condition against the vault at write time and
@@ -874,10 +883,11 @@ publishes only the resolved branch's outcome as a settled statement, never the
 caller's if/then wording. Before reporting a pass done it verifies its own claims
 mechanically rather than from recall: it sweeps the whole batch it touched for a
 defect class before reporting that class handled, states the class and files-swept
-count in the log, grep-verifies every additive claim ("tag added", "block ID added")
-against the target file, and parses any frontmatter it wrote or edited with a real
-YAML loader — a parse failure blocks "done". The same pass sweeps the prose it
-authored for wording addressed to its own author rather than the reader: an
+count in the log (or, where no log entry is written, to the caller), grep-verifies
+every additive claim ("tag added", "block ID added") against the target file, and
+parses any frontmatter it wrote or edited with a real YAML loader — a parse failure
+blocks "done". The same pass sweeps the prose it authored for wording addressed to
+its own author rather than the reader: an
 unresolved conditional, "check whether", "do NOT", "in progress" used as a process
 status, a TODO, or any reference to the dispatch itself. That sweep is scoped by
 authorship, not by file — wiki pages, `_meta/` prose, and its own wording inside a
@@ -885,6 +895,20 @@ raw note such as a Rejected Sources callout, never the verbatim source text
 preserved under `library/raw/`, and never a legitimate quotation of source material.
 Every hit is resolved into a statement of fact or removed before the pass may be
 reported done.
+
+**Raw-note-only mode.** Dispatched in raw-note-only mode, the scribe writes and
+updates raw notes under `library/raw/` and does nothing else — no wiki page, and no
+index, taxonomy, or log update. Reading is unaffected: it still reads the vault's
+`README.md` and `_meta/` files to resolve wikilinks and check tags, since the mode
+suppresses writes to those files, not reads of them. **An explicit caller prohibition
+on those writes always wins over the default step, unconditionally** — a dispatch that
+forbids touching the shared meta files puts the scribe into the mode whether or not it
+names it, so a caller that predates the mode gets the same outcome as one that names
+it. The conflict is never resolved silently: the scribe reports which default steps it
+suppressed and on whose instruction, the sweep counts and verified claims that would
+otherwise have gone to the log, and the paths of the raw notes it left un-indexed —
+the complete set the caller indexes later, so a fan-out parent batches the meta update
+from what came back rather than rescanning `library/raw/`.
 
 ### clerk — audits library health  ·  `ca77y-library`
 
