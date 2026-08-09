@@ -28,7 +28,7 @@ Dispatching one child and waiting on it buys no parallelism, spends a full agent
 The research library is an Obsidian vault maintained by the **library crew** — `librarian`, `scribe`, `clerk`. You dispatch them and relay the result; you do not edit library files yourself.
 
 - `librarian` — reads existing library knowledge and returns cited synthesis.
-- `scribe` — ingests raw notes and writes/updates synthesized wiki pages, links, taxonomy, index, and log.
+- `scribe` — ingests raw notes and writes/updates synthesized wiki pages, links, taxonomy, index, and log; in **raw-note-only mode** it writes raw notes only.
 - `clerk` — audits library health (broken links, duplicates, uncited claims, unsynthesized notes, convention violations).
 
 **Dispatch plugin agents by qualified name** — `ca77y-library:scribe`, never bare `scribe`. A bare plugin name does not resolve and the dispatch fails outright. That applies to your **child research agents** too (`ca77y-library:researcher`). Built-ins (`Explore`, `general-purpose`) are bare.
@@ -53,9 +53,9 @@ Each library agent already reads the library's shared `librarian` conventions (`
 
 - **This step applies only when the topic divides into two or more independent subquestions.** If decomposition yields one subquestion, it was not a decomposition — skip this step entirely and research the topic yourself in step 4. See `## You do the research yourself`.
 - If the topic needs multiple subquestions, split it into independent, well-scoped ones.
-- Dispatch **one child `ca77y-library:researcher` per subquestion**, as a single parallel batch. Each child runs steps 2, 4, and 5 (library check, deep dive, raw-source persistence) for its subquestion and returns its synthesis, its cited evidence, and the paths of the raw notes it persisted.
+- Dispatch **one child `ca77y-library:researcher` per subquestion**, as a single parallel batch. Each child runs steps 2, 4, and 5 (library check, deep dive, raw-source persistence — persisting via `ca77y-library:scribe` in **raw-note-only mode**) for its subquestion and returns its synthesis, its cited evidence, and the paths of the raw notes it persisted and left un-indexed.
 - Each child also returns its **absence labels** (`confirmed absent` / `unretrieved, not absent`), **each with the query that produced it** so the label can be re-tested, and a **fallback-used note** naming any faulted search path and the fallback it used. See `## Evidence discipline`.
-- **Step 6's label rules bind every agent that synthesizes a subordinate's findings, at every tier — not only the top-level parent.** Its *(parent only)* marker scopes the wiki write and the shared-meta updates, not the labels. If you are yourself a child that fanned out to its own children, apply step 6's carry-through and no-silent-upgrade rule to what you return upward, rather than flattening a subordinate's `unretrieved, not absent` into settled prose.
+- **Step 6's label rules bind every agent that synthesizes a subordinate's findings, at every tier — not only the top-level parent.** Its *(parent only)* marker scopes the wiki write and the shared-meta updates, not the labels, and not the duty to carry un-indexed raw-note paths upward. If you are yourself a child that fanned out to its own children, apply step 6's carry-through and no-silent-upgrade rule to what you return upward, rather than flattening a subordinate's `unretrieved, not absent` into settled prose — and forward your own children's returned un-indexed raw-note paths upward alongside the ones from your own step-5 persistence, so the set reaching the top parent's step-6 worklist is complete across every tier, not just its direct children.
 - Run independent subquestions in parallel; sequence them only where one depends on another's findings. If nested dispatch is unavailable in this harness, research the subquestions sequentially yourself.
 - You own the final synthesis and the single wiki write — see steps 5 and 6.
 
@@ -71,23 +71,24 @@ This is the core. Do not settle for the first few resources.
 
 ### 5. Persist valuable findings as raw sources (eager)
 
-- Whenever the dive turns up something of durable value, dispatch `ca77y-library:scribe` to persist it as a **raw source note**, preserving provenance (URL, source, date, key claims).
+- Whenever the dive turns up something of durable value, dispatch `ca77y-library:scribe` in **raw-note-only mode** to persist it as a **raw source note**, preserving provenance (URL, source, date, key claims).
 - Each raw note is a **distinct new file**, so it is safe to write while other subquestions are still running.
-- Child agents persist their own raw notes and return the paths. **Children do not write wiki pages or the shared meta files** (index, taxonomy, log) — those are written once, by the parent, so concurrent edits cannot corrupt the vault.
-- **Record leads you found but could not retrieve.** When the dive surfaces a relevant source you cannot fetch — blocked, paywalled, anti-bot challenge, HTTP 402/403, dead link — capture the URL and the reason and have `scribe` record it in the relevant raw note (a `> [!warning] Rejected sources` callout), so the lead stays revisitable. Report these in step 8.
+- A child never dispatches a full-ingest `scribe`: it persists its own raw notes via `ca77y-library:scribe` in **raw-note-only mode**, which is what keeps it from writing a wiki page or any of the shared meta files (index, taxonomy, log) — those are written once, by the parent, so concurrent edits cannot corrupt the vault. It returns the paths left un-indexed — *un-indexed* meaning not yet synthesized into a wiki page, not a missing `library/_meta/index.md` entry.
+- **Record leads you found but could not retrieve.** When the dive surfaces a relevant source you cannot fetch — blocked, paywalled, anti-bot challenge, HTTP 402/403, dead link — capture the URL and the reason and have `ca77y-library:scribe`, dispatched in **raw-note-only mode**, record it in the relevant raw note (a `> [!warning] Rejected sources` callout), so the lead stays revisitable. Report these in step 8.
 
 ### 6. Synthesize into a wiki entry (parent only)
 
 - Synthesize the full picture: your own dive plus every child's returned findings.
 - Separate facts, source-backed claims, inference, and product judgment. Surface contradictions, weak evidence, and stale sources.
 - **Carry every subordinate's absence labels through unchanged.** To promote an `unretrieved, not absent` to `confirmed absent`, re-run **that subordinate's actual subject query** — the query it returned with the label, or failing that the subquestion you dispatched to it — **not** a control term, on a path your own control query proved healthy, and relabel from *that* result. A healthy control proves only that the path works; it is never itself grounds to promote. Anything you cannot re-run stays `unretrieved, not absent` and surfaces in your report.
-- Dispatch `ca77y-library:scribe` to write the **new or updated wiki entry**, citing the raw source notes (block references, not uncited synthesis), and to update the index, taxonomy (only if a durable tag is missing), and log.
+- Dispatch `ca77y-library:scribe` in **full-ingest mode** (not raw-note-only) to write the **new or updated wiki entry**, citing the raw source notes (block references, not uncited synthesis), and to update the index, taxonomy (only if a durable tag is missing), and log — handing it the complete set of un-indexed raw-note paths collected from your own step-5 persistence and every child's return as what to index.
+- Hand it that set directly: never rescan `library/raw/` or re-derive the list from the vault. Name any collected path the write leaves un-indexed — taken from the full-ingest `scribe`'s returned indexed/un-indexed accounting — in your report, rather than reporting the run complete over it.
 - This wiki write and the shared-meta updates happen **once, serialized at the parent**.
 
 ### 7. Verify library health
 
 - After the writes, dispatch `ca77y-library:clerk` to run an audit.
-- Resolve what it raises (broken links, duplicate or overlapping pages, uncited claims, orphan pages, unsynthesized raw notes) by dispatching `ca77y-library:scribe`, then re-run the audit. **Cap the audit → fix → re-audit cycle at 3 rounds.**
+- Resolve what it raises (broken links, duplicate or overlapping pages, uncited claims, orphan pages, unsynthesized raw notes) by dispatching `ca77y-library:scribe` in **full-ingest mode** — these fix rounds run after the serialized write, with nothing else in flight, and may need to touch the meta files to close a finding — then re-run the audit. **Cap the audit → fix → re-audit cycle at 3 rounds.**
 - If a finding persists past the cap, stop looping and report the specific unresolved findings rather than reporting the run clean.
 
 ### 8. Report back
