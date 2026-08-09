@@ -889,6 +889,115 @@ to the `writer`'s spec pass at the readiness gate, both stated in that same sect
 this duty is one place that outcome gets reached from, not the incidental route it once
 was.
 
+## A spec's claims about the current tree are measured, not inherited
+
+The section above covers a spec asserting something about the tree that the pass's own
+later edits made false. This one covers the neighbouring root: a spec asserting something
+about the tree that **was never observed at all**, taken over from the card that asked for
+the work. Two failure modes come out of it, and both cost a whole run. Acceptance
+scenarios can be green before a line is written, because the gap the card described was
+already closed. And a Boundary can exclude the very file the build must edit, because it
+rested on a check somebody assumed was passing. The `writer`'s spec-authoring rules
+therefore require the measurement rather than the claim, and the obligation is authoring
+prose in `writer.md` — there is no mechanical guard and no CI check behind it.
+
+**Declared state is not effective state.** A claim that the system *lacks* a capability is
+checked against the **built, merged, or effective** artifact that would carry it, never
+only against the source that declares it: the two come apart at any layer that transforms
+one into the other — plugin defaults, codegen, framework auto-configuration. The layers
+are named generically, because the toolkit runs against arbitrary projects: naming a
+framework a project does not use, as a thing the rule requires, would be exactly the
+hardcoded assumption the rest of the pipeline forbids. Where the project has a command
+that renders effective state — an introspect or resolved-config dump, a build output, a
+`--showConfig`-style dump — it runs against the **unmodified** tree during the spec pass
+and the measured baseline goes into the spec, so the `coder` and the acceptance gate scope
+their assertions against observed state rather than against the card's.
+
+**A Boundary exclusion resting on an existing command's current result is measured before
+it is written.** That is the second trigger, and it is a different one: a CI gate, a
+pre-commit hook, or a smoke check whose *current* result the spec's value depends on. The
+command runs in the story worktree first, and its observed result is recorded. An
+equivalent baseline **already measured and handed to the `writer`** satisfies the run in
+place of a fresh invocation — provided the spec records which of the two its stated result
+came from, since "we ran it" and "we were told" fail differently. That clause is what lets
+a future lead-side base-commit baseline (`SMR-169` on the board) compose with this rule
+instead of duplicating its run.
+
+**When that command fails, the failing file is in scope by definition.** The spec's
+Boundary names it as in scope and the spec's Deviations content records it, rather than
+deferring it to an escalation the build has to override anyway. A boundary the build is
+guaranteed to breach is not a boundary; it is a defect handed forward one stage, where the
+acceptance gate then reports the omission.
+
+**The measurement never mutates the tree it measures.** Any such command runs through the
+project's own provisioned toolchain — never a fetch-and-run substitute, by reference to
+the ban the canonical worktree paragraph already carries rather than a second copy of it —
+and in its check-only or otherwise non-writing form where one exists. And it records which
+of the pipeline's **existing three outcomes** it took: *defined and runnable*, *not
+defined*, or *defined but not trustworthy here*. That is the same vocabulary the
+prose-deliverable branch and the spec-commit format and lint steps use (see *When the
+deliverable is prose, not code* and *The commit model*), extended rather than paralleled,
+which is what keeps its second and third values apart here too: a project that defines no
+such command is the expected case, recorded and never escalated, while a command that
+exists but cannot be trusted — the worktree's dependency-provisioning status *provisioning
+failed*, or no status named at all — is reported unrunnable and never written down as a
+clean baseline.
+
+**Where nothing can render the state, the claim is a marked assumption.** It is neither
+dropped nor asserted as fact: it says why it could not be measured and what would settle
+it, exactly as the dependency-citation rule already handles a claim it cannot cite. The
+mirroring is deliberate — a second, unrelated convention for unverifiable claims would
+leave a reader deciding which one applies. The same reasoning fixes where the rules sit:
+both new rules go inside the span the dependency-citation rule opens and the
+alternative-cause rule closes — four consecutive paragraphs in `writer.md`, in this
+order: dependency-citation, the current-state measurement rule, the pre-handoff
+self-check, the alternative-cause rule. Three of those four are the evidence-discipline
+list proper, and reading them in order gives the intended sequence — a dependency's
+behaviour, then the project's own current state, then what else could have produced the
+outcome — rather than a second citation regime bolted on elsewhere. The self-check is the
+third of the four paragraphs, sitting inside that span while deliberately **not** being
+one of the three list items: it is a check the `writer` runs over its own draft, not a
+rule about what evidence a claim must carry, and it is placed directly after the
+measurement rule because both turn on the same question of what the tree already does.
+
+**The draft is then self-checked against today's tree.** Before handoff the `writer` asks
+of **every** requirement: *would this scenario pass against the tree as it is today?* A
+scenario that would already pass is not testing this task. The check names a disposition
+rather than only diagnosing: a criterion needing nothing built moves into *Already
+satisfied criteria* with the evidence that section already requires (see *The card's
+acceptance criteria are pinned into the spec* above), and otherwise the scenario is aimed
+at the wrong observation and is rewritten so it would fail against today's tree. It is
+the runnability rule's complement, not a restatement of it — *"every
+acceptance scenario must be runnable inside the spec's own Boundary"* asks whether a
+scenario **can execute**; this one asks whether it would **already pass**, and a scenario
+can fail the second while passing the first.
+
+**Requiring the measurement forced one boundary to be redrawn in the same pass.**
+`writer.md`'s *Boundaries* said outright *"do not run the test suite"*, which would have
+left the definition carrying one instruction requiring a measurement and another
+forbidding it — the precise defect the `writer`'s own reconciliation rule exists to
+prevent, in the file that states the rule. The line now drawn is between two different
+runs: the `writer` may run the project's own commands **read-only, in their non-writing
+form, against the unmodified tree**, and validating a build stays `qa`'s. Measuring what
+the tree already does before a line is written is not validating a build, and it leaves
+[`PRODUCT.md`](PRODUCT.md)'s *nothing signs off on itself* untouched — there is no work of
+the `writer`'s own for the measurement to sign off on yet.
+
+**What is deliberately not built: a gate-side check.** The `auditor`'s readiness checklist
+carries no matching item, so an unmeasured gap claim is not *reported* by the gate — it is
+only prevented by the authoring rule. That asymmetry is stated rather than left to be
+discovered, and closing it is a follow-up on the board rather than part of this mechanism.
+
+**On this repository the rule takes its quietest form, and that is worth stating.** An
+agent definition has no build, merge, or codegen layer between the file and what the
+harness loads — the Claude manifest registers `./agents/<name>.md` **by path**, and the
+root manifest registers nothing (see *How scoping works*) — so declared and effective
+coincide and reading the definition end to end *is* the measurement. And the repo defines
+no command that renders effective state and no repository command at all, so a run here
+takes the *not defined* outcome, the same way it does for validation, format, and lint
+(see *Working on this repo with the pipeline*). The mechanism therefore ships largely
+unexercised on its own source, like the format and lint steps before it.
+
 ## The commit model
 
 The `lead` — the orchestrating main session — is the only place commits happen; no

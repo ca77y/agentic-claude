@@ -676,7 +676,31 @@ prompt, so the `lead` grants both by default rather than leaving them to be requ
   could not be cited and what would settle it, so the round that verifies it knows it
   was never checked. A scenario whose observable outcome could hold with the claimed
   mechanism absent gets that alternative cause named while the spec is written, so a
-  green test is never mistaken for a confirmed claim. It also
+  green test is never mistaken for a confirmed claim. The same discipline covers claims
+  about **your project's own current state**, which are measured rather than inherited
+  from the card: a claim that the system *lacks* something is checked against the
+  **built, merged, or effective** artifact that would carry it — not only the source that
+  declares it, since declared and effective configuration come apart at any layer that
+  transforms one into the other — and where your project has a command that renders
+  effective state, the writer runs it against the **unmodified** tree and records the
+  measured baseline in the spec, so the coder and the acceptance gate scope their
+  assertions against observed state. Where a Boundary exclusion instead rests on an
+  **existing command's current result** (a CI gate, a pre-commit hook, a smoke check),
+  that command runs before the exclusion is written — and if it **fails**, the failing
+  file is in scope by definition, named in the Boundary and recorded in the Deviations
+  rather than deferred to an escalation the build has to override anyway. An equivalent
+  baseline already measured and handed to the writer satisfies that run, provided the
+  spec says which of the two its result came from. Every such run goes through your
+  project's own toolchain in its check-only or otherwise non-writing form, so a
+  measurement never mutates the tree the spec is being written against, and it records
+  which of the pipeline's three outcomes it took — *defined and runnable*, *not defined*,
+  or *defined but not trustworthy here*. Where nothing can render the state a claim is
+  about, the claim is written as a marked **assumption**, exactly as an uncitable
+  dependency claim is. Then, before handing the
+  spec back, it asks of **every** requirement: *would this scenario pass against the tree
+  as it is today?* — one that would is not testing this task, and is either moved into
+  *Already satisfied criteria* with that section's evidence or rewritten so that it would
+  fail against today's tree. It also
   returns any **board follow-ups** — when a decision the spec settles contradicts
   relationship or dependency prose recorded on any card (including the card the work
   came from), it names which card, which sentence, and what it should now say — and
@@ -718,9 +742,14 @@ prompt, so the `lead` grants both by default rather than leaving them to be requ
   the pass itself wrote, not a review of anyone's work and not a new round.
 
 The writer just authors and returns; its spec is gated by the lead's `auditor`, its
-docs trusted. **Does not** implement code, run tests, or commit/branch/PR (the lead does)
-— the docs pass's format/lint self-check above is hygiene over its own output, not the
-test suite and not a gate over anyone else.
+docs trusted. **Does not** implement code (the `coder` does), validate a build (`qa`
+does), or create branches, commits, or PRs (the lead alone does, for every agent's work
+including its own). It **may** run your project's own commands, read-only and in their
+non-writing form, against the **unmodified** tree — that is the baseline measurement
+above, and measuring what the tree already does before a line is written is not
+validating a build. The docs pass's format/lint self-check above is the same kind of
+exception: hygiene over its own output, not the test suite and not a gate over anyone
+else's work.
 
 ### librarian — cited answers from the library  ·  `ca77y-library`
 

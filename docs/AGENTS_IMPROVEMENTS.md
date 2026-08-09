@@ -520,6 +520,58 @@ Boundary's edit-site list when it commits a fix round that lands outside it, or 
 the list is not re-validated after round 0, so `qa` and the acceptance gate stop treating a stale
 list as evidence.
 
+### A scenario's THEN may paraphrase a term the same spec elsewhere names canonically, and the coder ships the paraphrase
+
+**Area**: `agent:writer`
+
+**Observed**: On `SMR-163` the spec's *Coordination* section names the pipeline's shipped
+three-outcome vocabulary exactly — *defined and runnable* / *not defined* / *defined but not
+trustworthy here*, as `docs/ARCHITECTURE.md` carries it — and says the new rule "**extends** that
+vocabulary rather than inventing a parallel one". The Requirements scenario that actually specifies
+the outcome list then writes the first outcome as *"runnable and run"*. The `coder` implemented the
+scenario's wording, since a scenario THEN is what it builds against; `qa` flagged it in round 0 and
+round 1 corrected the deliverable to the canonical term. The spec's scenario text still reads
+*"runnable and run"*, so the shipped artifact and the criterion the acceptance gate reads now
+disagree in the exact place the spec was trying to keep aligned. Nothing in *Spec authoring rules*
+requires a THEN that names an already-shipped project term to name it in the project's own words —
+the nearest rules govern the card transcription (verbatim from the card) and post-hoc reconciliation
+of a superseding edit, neither of which is this.
+
+**Suggested change**: Add to *Spec authoring rules* that where a scenario's THEN names a term,
+status, or outcome vocabulary the project has already shipped, it quotes that term in the project's
+own wording and cites where it lives — the same way the dependency-citation rule demands a
+path-and-line — so the coder building against the THEN cannot ship a paraphrase, and the acceptance
+gate reads the term the artifact carries.
+
+### The docs pass hardcodes a feature/flow/design doc taxonomy the discovery principle forbids
+
+**Area**: `agent:writer`
+
+**Observed**: On `SMR-163`'s docs pass, steps 2–4 of `writer.md`'s *Docs pass* route durable content
+by a fixed table — "new/changed capability behavior … → the feature docs", "user journeys … → the
+flow docs", "UI/UX or system/architecture design → the design docs" — and step 4 adds "keep the
+**feature docs** as the settled source of truth". This repository has none of those three: its
+`docs/CLAUDE.md` declares `PRODUCT.md` (direction), `ARCHITECTURE.md` (structure), the root
+`README.md` (per-agent user-facing prose), and `issues/`, and says outright that per-agent behaviour
+belongs in the README while `ARCHITECTURE.md` "covers structure, not per-agent prose". So the pass
+has to silently discard its own routing table and re-derive the destinations from project context —
+which is the correct outcome, but it is reached by ignoring the instruction rather than by following
+it. The same file's *Reconciling what you touch* gets this exactly right one section later — "where
+the stated principles live is discovered from project context, **never hardcoded**" — and
+[`PRODUCT.md`](PRODUCT.md)'s *Agents discover, they do not assume* makes the general case. The risk
+is not this repo, where the mismatch is obvious; it is a target project whose docs area happens to
+contain a `features/` directory that means something else, where the table would route content there
+with nothing to signal the assumption.
+
+**Suggested change**: State the routing as *kinds of content*, and have the pass map each kind onto
+whatever the project's own documentation conventions define — capability behaviour/contracts, user
+journeys and sequences, and design/architecture — with the feature/flow/design names given as **one
+project's realization** of those kinds, the way the README's Obsidian Tasks example is already framed
+for board statuses. Replace "keep the feature docs as the settled source of truth" with "keep
+whichever document the project's conventions name as the settled source of truth for that kind", and
+require the pass to report which destinations it resolved to when the project defines none of the
+named ones.
+
 ### A spec that mandates byte-identical cross-file reuse leaves the reuse itself mechanically unchecked
 
 **Area**: `agent:writer`
