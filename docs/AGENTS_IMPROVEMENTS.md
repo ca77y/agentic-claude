@@ -29,3 +29,22 @@ story: the round-2 `qa` dispatch carried the round-1 findings and the commit ref
 `qa` dispatch, alongside the commit references, and to the `qa` bullet in *The agents*. `SMR-148`
 deliberately scoped the `lead` skill out of its own edit set, so this is the follow-up that
 closes the loop.
+
+### A final edit to a spec in the docs pass leaves no trace, because the same commit removes it
+
+**Area**: `flow`
+
+**Observed**: the docs pass both edits the shipped spec's surroundings and **removes** the spec,
+and the `lead` commits the whole pass as one commit. A commit that deletes a file shows that
+file's content **as of `HEAD`**, so any edit the same pass makes to the spec before deleting it is
+invisible in history — it is not merely redundant, it is unrecoverable. On this story the docs
+pass was asked to tick `T1`–`T9`'s checkboxes before removal "for an accurate historical record in
+git log", which cannot work in a one-commit pass: the removal diff shows the boxes unchecked
+either way. The same applies to any last correction to a spec discovered during its own conversion.
+
+**Suggested change**: state in `writer.md`'s docs pass (step 6) and in the `lead`'s commit step
+that a shipped spec is removed **as it stands**, and that anything worth recording about its final
+state — all tasks implemented and verified, a deviation that held, a criterion re-graded — goes in
+the **removal commit's message**, which is the only surviving trace. This mirrors the rule the
+root `CLAUDE.md` already applies to clearing `AGENTS_IMPROVEMENTS.md` entries, where the removal
+commit's message is explicitly the finding's only surviving record.
