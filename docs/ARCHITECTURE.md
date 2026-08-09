@@ -715,7 +715,9 @@ arrangements deliberately, and reaching for the wrong one is how wording drifts:
   where no drift check exists at all. `writer.md` carries the docs pass's reconciliation
   duty in one subsection, and the numbered step that used to hold that content is now a
   pointer at it; `### Applying a finding` likewise cross-references the spec-authoring
-  rule it hands off to instead of restating it. The `lead` skill's isolation step is the
+  rule it hands off to instead of restating it; and the frontmatter-`description` rule
+  below names the owning-mechanism rule it reuses rather than restating what an owning
+  mechanism must contain. The `lead` skill's isolation step is the
   same arrangement: the isolation remedy stated once in workspace creation, pointed at
   from the open-PR fix run's recovery step (see *The story worktree contract* above).
   The spec-commit format step and lint floor are the same again, and there the
@@ -997,6 +999,39 @@ no command that renders effective state and no repository command at all, so a r
 takes the *not defined* outcome, the same way it does for validation, format, and lint
 (see *Working on this repo with the pipeline*). The mechanism therefore ships largely
 unexercised on its own source, like the format and lint steps before it.
+
+## A definition file's frontmatter is inside its edit-site enumeration
+
+A spec that enumerates the edit sites inside a definition file is drawing the scope the
+`coder` is dispatched to, and anything in the file outside that list has no owner by
+construction — a `coder` leaving it alone is correct behaviour, not an oversight. The
+frontmatter `description` sat outside every such list, and it is the one field in the file
+that is not prose about the work: it is the surface other agents read when choosing a
+dispatch, so a behaviour change landing in the body while the `description` keeps stating
+the behaviour it replaced ships **wrong product surface**, not merely stale prose. Nothing
+in a run closed that gap unless a human named the field by hand in a dispatch prompt.
+
+The `writer`'s spec-authoring rules therefore fold the field into the enumeration instead
+of adding a pass over it — one line at the top of a file the enumeration already has open,
+read while the sites are being listed. Where the task changes behaviour the `description`
+also states, the spec's author, never the `coder`, takes one of exactly two dispositions:
+the `description` joins the enumerated sites, inside the scope the `coder` is dispatched
+to; or it gets a named owning mechanism and a Tasks entry marked as not the `coder`'s
+task, the same treatment a criterion no build step can close already gets (see *The card's
+acceptance criteria are pinned into the spec* above). Between them no case survives in
+which a `coder` must choose between staying in scope and knowingly leaving a contradiction
+behind. The unaffected case is recorded rather than left silent — a `description` the
+change falsifies nothing in is written down as checked — so *checked and unaffected* stays
+distinguishable from *never opened*, which a later reader cannot otherwise recover from
+the spec.
+
+The rule governs **any** definition file whose frontmatter carries a `description`, an
+agent or a skill, rather than agent definitions alone: a skill's `description` is what
+decides when it is invoked, so the mechanism is identical and a rule split by file type
+would leave the same gap open one type over. As with the rest of the spec-authoring rules
+there is no mechanical guard behind it, and deliberately no gate-side counterpart — the
+`auditor`'s readiness checklist carries no matching item, so a stale `description` is
+prevented at authoring time or not at all.
 
 ## The commit model
 
