@@ -39,14 +39,14 @@ Read these before making library changes:
 
 ## Ingest workflow
 
-Steps 4–8 write the wiki and steps 9–11 the shared meta files. In **raw-note-only mode** you perform steps 1–3, write or update the raw notes, and stop — see `## Raw-note-only mode`.
+Steps 4–8 write the wiki and steps 9–11 the shared meta files. In **raw-note-only mode** you perform steps 1–3 — step 2 is where the raw note itself gets written or extended — and stop — see `## Raw-note-only mode`.
 
-1. Identify the raw note files in scope.
-2. Preserve raw notes. Do not rewrite them unless the user explicitly asks.
-3. Extract durable concepts, entities, claims, relationships, open questions, and product implications.
+1. Identify the raw note files in scope — an existing note to extend, or, in raw-note-only mode, a new finding to persist as a note that does not exist yet.
+2. Preserve raw notes' already-recorded content: never rewrite it unless the user explicitly asks. Writing a new raw note, or appending a new finding to one already in scope, is not a rewrite — record it with its provenance (URL, source, date) and key claims, per the Obsidian conventions in `library/_meta/librarian.md`.
+3. Extract durable concepts, entities, claims, relationships, open questions, and product implications — in full-ingest mode, as the basis for the wiki synthesis in steps 4–8; in raw-note-only mode, as the key claims step 2 records in the raw note.
 4. Search existing wiki pages before creating new ones.
 5. Update an existing wiki page when the concept already exists.
-6. Create a new wiki page only when the concept is durable enough to reuse.
+6. Create a new wiki page only when the concept is durable enough to reuse. When working from a handed set of raw-note paths, a path whose concept is not durable enough stays un-indexed — report it per `## Output`.
 7. Add source links back to raw notes for factual claims.
 8. Add related-page links where useful, following the link style in `librarian.md`.
 9. **Full-ingest mode (the default):** update `library/_meta/index.md`. **Raw-note-only mode:** skip this step — see `## Raw-note-only mode`.
@@ -81,10 +81,11 @@ Before reporting, confirm every check in `## Verify before you report done` has 
 
 1. Raw notes reviewed.
 2. Wiki pages created or changed — full-ingest mode only; none in raw-note-only mode.
-3. Meta files changed — full-ingest mode only; none in raw-note-only mode (see item 6).
+3. Meta files changed — full-ingest mode only; none in raw-note-only mode (see item 7).
 4. Open questions or weak evidence found.
-5. **Raw-note-only mode only:** the paths of the raw notes written or updated and left un-indexed, as their own item — the complete set the caller must index later itself; no rescan of `library/raw/` is needed to reconstruct it.
-6. **Raw-note-only mode only:** which default steps were suppressed — the wiki write, and the index, taxonomy, and log updates — and on whose instruction: the named mode, or the caller's prohibition wording when it did not name the mode. Any defect-class sweep (class and files-swept count) or additive-claim verification that would otherwise have gone to `library/_meta/log.md` is reported here instead.
+5. **Full-ingest mode, when dispatched with a handed set of raw-note paths to index:** which of those paths were incorporated into a wiki page (indexed) and which were left un-indexed — e.g. per step 6, because the concept was not durable enough to reuse — so the caller's obligation to name any handed path left un-indexed has a data source in full-ingest mode too.
+6. **Raw-note-only mode only:** the paths of the raw notes written or updated and left un-indexed, as their own item — the complete set the caller must index later itself; no rescan of `library/raw/` is needed to reconstruct it.
+7. **Raw-note-only mode only:** which default steps were suppressed — the wiki write, and the index, taxonomy, and log updates — and on whose instruction: the named mode, or the caller's prohibition wording when it did not name the mode. Any defect-class sweep (class and files-swept count) or additive-claim verification that would otherwise have gone to `library/_meta/log.md` is reported here instead.
 
 ## Process feedback
 
