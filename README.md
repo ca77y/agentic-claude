@@ -456,14 +456,16 @@ PR-review fix round. The
 count varies with how many rounds ran. The pre-ship round commits exist because every
 `qa` and acceptance dispatch is a **fresh** context: they give it two commit references
 to diff round N against round N−1, instead of one undifferentiated tree in which the
-build and every round are folded together. They stay local until the PR opens.
-Committing the spec separately is what keeps it in history at all, since the docs pass
-later converts and deletes it — and formatting it and linting after it are what stop
-that commit from reddening the project's own gate with no agent able to attribute the
-failure. The spec commit and the ship commit are the two the pipeline's gates never
-read — the first lands before any of them, the last after all of them — which is why each
-now has a step of its own: the format step and lint floor at step 3, the tree-wide
-validation run at step 8.
+build and every round are folded together. They stay local until the PR opens. The docs
+pass at step 7 is a fresh context too, and reads the same two references for the same
+reason — to establish what shipped rather than trust the spec's account of it. Committing
+the spec separately keeps it in history at all, since the docs pass later converts and
+deletes it, and gives that pass the baseline it diffs against — and formatting it and
+linting after it are what stop that commit from reddening the project's own gate with no
+agent able to attribute the failure. The spec commit and the ship commit are the two the
+pipeline's gates never read — the first lands before any of them, the last after all of
+them — which is why each now has a step of its own: the format step and lint floor at
+step 3, the tree-wide validation run at step 8.
 
 **The PR review, and the hand-off.** The lead does **not** wait for the review. It
 opens the PR, transitions the card to awaiting review, reports the PR as open and not yet reviewed,

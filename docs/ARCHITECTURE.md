@@ -714,12 +714,15 @@ arrangements deliberately, and reaching for the wrong one is how wording drifts:
 - **Stated once, pointed at from everywhere else.** Used *within* a single definition,
   where no drift check exists at all. `writer.md` carries the docs pass's reconciliation
   duty in one subsection, and the numbered step that used to hold that content is now a
-  pointer at it; `### Applying a finding` likewise cross-references the spec-authoring
-  rule it hands off to instead of restating it; and the frontmatter-`description` rule
-  below names the owning-mechanism rule it reuses rather than restating what an owning
-  mechanism must contain. The `lead` skill's isolation step is the
-  same arrangement: the isolation remedy stated once in workspace creation, pointed at
-  from the open-PR fix run's recovery step (see *The story worktree contract* above).
+  pointer at it; the same file's *What shipped is the run's diff, not the spec* is the
+  arrangement again, stated whole in one subsection with the step that establishes what
+  shipped, the spec-conversion step, and the *Final report* contract line each reaching it
+  by name rather than restating it; `### Applying a finding` likewise cross-references the
+  spec-authoring rule it hands off to instead of restating it; and the
+  frontmatter-`description` rule below names the owning-mechanism rule it reuses rather
+  than restating what an owning mechanism must contain. The `lead` skill's isolation step
+  is the same arrangement: the isolation remedy stated once in workspace creation, pointed
+  at from the open-PR fix run's recovery step (see *The story worktree contract* above).
   The spec-commit format step and lint floor are the same again, and there the
   single-statement property is not just tidiness but the criterion itself — *the
   definition names one owner* — so the rule lives whole in step 3 and *Boundaries*,
@@ -1047,9 +1050,10 @@ commit**, carrying whatever is still uncommitted at PR time (by then mainly the 
 the spec's removal, plus any fix the ship-time validation run below surfaces — that run
 happens *before* this commit is created, precisely so its fix folds in rather than
 becoming a commit of its own); then one per PR-review fix round. The count therefore varies with
-how many rounds ran, rather than being fixed at two. The spec gets its own commit
-precisely because the docs pass later folds it into durable docs and deletes it; without
-that commit it would never appear in history.
+how many rounds ran, rather than being fixed at two. The spec gets its own commit for two
+reasons, both belonging to the docs pass: that pass later folds the spec into durable docs
+and deletes it, so without the commit the spec would never appear in history at all; and it
+is the **baseline that pass diffs against** to establish what actually shipped (below).
 
 The pre-ship round commits exist because every `qa` and acceptance-gate dispatch is a
 **fresh** context. Without them, a round-2 dispatch inherits one undifferentiated
@@ -1079,6 +1083,43 @@ A consequence worth stating: an interrupted run now has each completed round in 
 just in the worktree. The worktree already made an interruption lossless; the round
 commits also make the work *legible* after one — the history shows which rounds landed
 and what each changed, instead of one working tree of merged edits.
+
+**The docs pass is the third consumer of those references, and the reason the spec is not
+the record of what shipped.** The shipped spec and the shipped code **can disagree by
+design**: the spec is committed before any code exists, and a fix round changes the
+**code** — a `qa` or acceptance-gate finding that reshapes the design lands there, leaving
+the spec describing a shape the run has since abandoned. Nothing routinely brings the two
+back into line. The spec is re-authored mid-run only on the two routes `SKILL.md`'s *When a
+gate finds a problem* names — an approach wrong enough to respec, and a failed mechanical
+equality check — and neither is what an ordinary fix round takes; a round commit that
+touches the spec *file* at all, a ticked task or a Validation item `qa` adds, settles no
+design decision. So outside those two routes the spec states the design as of commit 1,
+whatever the run decided afterwards. The docs pass is a fresh dispatch facing exactly the
+blindness the round commits exist to remove, and until it used them the only thing between an
+abandoned design and this file was a human noticing: the run that generalised the
+`auditor`'s freshness duty planned it as *every round **and every caller***; the
+acceptance gate rejected the second half as unsourceable, and the `coder` removed it in
+the final commit — the spec still required it, and only a hand-written warning in the docs
+dispatch kept it out of *The card's acceptance criteria are pinned into the spec* above,
+which correctly records only the *every round, including each re-audit round* half.
+
+So the pass establishes what shipped from the run's diff before it authors anything: it
+diffs `<spec-commit>..HEAD` and reads that range's commit messages, which are what turn a
+bare textual difference into a *reason* — each names which round's findings it applies, so
+the pass can tell *a gate rejected this claim* from *the code merely drifted*. Each durable
+claim the spec makes is reconciled against that diff per claim, before it is folded. Where
+the two disagree the **diff is authoritative**: the durable doc records what the diff
+contains, and the spec's contradicted claim is not written down as fact. Where the diff is
+silent the spec still governs, as the source of **intent** — goal, design rationale,
+requirements. The diff for what the system does, the spec for why it exists. A divergence
+found, or an inability to obtain either reference, is named in the pass's report rather
+than papered over; what it must never do is report the spec as reconciled against a diff it
+never read. `SKILL.md` step 7 hands the dispatch the spec commit and the round commit
+references from the ledger — the same handover steps 5 and 6 already make to `qa` and the
+`auditor` — so the pass has a defined source for them rather than an identification method
+it has to invent. At docs-pass time `HEAD` is the last pre-ship round commit: this pass
+writes after `qa`'s last round and after the acceptance gate (below), and the ship commit
+does not exist yet, because the pass's own output is part of it.
 
 **Commit 1 is formatted before it lands, and linted once after.** The spec commit was one
 of the two commits in a run that nothing had ever checked — the ship commit, below, is the

@@ -31,3 +31,25 @@ chained redirects — because the agents that execute the list are dispatched in
 the harness refuses compound shell there. Where a project's own documented check (such as this
 repo's `CLAUDE.md` parity loop) is compound, the spec cites it *and* records the plain-command
 equivalent alongside it, so citing it does not hand the executing agent something it cannot run.
+
+### The docs pass has no rule for a divergence it finds in the shipped artifact itself
+
+**Area:** `agent:writer`
+
+**Observed:** On SMR-182's docs pass — the first live use of *What shipped is the run's diff, not
+the spec* — the divergence the diff surfaced sat in the **shipped artifact**, not in a durable doc.
+`writer.md` and `README.md` both state that the `lead` "commits the spec once ... and never revises
+it", and the run's own diff falsifies the literal claim twice: both round commits (`debeaef`,
+`e28a813`) modify the spec file, and `SKILL.md`'s *When a gate finds a problem* defines two mid-run
+respec routes. The new duty makes the diff authoritative over the spec and requires divergence to be
+reported, and *Reconciling what you touch* fixes a contradiction in any paragraph the pass touches —
+but neither covers this case: the inaccurate sentence is gate-accepted product prose the pass did
+not author and *Boundaries* tells it not to change built artifacts. The pass wrote the precise
+version into `ARCHITECTURE.md`, left the artifact alone, and reported it — which leaves the toolkit
+shipping a sentence its own run disproved, with nothing but a report line against it.
+
+**Suggested change:** State in *What shipped is the run's diff, not the spec* what to do when the
+divergence is in the shipped deliverable rather than in a durable doc: do not edit it (the
+acceptance gate judged it), record the accurate statement in the durable doc, and name it in the
+report as a **defect in shipped work** — a category distinct from a spec-only divergence — so the
+`lead` can choose between a fix round and a follow-up card instead of reading it as ordinary drift.
