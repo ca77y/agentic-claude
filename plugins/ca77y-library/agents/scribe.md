@@ -39,11 +39,11 @@ Read these before making library changes:
 
 ## Ingest workflow
 
-Steps 4–8 write the wiki and steps 9–11 the shared meta files. In **raw-note-only mode** you perform steps 1–3 — step 2 is where the raw note itself gets written or extended — and stop — see `## Raw-note-only mode`.
+Steps 4–8 write the wiki and steps 9–11 the shared meta files. In raw-note-only mode you perform steps 1–3, running step 3's extraction before step 2's write, and stop; see `## Raw-note-only mode`.
 
 1. Identify the raw note files in scope — an existing note to extend, or, in raw-note-only mode, a new finding to persist as a note that does not exist yet.
-2. Preserve raw notes' already-recorded content: never rewrite it unless the user explicitly asks. Writing a new raw note, or appending a new finding to one already in scope, is not a rewrite — record it with its provenance (URL, source, date) and key claims, per the Obsidian conventions in `library/_meta/librarian.md`.
-3. Extract durable concepts, entities, claims, relationships, open questions, and product implications — in full-ingest mode, as the basis for the wiki synthesis in steps 4–8; in raw-note-only mode, as the key claims step 2 records in the raw note.
+2. Preserve raw notes' already-recorded content: never rewrite it unless the user explicitly asks. Writing a new raw note, or appending a new finding to one already in scope, is not a rewrite — record it with its provenance (URL, source, date) and the key claims extracted per step 3, per the Obsidian conventions in `library/_meta/librarian.md`.
+3. Extract durable concepts, entities, claims, relationships, open questions, and product implications — in full-ingest mode, as the basis for the wiki synthesis in steps 4–8; in raw-note-only mode, as the key claims the raw note records.
 4. Search existing wiki pages before creating new ones.
 5. Update an existing wiki page when the concept already exists.
 6. Create a new wiki page only when the concept is durable enough to reuse. When working from a handed set of raw-note paths, a path whose concept is not durable enough stays un-indexed — report it per `## Output`.

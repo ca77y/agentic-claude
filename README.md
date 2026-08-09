@@ -779,9 +779,13 @@ Ingests raw Markdown research notes into the synthesized wiki without destroying
 provenance. Preserves raw notes, extracts durable concepts/claims, writes or updates
 the matching wiki page, and updates links, taxonomy, the index, and the maintenance
 log — its **full-ingest** default, which raw-note-only mode (below) suppresses down
-to the raw notes alone. Follows the Obsidian authoring conventions in
-`library/_meta/librarian.md` for every file it touches — resolving each wikilink target against a real filename or a
-declared alias (never a page's `title:`) and placing `^block-id` anchors only in
+to the raw notes alone. Handed a set of raw-note paths to index, it reports which of
+them it incorporated into a wiki page and which it left un-indexed (a concept not
+durable enough to reuse stays behind), so the caller can name the gap instead of
+assuming the whole set was absorbed. Follows the Obsidian authoring conventions in
+`library/_meta/librarian.md` for every file it touches — resolving each wikilink
+target against a real filename or a declared alias (never a page's `title:`) and
+placing `^block-id` anchors only in
 Obsidian's valid forms. A dispatch conditional whose truth depends on vault state
 ("if a dedicated page exists, link to it; if not, state …") is an instruction to the
 scribe, not content: it settles the condition against the vault at write time and
@@ -790,9 +794,10 @@ caller's if/then wording. Before reporting a pass done it verifies its own claim
 mechanically rather than from recall: it sweeps the whole batch it touched for a
 defect class before reporting that class handled, states the class and files-swept
 count in the log (or, where no log entry is written, to the caller), grep-verifies
-every additive claim ("tag added", "block ID added") against the target file, and parses any frontmatter it wrote or edited with a real
-YAML loader — a parse failure blocks "done". The same pass sweeps the prose it
-authored for wording addressed to its own author rather than the reader: an
+every additive claim ("tag added", "block ID added") against the target file, and
+parses any frontmatter it wrote or edited with a real YAML loader — a parse failure
+blocks "done". The same pass sweeps the prose it authored for wording addressed to
+its own author rather than the reader: an
 unresolved conditional, "check whether", "do NOT", "in progress" used as a process
 status, a TODO, or any reference to the dispatch itself. That sweep is scoped by
 authorship, not by file — wiki pages, `_meta/` prose, and its own wording inside a

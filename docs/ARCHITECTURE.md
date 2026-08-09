@@ -750,8 +750,12 @@ and would make the name "raw-note-only" false.
 un-indexed, as their own output item, stated to be the complete set the caller must index
 later. The parent's single serialized write is handed that set as what to index instead of
 rescanning `library/raw/` for it, and names any collected path the write leaves un-indexed
-rather than reporting the run complete over it. A rescan re-derives a worklist that was
-already known; a handed set is checkable against what came back.
+rather than reporting the run complete over it. What supplies that last part is the
+full-ingest `scribe`'s own return: handed a set, it reports which paths it incorporated
+into a wiki page and which it left un-indexed — a concept not durable enough to reuse
+stays behind — so the parent's obligation to name the gap has a data source rather than a
+guess. A rescan re-derives a worklist that was already known; a handed set is checkable
+against what came back, in both directions.
 
 **What the return depends on.** A child's report reaching the parent that dispatched it is
 exactly the routing this harness does not guarantee for nested dispatch (see
@@ -768,7 +772,10 @@ and that claim was false about its own file while the parent's own eager persist
 in the default mode, updating index, taxonomy, and log on each dispatch. Routing all of it
 through the mode is what makes the claim true, and it makes the serialized write's
 worklist complete: the set handed over is every note persisted during the run, not only
-the children's. The post-audit fix rounds are the deliberate exception — they are
+the children's. Completeness holds across tiers rather than one level down — a mid-tier
+child that fanned out forwards its own children's returned paths upward alongside its own,
+and only the top-level parent ever hands the accumulated set to a full-ingest dispatch.
+The post-audit fix rounds are the deliberate exception — they are
 full-ingest, because they run after the serialized write with nothing else in flight and
 may need to touch a meta file to close a `clerk` finding.
 
