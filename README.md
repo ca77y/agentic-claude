@@ -226,7 +226,7 @@ behind it — is the separate `ca77y-library` plugin; everything from `analyst` 
 | Build | `coder` | the validated spec | the finished work in the story worktree |
 | Validation & review | `qa` | the work in progress | pass/fail + filled test (or checklist) gaps + code-review findings |
 | Readiness & acceptance | `auditor` | the spec, the built work vs its criteria, or a story card | ready / not-ready verdict |
-| Docs | `writer` | the finished task | durable docs; spec converted & removed |
+| Docs | `writer` | the finished task | durable docs (format/lint self-checked); spec converted & removed |
 | Library lookup ᴸ | `librarian` | a research question | cited synthesis from the Markdown library |
 | Library write ᴸ | `scribe` | raw notes / a synthesis target | wiki pages + index/taxonomy/log updates |
 | Library audit ᴸ | `clerk` | the library vault | health findings (links, citations, taxonomy) |
@@ -381,9 +381,21 @@ the readiness gate's board-side duplicate detection itself, in each; the
    mismatch reported by either gate routes back to the writer for a respec, never to
    grading a stale list.
 7. **Docs** — a `writer` pass to update docs and convert the shipped spec; the lead
-   trusts it, no docs gate.
-8. **Ship** — **commits whatever is still uncommitted** (the ship commit), pushes, and
-   opens **one PR** —
+   trusts it, no docs gate. The pass does run your project's format/lint command over
+   the files it wrote and reports the outcome — a self-check on its own output, not a
+   review of its content by anyone.
+8. **Ship** — **runs the project's validation once over the whole worktree** *before* the
+   ship commit exists, then **commits whatever is still uncommitted** (the ship commit),
+   pushes, and opens **one PR**. That run is the only look anything takes at the tree as it
+   ships: the docs pass writes after qa's last round and after the acceptance gate, and an
+   acceptance-round commit is judged by the `auditor`, which runs no validation — so this
+   catches a break of that class whichever agent introduced it. Same command discovery and
+   same three outcomes as step 3 (ran, **not defined**, or **not trustworthy here**). A
+   failure naming a path this run touched routes by owner — docs to the writer, code to the
+   coder — and its fix **folds into the ship commit** rather than becoming one of its own;
+   a failure naming only untouched paths is relayed as pre-existing and never stops the
+   run; the 3× rule bounds the retries. It is commit hygiene, not a gate: nothing is
+   re-reviewed and no round is added. The PR then goes out
    carrying any production hazards the coder reported into its description, and relaying
    any board follow-ups the writer surfaced while speccing in both its final report and
    the PR description, so a card a decision made stale is visible without opening the spec.
@@ -435,15 +447,20 @@ for every path that commit lands, where the project defines a format command at 
 then, only on a run where the lint floor finds something, a **spec-format-fix commit**;
 then one commit per **pre-ship round** — the coder's initial build, then each `qa` and
 acceptance-gate fix round; then the **ship commit** with whatever is still uncommitted
-at PR time (mainly docs and the spec's removal); then one per PR-review fix round. The
+at PR time (mainly docs and the spec's removal, plus anything the step-8 validation run
+turned up — it runs before that commit is created so its fix folds in); then one per
+PR-review fix round. The
 count varies with how many rounds ran. The pre-ship round commits exist because every
 `qa` and acceptance dispatch is a **fresh** context: they give it two commit references
 to diff round N against round N−1, instead of one undifferentiated tree in which the
 build and every round are folded together. They stay local until the PR opens.
 Committing the spec separately is what keeps it in history at all, since the docs pass
 later converts and deletes it — and formatting it and linting after it are what stop
-that commit, the one commit no downstream gate was ever pointed at, from reddening the
-project's own gate with no agent able to attribute the failure.
+that commit from reddening the project's own gate with no agent able to attribute the
+failure. The spec commit and the ship commit are the two the pipeline's gates never
+read — the first lands before any of them, the last after all of them — which is why each
+now has a step of its own: the format step and lint floor at step 3, the tree-wide
+validation run at step 8.
 
 **The PR review, and the hand-off.** The lead does **not** wait for the review. It
 opens the PR, transitions the card to awaiting review, reports the PR as open and not yet reviewed,
@@ -468,10 +485,11 @@ orchestrator, and it runs in the main session: it dispatches `writer`, `coder`, 
 and `auditor` directly, and no pipeline agent dispatches or resumes another — every
 worker is a leaf at depth 1. Each leaf does its one job and returns, and the lead
 **trusts that result**: it never writes, tests, reviews, or judges the work itself, and
-if a dispatch fails it retries or escalates rather than stepping in. The one carve-out
-is commit hygiene on its **own** commit — the step-3 format step and lint floor, bounded
-to what commit 1 lands; neither looks at the build, replaces a `qa` round, or reads an
-acceptance criterion. The flatness is
+if a dispatch fails it retries or escalates rather than stepping in. The carve-outs are
+commit hygiene on its **own** commits — the step-3 format step and lint floor, bounded to
+what commit 1 lands, and the step-8 validation run over the tree just before the ship
+commit; each routes a failure by owner instead of judging the work, and none replaces a
+`qa` round or reads an acceptance criterion. The flatness is
 deliberate: the harness does not support a nested orchestrator — a subagent's children
 detach, their completion notifications route to the root session, and a resumed child's
 report never reaches a subagent parent (see
@@ -687,10 +705,22 @@ prompt, so the `lead` grants both by default rather than leaving them to be requ
   contradiction is fixed even when the edit that surfaced it was unrelated to it. The one
   thing the writer never does is rewrite the principle: when the principle may be the
   stale side, or it cannot tell which side is stale, it reports and leaves the sentence
-  standing — what the product is *for* stays yours.
+  standing — what the product is *for* stays yours. The pass then **checks its own
+  output**: before reporting back it runs your project's format or lint command over the
+  files it authored, changed, or removed, and confirms clean. The command is discovered
+  from your project's context — no tool is named — with the same three outcomes step 3
+  uses: it ran; it is **not defined**, said so in the report and never invented; or it is
+  defined but **not trustworthy here**, reported as unrunnable rather than concluded
+  clean. A failure inside its own file set is the pass's to fix and re-run; one naming
+  only files outside it is relayed as pre-existing and never fixed; and a failure in its
+  own file it cannot clear is reported as **not clean**, so a docs pass that authored a
+  file your own gate would reject cannot report success. This is a self-check on files
+  the pass itself wrote, not a review of anyone's work and not a new round.
 
 The writer just authors and returns; its spec is gated by the lead's `auditor`, its
-docs trusted. **Does not** implement code, run tests, or commit/branch/PR (the lead does).
+docs trusted. **Does not** implement code, run tests, or commit/branch/PR (the lead does)
+— the docs pass's format/lint self-check above is hygiene over its own output, not the
+test suite and not a gate over anyone else.
 
 ### librarian — cited answers from the library  ·  `ca77y-library`
 
@@ -793,9 +823,16 @@ home of the criteria once the transcription goes with the spec.
 
 **Every check runs in an independent context.** Code review goes to `qa` locally — a
 separate context from the `coder` — and to the PR review on the opened PR, readiness and
-acceptance audits to the native `auditor`, and library health to the `clerk`.
-Self-checking is forbidden across the pipeline; the agent that produces an artifact never
-signs off on it — the review always runs as a separate subagent.
+acceptance audits to the native `auditor`, and library health to the `clerk`. **No agent
+ever gates its own artifact**; the judgement always runs as a separate subagent.
+
+What that rules out is *sign-off*, not hygiene. Two steps deliberately run over work the
+running agent is about to hand over, and neither is a gate, adds a round, or judges
+anybody's work: the `writer`'s docs pass runs your project's format/lint command over the
+files it just wrote, and the `lead` runs your project's validation over the whole tree
+immediately before it creates the ship commit (see **The commit model** above for why
+those two points and no others). Both are mechanical commands your project itself
+defines — run them or report that you define none; nothing is reviewed either way.
 
 **Verification is layered**: the `writer` authors the spec → the `auditor` gates it
 ready-to-build → `coder` writes per-scenario tests → `qa` fills coverage gaps and reviews
