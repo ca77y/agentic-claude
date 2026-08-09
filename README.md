@@ -350,7 +350,8 @@ the readiness gate's board-side duplicate detection itself, in each; the
    when it is not, either way continuing on the report that dispatch delivers (see
    **Dispatch and resume** below) — **commits that round's work** when the coder
    reports back, and re-dispatches a **fresh** `qa` with the commit references to
-   diff against, capped at 3 rounds.
+   diff against **and the coder's fix report**, so qa reads each behavioural fix's
+   demonstration outcome rather than re-deriving every pin; capped at 3 rounds.
 6. **Acceptance gate** — the `auditor` verifies the built result meets the task's
    acceptance criteria against the **spec's labelled `AC1`…`ACn` transcription** of the
    card's criteria — the standard either way, whether or not a card exists — carrying
@@ -594,7 +595,8 @@ risk reaches the human through the PR rather than only through a comment on a te
 
 Dispatched by the `lead` after the coder builds, and again after each fix round — each
 fresh dispatch handed the round's commit references (the state the previous round
-reviewed, and the new round commit) so it can diff round N against round N−1. Runs the
+reviewed, and the new round commit) so it can diff round N against round N−1, and — on a
+findings round — the coder's fix report, which carries the pin evidence below. Runs the
 project's validation commands, compares the spec's scenarios against existing tests and
 adds the missing coverage (e2e, frontend, integration, edge cases), then re-runs;
 **re-validates every entry in the spec's *Already satisfied criteria* section** against
