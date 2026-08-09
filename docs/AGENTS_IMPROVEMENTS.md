@@ -50,3 +50,24 @@ just prose: have the `coder` state, per finding, either that it edited the cited
 the cited location is correct as-is given the fix elsewhere, and have the `lead` pass the cited
 locations to `qa` so the re-audit can check each citation directly instead of re-deriving it from
 the diff.
+
+### Nothing checks a story branch against master's tip before push, and every story conflicts in the improvements log
+
+**Area**: flow
+
+**Observed**: On `SMR-143`'s final pre-push `qa` pass, `git diff master --stat` in the story worktree
+reported `plugins/ca77y-engineering/agents/writer.md` and `skills/lead/SKILL.md` as changed — files
+the story never touched — because master had advanced one commit (`#28`) since the branch point. The
+scope check reads as an out-of-scope-edit finding until you notice it is merge-base drift and re-run
+against `git merge-base master HEAD`. The real problem surfaced only on a `git merge-tree
+--write-tree master HEAD` dry run: the branch **conflicts** with master in `docs/AGENTS_IMPROVEMENTS.md`.
+That conflict is structural, not incidental — the flow instructs every agent on every story to append
+to that one file, so any two stories in flight at once collide there by construction, and no step in
+the run checks for it before the `lead` pushes and the PR is declared ready.
+
+**Suggested change**: Two parts. (1) Where the flow asks for a changed-file scope check, specify the
+merge base (`git -C <worktree> diff $(git -C <worktree> merge-base master HEAD)..HEAD --stat`), not
+`git diff master`, so drift is never mistaken for a story's own edits. (2) Add a mergeability check to
+the `lead`'s ship step — `git merge-tree --write-tree master HEAD`, which is read-only and needs no
+checkout — and have it resolve an `AGENTS_IMPROVEMENTS.md` conflict by keeping both sides' entries
+(the file is append-only, so that is always the correct resolution) before pushing.
