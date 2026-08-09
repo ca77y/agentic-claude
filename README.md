@@ -258,8 +258,9 @@ library knowledge — not tickets or code.
    `scribe` in **raw-note-only mode**), eagerly and in parallel-safe distinct files —
    children and parent alike, so nothing writes the shared files mid-run.
 6. **Synthesizes** one new/updated wiki entry — *parent only*, serialized — citing
-   the raw notes, and updates the index/taxonomy/log, handing the full-ingest `scribe`
-   the un-indexed raw-note paths its children and its own step 5 returned.
+   the raw notes, and updates `_meta/index.md`, `_meta/taxonomy.md`, and `_meta/log.md`,
+   handing the full-ingest `scribe` the raw-note paths not yet synthesized into a wiki
+   page that its children and its own step 5 returned.
 7. **Verifies library health** (`clerk` audit) and fixes issues before reporting.
 
 Output: a cited synthesis, the new wiki entry + raw-source paths, contradictions and

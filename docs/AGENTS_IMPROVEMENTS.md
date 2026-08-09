@@ -29,3 +29,24 @@ alongside the readable one (e.g. the manifest check as one `grep -H '"version"'`
 manifest paths, the greps already single commands with paths spelled out rather than brace-
 expanded), and note that a worktree-isolated session must run the plain form. Specs can then cite a
 command that actually runs where the pipeline runs it.
+
+### A fix round can close a finding away from the location the finding cited, with nothing checking the citation
+
+**Area**: flow
+
+**Observed**: Review findings carry a `path:line` location, and the `lead` routes them to the
+`coder` as prose. On `SMR-143` a finding filed against `researcher.md:84` ("loose use of
+indexed/index") was addressed by adding a definition paragraph to a *different* file
+(`scribe.md:40`) that scopes itself to "wherever this file or `researcher.md` calls a raw note
+indexed". `researcher.md:84` was never edited and still carries the two senses it was cited for in
+one sentence ("to **index**, taxonomy-check, and log the pass" alongside "as what to **index**"),
+and `researcher.md` gained no pointer to the new definition even though the definition claims to
+govern it. The round was nonetheless reported as fixing the finding. Nothing in the loop compares
+the fix's edit sites against the finding's cited location, so a fix that lands adjacent to the
+citation reads as identical to one that lands on it.
+
+**Suggested change**: Carry each finding's cited `path:line` through the fix round as data, not
+just prose: have the `coder` state, per finding, either that it edited the cited location or why
+the cited location is correct as-is given the fix elsewhere, and have the `lead` pass the cited
+locations to `qa` so the re-audit can check each citation directly instead of re-deriving it from
+the diff.

@@ -37,11 +37,11 @@ Read these before making library changes:
 
 **The conflict is signalled, not silently resolved.** When the `scribe` suppresses a default step because of this precedence rule, it states in `## Output` which default steps it suppressed and on whose instruction, so a complying pass is distinguishable from a lucky one — see `## Output` for what raw-note-only mode reports in place of the suppressed writes.
 
-**"Indexed" means incorporated into a wiki page — not an entry in `library/_meta/index.md`.** Wherever this file or `researcher.md` calls a raw note indexed, or left un-indexed, that describes whether its content was synthesized into a wiki page (steps 4–8), not whether `library/_meta/index.md` itself was updated (the separate, file-level step 9).
-
 ## Ingest workflow
 
 Steps 4–8 write the wiki and steps 9–11 the shared meta files. Step 3's extraction runs before step 2's write in both modes. In raw-note-only mode you perform steps 1–3 and stop; see `## Raw-note-only mode`.
+
+**"Indexed" means incorporated into a wiki page — not an entry in `library/_meta/index.md`.** Wherever this file, `researcher.md`, and the durable docs call a raw note indexed, or left un-indexed, that describes whether its content was synthesized into a wiki page (steps 4–8), not whether `library/_meta/index.md` itself was updated (the separate, file-level step 9).
 
 1. Identify the raw note files in scope — an existing note to extend, or, in raw-note-only mode, a new finding to persist as a note that does not exist yet.
 2. Preserve raw notes' already-recorded content: never rewrite it unless the user explicitly asks. Writing a new raw note, or appending a new finding to one already in scope, is not a rewrite — record it with its provenance (URL, source, date) and the key claims extracted per step 3 (see below), per the Obsidian conventions in `library/_meta/librarian.md`.
