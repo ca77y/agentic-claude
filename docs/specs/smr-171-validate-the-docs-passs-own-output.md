@@ -260,9 +260,9 @@ Both appear in *Tasks* marked as not the `coder`'s.
   SMR-163 requires the `writer` to **run project commands during the spec pass** — if it lands
   first and has already added a carve-out to `writer.md`'s *Boundaries* bullet for running a
   project command, **extend that carve-out rather than adding a second one**.
-- **`SMR-187` (`Backlog`)** already lists this card in its shared-region note for
-  `SKILL.md` as *"(optionally the ship step)"*, and its own edits are to the dispatch-prompt
-  rule and step 7. No overlap with the sections edited here; whichever lands second reconciles.
+- **`SMR-187` (`Canceled`)** listed this card in its shared-region note for `SKILL.md` as
+  *"(optionally the ship step)"*, and its own edits were to the dispatch-prompt rule and
+  step 7. It has since been canceled, so there is nothing left to reconcile against.
 - **`SMR-144` (`Done`)** is the wording source, already landed. Nothing to detect and reuse
   at build time beyond what this spec quotes.
 
@@ -385,6 +385,10 @@ Run in the story worktree, addressed by absolute path. The dependency-provisioni
 
 ### Requirement (R5): The writer's other statements survive the addition
 
+*This requirement is a regression guard, not `ACn` coverage: it protects statements already
+true of `writer.md` that this change must not invalidate, rather than proving a new acceptance
+criterion.*
+
 #### Scenario: The Boundaries bullet carves the check out
 
 - **WHEN** the reader reads `writer.md`'s `## Boundaries` bullet that begins *"Do not
@@ -450,6 +454,10 @@ Run in the story worktree, addressed by absolute path. The dependency-provisioni
 
 ### Requirement (R7): Nothing outside the two files moves
 
+*This requirement is a regression guard, not `ACn` coverage: it protects the untouched files
+and canonical paragraphs that this change must not invalidate, rather than proving a new
+acceptance criterion.*
+
 #### Scenario: The canonical duplicated paragraphs are untouched
 
 - **WHEN** the run's diff for `plugins/` is read
@@ -468,27 +476,27 @@ Run in the story worktree, addressed by absolute path. The dependency-provisioni
 
 ## Tasks
 
-- [ ] Add `### Checking your own output` to `writer.md`'s `## Docs pass`, after
+- [x] Add `### Checking your own output` to `writer.md`'s `## Docs pass`, after
       `### Reconciling what you touch`: the scope, the three outcomes reused per the
       substitution table, the narrow attribution rule, the cannot-report-success rule, and the
       self-check-not-a-gate sentence.
-- [ ] Insert the pointing step into `writer.md`'s docs-pass numbered list, immediately before
+- [x] Insert the pointing step into `writer.md`'s docs-pass numbered list, immediately before
       the report-back step, and renumber.
-- [ ] Extend `writer.md`'s `## Boundaries` "do not run the test suite" bullet with the
+- [x] Extend `writer.md`'s `## Boundaries` "do not run the test suite" bullet with the
       carve-out. If SMR-163 has landed first and already added a carve-out there for running a
       project command, extend that one instead of adding a second.
-- [ ] Extend the **Docs pass:** bullet of `writer.md`'s `## Final report` with the check's
+- [x] Extend the **Docs pass:** bullet of `writer.md`'s `## Final report` with the check's
       outcome.
-- [ ] Re-read `writer.md`'s frontmatter `description` and its *"docs are trusted with no
+- [x] Re-read `writer.md`'s frontmatter `description` and its *"docs are trusted with no
       gate"* sentence; both remain true, so leave them — and say so in the build report rather
       than leaving it looking unchecked.
-- [ ] Add the pre-ship validation run to `SKILL.md`'s `## Ship and hand off` step 1, pointing
+- [x] Add the pre-ship validation run to `SKILL.md`'s `## Ship and hand off` step 1, pointing
       at step 3 for the three outcomes.
-- [ ] Reconcile the five other `SKILL.md` sites in the same pass: the opening paragraph's
+- [x] Reconcile the five other `SKILL.md` sites in the same pass: the opening paragraph's
       carve-out parenthetical, `## The commit model`'s ship-commit bullet,
       `## When a gate finds a problem`'s routing list, `## Boundaries`' carve-out bullet, and
       `## Final handoff`'s report list.
-- [ ] Re-read `SKILL.md` step 6 and step 7 (*"last gate you run"*, *"no docs-consistency
+- [x] Re-read `SKILL.md` step 6 and step 7 (*"last gate you run"*, *"no docs-consistency
       gate"*); both remain true, so leave them, and say so in the build report.
 - [ ] **Not the `coder`'s task — the docs pass owns it:** update `README.md`'s `### writer`
       docs-pass bullet, its `lead` step 8, and the *"Does not implement code, run tests…"*
