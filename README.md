@@ -614,6 +614,11 @@ temporary, verified exception to *does not fix feature code*. Red on the revert 
 pin holds. Still green, or no test named, means the fix is unpinned: a finding naming the
 fix and the test it was claimed to have, reported even where qa closes it by writing the
 covering test itself, because the coder's report was wrong and the lead needs to see that.
+A test qa writes that way is held to the same bar as the coder's: it closes the finding
+only once qa has **demonstrated it red** — revert the restored fix again, run the new test,
+observe it fail, restore the fix verbatim, re-run it green. A test qa added but never
+observed red is reported as **not demonstrated**, not as closing the finding; naming a test
+is no more a demonstration for qa's own tests than for the coder's.
 A probe that could not be run at all is neither red nor green — reported as unproven with
 its reason, never as a finding against the coder — and a probe that cannot be restored is a
 blocking finding raised immediately. A **nothing can reach it** entry is **inherited** as a

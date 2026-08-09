@@ -883,7 +883,11 @@ then the round that proves it closed, and the proof costs seconds per finding in
 whole later `qa` round spent mutation-testing on a hunch. Leaving the demonstration to `qa`
 alone — where the original defect was in fact caught — was rejected: it puts the proof one
 agent and one round away from whoever made the claim, and that distance is exactly what let
-the defect survive the first time.
+the defect survive the first time. **The bar is the same for `qa`'s own remediation test:**
+when a probe uncovers an unpinned fix and `qa` writes the covering test, that test closes
+the finding only once `qa` has itself observed it red on the same revert-run-restore — a
+test named by `qa` is no better evidence than a test named by the `coder`, and one never
+observed red is reported as *not demonstrated* rather than as closing anything.
 
 **Restoration is the hazard the procedure is built around.** The damaging failure this rule
 can introduce is a revert that is never put back — a `coder` shipping the bug it just
@@ -892,7 +896,12 @@ inferred from having made the edit: the same test green again **and** the worktr
 the fix as written, with one fix's demonstration completing before the next begins, and an
 unrestorable revert reported to the `lead` as an immediate blocker rather than left in the
 tree. `qa`'s probe carries the same duty, using the round commit the `lead` has already
-made as the "before" state it confirms it returned to.
+made as the "before" state it confirms it returned to — but the comparison is **scoped to
+the reverted fix's own file(s)**, and to the region itself wherever `qa`'s own test lives
+in the same file as the fix. A whole-worktree diff against that commit is wrong by
+construction: `qa`'s added tests sit uncommitted in the tree around the probe, so the tree
+as a whole is *expected* to differ from the round commit, and scoping the check to what was
+actually reverted is what keeps a correct restore from reading as a failed one.
 
 **The outcome vocabulary is closed at three terms and crosses the file boundary
 unchanged** — **demonstrated**, **not demonstrated**, **nothing can reach it** — with
@@ -923,7 +932,9 @@ producing it. What `qa` does with an unproven pin keeps the layering honest: it 
 the same revert-run-restore on its own authority, which is the one narrow, temporary,
 verified exception to its *do not fix feature code* boundary, and an unpinned fix it
 uncovers is reported as a finding even where `qa` closes it by writing the covering test
-itself, because the `coder`'s report was wrong and the `lead` needs to see that.
+itself — a test that closes it only once `qa` has demonstrated it red on that same
+revert-run-restore — because the `coder`'s report was wrong and the `lead` needs to see
+that.
 
 **The rule is bounded so it cannot inflate into mutation testing.** It applies to a
 findings round's behavioural fixes, over the named test only. The initial build's
