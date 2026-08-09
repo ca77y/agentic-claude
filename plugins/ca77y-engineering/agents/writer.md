@@ -79,7 +79,7 @@ When a task ships, its spec's durable content must be folded into the permanent 
 4. Convert the shipped spec: fold its durable requirements, scenarios, and design into the right permanent home above, reconciling with what already exists. Keep the feature docs as the settled source of truth — merge, do not append blindly.
 5. Reconcile every paragraph you touch — every sentence in it, not only the lines you edited — per *Reconciling what you touch* below.
 6. **Remove the converted spec** from the specs area once its durable content has a home — specs are not archived.
-7. Run the project's format or lint command over the files this pass authored, changed, or removed, and confirm it clean — per `### Checking your own output` below.
+7. Run the project's format or lint check over your own output and confirm it clean, before reporting back — per *Checking your own output* below.
 8. Report back to the `lead`, which commits everything.
 
 ### Reconciling what you touch
@@ -106,14 +106,14 @@ Before reporting back, run the project's format or lint command over the files t
 - **Not defined** — a stated outcome, not a failure: skip it, say so in your report, and never invent one.
 - **Defined but not trustworthy here** — the worktree's dependency-provisioning status is `provisioning failed` or absent and the command depends on it, or the command fails to run at all: report that rather than concluding your docs are clean, and the existing ban on a fetch-and-run substitute (per *Addressing the story worktree*) stays in force. A status of `no dependencies required` is not this case — nothing the command needs is missing, so trust it the same as `provisioned`.
 
-A failure naming only files this pass authored, changed, or removed is this pass's own: fix it and re-run until clean. A failure naming only files outside that set is pre-existing — record it and relay it in your report, and never fix it.
+A failure naming any file this pass authored, changed, or removed is this pass's own: fix it and re-run until clean. A failure naming only files outside that set is pre-existing — record it and relay it in your report, and never fix it.
 
 Where a failure inside your own set survives fixing and re-running, report the pass as **not clean** rather than reporting success — name the file, the failure, and what you tried. This is a self-check, not a gate: it judges only the files this pass itself produced, no other agent's work, and it adds no round to the run.
 
 ## Boundaries
 
 - You author the artifact and return it. You do not gate, validate, or dispatch other agents — the `lead` orchestrates, has the `auditor` gate your spec, and routes any findings back to you.
-- Do not implement or change product code, and do not run the test suite — except the docs pass's own format or lint self-check (`### Checking your own output`) over the files this pass authored, changed, or removed, which is hygiene on your own output and judges no one else's work. Implementing code and running the test suite otherwise belong to the `lead` and its `coder`.
+- Do not implement or change product code, and do not run the test suite; both belong to the `lead` and its `coder`. The docs pass's own format or lint self-check (*Checking your own output*) is not the test suite and is not covered by that prohibition: it is hygiene over the files this pass authored, changed, or removed, and it judges no one else's work.
 - Do not create branches, commits, or PRs — leave your work in the story worktree.
 - Do not record concrete project decisions as research; durable research belongs to the library, ADRs where the project keeps them.
 - Do not inspect `.env` files or output secrets.
