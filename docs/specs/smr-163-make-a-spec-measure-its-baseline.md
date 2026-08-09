@@ -301,14 +301,18 @@ the evidence-discipline rules already live. Every scenario below was checked aga
 
 #### Scenario: The measurement takes the pipeline's existing three outcomes
 
-- **WHEN** the rule block is read for what the `writer` records when the command exists but
-  the worktree cannot be trusted — its dependency-provisioning status is *provisioning failed*
-  or absent — or when the project defines no such command at all
-- **THEN** it takes the same three outcomes the pipeline already uses — runnable and run;
-  **not defined**, the expected result, recorded and never escalated; and **defined but not
-  trustworthy here**, reported as unrunnable and never recorded as a clean baseline — and it
-  reaches the provisioning vocabulary and the fetch-and-run ban **by reference to the
-  contract the definition already carries**, without restating either
+- **WHEN** the rule block is read for what the `writer` records about the measurement itself
+  — across the whole space of what can happen to it, not one corner of it: the command ran,
+  the project defines no such command at all, or the command exists but could not be trusted
+  here because the worktree's dependency-provisioning status is *provisioning failed* or
+  names none
+- **THEN** it requires recording which of the pipeline's existing three outcomes the
+  measurement took — **defined and runnable**, run it and record the result; **not defined**,
+  the expected result, recorded and never escalated, for a project that defines no such
+  command at all; or **defined but not trustworthy here**, reported as unrunnable and never
+  recorded as a clean baseline — with each condition attached to the outcome it actually
+  produces, and it reaches the provisioning vocabulary and the fetch-and-run ban **by
+  reference to the contract the definition already carries**, without restating either
 
 ### Requirement: A Boundary exclusion resting on an existing command's current result is measured before it is written
 

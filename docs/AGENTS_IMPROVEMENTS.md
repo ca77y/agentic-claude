@@ -519,3 +519,26 @@ the exclusive list is the separate *Must not touch* one. Then either have the `l
 Boundary's edit-site list when it commits a fix round that lands outside it, or say explicitly that
 the list is not re-validated after round 0, so `qa` and the acceptance gate stop treating a stale
 list as evidence.
+
+### A scenario's THEN may paraphrase a term the same spec elsewhere names canonically, and the coder ships the paraphrase
+
+**Area**: `agent:writer`
+
+**Observed**: On `SMR-163` the spec's *Coordination* section names the pipeline's shipped
+three-outcome vocabulary exactly — *defined and runnable* / *not defined* / *defined but not
+trustworthy here*, as `docs/ARCHITECTURE.md` carries it — and says the new rule "**extends** that
+vocabulary rather than inventing a parallel one". The Requirements scenario that actually specifies
+the outcome list then writes the first outcome as *"runnable and run"*. The `coder` implemented the
+scenario's wording, since a scenario THEN is what it builds against; `qa` flagged it in round 0 and
+round 1 corrected the deliverable to the canonical term. The spec's scenario text still reads
+*"runnable and run"*, so the shipped artifact and the criterion the acceptance gate reads now
+disagree in the exact place the spec was trying to keep aligned. Nothing in *Spec authoring rules*
+requires a THEN that names an already-shipped project term to name it in the project's own words —
+the nearest rules govern the card transcription (verbatim from the card) and post-hoc reconciliation
+of a superseding edit, neither of which is this.
+
+**Suggested change**: Add to *Spec authoring rules* that where a scenario's THEN names a term,
+status, or outcome vocabulary the project has already shipped, it quotes that term in the project's
+own wording and cites where it lives — the same way the dependency-citation rule demands a
+path-and-line — so the coder building against the THEN cannot ship a paraphrase, and the acceptance
+gate reads the term the artifact carries.
