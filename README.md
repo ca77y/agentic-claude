@@ -354,7 +354,8 @@ the readiness gate's board-side duplicate detection itself, in each; the
    when it is not, either way continuing on the report that dispatch delivers (see
    **Dispatch and resume** below) — **commits that round's work** when the coder
    reports back, and re-dispatches a **fresh** `qa` with the commit references to
-   diff against, capped at 3 rounds.
+   diff against **and the coder's fix report**, so qa reads each behavioural fix's
+   demonstration outcome rather than re-deriving every pin; capped at 3 rounds.
 6. **Acceptance gate** — the `auditor` verifies the built result meets the task's
    acceptance criteria against the **spec's labelled `AC1`…`ACn` transcription** of the
    card's criteria — the standard either way, whether or not a card exists — carrying
@@ -544,6 +545,47 @@ set in one go and report back to the lead, which re-runs `qa`. A finding is reje
 only with a traced input, never a restated conclusion; a finding that genuinely
 conflicts with the spec is escalated as a mismatch, never rejected.
 
+**Every behavioural fix is demonstrated red before it is reported pinned.** Naming a test
+is free — nothing the round produces can contradict a plausible-looking name, so an
+unpinned fix would report identically to a pinned one. So per behavioural fix, one at a
+time (never two reverts in flight together), the coder **reverts** the fix in the working
+tree, **runs** the named test — that test, or at minimum only its file, never the whole
+suite — **observes** the failure and records the test's name and the assertion that went
+red from the real output, **restores** the fix verbatim, and **re-runs** the same test to
+see it green again. A claim that the test *would* fail is not a demonstration; only the
+observed red counts. The restore is *proved* by two things together rather than assumed
+from having made the edit — the test green again *and* the worktree carrying the fix as
+written — and a revert that cannot be restored is a blocker reported to the lead
+immediately, never left in the tree. What is reverted is always the coder's **own** fix and
+only until the restore, so this is not the "never revert another agent's changes" rule,
+which stays in force unmodified.
+
+**Each fix carries exactly one of three outcomes, and the set is closed**: **demonstrated**
+(reverted, observed red, restored, re-observed green — carrying the test's name and the
+assertion that went red), **not demonstrated** (a test named but red never observed here,
+or no test named at all — carrying the reason), or **nothing can reach it** (no test can
+reach the fix — carrying the concrete reason). The second and third are not
+interchangeable: a test that exists but could not be run here — untrustworthy worktree
+provisioning, a runner that will not start — is **not demonstrated** with that reason,
+never **nothing can reach it**, which would turn a temporary environment problem into a
+permanent, accepted coverage gap. A fix reported with no outcome at all reads as **not
+demonstrated**, so silence costs a probe rather than buying a pass.
+
+**In the prose-deliverable branch the demonstration takes its analogue** — there is no test
+to revert and run, so the entry is the exact quoted line in the changed artifact that
+carries the fix, the region a reader finds it by (never a line number), the finding it is
+keyed to, and **what a reader would find missing were that line removed**, which is the
+prose counterpart of the assertion that went red. The three outcomes are the same three, so
+qa needs no second branch to consume them. Where the project has a test runner — including
+on a task whose deliverable is only partly a document — the runnable demonstration is what
+is required, and the analogue never substitutes for one that could have been run.
+
+**No demonstration is owed** for the initial build's per-scenario tests, for a
+test-quality, documentation, comment, or naming change, for a refactor with no behavioural
+effect, or for a finding rejected with a traced input. The rule is scoped to a findings
+round's behavioural fixes, over the named test only, one fix at a time — which is what
+keeps it from becoming a mutation-testing exercise over the suite.
+
 When a scenario workaround is forced by a real production dependency misbehaving — a
 **production hazard**, as opposed to a mere **test-harness inconvenience** the fixture
 setup made awkward with no effect on the shipped system — the coder raises it as an
@@ -557,7 +599,8 @@ risk reaches the human through the PR rather than only through a comment on a te
 
 Dispatched by the `lead` after the coder builds, and again after each fix round — each
 fresh dispatch handed the round's commit references (the state the previous round
-reviewed, and the new round commit) so it can diff round N against round N−1. Runs the
+reviewed, and the new round commit) so it can diff round N against round N−1, and — on a
+findings round — the coder's fix report, which carries the pin evidence below. Runs the
 project's validation commands, compares the spec's scenarios against existing tests and
 adds the missing coverage (e2e, frontend, integration, edge cases), then re-runs;
 **re-validates every entry in the spec's *Already satisfied criteria* section** against
@@ -566,8 +609,36 @@ the post-build tree, reporting a broken one as a regression finding and a result
 spec and the project's conventions for defects and quality, since it is a separate context
 from the one that wrote it. Reports pass/fail with evidence, the tests it added, the
 already-satisfied results, and its review findings — the lead routes them to the
-`coder`. **Does not** fix feature code or weaken a failing test to make the suite pass.
+`coder`. **Does not** fix feature code — a pin probe's temporary, restored revert (below)
+is the single exception — and never weakens a failing test to make the suite pass.
 The heavy, independent code review runs again on the **PR** — the Claude GitHub review.
+
+**On a findings round it consumes the coder's pin evidence instead of re-deriving it.**
+Each behavioural fix arrives marked **demonstrated**, **not demonstrated**, or **nothing
+can reach it**; a fix carrying no mark — including every fix in a round whose dispatch
+never carried the coder's report at all — reads as **not demonstrated**, and qa says so
+explicitly rather than assuming any of them was demonstrated. A **demonstrated** pin is
+**trusted** and not re-derived; that is where the round's saving actually comes from, and
+the budget goes to the pins that are unproven. A **not demonstrated** or unmarked fix is
+**probed** with the same revert-run-restore, on qa's own authority — the one narrow,
+temporary, verified exception to *does not fix feature code*. Red on the revert means the
+pin holds. Still green, or no test named, means the fix is unpinned: a finding naming the
+fix and the test it was claimed to have, reported even where qa closes it by writing the
+covering test itself, because the coder's report was wrong and the lead needs to see that.
+A test qa writes that way is held to the same bar as the coder's: it closes the finding
+only once qa has **demonstrated it red** — revert the restored fix again, run the new test,
+observe it fail, restore the fix verbatim, re-run it green. A test qa added but never
+observed red is reported as **not demonstrated**, not as closing the finding; naming a test
+is no more a demonstration for qa's own tests than for the coder's.
+A probe that could not be run at all is neither red nor green — reported as unproven with
+its reason, never as a finding against the coder — and a probe that cannot be restored is a
+blocking finding raised immediately. A **nothing can reach it** entry is **inherited** as a
+known gap rather than rediscovered a round later, though a reachable seam qa can see
+against a claim that none exists is an ordinary review finding. In prose mode the probe is
+to re-read the region the entry names and check the quoted line is present and answers the
+finding it is keyed to. Its report then carries a per-fix pin result — trusted, probed with
+its outcome, or inherited — so the lead and the acceptance gate read the state of the
+evidence rather than reconstructing it.
 
 **Where the project defines no validation command** — the prose-deliverable case above —
 the spec's own **Validation checklist is the validation**: qa runs every check it lists
@@ -908,13 +979,17 @@ separate context from the `coder` — and to the PR review on the opened PR, rea
 acceptance audits to the native `auditor`, and library health to the `clerk`. **No agent
 ever gates its own artifact**; the judgement always runs as a separate subagent.
 
-What that rules out is *sign-off*, not hygiene. Two steps deliberately run over work the
-running agent is about to hand over, and neither is a gate, adds a round, or judges
-anybody's work: the `writer`'s docs pass runs your project's format/lint command over the
-files it just wrote, and the `lead` runs your project's validation over the whole tree
-immediately before it creates the ship commit (see **The commit model** above for why
+What that rules out is *sign-off*, not hygiene. Two **hygiene** steps deliberately run
+over work the running agent is about to hand over, and neither is a gate, adds a round, or
+judges anybody's work: the `writer`'s docs pass runs your project's format/lint command
+over the files it just wrote, and the `lead` runs your project's validation over the whole
+tree immediately before it creates the ship commit (see **The commit model** above for why
 those two points and no others). Both are mechanical commands your project itself
-defines — run them or report that you define none; nothing is reviewed either way.
+defines — run them or report that you define none; nothing is reviewed either way. The
+`coder`'s **pin demonstration** is a third step over its own work and a different kind
+again: it runs one named test to make its own claim falsifiable, and what it hands on is
+*evidence* for `qa` to consume rather than a judgement — `qa`, the acceptance gate, and the
+PR review all still run in their own contexts over everything it produced.
 
 **Verification is layered**: the `writer` authors the spec → the `auditor` gates it
 ready-to-build → `coder` writes per-scenario tests → `qa` fills coverage gaps and reviews
@@ -927,6 +1002,9 @@ file, the region, and the quoted sentence that satisfies it), and the coverage g
 fills becomes the read-only checks the spec's own Validation checklist should have had.
 Both facts must hold together for that substitution — the spec declares the medium *and*
 the project has no runner — so a task with a real test suite is untouched by it.
+**Layered, not repeated**: on a findings round the `coder`'s pin demonstration is what
+lets one layer skip re-deriving another's observation — a fix demonstrated red is trusted
+by `qa`, which spends the round probing the pins nobody ever proved.
 The two `auditor` gates divide a spec's **dependency claims** between them: at readiness
 it checks each such claim is either cited or explicitly marked an assumption, and that a
 scenario which could pass with the claimed mechanism absent names that alternative cause

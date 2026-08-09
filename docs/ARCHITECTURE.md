@@ -806,7 +806,11 @@ arrangements deliberately, and reaching for the wrong one is how wording drifts:
   `writer.md` and `auditor.md`.
 - **Deliberately different wording for two sides of one defect.** The two library nets
   above: a write-time self-check and an audit finding. No drift check covers them and
-  none should — unifying the wording would fuse two different jobs.
+  none should — unifying the wording would fuse two different jobs. The pin demonstration
+  is the second instance: `coder.md` produces the evidence and `qa.md` consumes it (see *A
+  pin is demonstrated, not named* below). What crosses that boundary is not a paragraph but
+  a **closed vocabulary** — the three outcome terms, in the same words — so a drift check
+  would be checking the wrong property as well as failing on a correct pair.
 - **Stated once, pointed at from everywhere else.** Used *within* a single definition,
   where no drift check exists at all. `writer.md` carries the docs pass's reconciliation
   duty in one subsection, and the numbered step that used to hold that content is now a
@@ -921,7 +925,15 @@ satisfiable by any plausible-looking line elsewhere in the file — the prose an
 the adjacent-test trap the `coder`'s pinning rule already warns about. A scenario nothing
 satisfies is named as missing rather than omitted. Findings rounds take the same
 substitution: a behavioural fix is pinned by the inspectable assertion it re-satisfies
-where no test can exist to go red.
+where no test can exist to go red — and the demonstration rule below extends exactly that
+sentence, because a quoted assertion alone is the same unfalsifiable claim a named test
+was. The prose analogue therefore carries four parts: the exact quoted line in the changed
+artifact that carries the fix, the region a reader finds it by, the finding it is keyed to,
+and **what a reader would find missing were that line removed** — the last being the prose
+counterpart of "the assertion that went red", without which the entry degrades back into
+the quotation this paragraph already asked for and nothing has been demonstrated (see *A
+pin is demonstrated, not named* below). `qa`'s probe takes the matching form: re-read the
+named region and check the quoted line is present and answers the finding it is keyed to.
 
 **The spec's own Validation checklist is what `qa` runs.** Where the project defines no
 validation command, the checklist **is** the validation: `qa` runs every check it lists
@@ -944,11 +956,91 @@ reason to invent a command, add a test file the Boundary forbids, or keep search
 **defined but not trustworthy here** — the worktree's provisioning is absent or negative,
 or the command will not run — is reported as unrunnable, never concluded clean and never
 folded into the first. Collapsing them is how an unprovisioned worktree's failed command
-gets waved through as "this project just has no runner".
+gets waved through as "this project just has no runner". The pin outcomes in *A pin is
+demonstrated, not named* below are a **different** closed three-term set, parallel in shape
+and reasoning but not shared: this one grades a *command*, that one grades a *fix*.
 
 **The code path is the default and the branch is the exception**, stated that way round in
 all three definitions. Where a project has a test suite, per-scenario tests and a `qa` run
 are exactly what they were.
+
+## A pin is demonstrated, not named
+
+`coder.md` has always required every behavioural fix on a findings round to be pinned by a
+test that fails without it, and required the `coder` to **name** that test per finding.
+Naming is free: nothing the round produces can contradict a plausible-looking name, so an
+unpinned fix reported identically to a pinned one. That shipped on one story — a real
+production fix closed with a named test, and a round later, deleting the fixed line left
+the whole suite green, because the named test covered the *adjacent* finding and passed
+with or without the fix. It surfaced only because that `qa` round happened to be told to
+mutation-test, one round before the PR opened.
+
+**The repair is to make the claim an observation.** Per behavioural fix, one at a time:
+revert the fix, run the named test, observe it red and record the assertion that went red
+from the real output, restore the fix, re-run it green. The round that closes a finding is
+then the round that proves it closed, and the proof costs seconds per finding instead of a
+whole later `qa` round spent mutation-testing on a hunch. Leaving the demonstration to `qa`
+alone — where the original defect was in fact caught — was rejected: it puts the proof one
+agent and one round away from whoever made the claim, and that distance is exactly what let
+the defect survive the first time. **The bar is the same for `qa`'s own remediation test:**
+when a probe uncovers an unpinned fix and `qa` writes the covering test, that test closes
+the finding only once `qa` has itself observed it red on the same revert-run-restore — a
+test named by `qa` is no better evidence than a test named by the `coder`, and one never
+observed red is reported as *not demonstrated* rather than as closing anything.
+
+**Restoration is the hazard the procedure is built around.** The damaging failure this rule
+can introduce is a revert that is never put back — a `coder` shipping the bug it just
+fixed, under a report claiming the fix is pinned. So the restore is *observed*, never
+inferred from having made the edit: the same test green again **and** the worktree carrying
+the fix as written, with one fix's demonstration completing before the next begins, and an
+unrestorable revert reported to the `lead` as an immediate blocker rather than left in the
+tree. `qa`'s probe carries the same duty, using the round commit the `lead` has already
+made as the "before" state it confirms it returned to — but the comparison is **scoped to
+the reverted fix's own file(s)**, and to the region itself wherever `qa`'s own test lives
+in the same file as the fix. A whole-worktree diff against that commit is wrong by
+construction: `qa`'s added tests sit uncommitted in the tree around the probe, so the tree
+as a whole is *expected* to differ from the round commit, and scoping the check to what was
+actually reverted is what keeps a correct restore from reading as a failed one.
+
+**The outcome vocabulary is closed at three terms and crosses the file boundary
+unchanged** — **demonstrated**, **not demonstrated**, **nothing can reach it** — with
+absence defaulting to *not demonstrated*, so silence costs a probe rather than buying a
+pass. The second and third are deliberately not interchangeable, for the same reason *When
+the deliverable is prose, not code* above keeps **not defined** apart from **defined but
+not trustworthy here**: a test that exists but could not be run in this worktree is a
+temporary environment problem, and filing it as "nothing can reach it" converts it into a
+permanent, accepted coverage gap. A fourth term for that case was considered and rejected —
+`qa`'s consumption rule would need a fourth branch, while the case behaves exactly like
+*not demonstrated* (probe it) — so it is carried as a required *reason* on that outcome
+instead. In the prose-deliverable branch the same three terms apply to the analogue
+described in that section, which is why `qa` needs no second branch to consume them.
+
+**The two definitions are two sides of one defect, not a canonical pair.** `coder.md`
+produces the evidence and `qa.md` consumes it — different jobs, so the surrounding prose is
+deliberately different in each file and **no byte-identical drift check applies**: the root
+`CLAUDE.md`'s two `sort -u` paragraph checks are not extended, and a third would fail on a
+correct pair. What must cross the boundary intact is the three terms themselves.
+
+**Trusting a demonstrated pin is not an agent gating its own work.** `qa` still runs the
+validation, still reviews the diff in its own context, and the acceptance gate and PR
+review are untouched; what `qa` stops doing is re-deriving one observation the `coder`
+already made and recorded. That is [`PRODUCT.md`](PRODUCT.md)'s *verification is layered,
+not repeated* rather than a hole in *nothing signs off on itself* — the evidence exists to
+redirect the next layer's budget onto the fixes that lack it, which is the whole reason for
+producing it. What `qa` does with an unproven pin keeps the layering honest: it probes with
+the same revert-run-restore on its own authority, which is the one narrow, temporary,
+verified exception to its *do not fix feature code* boundary, and an unpinned fix it
+uncovers is reported as a finding even where `qa` closes it by writing the covering test
+itself — a test that closes it only once `qa` has demonstrated it red on that same
+revert-run-restore — because the `coder`'s report was wrong and the `lead` needs to see
+that.
+
+**The rule is bounded so it cannot inflate into mutation testing.** It applies to a
+findings round's behavioural fixes, over the named test only. The initial build's
+one-scenario-test-per-scenario duty is untouched — those tests are written *from* the
+scenarios, so the adjacent-test trap is a findings-round hazard, not a build one — and a
+test-quality, documentation, comment, or naming change, a behaviour-neutral refactor, and a
+finding rejected with a traced input all carry no demonstration at all.
 
 ## A spec is written against a tree the same pass is editing
 
