@@ -772,12 +772,13 @@ and that claim was false about its own file while the parent's own eager persist
 in the default mode, updating index, taxonomy, and log on each dispatch. Routing all of it
 through the mode is what makes the claim true, and it makes the serialized write's
 worklist complete: the set handed over is every note persisted during the run, not only
-the children's. Completeness holds across tiers rather than one level down — a mid-tier
+the children's. The post-audit fix rounds are the deliberate exception to the mode rule —
+they are full-ingest, and the top-level parent's alone, because they run after the
+serialized write with nothing else in flight and may need to touch a meta file to close a
+`clerk` finding. Completeness holds across tiers rather than one level down: a mid-tier
 child that fanned out forwards its own children's returned paths upward alongside its own,
-and only the top-level parent ever hands the accumulated set to a full-ingest dispatch.
-The post-audit fix rounds are the deliberate exception — they are
-full-ingest, because they run after the serialized write with nothing else in flight and
-may need to touch a meta file to close a `clerk` finding.
+and only the top-level parent ever hands the accumulated set to a full-ingest dispatch —
+at any step, a child never dispatches a full-ingest `scribe` at all.
 
 Two alternatives were rejected. A `no-meta` flag named in the dispatch prompt leaves the
 default winning whenever a caller forgets the flag — the incident's exact failure under a
