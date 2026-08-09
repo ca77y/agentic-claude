@@ -155,6 +155,14 @@ No build or typecheck exists to run. What Validation must reach instead is the s
 6. **Changed-file set.** `git -C <worktree> status --porcelain` shows changes only to the files the Boundary lists as in scope.
 7. **Format/lint self-check.** *Not defined* for this project (see *Measured baseline*) — recorded, skipped, and never invented.
 
+**Added by `qa` (round 1)** — the checks below close gaps the list above left: three of the Requirements' *Alternative cause named* notes demand a **region-scoped** observation rather than a whole-file `grep`, and nothing above observed the pointer form or the wrap the two edited prose files already use.
+
+8. **Region-scoped presence, `## Docs pass` (R2/S1's alternative cause).** `awk '/^## Docs pass/,/^## Boundaries/' plugins/ca77y-engineering/agents/writer.md | grep -n 'diff\|HEAD\|spec commit\|round commit'` returns hits inside the docs-pass region — the *Measured baseline*'s three pre-existing whole-file hits all sit in `## Spec pass`, so only a region-scoped run observes the change.
+9. **Region-scoped absence, `## Spec pass`.** `awk '/^## Spec pass/,/^## Docs pass/' plugins/ca77y-engineering/agents/writer.md | grep -n 'can disagree by design\|diff is authoritative\|<spec-commit>'` prints nothing — the new duty did not leak into the spec pass.
+10. **Duty stated exactly once (AC11).** `grep -c 'diff is authoritative' plugins/ca77y-engineering/agents/writer.md` prints `1`, **and** `grep -rn 'diff is authoritative\|run.s diff\|spec commit' plugins/ | grep -v 'writer.md\|SKILL.md'` prints nothing — the statement present once, and asserted by no other definition under `plugins/`.
+11. **Pointer form matches the file's own convention.** `grep -c '\*###' plugins/ca77y-engineering/agents/writer.md` prints `0`. Every pointer at a subsection in `writer.md` uses the established `per *Subsection Title*` form (as at *Reconciling what you touch* and *Checking your own output*); a pointer that embeds the literal `###` marker inside the italics renders as `### What shipped …` in running prose.
+12. **Prose wrap in the edited README bullets** (a nit, not a gate). `awk 'length($0)>0 && length($0)<60 && $0 !~ /^[|#>-]/ {print NR": "length($0)": "$0}' README.md` — the file wraps at ~85 columns, and a short line is normal at a paragraph's end. What this item looks for is a short line **mid-paragraph**, where the next line continues the sentence. Note before reading the result: lines 683, 712, and 716 already carried that shape at `HEAD = 2b564ed`, inside the untouched `### writer` **Spec pass** bullet, so the pattern is pre-existing in this very list and a new instance is a tidiness nit rather than a defect.
+
 ## Requirements
 
 ### Requirement: The docs pass states that the spec and the shipped code can disagree, and why
