@@ -384,9 +384,9 @@ the readiness gate's board-side duplicate detection itself, in each; the
    hands the dispatch the **spec commit** and the **round commit references** from the
    ledger, so the pass can diff the spec commit against `HEAD` to establish what
    shipped, rather than trusting the spec's own account of itself. The lead trusts what
-   it returns, no docs gate. The pass
-   does run your project's format/lint command over the files it wrote and reports the
-   outcome — a self-check on its own output, not a review of its content by anyone.
+   it returns, no docs gate. The pass does run your project's format/lint command over
+   the files it wrote and reports the outcome — a self-check on its own output, not a
+   review of its content by anyone.
 8. **Ship** — **runs the project's validation once over the whole worktree** *before* the
    ship commit exists, then **commits whatever is still uncommitted** (the ship commit),
    pushes, and opens **one PR**. That run is the only look anything takes at the tree as it
@@ -753,20 +753,20 @@ prompt, so the `lead` grants both by default rather than leaving them to be requ
   rather than merely unverifiable. Where those principles live is discovered from the
   project's own context, never hardcoded, and a project that states none is reported as
   such rather than passed silently. A contradiction is fixed even when the edit that
-  surfaced it was unrelated to it. The one
-  thing the writer never does is rewrite the principle: when the principle may be the
-  stale side, or it cannot tell which side is stale, it reports and leaves the sentence
-  standing — what the product is *for* stays yours. The pass then **checks its own
-  output**: before reporting back it runs your project's format or lint command over the
-  files it authored, changed, or removed, and confirms clean. The command is discovered
-  from your project's context — no tool is named — with the same three outcomes step 3
-  uses: it ran; it is **not defined**, said so in the report and never invented; or it is
-  defined but **not trustworthy here**, reported as unrunnable rather than concluded
-  clean. A failure inside its own file set is the pass's to fix and re-run; one naming
-  only files outside it is relayed as pre-existing and never fixed; and a failure in its
-  own file it cannot clear is reported as **not clean**, so a docs pass that authored a
-  file your own gate would reject cannot report success. This is a self-check on files
-  the pass itself wrote, not a review of anyone's work and not a new round.
+  surfaced it was unrelated to it. The one thing the writer never does is rewrite the
+  principle: when the principle may be the stale side, or it cannot tell which side is
+  stale, it reports and leaves the sentence standing — what the product is *for* stays
+  yours. The pass then **checks its own output**: before reporting back it runs your
+  project's format or lint command over the files it authored, changed, or removed, and
+  confirms clean. The command is discovered from your project's context — no tool is
+  named — with the same three outcomes step 3 uses: it ran; it is **not defined**, said
+  so in the report and never invented; or it is defined but **not trustworthy here**,
+  reported as unrunnable rather than concluded clean. A failure inside its own file set
+  is the pass's to fix and re-run; one naming only files outside it is relayed as
+  pre-existing and never fixed; and a failure in its own file it cannot clear is
+  reported as **not clean**, so a docs pass that authored a file your own gate would
+  reject cannot report success. This is a self-check on files the pass itself wrote, not
+  a review of anyone's work and not a new round.
 
 The writer just authors and returns; its spec is gated by the lead's `auditor`, its
 docs trusted. **Does not** implement code (the `coder` does), validate a build (`qa`

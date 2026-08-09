@@ -163,6 +163,20 @@ No build or typecheck exists to run. What Validation must reach instead is the s
 11. **Pointer form matches the file's own convention.** `grep -c '\*###' plugins/ca77y-engineering/agents/writer.md` prints `0`. Every pointer at a subsection in `writer.md` uses the established `per *Subsection Title*` form (as at *Reconciling what you touch* and *Checking your own output*); a pointer that embeds the literal `###` marker inside the italics renders as `### What shipped …` in running prose.
 12. **Prose wrap in the edited README bullets** (a nit, not a gate). `awk 'length($0)>0 && length($0)<60 && $0 !~ /^[|#>-]/ {print NR": "length($0)": "$0}' README.md` — the file wraps at ~85 columns, and a short line is normal at a paragraph's end. What this item looks for is a short line **mid-paragraph**, where the next line continues the sentence. Note before reading the result: lines 683, 712, and 716 already carried that shape at `HEAD = 2b564ed`, inside the untouched `### writer` **Spec pass** bullet, so the pattern is pre-existing in this very list and a new instance is a tidiness nit rather than a defect.
 
+**Added by `qa` (round 2)** — item 12 as written requires a human to eyeball a ~90-line result and remember which entries pre-existed, which is how round 1's rewrap closed one orphan and opened two more without the check noticing. Item 13 makes the comparison mechanical. Item 14 closes a defect class nothing above observed at all: the numbered list was renumbered by hand.
+
+13. **New mid-paragraph orphans only** (the mechanical form of item 12). Run item 12's `awk` over both the working tree's `README.md` and the baseline's, and diff the *text* of the short lines — line numbers shift with every edit, so comparing numbers reports noise. Four plain commands, not one pipeline: a worktree-isolated harness session refuses `diff <(…) <(…)` process substitution as too complex to verify, so the intermediates go to files.
+
+    ```bash
+    git -C <worktree> show 2b564ed:README.md > /tmp/readme_base.md
+    awk 'length($0)>0 && length($0)<60 && $0 !~ /^[|#>-]/' /tmp/readme_base.md > /tmp/short_base.txt
+    awk 'length($0)>0 && length($0)<60 && $0 !~ /^[|#>-]/' README.md > /tmp/short_now.txt
+    diff /tmp/short_base.txt /tmp/short_now.txt
+    ```
+
+    Every `>` line is a short line this story introduced. A `>` line is a defect only when the **next** line of `README.md` continues its sentence (mid-paragraph); a `>` line that ends its paragraph or list item is correct wrapping. Read each `>` line in context before calling it either way.
+14. **The docs-pass list renumbers cleanly (1…9, no gap, no repeat).** `awk '/^## Docs pass/,/^### What shipped/' plugins/ca77y-engineering/agents/writer.md | grep -o '^[0-9]*\.' | tr '\n' ' '` prints `1. 2. 3. 4. 5. 6. 7. 8. 9.` — the Tasks list inserts a step by hand and renumbers the five that follow, and a duplicated or skipped ordinal is invisible to every other check here.
+
 ## Requirements
 
 ### Requirement: The docs pass states that the spec and the shipped code can disagree, and why
