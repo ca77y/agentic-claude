@@ -74,7 +74,7 @@ This is the core. Do not settle for the first few resources.
 - Whenever the dive turns up something of durable value, dispatch `ca77y-library:scribe` in **raw-note-only mode** to persist it as a **raw source note**, preserving provenance (URL, source, date, key claims).
 - Each raw note is a **distinct new file**, so it is safe to write while other subquestions are still running.
 - A child never dispatches a full-ingest `scribe`: it persists its own raw notes via `ca77y-library:scribe` in **raw-note-only mode**, which is what keeps it from writing a wiki page or any of the shared meta files (index, taxonomy, log) — those are written once, by the parent, so concurrent edits cannot corrupt the vault. It returns the paths left un-indexed.
-- **Record leads you found but could not retrieve.** When the dive surfaces a relevant source you cannot fetch — blocked, paywalled, anti-bot challenge, HTTP 402/403, dead link — capture the URL and the reason and have `scribe` record it in the relevant raw note (a `> [!warning] Rejected sources` callout), so the lead stays revisitable. Report these in step 8.
+- **Record leads you found but could not retrieve.** When the dive surfaces a relevant source you cannot fetch — blocked, paywalled, anti-bot challenge, HTTP 402/403, dead link — capture the URL and the reason and have `ca77y-library:scribe`, dispatched in **raw-note-only mode**, record it in the relevant raw note (a `> [!warning] Rejected sources` callout), so the lead stays revisitable. Report these in step 8.
 
 ### 6. Synthesize into a wiki entry (parent only)
 
