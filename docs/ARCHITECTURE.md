@@ -488,14 +488,25 @@ stated as a shape, never as a command — the toolkit runs against arbitrary pro
 package manager, installer, or ecosystem may be named. The preference is not cosmetic: an
 install that re-resolves can produce a different dependency layout than the main checkout
 *from the same lockfile*, and so can break pre-existing tests the task never touched.
-When a project has no install step, or provisioning fails, the status is recorded as **not
-provisioned, with the reason**, and the run proceeds.
+The recorded status is one of **three** values: **provisioned**, when the project's
+install/bootstrap step ran and completed; **no dependencies required**, when the project
+has no such step to detect; and **provisioning failed**, with the reason, when it has one
+and the step did not complete. The run proceeds in every case. The middle value is stated
+affirmatively — a property of the project, not the absence of an action — because any
+label shaped as a negation of provisioning collapses it with the failure case, and
+the two mean opposite things: nothing was needed, versus something was needed and is
+missing.
 
-**The resulting status is part of the handover.** Every dispatch that names a worktree
-names its dependency-provisioning status alongside the path, so a receiving agent knows
-*before* it runs a command whether the result is trustworthy. An agent handed an absent or
-negative status treats dependency-sensitive command output as untrustworthy and **reports
-that**, and does **not** provision the worktree itself — self-repair by fresh install is
+**The resulting status is part of the handover, and the receiver branches on it.** Every
+dispatch that names a worktree names its dependency-provisioning status alongside the
+path, so a receiving agent knows *before* it runs a command whether the result is
+trustworthy. **Provisioned** and **no dependencies required** are both trustworthy — the
+agent runs the project's commands and draws conclusions from their output as it would
+anywhere — and **no dependencies required** additionally generates **no report**, because
+there is no gap to describe and a provisioning caveat there would describe nothing. An
+agent handed **provisioning failed**, or a dispatch naming no status at all, treats
+dependency-sensitive command output as untrustworthy and **reports that**, and does
+**not** provision the worktree itself — self-repair by fresh install is
 the exact move that breaks untouched tests, and only the `lead`'s creation step can prefer
 inheritance over re-resolution.
 
@@ -975,11 +986,14 @@ defined**, a stated outcome rather than a failure, skipped and said so in the ha
 and never a reason to invent a command — a gate that exists only in CI is this case, and
 reporting it as such is what keeps *`qa` found no spec-caused failure* from being read as
 *the spec was checked and passed*; and **defined but not trustworthy here**, where the
-worktree's dependency provisioning is absent or negative and the command depends on it,
-or the command will not run — reported as unrunnable rather than concluded clean, with
-the standing ban on a fetch-and-run substitute still in force. The floor takes all three,
-not merely the absence handling, and that matters most for the third: an unprovisioned
-lint run typically emits output naming the file it was pointed at, which a naive
+worktree's dependency-provisioning status is *provisioning failed* or absent and the
+command depends on it, or the command will not run — reported as unrunnable rather than
+concluded clean, with the standing ban on a fetch-and-run substitute still in force. A
+status of *no dependencies required* is **not** this case: nothing the command needs is
+missing, so it is trusted the same as *provisioned*. The floor takes all three, not
+merely the absence handling, and that matters most for the third: a lint run whose
+worktree status is *provisioning failed* or absent typically emits output naming the
+file it was pointed at, which a naive
 attribution would read as a commit-1 failure and misroute to the `writer` as a spec
 defect. Trustworthiness is therefore settled **before** attribution, and an untrusted run
 is attributed to nobody. The `coder`'s and `qa`'s **validation** now takes the same three

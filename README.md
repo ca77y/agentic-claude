@@ -316,9 +316,10 @@ the readiness gate's board-side duplicate detection itself, in each; the
    re-deriving it with a fresh install — a re-resolving install can produce a different
    layout from the same lockfile and break tests the task never touched — otherwise by
    running the project's own install/bootstrap step. The lead then **records the
-   provisioning status**, including *not provisioned, with the reason*, and every
-   dispatch into the worktree names it, and **transitions the referenced card to
-   work started**. Everything else happens in that worktree. Where the harness refuses
+   provisioning status** — one of three values: *provisioned*; *no dependencies
+   required*, the affirmative outcome when the project has no install/bootstrap step it
+   can detect; or *provisioning failed*, with the reason — and every dispatch into the
+   worktree names it, and **transitions the referenced card to work started**. Everything else happens in that worktree. Where the harness refuses
    file writes until the session has isolated itself — a background job typically is —
    the lead's one compliant move is to enter the worktree it just created with
    `EnterWorktree`'s **`path`** form, never its `name` form: `name` would create a second
@@ -609,8 +610,9 @@ the cited version and confirms the behavior is what the spec says, because a sce
 passing on its observable outcome is not on its own evidence for the mechanism — the same
 outcome can come from an unrelated cause. A claim the spec marks as an *assumption* is
 reported as unverified rather than treated as established, and so is one whose cited
-source it cannot read (package absent, or the worktree's provisioning status absent or
-negative) — it reports that instead of provisioning anything to check. At the readiness
+source it cannot read (package absent, or the worktree's provisioning status
+*provisioning failed* or absent — *no dependencies required* is not that case, and is
+trustworthy) — it reports that instead of provisioning anything to check. At the readiness
 gate, before anything is built, the same concern shows up as two things it looks for in
 the spec: a dependency claim carrying neither a citation nor an assumption marking, and a
 scenario that could pass with the claimed mechanism absent without naming the alternative
@@ -817,10 +819,15 @@ it was written for.
 **Isolation**: the task builds in one worktree/branch under the repo's worktree
 directory, and the repo root stays on its base branch. That worktree is **provisioned
 with the project's dependencies when the lead creates it**, and every agent is handed
-the worktree path **together with the resulting provisioning status** — so it knows
-before it runs anything whether a command's result is trustworthy. Handed an absent or
-negative status, an agent reports the gap instead of concluding from the output, and
-never provisions the worktree itself (a fresh re-resolving install is what breaks
+the worktree path **together with the resulting provisioning status** — one of
+*provisioned*, *no dependencies required*, or *provisioning failed* — so it knows
+before it runs anything whether a command's result is trustworthy. The first two are
+both trustworthy, and *no dependencies required* is affirmative rather than a weaker
+*provisioned*: the project has no install or bootstrap step, so nothing is missing, and
+the agent runs the project's commands and **reports nothing about provisioning**, having
+no gap to describe. Handed *provisioning failed*, or a dispatch naming no status at all,
+an agent reports the gap instead of concluding from the output, and never provisions
+the worktree itself (a fresh re-resolving install is what breaks
 untouched tests). The root checkout is **readable** for dependency and vendor sources —
 resolved dependency trees, installed type definitions, vendored packages — and is
 **never written**; and no agent resolves a project CLI through a bare `npx`-style
