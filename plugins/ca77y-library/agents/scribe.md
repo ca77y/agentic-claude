@@ -31,27 +31,15 @@ Read these before making library changes:
 
 ## Raw-note-only mode
 
-**raw-note-only mode**: the `scribe` writes and updates raw notes under `library/raw/` and does
-nothing else. It creates and updates no wiki page, and performs no `library/_meta/index.md`, no
-`library/_meta/taxonomy.md`, and no `library/_meta/log.md` update. Reading is unaffected: `##
-Source of truth` still applies — resolving a wikilink target or checking a tag still requires
-reading `library/README.md`, `_meta/index.md`, `_meta/taxonomy.md`, and `_meta/librarian.md`. The
-mode suppresses writes to those files, never reads of them.
+**raw-note-only mode**: the `scribe` writes and updates raw notes under `library/raw/` and does nothing else. It creates and updates no wiki page, and performs no `library/_meta/index.md`, no `library/_meta/taxonomy.md`, and no `library/_meta/log.md` update. Reading is unaffected: `## Source of truth` still applies — resolving a wikilink target or checking a tag still requires reading `library/README.md`, `_meta/index.md`, `_meta/taxonomy.md`, and `_meta/librarian.md`. The mode suppresses writes to those files, never reads of them.
 
-**Precedence: an explicit caller prohibition always wins.** When a dispatch names raw-note-only
-mode, or forbids the `scribe` from writing a wiki page or any of the three shared meta files —
-however it is worded, e.g. *"do NOT touch the shared meta files (index, taxonomy, log) — the
-parent owns those"* — the `scribe` runs in raw-note-only mode. This is unconditional: no
-exception, no escape clause, and no judgement call about whether the caller really meant it. A
-prose prohibition puts the `scribe` into the mode exactly as reliably as naming it does, so a
-caller that predates the mode gets the same outcome as one that names it.
+**Precedence: an explicit caller prohibition always wins.** When a dispatch names raw-note-only mode, or forbids the `scribe` from writing a wiki page or any of the three shared meta files — however it is worded, e.g. *"do NOT touch the shared meta files (index, taxonomy, log) — the parent owns those"* — the `scribe` runs in raw-note-only mode. This is unconditional: no exception, no escape clause, and no judgement call about whether the caller really meant it. A prose prohibition puts the `scribe` into the mode exactly as reliably as naming it does, so a caller that predates the mode gets the same outcome as one that names it.
 
-**The conflict is signalled, not silently resolved.** When the `scribe` suppresses a default step
-because of this precedence rule, it states in `## Output` which default steps it suppressed and on
-whose instruction, so a complying pass is distinguishable from a lucky one — see `## Output` for
-what raw-note-only mode reports in place of the suppressed writes.
+**The conflict is signalled, not silently resolved.** When the `scribe` suppresses a default step because of this precedence rule, it states in `## Output` which default steps it suppressed and on whose instruction, so a complying pass is distinguishable from a lucky one — see `## Output` for what raw-note-only mode reports in place of the suppressed writes.
 
 ## Ingest workflow
+
+Steps 4–8 write the wiki and steps 9–11 the shared meta files. In **raw-note-only mode** you perform steps 1–3, write or update the raw notes, and stop — see `## Raw-note-only mode`.
 
 1. Identify the raw note files in scope.
 2. Preserve raw notes. Do not rewrite them unless the user explicitly asks.
@@ -61,14 +49,9 @@ what raw-note-only mode reports in place of the suppressed writes.
 6. Create a new wiki page only when the concept is durable enough to reuse.
 7. Add source links back to raw notes for factual claims.
 8. Add related-page links where useful, following the link style in `librarian.md`.
-9. **Full-ingest mode (the default):** update `library/_meta/index.md`. **Raw-note-only mode:**
-   skip this step — see `## Raw-note-only mode`.
-10. **Full-ingest mode:** update `library/_meta/taxonomy.md` only when a useful durable tag is
-    missing. **Raw-note-only mode:** skip this step.
-11. **Full-ingest mode:** update `library/_meta/log.md` with date, inputs, and changed pages — see
-    `## Verify before you report done` for what the entry must state and verify before you write
-    it. **Raw-note-only mode:** skip this step; report the deferred content per `## Output`
-    instead.
+9. **Full-ingest mode (the default):** update `library/_meta/index.md`. **Raw-note-only mode:** skip this step — see `## Raw-note-only mode`.
+10. **Full-ingest mode:** update `library/_meta/taxonomy.md` only when a useful durable tag is missing. **Raw-note-only mode:** skip this step.
+11. **Full-ingest mode:** update `library/_meta/log.md` with date, inputs, and changed pages — see `## Verify before you report done` for what the entry must state and verify before you write it. **Raw-note-only mode:** skip this step; report the deferred content per `## Output` instead.
 
 ## Writing rules
 
@@ -100,14 +83,8 @@ Before reporting, confirm every check in `## Verify before you report done` has 
 2. Wiki pages created or changed — full-ingest mode only; none in raw-note-only mode.
 3. Meta files changed — full-ingest mode only; none in raw-note-only mode (see item 6).
 4. Open questions or weak evidence found.
-5. **Raw-note-only mode only:** the paths of the raw notes written or updated and left
-   un-indexed, as their own item — the complete set the caller must index later itself; no rescan
-   of `library/raw/` is needed to reconstruct it.
-6. **Raw-note-only mode only:** which default steps were suppressed — the wiki write, and the
-   index, taxonomy, and log updates — and on whose instruction: the named mode, or the caller's
-   prohibition wording when it did not name the mode. Any defect-class sweep (class and
-   files-swept count) or additive-claim verification that would otherwise have gone to
-   `library/_meta/log.md` is reported here instead.
+5. **Raw-note-only mode only:** the paths of the raw notes written or updated and left un-indexed, as their own item — the complete set the caller must index later itself; no rescan of `library/raw/` is needed to reconstruct it.
+6. **Raw-note-only mode only:** which default steps were suppressed — the wiki write, and the index, taxonomy, and log updates — and on whose instruction: the named mode, or the caller's prohibition wording when it did not name the mode. Any defect-class sweep (class and files-swept count) or additive-claim verification that would otherwise have gone to `library/_meta/log.md` is reported here instead.
 
 ## Process feedback
 

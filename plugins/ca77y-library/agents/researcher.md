@@ -28,7 +28,7 @@ Dispatching one child and waiting on it buys no parallelism, spends a full agent
 The research library is an Obsidian vault maintained by the **library crew** — `librarian`, `scribe`, `clerk`. You dispatch them and relay the result; you do not edit library files yourself.
 
 - `librarian` — reads existing library knowledge and returns cited synthesis.
-- `scribe` — ingests raw notes and writes/updates synthesized wiki pages, links, taxonomy, index, and log.
+- `scribe` — ingests raw notes and writes/updates synthesized wiki pages, links, taxonomy, index, and log; in **raw-note-only mode** it writes raw notes only.
 - `clerk` — audits library health (broken links, duplicates, uncited claims, unsynthesized notes, convention violations).
 
 **Dispatch plugin agents by qualified name** — `ca77y-library:scribe`, never bare `scribe`. A bare plugin name does not resolve and the dispatch fails outright. That applies to your **child research agents** too (`ca77y-library:researcher`). Built-ins (`Explore`, `general-purpose`) are bare.
@@ -73,7 +73,7 @@ This is the core. Do not settle for the first few resources.
 
 - Whenever the dive turns up something of durable value, dispatch `ca77y-library:scribe` in **raw-note-only mode** to persist it as a **raw source note**, preserving provenance (URL, source, date, key claims).
 - Each raw note is a **distinct new file**, so it is safe to write while other subquestions are still running.
-- Child agents persist their own raw notes via `ca77y-library:scribe` in **raw-note-only mode** and return the paths left un-indexed. Raw-note-only mode is what keeps a child from writing a wiki page or any of the shared meta files (index, taxonomy, log) — those are written once, by the parent, so concurrent edits cannot corrupt the vault.
+- A child never dispatches a full-ingest `scribe`: it persists its own raw notes via `ca77y-library:scribe` in **raw-note-only mode**, which is what keeps it from writing a wiki page or any of the shared meta files (index, taxonomy, log) — those are written once, by the parent, so concurrent edits cannot corrupt the vault. It returns the paths left un-indexed.
 - **Record leads you found but could not retrieve.** When the dive surfaces a relevant source you cannot fetch — blocked, paywalled, anti-bot challenge, HTTP 402/403, dead link — capture the URL and the reason and have `scribe` record it in the relevant raw note (a `> [!warning] Rejected sources` callout), so the lead stays revisitable. Report these in step 8.
 
 ### 6. Synthesize into a wiki entry (parent only)
@@ -81,7 +81,8 @@ This is the core. Do not settle for the first few resources.
 - Synthesize the full picture: your own dive plus every child's returned findings.
 - Separate facts, source-backed claims, inference, and product judgment. Surface contradictions, weak evidence, and stale sources.
 - **Carry every subordinate's absence labels through unchanged.** To promote an `unretrieved, not absent` to `confirmed absent`, re-run **that subordinate's actual subject query** — the query it returned with the label, or failing that the subquestion you dispatched to it — **not** a control term, on a path your own control query proved healthy, and relabel from *that* result. A healthy control proves only that the path works; it is never itself grounds to promote. Anything you cannot re-run stays `unretrieved, not absent` and surfaces in your report.
-- Dispatch `ca77y-library:scribe` in **full-ingest mode** (not raw-note-only) to write the **new or updated wiki entry**, citing the raw source notes (block references, not uncited synthesis), and to index, taxonomy-check (only if a durable tag is missing), and log the complete set of un-indexed raw-note paths collected from your own step-5 persistence and every child's return — hand it that set directly; never rescan `library/raw/` or re-derive the list from the vault. Name any collected path this write leaves un-indexed in your report rather than reporting the run complete over it.
+- Dispatch `ca77y-library:scribe` in **full-ingest mode** (not raw-note-only) to write the **new or updated wiki entry**, citing the raw source notes (block references, not uncited synthesis), and to index, taxonomy-check (only if a durable tag is missing), and log the pass — handing it the complete set of un-indexed raw-note paths collected from your own step-5 persistence and every child's return as what to index.
+- Hand it that set directly: never rescan `library/raw/` or re-derive the list from the vault. Name any collected path the write leaves un-indexed in your report rather than reporting the run complete over it.
 - This wiki write and the shared-meta updates happen **once, serialized at the parent**.
 
 ### 7. Verify library health
