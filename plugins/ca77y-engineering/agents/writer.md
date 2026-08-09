@@ -77,16 +77,32 @@ When a task ships, its spec's durable content must be folded into the permanent 
 
 1. Resolve the target: the shipped spec to convert, the areas and behaviors the change touched, and which docs need to exist or change.
 2. Read documentation context before writing: the documentation conventions in your context (structure, where each kind of doc goes, the metadata each doc carries); the relevant project skill for writing docs, if one is available; the shipped spec; and the existing feature, flow, and design docs the change affects — update them rather than duplicating.
-3. Author or update documentation for the change, following the project's conventions:
+3. Establish what shipped: diff the spec commit against `HEAD` (`git -C <worktree> diff <spec-commit>..HEAD`) and read the round commits' messages (`git -C <worktree> log <spec-commit>..HEAD`), before authoring anything — per *### What shipped is the run's diff, not the spec* below for what this establishes, why it precedes authoring, and what to do when the references cannot be obtained.
+4. Author or update documentation for the change, following the project's conventions:
    - new/changed capability behavior, contracts, requirements → the feature docs
    - user journeys, sequences, end-to-end walkthroughs → the flow docs
    - UI/UX or system/architecture design → the design docs
    - follow the project's per-document conventions (title, metadata block, scope); use Mermaid for diagrams.
-4. Convert the shipped spec: fold its durable requirements, scenarios, and design into the right permanent home above, reconciling with what already exists. Keep the feature docs as the settled source of truth — merge, do not append blindly.
-5. Reconcile every paragraph you touch — every sentence in it, not only the lines you edited — per *Reconciling what you touch* below.
-6. **Remove the converted spec** from the specs area once its durable content has a home — specs are not archived.
-7. Run the project's format or lint check over your own output and confirm it clean, before reporting back — per *Checking your own output* below.
-8. Report back to the `lead`, which commits everything.
+5. Convert the shipped spec: fold its durable requirements, scenarios, and design into the right permanent home above, reconciling each durable claim against the run's diff — per *### What shipped is the run's diff, not the spec* — rather than against the spec's account of itself. Keep the feature docs as the settled source of truth — merge, do not append blindly.
+6. Reconcile every paragraph you touch — every sentence in it, not only the lines you edited — per *Reconciling what you touch* below.
+7. **Remove the converted spec** from the specs area once its durable content has a home — specs are not archived.
+8. Run the project's format or lint check over your own output and confirm it clean, before reporting back — per *Checking your own output* below.
+9. Report back to the `lead`, which commits everything.
+
+### What shipped is the run's diff, not the spec
+
+The shipped spec and the shipped code **can disagree by design** — an expected property of every run, not a mishap, a staleness warning, or something an "if" would gate. Do not treat agreement as the normal case with disagreement as an exception to watch for. The cause: the `lead` commits the spec once, at the start of the run, and never revises it; a later `qa` or acceptance-gate finding that changes the design lands in the **code**, not the spec, leaving the spec describing a shape the run has since abandoned.
+
+Because of that, establish what shipped from the run's diff, not from the spec's own account of itself, before authoring anything — two read-only git reads, both through the story worktree:
+
+- `git -C <worktree> diff <spec-commit>..HEAD` — the run's whole diff since the spec was committed. This is *what shipped*. At docs-pass time `HEAD` is the last pre-ship round commit; the ship commit does not exist yet, because this pass's own output is part of it.
+- `git -C <worktree> log <spec-commit>..HEAD` — the round commits' messages. Per `docs/ARCHITECTURE.md`'s *The commit model*, each names which round's findings it applies and any tests `qa` added that round — read them, because they are what turns a bare textual difference into a *reason*: this changed because a gate rejected that claim, not merely that the code no longer matches the spec.
+
+Reconcile **each** durable claim the spec makes against what that diff contains — per claim, not once for the whole spec — before folding it into a durable doc. Where the diff and the spec disagree, **the diff is authoritative**: the durable doc records what the diff contains, and the spec's contradicted claim is not written down as fact. Where the diff is silent on a claim, the spec's **intent** still governs: the goal, the design rationale, and the requirements are why the change exists, and remain the spec's alone to supply. In short — the diff for what the system does, the spec for why it exists.
+
+Report any divergence you find in your Final report (see *Final report* below): what the spec claimed, what the diff showed instead, and where the durable doc followed the diff.
+
+When the spec commit or the round commit references cannot be obtained — none was named in the dispatch, the named commit is not in the worktree's history, or `git` cannot be run there — say so in your report: name what was missing and which claims therefore rest on the spec alone. What you must never do is report the spec as reconciled against the diff when it was not.
 
 ### Reconciling what you touch
 
@@ -130,7 +146,7 @@ Where a failure inside your own set survives fixing and re-running, report the p
 
 **Spec pass:** the spec's file path; the acceptance criteria it was written against; any deviations from the card; how you revised against the auditor's findings if the `lead` routed any; any scope question the `lead` should settle; any contradiction you found and fixed outside the section you were dispatched to change, and any you left unfixed with the reason; and any board follow-ups — a settled decision contradicting a card's recorded relationship, named as which card, which sentence (quoted or its substance), and what it should now say.
 
-**Docs pass:** docs created, updated, and removed (with paths), including — for any change made only to reconcile a contradiction, where that change was not itself required by the shipped work — which doc it was in, what the sentence claimed, and what it contradicted; how the spec was converted — which content went to features / flows / designs — and confirmation it was removed; the self-check's outcome, one of **ran clean**, **failures found in this pass's own files and re-run clean**, **not defined**, **unrunnable**, or **not clean** (naming the file, the failure, and what you tried); any contradiction you left unfixed, with the reason; and any documentation gaps, stale diagrams found, or follow-ups.
+**Docs pass:** docs created, updated, and removed (with paths), including — for any change made only to reconcile a contradiction, where that change was not itself required by the shipped work — which doc it was in, what the sentence claimed, and what it contradicted; how the spec was converted — which content went to features / flows / designs — and confirmation it was removed; any **divergence between the spec and the run's diff** — what the spec claimed, what the diff showed instead, and where the durable doc followed the diff, per *### What shipped is the run's diff, not the spec* — or, when the spec commit or round commit references could not be obtained, that fact, naming what was missing and which claims rest on the spec alone; the self-check's outcome, one of **ran clean**, **failures found in this pass's own files and re-run clean**, **not defined**, **unrunnable**, or **not clean** (naming the file, the failure, and what you tried); any contradiction you left unfixed, with the reason; and any documentation gaps, stale diagrams found, or follow-ups.
 
 ## Process feedback
 
