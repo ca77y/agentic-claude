@@ -671,10 +671,16 @@ The obligation sits with the **receiving** side, as two independent nets — a w
 self-check in `scribe.md`, and a named default category in the `clerk`'s audit checklist
 ranked as a critical library-integrity issue. Neither is gated on a dispatcher naming the
 defect, on a human re-reading the page, or on the other net having run; the per-agent
-wording is in the root [`README.md`](../README.md). No dispatcher-side constraint
-accompanies them: `researcher.md` and any other caller may keep writing state-dependent
-conditionals, because a dispatcher genuinely cannot know a racing sibling's state in
-advance — which is exactly why the check belongs to the agent that can perform it.
+wording is in the root [`README.md`](../README.md). No dispatcher-side constraint on
+**conditionals** accompanies them: `researcher.md` and any other caller may keep writing
+state-dependent conditionals, because a dispatcher genuinely cannot know a racing
+sibling's state in advance — which is exactly why the check belongs to the agent that can
+perform it. That claim is narrower than it once was. A dispatcher-side constraint does now
+exist for **prohibitions**: a caller suppressing the `scribe`'s writes names raw-note-only
+mode rather than prohibiting them in prose (see *One writer for the shared library files*
+below). The two cases differ in who can settle them — a state-dependent conditional is a
+question only the receiver can answer, while a prohibition is a decision the dispatcher
+has already made and can therefore state as a mode.
 
 Three constraints shape where that wording lives.
 
@@ -682,8 +688,9 @@ Three constraints shape where that wording lives.
 `scribe` writes in its own voice — wiki pages, `_meta/` prose, its own wording inside a raw
 note — wherever that lives, and never the verbatim source text preserved under
 `library/raw/`, which the crew exists to keep intact. It also governs published prose only:
-a prohibition addressed to the `scribe` in a dispatch is still obeyed as an instruction; it
-simply never appears in a page.
+a prohibition addressed to the `scribe` in a dispatch puts the `scribe` into raw-note-only
+mode (see *One writer for the shared library files* below); the prohibition itself simply
+never appears in a page.
 
 **A defect class this toolkit defines belongs in the `clerk`'s audit-only checks.** Its
 *Convention compliance* item is a checklist entry in `clerk.md` like any other, but the
@@ -696,6 +703,87 @@ be named in the audit-only list, the part of the checklist `clerk.md` owns outri
 they describe one defect from two sides — a self-check and an audit finding — and are
 deliberately *not* required to match byte for byte. No drift check covers them and none
 should be added; unifying the wording would fuse two different jobs.
+
+## One writer for the shared library files
+
+A `researcher` fan-out runs several children at once, and every child persists what its
+dive turns up. Raw notes survive that: each is a distinct new file. The wiki page and the
+three shared `_meta/` files — index, taxonomy, log — do not. They are single targets that
+every child's `scribe` would write, so concurrent ingests are a lost-update race, not
+merely a protocol violation.
+
+Only the dispatching half of the answer existed. `researcher.md` already stated that
+children write neither wiki pages nor the shared meta files, and that those are written
+once, by the parent. The receiving half did not: `scribe.md`'s ingest workflow ended in
+three unconditional meta-update steps, and nothing in the file said what happens when a
+caller forbids exactly those steps. A prohibition in a dispatch was therefore prose
+competing with a built-in step, with no stated precedence between them — and the built-in
+step can win silently. It did: in a five-way fan-out, four children's scribes complied and
+one updated all three meta files, with no signal that its default and its instructions had
+collided.
+
+**The fix is a named mode in the receiving definition, not a stronger prompt.**
+`scribe.md` defines **raw-note-only mode**: it writes and updates raw notes under
+`library/raw/` and does nothing else — no wiki page, no index, no taxonomy, no log.
+Reading is untouched, because reading is not writing: resolving a wikilink target or
+checking a tag still requires the vault's `README.md` and `_meta/` files, and the mode
+suppresses writes to them only. Three properties make it do the job the incident exposed:
+
+- **Precedence is unconditional.** An explicit caller prohibition on those writes always
+  wins over the default step — no exception, no escape clause, no judgement call left to
+  the `scribe` about whether the caller meant it. The whole failure was a default silently
+  winning a contest the file never said it could lose.
+- **A prose prohibition triggers the mode by itself.** Naming the mode is the tidy path,
+  not the only one. Callers that predate the mode, or live outside this toolkit, keep
+  wording the prohibition however they like and get the same outcome.
+- **The conflict is signalled, not just obeyed.** The `scribe` reports which default steps
+  it suppressed and on whose instruction, so a complying pass is distinguishable from a
+  lucky one. A rule that changed only the outcome would leave the caller exactly where the
+  incident's parent stood: unable to tell the two apart.
+
+**The mode suppresses the wiki write as well**, which is more than the meta-file race
+needs. It has to. The prose it replaces forbade children both halves, so a mode covering
+only the meta updates would drop the wiki prohibition on the floor as the prose came out —
+and would make the name "raw-note-only" false.
+
+**The return closes the loop.** The mode reports the paths of the notes it left
+un-indexed, as their own output item, stated to be the complete set the caller must index
+later. The parent's single serialized write is handed that set as what to index instead of
+rescanning `library/raw/` for it, and names any collected path the write leaves un-indexed
+rather than reporting the run complete over it. A rescan re-derives a worklist that was
+already known; a handed set is checkable against what came back.
+
+**What the return depends on.** A child's report reaching the parent that dispatched it is
+exactly the routing this harness does not guarantee for nested dispatch (see
+[`issues/nested-subagent-result-routing.md`](issues/nested-subagent-result-routing.md)),
+which is why `researcher.md` keeps a fallback of researching the subquestions sequentially
+itself — and in that mode the parent persisted every note, so it already holds the set.
+Where a fan-out does run, a path that never comes back is a missing-accounting problem the
+fan-out parent owns; the `scribe`'s side of the contract is discharged by returning what it
+wrote to whoever dispatched it.
+
+**Every eager persistence uses the mode, the parent's own included.** `researcher.md`
+claims the wiki write and the shared-meta updates happen once, serialized at the parent —
+and that claim was false about its own file while the parent's own eager persistence ran
+in the default mode, updating index, taxonomy, and log on each dispatch. Routing all of it
+through the mode is what makes the claim true, and it makes the serialized write's
+worklist complete: the set handed over is every note persisted during the run, not only
+the children's. The post-audit fix rounds are the deliberate exception — they are
+full-ingest, because they run after the serialized write with nothing else in flight and
+may need to touch a meta file to close a `clerk` finding.
+
+Two alternatives were rejected. A `no-meta` flag named in the dispatch prompt leaves the
+default winning whenever a caller forgets the flag — the incident's exact failure under a
+new name. Making the meta updates opt-in for every caller fixes the race by breaking the
+common case: an ordinary single ingest would stop indexing itself, and every caller would
+have to learn a flag to get the behaviour it already has.
+
+**The mode's name is a shared literal token across two definitions.** `scribe.md` defines
+it, `researcher.md` invokes it, and an invocation naming a mode the other file does not
+define is a no-op that reads as satisfied — so when either file changes, the two spellings
+are compared literally rather than by eye. No standing drift check covers this: the root
+[`CLAUDE.md`](../CLAUDE.md) greps pin whole canonical paragraphs, not a token inside a
+sentence.
 
 ## Four ways an obligation gets repeated
 
