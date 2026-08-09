@@ -734,42 +734,41 @@ prompt, so the `lead` grants both by default rather than leaving them to be requ
   stale checklist.
 - **Docs pass**, after the build is accepted: the shipped spec and the shipped code
   **can disagree by design** — a later `qa` or acceptance-gate finding that changes the
-  design lands in the code, not the spec, leaving the spec describing a shape the run
-  has since abandoned. Before authoring anything, the writer establishes what shipped
-  from the run's diff rather than from the spec's own account of itself: it diffs the
-  spec commit against `HEAD` and reads the round commits' messages, which is what turns
-  a bare textual difference into a *reason* — this changed because a gate rejected that
-  claim.
-  Each durable claim the spec makes is reconciled against that diff before it is folded
-  into a durable doc; where the two disagree, **the diff is authoritative** and the
-  spec's contradicted claim is not written down as fact, while the spec remains the
-  source of durable **intent** — goal, design rationale, requirements — wherever the
-  diff is silent. A divergence it finds, or an inability to obtain the spec commit or
-  round commit references, is named in its report rather than papered over. It folds the
-  shipped spec's durable content into its permanent home (features / flows / designs),
-  reconciling with what exists, and **removes the spec** (specs are not archived). Here
-  the unit of review is **the paragraph, and every sentence in it** — not the lines
-  being mechanically edited: touching a prose block, a list item, a table row, or a
-  diagram is vouching for all of it. Every sentence is held to **two** standards, the
-  shipped system *and* the project's stated principles, which is what makes a sentence
-  describing something the project explicitly decided **not** to build correctable
-  rather than merely unverifiable. Where those principles live is discovered from the
-  project's own context, never hardcoded, and a project that states none is reported as
-  such rather than passed silently. A contradiction is fixed even when the edit that
-  surfaced it was unrelated to it. The one thing the writer never does is rewrite the
-  principle: when the principle may be the stale side, or it cannot tell which side is
-  stale, it reports and leaves the sentence standing — what the product is *for* stays
-  yours. The pass then **checks its own output**: before reporting back it runs your
-  project's format or lint command over the files it authored, changed, or removed, and
-  confirms clean. The command is discovered from your project's context — no tool is
-  named — with the same three outcomes step 3 uses: it ran; it is **not defined**, said
-  so in the report and never invented; or it is defined but **not trustworthy here**,
-  reported as unrunnable rather than concluded clean. A failure inside its own file set
-  is the pass's to fix and re-run; one naming only files outside it is relayed as
-  pre-existing and never fixed; and a failure in its own file it cannot clear is
-  reported as **not clean**, so a docs pass that authored a file your own gate would
-  reject cannot report success. This is a self-check on files the pass itself wrote, not
-  a review of anyone's work and not a new round.
+  design ordinarily lands in the code, not the spec, leaving the spec describing a shape
+  the run has since abandoned. Before authoring anything, the writer establishes what
+  shipped from the run's diff rather than from the spec's own account of itself: it
+  diffs the spec commit against `HEAD` and reads the round commits' messages, which is
+  what turns a bare textual difference into a *reason* — this changed because a gate
+  rejected that claim. Each durable claim the spec makes is reconciled against that diff
+  before it is folded into a durable doc; where the two disagree, **the diff is
+  authoritative** and the spec's contradicted claim is not written down as fact, while
+  the spec remains the source of durable **intent** — goal, design rationale,
+  requirements — wherever the diff is silent. A divergence it finds, or an inability to
+  obtain the spec commit or round commit references, is named in its report rather than
+  papered over. It folds the shipped spec's durable content into its permanent home
+  (features / flows / designs), reconciling with what exists, and **removes the spec**
+  (specs are not archived). Here the unit of review is **the paragraph, and every
+  sentence in it** — not the lines being mechanically edited: touching a prose block, a
+  list item, a table row, or a diagram is vouching for all of it. Every sentence is held
+  to **two** standards, the shipped system *and* the project's stated principles, which
+  is what makes a sentence describing something the project explicitly decided **not**
+  to build correctable rather than merely unverifiable. Where those principles live is
+  discovered from the project's own context, never hardcoded, and a project that states
+  none is reported as such rather than passed silently. A contradiction is fixed even
+  when the edit that surfaced it was unrelated to it. The one thing the writer never
+  does is rewrite the principle: when the principle may be the stale side, or it cannot
+  tell which side is stale, it reports and leaves the sentence standing — what the
+  product is *for* stays yours. The pass then **checks its own output**: before
+  reporting back it runs your project's format or lint command over the files it
+  authored, changed, or removed, and confirms clean. The command is discovered from your
+  project's context — no tool is named — with the same three outcomes step 3 uses: it
+  ran; it is **not defined**, said so in the report and never invented; or it is defined
+  but **not trustworthy here**, reported as unrunnable rather than concluded clean. A
+  failure inside its own file set is the pass's to fix and re-run; one naming only files
+  outside it is relayed as pre-existing and never fixed; and a failure in its own file
+  it cannot clear is reported as **not clean**, so a docs pass that authored a file your
+  own gate would reject cannot report success. This is a self-check on files the pass
+  itself wrote, not a review of anyone's work and not a new round.
 
 The writer just authors and returns; its spec is gated by the lead's `auditor`, its
 docs trusted. **Does not** implement code (the `coder` does), validate a build (`qa`
