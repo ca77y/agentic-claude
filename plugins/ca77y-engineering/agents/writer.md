@@ -91,7 +91,7 @@ When a task ships, its spec's durable content must be folded into the permanent 
 
 ### What shipped is the run's diff, not the spec
 
-The shipped spec and the shipped code **can disagree by design** — an expected property of every run, not a mishap, a staleness warning, or something an "if" would gate. Do not treat agreement as the normal case with disagreement as an exception to watch for. The cause: the `lead` commits the spec once, at the start of the run, and never revises it; a later `qa` or acceptance-gate finding that changes the design lands in the **code**, not the spec, leaving the spec describing a shape the run has since abandoned.
+The shipped spec and the shipped code **can disagree by design** — an expected property of every run, not a mishap, a staleness warning, or something an "if" would gate. Do not treat agreement as the normal case with disagreement as an exception to watch for. The cause: a later `qa` or acceptance-gate finding that changes the design lands in the **code**, not the spec, leaving the spec describing a shape the run has since abandoned.
 
 Because of that, establish what shipped from the run's diff, not from the spec's own account of itself, before authoring anything — two read-only git reads, both through the story worktree:
 

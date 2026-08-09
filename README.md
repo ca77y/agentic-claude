@@ -733,12 +733,13 @@ prompt, so the `lead` grants both by default rather than leaving them to be requ
   the `coder` implements the superseded one and `qa` reports a false finding against a
   stale checklist.
 - **Docs pass**, after the build is accepted: the shipped spec and the shipped code
-  **can disagree by design** — the lead commits the spec once and never revises it, so a
-  later `qa` or acceptance-gate finding that changes the design lands in the code, not
-  the spec. Before authoring anything, the writer establishes what shipped from the
-  run's diff rather than from the spec's own account of itself: it diffs the spec commit
-  against `HEAD` and reads the round commits' messages, which is what turns a bare
-  textual difference into a *reason* — this changed because a gate rejected that claim.
+  **can disagree by design** — a later `qa` or acceptance-gate finding that changes the
+  design lands in the code, not the spec, leaving the spec describing a shape the run
+  has since abandoned. Before authoring anything, the writer establishes what shipped
+  from the run's diff rather than from the spec's own account of itself: it diffs the
+  spec commit against `HEAD` and reads the round commits' messages, which is what turns
+  a bare textual difference into a *reason* — this changed because a gate rejected that
+  claim.
   Each durable claim the spec makes is reconciled against that diff before it is folded
   into a durable doc; where the two disagree, **the diff is authoritative** and the
   spec's contradicted claim is not written down as fact, while the spec remains the
