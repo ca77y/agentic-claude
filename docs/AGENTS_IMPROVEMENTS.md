@@ -48,3 +48,26 @@ state — all tasks implemented and verified, a deviation that held, a criterion
 the **removal commit's message**, which is the only surviving trace. This mirrors the rule the
 root `CLAUDE.md` already applies to clearing `AGENTS_IMPROVEMENTS.md` entries, where the removal
 commit's message is explicitly the finding's only surviving record.
+
+### A PR-review fix round routed to the `coder` can silently falsify the docs the same run shipped
+
+**Area**: `skill:lead`
+
+**Observed**: *Invoked on an open PR* (`plugins/ca77y-engineering/skills/lead/SKILL.md`, bullets 3–4)
+routes each review finding **by owner** — "code to the `coder`, docs to the `writer`" — and then
+re-runs `qa` over any code change. Nothing in that sequence covers the common case where a *code*
+fix changes behaviour that the **docs pass of the same run already described**. The docs pass runs
+once, before the PR opens (step 7), and is trusted with no gate; every fix round after it can
+therefore invalidate prose it wrote, with no owner assigned to reconcile it. Observed live on this
+story: the round fixing two PR-review findings changed `qa.md`'s probe rule and its restoration
+check, while `README.md` and `docs/ARCHITECTURE.md` — written one commit earlier, in this run's own
+docs pass — kept describing the pre-fix behaviour. `qa` caught it only because this repo's
+`docs/CLAUDE.md` happens to state that the README tracks per-agent behaviour; on a project without
+that rule written down, nothing in the pipeline would have looked.
+
+**Suggested change**: add a bullet to *Invoked on an open PR* (and to the pre-ship *When a gate
+finds a problem* routing) stating that a finding routed to the `coder` is checked for docs the run
+already shipped that the fix falsifies, and that any such divergence is routed to the `writer` in
+the same round so the fix and its docs land in one commit. The `qa` round that already re-runs over
+the code change is the natural place to surface the divergence, since it is the only agent reading
+the diff in that round.
