@@ -50,6 +50,7 @@ already shipped that the fix falsifies, and that any such divergence is routed t
 the same round so the fix and its docs land in one commit. The `qa` round that already re-runs over
 the code change is the natural place to surface the divergence, since it is the only agent reading
 the diff in that round.
+
 ### A spec's Validation commands must be runnable by a worktree-isolated session
 
 **Area:** `agent:writer`
@@ -94,3 +95,26 @@ divergence is in the shipped deliverable rather than in a durable doc: do not ed
 acceptance gate judged it), record the accurate statement in the durable doc, and name it in the
 report as a **defect in shipped work** — a category distinct from a spec-only divergence — so the
 `lead` can choose between a fix round and a follow-up card instead of reading it as ordinary drift.
+
+### The rule to pass the coder's fix report to `qa` has no size escape hatch, and one PR-review bullet doesn't say to pass it
+
+**Area**: `skill:lead`
+
+**Observed**: commit `8a989de` added the rule that a fresh `qa` dispatch must receive the `coder`'s
+fix report for the round, alongside the commit references, so `qa` can trust a demonstrated pin
+instead of re-probing every finding (step 5, and the `qa` bullet under *Delegation*). That rule has
+no length escape hatch, even though the very same step already gives one to *findings* headed the
+other direction — "When a round's findings exceed a short summary, write them to
+`tmp/findings-round-<N>.md` ... and pass that path" (*Context discipline*). A fix report that quotes
+a red assertion per behavioural fix, across several fixes, can grow past what belongs inline in a
+dispatch prompt, with nothing in the rule saying to write it to a file instead. Separately,
+*Invoked on an open PR*'s bullet "Re-run `qa` over any code change" doesn't mention passing the
+commit references or the fix report at all — a PR-review fix round is exactly a findings round
+where both matter, and the general rule does live elsewhere (the `Delegation` `qa` bullet), but nothing
+on that bullet points there, so it reads as self-contained and incomplete.
+
+**Suggested change**: mirror the findings wording so an oversized fix report gets the same
+inline-or-by-path treatment (step 5 and the `Delegation` `qa` bullet), and either add "commit
+references and fix report" to the *Invoked on an open PR* bullet directly or have it point at
+*Delegation* explicitly, so a reader of that section alone doesn't miss what a PR-review `qa`
+re-dispatch needs.
