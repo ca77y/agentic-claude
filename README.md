@@ -714,11 +714,12 @@ prompt, so the `lead` grants both by default rather than leaving them to be requ
   standing — what the product is *for* stays yours.
 
 The writer just authors and returns; its spec is gated by the lead's `auditor`, its
-docs trusted. **Does not** implement code, validate a build, or commit/branch/PR (the
-lead, its `coder`, and `qa` do). It **may** run your project's own commands, read-only
-and in their non-writing form, against the **unmodified** tree — that is the baseline
-measurement above, and measuring what the tree already does before a line is written is
-not validating a build.
+docs trusted. **Does not** implement code (the `coder` does), validate a build (`qa`
+does), or create branches, commits, or PRs (the lead alone does, for every agent's work
+including its own). It **may** run your project's own commands, read-only and in their
+non-writing form, against the **unmodified** tree — that is the baseline measurement
+above, and measuring what the tree already does before a line is written is not
+validating a build.
 
 ### librarian — cited answers from the library  ·  `ca77y-library`
 

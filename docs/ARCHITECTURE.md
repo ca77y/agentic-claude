@@ -927,10 +927,17 @@ dropped nor asserted as fact: it says why it could not be measured and what woul
 it, exactly as the dependency-citation rule already handles a claim it cannot cite. The
 mirroring is deliberate — a second, unrelated convention for unverifiable claims would
 leave a reader deciding which one applies. The same reasoning fixes where the rules sit:
-they are placed immediately after the dependency-citation rule and immediately before the
-alternative-cause rule, so the evidence-discipline cluster reads as one list — a
-dependency's behaviour, then the project's own current state, then what else could have
-produced the outcome — rather than as a second citation regime bolted on elsewhere.
+both new rules go inside the span the dependency-citation rule opens and the
+alternative-cause rule closes — four consecutive paragraphs in `writer.md`, in this
+order: dependency-citation, the current-state measurement rule, the pre-handoff
+self-check, the alternative-cause rule. Three of those four are the evidence-discipline
+list proper, and reading them in order gives the intended sequence — a dependency's
+behaviour, then the project's own current state, then what else could have produced the
+outcome — rather than a second citation regime bolted on elsewhere. The self-check is the
+third of the four paragraphs, sitting inside that span while deliberately **not** being
+one of the three list items: it is a check the `writer` runs over its own draft, not a
+rule about what evidence a claim must carry, and it is placed directly after the
+measurement rule because both turn on the same question of what the tree already does.
 
 **The draft is then self-checked against today's tree.** Before handoff the `writer` asks
 of **every** requirement: *would this scenario pass against the tree as it is today?* A
