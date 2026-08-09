@@ -36,7 +36,9 @@ The toolkit is **two plugins**, each its own roster:
   (`/ca77y-library:bootstrap`), which scaffolds the fixed `library/` folder — README,
   CLAUDE.md, `_meta/` (index, taxonomy, log, librarian conventions, templates), `raw/`,
   `wiki/` — that every agent above reads and writes directly, in a project that
-  doesn't have one yet. You invoke it once, before the crew's first run on a project.
+  doesn't have one yet, and asks whether to also bootstrap the project's Obsidian vault
+  config for the library's own plugins (Dataview, Templater, Breadcrumbs). You invoke
+  it once, before the crew's first run on a project.
 
 **The two are independent installs.** `ca77y-library` needs nothing else. The pipeline
 runs fine without it — the `analyst` reads library wiki pages directly — and reaches for
