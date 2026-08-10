@@ -18,7 +18,7 @@ comment** on the story card,
 alongside the option A/B/C analysis that chose this topology. (The log was originally
 `docs/tasks/contain-subagent-traffic-inside-the-pipeline.md`; that Markdown board was
 migrated to Linear on 2026-08-03 and removed — see
-[`../ISSUE_TRACKING.md`](../ISSUE_TRACKING.md).)
+[`../BOARD.md`](../BOARD.md).)
 
 ## The evidence
 

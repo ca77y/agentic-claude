@@ -1,16 +1,16 @@
 ---
 name: board
-description: Help a project write, repair, or inspect the `ISSUE_TRACKING.md` declaration that tells the pipeline how it tracks work — which board holds its story cards, how to locate/read/search/create/transition a card (plus comment/update where the project authorises them), the card shape, the status vocabulary, and what the pipeline is permitted to write. Invoked directly by the user to set a project up or check what it currently declares; never invoked by the `lead` or the `analyst` as a per-run step, since every board-touching agent reads the declaration itself, directly, at the fixed path `docs/ISSUE_TRACKING.md`. Does not move, edit, or create cards.
+description: Help a project write, repair, or inspect the `BOARD.md` declaration that tells the pipeline how it tracks work — which board holds its story cards, how to locate/read/search/create/transition a card (plus comment/update where the project authorises them), the card shape, the status vocabulary, and what the pipeline is permitted to write. Invoked directly by the user to set a project up or check what it currently declares; never invoked by the `lead` or the `analyst` as a per-run step, since every board-touching agent reads the declaration itself, directly, at the fixed path `docs/BOARD.md`. Does not move, edit, or create cards.
 ---
 
-You help a project answer **how do we track work**, by writing, repairing, or reading back its `docs/ISSUE_TRACKING.md` declaration. There is no per-run resolution here and nothing to hand back to a caller: every board-touching agent reads the declaration itself, directly, at its fixed path, at the moment it needs it. Your job is the declaration's own health — writing it, fixing it, or reporting what it currently says.
+You help a project answer **how do we track work**, by writing, repairing, or reading back its `docs/BOARD.md` declaration. There is no per-run resolution here and nothing to hand back to a caller: every board-touching agent reads the declaration itself, directly, at its fixed path, at the moment it needs it. Your job is the declaration's own health — writing it, fixing it, or reporting what it currently says.
 
 **Board and card are roles, not formats.** The *board* is whatever system holds this project's tracked work. A *card* is one tracked story on it. A board can be Markdown files committed in the repo, a hosted tracker reached through an MCP server, a REST API behind a CLI, or nothing at all — the declaration is what settles which, and nothing in the pipeline assumes it.
 
 ## Two ways you are invoked
 
 - **Directly, by the user** — to set a project up, repair a declaration, or see what it currently says. Do the work below, and write the file when asked to.
-- **Mid-run, by a `lead` that found no declaration.** This is a fallback, not a per-run step — the pipeline reads `docs/ISSUE_TRACKING.md` directly and never invokes you to resolve one. When a caller does reach you here, **do not write the file mid-run**: put the recommendation — and a draft, when you have enough to write one — in your report, and let the user decide. A project document that appears during someone's pipeline run is a side effect they did not ask for.
+- **Mid-run, by a `lead` that found no declaration.** This is a fallback, not a per-run step — the pipeline reads `docs/BOARD.md` directly and never invokes you to resolve one. When a caller does reach you here, **do not write the file mid-run**: put the recommendation — and a draft, when you have enough to write one — in your report, and let the user decide. A project document that appears during someone's pipeline run is a side effect they did not ask for.
 
 ## What the declaration answers
 
@@ -26,9 +26,9 @@ Two more exist only where the project's write authority grants them: **comment**
 
 Beyond the bindings, the declaration records the **card shape** (identity, type, priority, dependencies, acceptance criteria, any format quirk that constrains a writer), the **status vocabulary** with the pipeline's two semantic transitions — work started, awaiting review — mapped onto it and every human-reserved transition named explicitly, **where a write must land** to be seen immediately, and the **exhaustive write authority**.
 
-`references/authoring-issue-tracking.md`, next to this file, covers each of these in full, with a template and three worked examples. **Load it only when you are actually writing or repairing a declaration** — inspecting one that already reads cleanly never needs it, and pulling it in on every invocation costs context for nothing.
+`references/authoring-board.md`, next to this file, covers each of these in full, with a template and three worked examples. **Load it only when you are actually writing or repairing a declaration** — inspecting one that already reads cleanly never needs it, and pulling it in on every invocation costs context for nothing.
 
-**If the user tells you a declaration already exists but it is not at `docs/ISSUE_TRACKING.md`, do not go hunting the repo for it.** Stop and route them through the fix in that same reference — move the file to the fixed path, or write a new one there that points at what they already have — rather than searching, because a declaration anywhere else is one no agent will ever read.
+**If the user tells you a declaration already exists but it is not at `docs/BOARD.md`, do not go hunting the repo for it.** Stop and route them through the fix in that same reference — move the file to the fixed path, or write a new one there that points at what they already have — rather than searching, because a declaration anywhere else is one no agent will ever read.
 
 **Write the file only when the user invoked you directly, or has explicitly asked for it.**
 

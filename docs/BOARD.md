@@ -1,7 +1,7 @@
-# Issue tracking
+# The board
 
-How this project tracks work, read directly at this fixed path — `docs/ISSUE_TRACKING.md`
-— by every board-touching agent, with no per-run resolution step in between. Keep it true,
+How this project tracks work, read directly at this fixed path — `docs/BOARD.md` — by
+every board-touching agent, with no per-run resolution step in between. Keep it true,
 because the pipeline binds real calls to what it says.
 
 ## The board
@@ -43,8 +43,10 @@ Markdown.
   kind is refined into one of the three before it is filed.
 - **Priority** — `1` Urgent · `2` High · `3` Medium · `4` Low.
 - **Identity** — the issue identifier (`SMR-166`). It is the stable name across board,
-  branch, and PR: branch from the issue's own `gitBranchName`, and name the spec
-  `docs/specs/<identifier-slug>.md` (lowercase, e.g. `smr-166-convert-the-lead.md`).
+  branch, and PR, and the spec takes it as `docs/specs/<identifier-slug>.md` (lowercase,
+  e.g. `smr-166-convert-the-lead.md`). **How a branch name is derived from it is
+  [`FORGE.md`](./FORGE.md)'s to say** — this file supplies the identity, that one
+  supplies the branch.
 - **Dependencies** — Linear's blocking relations, set via `blockedBy` / `blocks` on
   `save_issue`. There are no sub-issues: one story is one issue is one PR.
 - **Body** — scaffolded by [`_templates/story.md`](./_templates/story.md): a summary
@@ -90,7 +92,8 @@ Agents **work** these issues; they do not just read them. Permitted, and expecte
 - **create** — the `analyst` files new issues at `Backlog`.
 - **transition** — the `lead` makes the two middle transitions above, and only those.
 - **attach the PR** — the `lead` links the PR to the issue when it opens it. Preferred,
-  not optional: an issue should carry its own PR rather than making someone search.
+  not optional: an issue should carry its own PR rather than making someone search. The
+  link itself comes from [`FORGE.md`](./FORGE.md)'s *open the change* binding.
 - **comment** — progress, production hazards, and the handoff summary belong on the
   issue, where they outlive the session that produced them.
 - **edit content** — description, acceptance criteria, labels, priority, and relations

@@ -27,9 +27,16 @@ told which issue tracker to use.
   repository the pipeline runs on. No hosted state of the toolkit's own.
 - **The board is declared, never assumed.** How a project tracks work — repo-local
   Markdown, Linear, Jira, GitHub Issues, or nothing — is read from that project's own
-  `docs/ISSUE_TRACKING.md` declaration and reached only through the bindings it records.
+  `docs/BOARD.md` declaration and reached only through the bindings it records.
   A tracker detail hardcoded in an agent is a defect — but the declaration's own
   **location** is a fixed convention, not a tracker detail, so pinning it is not.
+- **The repository and its forge are declared, never assumed.** Where changes go — a
+  hosted forge behind a CLI or an MCP server, or nowhere at all — is read from that
+  project's own `docs/FORGE.md` declaration, along with the target branch, the worktree
+  directory, the branch and commit conventions, and the push point. Unlike the board, a
+  **missing declaration stops the run**: a guessed tracker at worst does nothing, while
+  a branch pushed to an inferred remote is a write into a repository the user never
+  named, and the pipeline cannot take it back.
 - **Nothing signs off on itself.** The agent that produces an artifact never gates it.
   Code review goes to `qa` (a separate context from the `coder`) locally and to the PR
   review on the opened PR, readiness and acceptance to the `auditor`, library health to
@@ -41,10 +48,11 @@ told which issue tracker to use.
   where it authorises the correction, reported where it does not. Two human gates punctuate
   the flow: approving the analyst's stories, and invoking the `lead`.
 - **Agents discover, they do not assume.** Every agent reads paths, conventions, and
-  product context from the target project. Hardcoded paths are a defect — except the two
-  fixed conventions this toolkit itself pins: the tracking declaration always lives at
-  `docs/ISSUE_TRACKING.md`, and the improvements log at `docs/AGENTS_IMPROVEMENTS.md`.
-  Pinning where either file lives asserts nothing about what it says.
+  product context from the target project. Hardcoded paths are a defect — except the
+  three fixed conventions this toolkit itself pins: the tracking declaration always lives
+  at `docs/BOARD.md`, the forge declaration at `docs/FORGE.md`, and the improvements log
+  at `docs/AGENTS_IMPROVEMENTS.md`. Pinning where any of them lives asserts nothing about
+  what it says.
 - **Verification is layered, not repeated.** Spec authored + audited → per-scenario tests →
   qa gap fill and local review → acceptance audit → PR review. Each layer checks something
   the previous one cannot. Where a deliverable is prose and the project has no test runner,
@@ -70,10 +78,18 @@ A repo the pipeline runs on must be an Obsidian vault with a committed `.obsidia
 the community plugins listed in the root [`README.md`](../README.md) — Templater is
 required for the scaffolds; Dataview, Breadcrumbs, and Excalidraw are recommended. That
 requirement covers the **docs and library** (`docs/specs/`, durable docs, `library/`,
-`docs/_templates/`, and the `docs/ISSUE_TRACKING.md` declaration itself), not the board.
+`docs/_templates/`, and the `docs/BOARD.md` and `docs/FORGE.md` declarations
+themselves), not the board.
+
+**The forge declaration is not optional.** A repo the pipeline runs on must declare, at
+the fixed path `docs/FORGE.md`, which repository and remote it ships to, its target
+branch, where story worktrees live, how a branch is named and a commit written, when a
+push happens, and how a change is opened and its review re-fired — or that it has no
+forge at all, which is a complete answer. The `forge` skill writes the file. Without it
+the `lead` stops before it creates a workspace, by design.
 
 The board is separate and optional: a project either declares one — at the fixed path
-`docs/ISSUE_TRACKING.md`, which the `board` skill can help write — or declares none, and
+`docs/BOARD.md`, which the `board` skill can help write — or declares none, and
 the pipeline runs trackerless off the spec. Which board it declares, and how the
 pipeline reaches it, stay resolved from the declaration; only the declaration's own
 location is a convention. This repo tracks its own work in Linear; a repo-local Markdown

@@ -14,8 +14,10 @@ ca77y-agentic/
 |   |   |-- .claude-plugin/plugin.json   # Claude manifest (agents whitelist)
 |   |   |-- plugin.json                  # root manifest, mirrors the Claude one
 |   |   |-- skills/lead/SKILL.md         # the lead skill - the pipeline orchestrator
-|   |   |-- skills/board/SKILL.md        # helps write/repair the ISSUE_TRACKING.md declaration
-|   |   |   `-- references/              # loaded only to author an ISSUE_TRACKING.md
+|   |   |-- skills/board/SKILL.md        # helps write/repair the BOARD.md declaration
+|   |   |   `-- references/              # loaded only to author a BOARD.md
+|   |   |-- skills/forge/SKILL.md        # helps write/repair the FORGE.md declaration
+|   |   |   `-- references/              # loaded only to author a FORGE.md
 |   |   `-- agents/*.md                  # analyst, auditor, coder, qa, writer
 |   `-- ca77y-library/
 |       |-- .claude-plugin/plugin.json   # Claude manifest (agents whitelist)
@@ -62,7 +64,7 @@ Nine agents and two skills across **two plugins**, one group each:
 
 | Plugin | Agents | Role |
 | --- | --- | --- |
-| `ca77y-engineering` | the `lead` and `board` **skills**, plus `analyst`, `writer`, `coder`, `qa`, `auditor` | idea → shipped PR |
+| `ca77y-engineering` | the `lead`, `board`, and `forge` **skills**, plus `analyst`, `writer`, `coder`, `qa`, `auditor` | idea → shipped PR |
 | `ca77y-library` | `researcher`, `librarian`, `scribe`, `clerk` | grows and maintains the target project's Markdown research library |
 
 The flow is `researcher → analyst → lead → writer → coder → writer`, with `qa`
@@ -75,8 +77,9 @@ The library crew is dispatched directly by whichever agent needs library work �
 `researcher` within its own plugin, and the `analyst` across the plugin boundary,
 optionally (see *Two plugins, one optional edge* below).
 
-`board` is the second skill, and the only one nothing dispatches automatically: the
-`lead` and the `analyst` **read** `docs/ISSUE_TRACKING.md` directly, at that fixed path,
+`board` and `forge` are the other two skills, and the only ones nothing dispatches
+automatically. Taking the board first: the
+`lead` and the `analyst` **read** `docs/BOARD.md` directly, at that fixed path,
 rather than invoking anything — bindings for locate/read/search/create/transition (plus
 comment and update where the project authorises them), the card shape, the status
 vocabulary, the visibility rule, and the write authority all come straight from that one
@@ -85,10 +88,15 @@ see *Board access is granted per dispatch* below. It keeps the board a *declared
 dependency rather than a structural one — repo-local Markdown, a hosted tracker, or
 nothing changes what the declaration says and nothing else in the pipeline.
 
+`forge` is the same shape one layer down, over `docs/FORGE.md`: authoring-only, never
+dispatched, read directly — but by the `lead` alone, and with the one asymmetry recorded
+under *The repository and forge are declared once* below, that an absent declaration
+stops the run instead of degrading it.
+
 **The skill itself remains, narrowed to authoring.** It no longer resolves anything per
 run — there is nothing left to resolve, since every agent reads the fixed declaration
 itself — but it stays a skill rather than collapsing into a line of prose, because its
-authoring half is substantial: it owns `references/authoring-issue-tracking.md`,
+authoring half is substantial: it owns `references/authoring-board.md`,
 [`PRODUCT.md`](PRODUCT.md) advertises it as the tool for writing a declaration, and it
 remains a legitimate user-invocable setup and inspection entry point — collapsing it to
 one line would orphan that reference. That reference is loaded on the **job**, not on the
@@ -150,6 +158,52 @@ declaration yourself at its fixed path, and where the caller named nothing you h
 and say so. The `lead` skill deliberately does **not** join that pair — it reads the
 declaration unconditionally, and says so in its own voice — so the pair stays two files,
 not three.
+
+## The repository and forge are declared once, and only the lead reads it
+
+Where the board's access varies by caller, the forge's does not — and the contrast is
+the whole design. Every git and forge write in a run belongs to the `lead`:
+
+| Role | Forge access |
+| --- | --- |
+| `lead` | branch, worktree, commit, push, open the change, update it, comment on it, read it back, re-fire its review |
+| every other role | **none**, permanently |
+
+That is a property of the **role**, not of the dispatch, so it needs no caller-granted
+paragraph and gets none. The `**Board access is granted by your caller.**` paragraph
+exists in `writer` and `auditor` precisely because their access changes with who
+dispatched them and for which gate; a constant needs only a one-line prohibition in each
+file's own voice, which `coder`, `writer`, `qa`, and `analyst` already carry. **There is
+deliberately no third byte-identical paragraph and no third drift grep** — the root
+`CLAUDE.md` guards this with negative checks instead (no agent names a forge, a CLI, a
+remote, or a review trigger), which cost nothing to keep passing.
+
+Workers stay forge-blind by construction: they receive the story worktree's **absolute
+path** in their dispatch and read inside it. Nothing hands them the declaration, and
+nothing should — a worker that read `docs/FORGE.md` would hold a second source for a
+path it was already given.
+
+**A missing `docs/FORGE.md` stops the run; a missing `docs/BOARD.md` does not.** The
+asymmetry is intentional and should not be reconciled. A board the pipeline guessed at
+is, at worst, a status written where nobody looks; a remote or a base branch the
+pipeline guessed at is a push into a repository the user never named, which no later
+step can undo. So the board degrades to trackerless and the forge does not degrade at
+all: the `lead` stops at step 1, before it has branched, provisioned, transitioned a
+card, or dispatched anybody, and hands the user the path and the `forge` skill. That
+skill never writes the file to unblock a stopped run — a declaration authored for that
+reason is a guess carrying a project document's authority.
+
+**Two declarations, one boundary rule:** *the declaration that owns the consumer of a
+fact names it, and cites the other.* A branch name derived from a card is consumed by
+git, so `FORGE.md` owns the derivation and cites `BOARD.md` for the field; attaching a
+link to a card is consumed by the board, so `BOARD.md` owns the authority and cites
+`FORGE.md` for where the link comes from. Shape statements ("one story is one card is
+one PR") may appear in both — only **bindings** are single-sourced.
+
+**Two registers, deliberately not unified.** Prose that names, prohibits, or describes
+says "PR"; only prose that *binds* uses role language, and only three places do —
+`docs/FORGE.md`, the `forge` skill, and the `lead`'s no-forge paragraph — because only
+they must read correctly on a project that has no forge at all.
 
 ## The card's acceptance criteria are pinned into the spec
 
@@ -440,7 +494,7 @@ or is carried as a named follow-up. The failure this guards against is not docum
 drift but a worker believing something false about its own situation — a definition
 telling a freshly dispatched coder it was resumed with a build context it never had. A
 mechanical guard is still unbuilt; making the rule bind is tracked as `SMR-183` on the
-board (see [`ISSUE_TRACKING.md`](ISSUE_TRACKING.md)).
+board (see [`BOARD.md`](BOARD.md)).
 
 **Why the prescription was removed rather than inverted.** The skill once mandated
 `run_in_background: false` on every fresh dispatch and, six lines later, called a resume
@@ -478,6 +532,13 @@ session model.
 ## The story worktree contract
 
 A story worktree is the pipeline's only workspace, and the `lead` owns making it usable.
+**Where that worktree lives, and what its branch is called, come from `docs/FORGE.md`**
+— and they are consumed only by the `lead`, which creates the worktree and then names
+its resulting absolute path to every dispatch. That split is why the canonical
+`**Addressing the story worktree.**` paragraph carries no forge fact and did not change
+when the forge declaration arrived: the declaration settles the *directory*, the
+dispatch settles the *path*, and a worker needs only the second.
+
 `git worktree add` copies no installed dependencies, so **provisioning is part of
 creating the workspace** — it happens in the `lead`'s workspace-creation step, before any
 agent is dispatched into the worktree, and it is provisioning only: not running the
@@ -1227,9 +1288,11 @@ prevented at authoring time or not at all.
 ## The commit model
 
 The `lead` — the orchestrating main session — is the only place commits happen; no
-worker commits. Work happens in one worktree on one story
-branch under the repo's worktree directory; the repo root stays on its base branch, and
-that worktree is provisioned at creation (above).
+worker commits. Work happens in one worktree on one story branch under the worktree
+directory `docs/FORGE.md` names; the repo root stays on the target branch that same
+declaration names, and that worktree is provisioned at creation (above). The
+message convention, and what a message must additionally name, are the declaration's
+too — the model below governs *which* commits exist, never how they are worded.
 
 The commits a run produces, in order: the spec; the **spec-format-fix commit**, on the
 runs where the lint floor below finds something to fix; one per **pre-ship round** — the
@@ -1250,8 +1313,9 @@ question its own dispatch asks — *what did the coder change in response to rou
 With them, the `lead` hands each fresh dispatch two commit references and it diffs round
 N against round N−1: cheap, exact, and enough to check the coder changed **only** what
 was reported. It is the same mechanism the PR-review loop already used, applied one
-phase earlier. Round commits stay local in the worktree — there is no remote branch to
-push to until the PR opens.
+phase earlier. Round commits stay local in the worktree until the declaration's push
+point — for a project that pushes when the change opens, which is the usual shape, there
+is no remote branch to push to before then.
 
 Three details of the design are deliberate. The **build** is committed before the *first*
 `qa` dispatch, not just after each fix round: without it, round 1's fix lands fused with
@@ -1509,8 +1573,12 @@ This repository is itself an Obsidian vault with the layout the pipeline expects
 toolkit can be run on its own definitions: in-flight specs in `specs/`, the spec and
 story scaffolds in `_templates/`.
 
+Its forge is **GitHub** — `ca77y/agentic-claude`, reached through an already-authenticated
+`gh`, target branch `master` — declared in [`FORGE.md`](./FORGE.md), which the `lead`
+reads before it creates a workspace and without which it would not start at all.
+
 Its board is **Linear** — the `Agentic Claude` project in team `Smerfy` — declared in
-[`ISSUE_TRACKING.md`](./ISSUE_TRACKING.md): bindings onto the Linear MCP tools, the card
+[`BOARD.md`](./BOARD.md): bindings onto the Linear MCP tools, the card
 shape, the two permitted transitions, the visibility rule, and the write authority. That
 declaration is what every board-touching agent reads directly, at its fixed path, when
 the pipeline runs here, so the repo doubles as the worked example of a **hosted** board

@@ -6,10 +6,12 @@ runtime agent behavior.
 
 ## Worktrees
 
-Story worktrees live in `.worktrees/<branch>` at the repo root (gitignored). One story
-branch per worktree, branched off `master`; the root checkout stays on `master` and
-never has a story branch checked out. Remove the worktree and its branch once the PR
-merges.
+Where story worktrees live, what they branch off, and how they are named is this repo's
+own [`docs/FORGE.md`](docs/FORGE.md) — the same declaration the pipeline reads. Do not
+restate it here; in summary, `.worktrees/<branch>` at the repo root (gitignored), one
+story branch per worktree off `master`, the root checkout staying on `master` and never
+holding a story branch, and the worktree and its branch removed once the PR merges.
+Where this summary and the declaration disagree, the declaration is right.
 
 Dispatched agents address the worktree by its absolute path, not by cwd: git calls
 carry `-C <path>`, and file tools take an absolute path under `<path>`. Do not use
@@ -68,8 +70,9 @@ grep -h '^\*\*Board access is granted by your caller\.\*\*' \
 ## Two plugins — keep the cross-plugin edge soft
 
 The repo ships `ca77y-engineering` (pipeline: `analyst`, `auditor`, `coder`, `qa`,
-`writer`, plus the `lead` and `board` skills) and `ca77y-library` (research crew:
-`researcher`, `librarian`, `scribe`, `clerk`). They install independently, and **no
+`writer`, plus the `lead`, `board`, and `forge` skills) and `ca77y-library` (research crew:
+`researcher`, `librarian`, `scribe`, `clerk`, plus the `bootstrap` skill). They install
+independently, and **no
 plugin manifest can declare a dependency on another plugin** — so the only thing keeping
 that true is how the agents are written:
 
@@ -83,31 +86,76 @@ Dispatch names are plugin-qualified, so **moving an agent between plugins means 
 every `ca77y-<plugin>:<agent>` string that names it.** This should print nothing:
 
 ```bash
-grep -rn 'ca77y-engineering:\(researcher\|librarian\|scribe\|clerk\)' plugins/
-grep -rn 'ca77y-library:\(analyst\|auditor\|coder\|qa\|writer\|lead\|board\)' plugins/
+grep -rn 'ca77y-engineering:\(researcher\|librarian\|scribe\|clerk\|bootstrap\)' plugins/
+grep -rn 'ca77y-library:\(analyst\|auditor\|coder\|qa\|writer\|lead\|board\|forge\)' plugins/
 ```
 
 The rationale for the split is recorded in
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) under *Two plugins, one optional edge*.
 
-## The tracker is declared, never hardcoded — at a fixed path
+## The board is declared, never hardcoded — at a fixed path
 
 No agent may name a tracker, a card path, a status symbol, or a card field as a fact
 about "the project". All of it comes from the fixed declaration at
-[`docs/ISSUE_TRACKING.md`](docs/ISSUE_TRACKING.md) — bindings for
-locate/read/search/create/transition (plus comment and update where the project
-authorises them), the card shape, the status vocabulary, the visibility rule, and the
-write authority. When editing an agent, treat any concrete tracker detail as a bug
+[`docs/BOARD.md`](docs/BOARD.md) — bindings for locate/read/search/create/transition
+(plus comment and update where the project authorises them), the card shape, the status
+vocabulary, the visibility rule, and the write authority. When editing an agent, treat
+any concrete tracker detail as a bug
 unless it is explicitly framed as *one board's realization* of a semantic (the
 README's Obsidian Tasks example, the analyst's format-quirk rule).
 
 The declaration's own **path** is the one tracker fact this repo *does* hardcode, and
-deliberately: every board-touching agent reads `docs/ISSUE_TRACKING.md` directly, with
-no per-run resolution step and no discovery order in between. That is narrower than it
+deliberately: every board-touching agent reads `docs/BOARD.md` directly, with no per-run
+resolution step and no discovery order in between. That is narrower than it
 sounds — fixing where the declaration lives asserts nothing about the board itself,
 because the declaration is still what says which board, which statuses, and what may be
 written. The path is fixed, so the file does not move; this link is a convenience for a
 human reader, not the mechanism any agent relies on.
+
+## The repository and its forge are declared, never hardcoded — at a fixed path
+
+No agent may name a remote, a clone URL, a target branch, a branch pattern, a
+commit-message convention, a forge, a forge CLI, a change-artifact command, or a review
+trigger as a fact about "the project". All of it comes from the fixed declaration at
+[`docs/FORGE.md`](docs/FORGE.md) — the repository and its remote, the target branch, the
+worktree directory, where a branch name comes from, the commit convention and when a
+push happens, bindings for branch/commit/push and for opening, updating, commenting on,
+reading back, and re-firing the review on a change, what the change's description must
+carry, the review and its trigger, and the write authority. Same fixed-path rationale as
+the board: fixing where the declaration lives asserts nothing about the forge itself,
+because the declaration is still what says which repository, which branch, and what may
+be pushed.
+
+**One asymmetry with the board is deliberate — do not "fix" it.** An absent
+`docs/BOARD.md` lets a run proceed trackerless; an absent `docs/FORGE.md` **stops the
+`lead` before it creates a workspace.** A status written to the wrong board is bad but
+recoverable; a branch pushed to a remote the pipeline inferred, or a change opened
+against a base it guessed, is a write into somebody else's repository that cannot be
+taken back. The `forge` skill exists to author the file, and never authors it to unblock
+a stopped run.
+
+**Two registers, deliberately not unified.** An agent may say "PR" where it **names,
+prohibits, or describes** — that is the familiar realization, the same license the
+README's Obsidian Tasks example has. Role language ("the change") is for sentences that
+**bind**, and appears in only three places, because only they must cover a forgeless
+project: `docs/FORGE.md`, `plugins/ca77y-engineering/skills/forge/**`, and the `lead`'s
+no-forge paragraph. Do not sweep one register into the other.
+
+There is no canonical duplicated paragraph here, and no third drift grep, because forge
+access does not vary by caller the way board access does: the `lead` has all of it,
+every other role has none, permanently. What is worth checking instead is the negative —
+that no agent has started naming a forge, and that the rename and the boundary held.
+These should each print nothing, except the third, which prints exactly the three files
+that may read the declaration:
+
+```bash
+grep -rnE '@review|`gh`|gh pr |GitHub app|Claude GitHub|origin/' \
+  plugins/ca77y-engineering/agents/ \
+  plugins/ca77y-engineering/skills/{lead,board}/ plugins/ca77y-library/
+grep -rnE '\b(master|trunk)\b|branch `main`|origin/main' plugins/
+grep -rl 'docs/FORGE\.md' plugins/   # lead/SKILL.md, forge/SKILL.md, authoring-forge.md
+grep -rn 'gitBranchName' docs/ plugins/   # exactly one line, in docs/FORGE.md
+```
 
 ## The improvements log is cleared as it is converted
 
