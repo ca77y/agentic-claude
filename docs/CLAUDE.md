@@ -9,6 +9,7 @@ docs/
 |-- PRODUCT.md        # Toolkit intent, boundaries, and direction
 |-- ARCHITECTURE.md   # Plugin structure, agent roster, dispatch model
 |-- BOARD.md          # How this repo's board is reached; read directly, at this path
+|-- FORGE.md          # How this repo branches, commits, and ships; read the same way
 |-- issues/           # Known problems with no identified solution on our side
 |-- specs/            # Active specs, one per in-flight unit
 `-- _templates/       # The spec scaffold, and the story scaffold for a Linear issue body

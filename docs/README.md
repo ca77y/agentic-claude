@@ -9,6 +9,7 @@ Toolkit usage — what the plugin is, how to install it, and what each agent doe
 - `PRODUCT.md` - what the toolkit is for, its boundaries, and where it is going
 - `ARCHITECTURE.md` - how the plugin is put together and how the agents fit
 - `BOARD.md` - how the board is reached; read directly, at this fixed path
+- `FORGE.md` - how this repo branches, commits, and ships; read directly, at this fixed path
 - `issues/` - known problems with no identified solution on our side
 - `specs/` - temporary specs for in-flight units of work
 - `_templates/` - the spec and story scaffolds

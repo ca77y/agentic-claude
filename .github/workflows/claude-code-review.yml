@@ -4,8 +4,10 @@ on:
   # Auto-run only when a PR is first opened (not on every push/synchronize).
   pull_request:
     types: [opened]
-  # On-demand: trigger by commenting "@review" on a PR. lead.md's PR-review loop
-  # re-fires with `gh pr comment --body "@review rerun the PR review"`.
+  # On-demand: trigger by commenting "@review" on a PR. This condition is the source of
+  # truth for the trigger; docs/FORGE.md's "The review" section records it for the lead's
+  # PR-review loop, which re-fires through that declaration's own binding
+  # (`gh pr comment --body "@review rerun the PR review"`). Change one, change both.
   issue_comment:
     types: [created]
   pull_request_review_comment:

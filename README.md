@@ -41,8 +41,8 @@ both.
 
 Every check runs **natively in Claude** — the local code review (`qa`), readiness and
 acceptance audits (`auditor`), and library health (`clerk`), plus the independent code
-review on the PR (the Claude GitHub review — Claude Code in CI). No external CLI
-dispatcher.
+review on the PR, by whatever reviewer your `docs/FORGE.md` declares (for this repo, the
+Claude GitHub review — Claude Code in CI). No external CLI dispatcher.
 
 **One task in, one PR out.** The `lead` takes a single task — a prompt, optionally
 referencing a story card — and ships it. There is no splitting into units, no
@@ -154,6 +154,70 @@ The declaration never invents an endpoint, a project key, a field, or a status v
 anything it cannot state plainly is recorded as unbound, and an agent that needs an
 unbound operation reports the gap rather than improvising a call.
 
+*Upgrading from an earlier version?* This declaration used to live at
+`docs/ISSUE_TRACKING.md`. Move it to `docs/BOARD.md` — its contents are unchanged. The
+symptom of forgetting is quiet: an absent board is a supported state, so runs simply go
+trackerless without complaining.
+
+## Bring your own forge
+
+**Nothing in the pipeline knows where your changes go, either.** *Forge* and *change*
+are roles, not formats: a forge can be a hosted service behind an already-authenticated
+CLI, one behind an MCP server, a self-hosted instance with its own tooling, or nothing
+at all. Which one it is gets **declared once, at a fixed path** — `docs/FORGE.md` — and
+the `lead` reads that declaration directly, itself, before it creates a workspace. It is
+the only agent that reads it: every git and forge write in a run is the `lead`'s, and
+the workers it dispatches receive a worktree path and never touch a remote.
+
+| Field | What it settles |
+| --- | --- |
+| **Repository & remote** | which repository, which remote anything is pushed to, and whether this checkout is a fork |
+| **Target branch** | what stories branch off, what changes open against, and that nothing pushes it |
+| **Branches & worktrees** | where story worktrees live, the committed ignore entry covering them, where a branch name comes from, and who removes a worktree |
+| **Commits & push** | the message convention, what a message must name, when a push happens, and what may never be rewritten |
+| **Bindings** | the concrete call for each operation — *branch · remove a worktree · commit · push · open the change · update it · comment on it · read it back · re-fire the review · merge* |
+| **Change artifact** | what your forge calls it, the title's shape, what the description must carry, and that its link is the open binding's own output |
+| **Review** | who reviews an opened change, how that review is fired and re-fired — or that there is none |
+| **Write authority** | the exhaustive list. **Merging, force-pushing, rewriting pushed history, deleting refs, tagging, and releasing are never the pipeline's** |
+
+**A missing declaration *does* block a run** — and this is the one place the toolkit
+deliberately behaves unlike the board section above. With no `docs/FORGE.md`, the `lead`
+stops at its first step: nothing branched, no worktree, no dependencies provisioned, no
+card transitioned, nobody dispatched. It reports the path the file belongs at, the
+handful of facts it has to answer, and the skill that writes it. The reason for the
+difference is the blast radius: a guessed tracker at worst does nothing, while a branch
+pushed to a remote the pipeline inferred, or a change opened against a base it guessed,
+is a write into a repository you never named — and the pipeline cannot take it back.
+
+`/ca77y-engineering:forge` writes the file: invoked directly, it interviews you and
+verifies what it wrote **read-only** against your real repository — the remote resolves,
+the target branch exists, one already-merged change is fetched through the *read*
+binding. It never proves a binding by using it, so it opens no throwaway change and
+pushes no probe branch. And it never writes the declaration to unblock a `lead` that
+stopped: a file authored to get a run moving is a guess wearing the authority of a
+project document, and the first thing it guesses is your remote.
+
+Four shapes the declaration covers, none of them privileged:
+
+- **A hosted forge over an authenticated CLI** — bindings are commands (`gh pr create`,
+  `gh pr edit`, `gh pr comment`). This is what this repo itself uses; its declaration is
+  [`docs/FORGE.md`](docs/FORGE.md).
+- **A hosted forge that calls a change something else** — GitLab's *merge request*, for
+  one. The declaration records the word, and the pipeline's behaviour is unchanged.
+  Where review is a human approval rather than a bot, *re-fire the review* is simply
+  unbound, and the `lead` says the review is waiting on a person.
+- **A forge over MCP** — bindings are tool calls. Note that a push is usually still git
+  rather than MCP; a declaration that binds *open* but leaves *push* unbound describes a
+  pipeline that cannot ship.
+- **No forge at all** — a complete declaration, not a gap. The pipeline runs end to end
+  and finishes at its last commit on the story branch, pushed if you bound a push, with
+  the change description it would have posted going into the handoff instead.
+
+Every operation is either bound to a concrete call or marked unavailable, and each
+unbound one has defined behaviour. The declaration never invents a remote, a branch
+pattern, a commit convention, or a review trigger; credentials come from the mechanism's
+own configured auth, and `.env` files are never read.
+
 ## Requires the target repo to be an Obsidian vault (docs & library)
 
 Specs, durable docs, and the research library are plain Markdown **inside the repo you
@@ -180,7 +244,8 @@ under `.obsidian/`. Add them back only if you keep your cards as Markdown in the
 `.worktrees/`) and one for `/tmp/` inside each story worktree, where the pipeline keeps
 its run-local ledger and findings files. Both matter for the same reason: without them, a
 commit step can sweep either into a story commit. Name the worktree-directory entry to
-match whatever you actually call it; `/tmp/` is fixed, and **anchored** deliberately —
+match whatever your `docs/FORGE.md` declares the directory to be; `/tmp/` is fixed, and
+**anchored** deliberately —
 unanchored would also silently ignore any unrelated nested `tmp/` your project already
 tracks on purpose, while anchored matches only the scratch directory this design creates
 at the worktree's own root.
@@ -207,6 +272,16 @@ Neither requires the other. `ca77y-library` is entirely self-contained.
 `ca77y-engineering` uses `ca77y-library:librarian` and `ca77y-library:clerk` when they
 resolve and works from the wiki pages directly when they do not — so installing the
 pipeline alone costs you the deep-research front end, not a broken pipeline.
+
+**Then, before your first `lead` run, declare how your repo ships:**
+
+```
+/ca77y-engineering:forge
+```
+
+Without a `docs/FORGE.md` the `lead` stops before it creates a workspace rather than
+guess at your remote — see *Bring your own forge* above. `/ca77y-engineering:board` is
+the optional companion; a project with no board declaration runs trackerless.
 
 ## The pipeline at a glance
 
@@ -296,13 +371,16 @@ makes the **main session itself the orchestrator**, dispatching the workers flat
 every pipeline agent is a leaf directly below it. It owns the path from a task to a
 single open PR, and writes neither code nor specs — it dispatches, gates,
 commits, and ships. Invoking the `lead` is explicit permission to branch, worktree,
-commit, push, and open the PR. (Orchestration runs on the session's model; the
+commit, push, and open the PR — each of those exactly as your `docs/FORGE.md` binds it,
+and no further. (Orchestration runs on the session's model; the
 workers keep the models pinned in their own frontmatter.)
 
-Its input is a **prompt**. Before anything else it **reads the tracking declaration**
-(`docs/BOARD.md`, at its fixed path), so that if the prompt references a card it
-reads that card — and what it links — through the declaration's own bindings rather than
-an assumed tracker. That, plus two status transitions on that one card — *work started*
+Its input is a **prompt**. Before anything else it **reads both declarations** at their
+fixed paths — `docs/BOARD.md`, so that if the prompt references a card it reads that
+card, and what it links, through the declaration's own bindings rather than an assumed
+tracker; and `docs/FORGE.md`, so that every branch, commit, push, and PR operation that
+follows is one your project bound rather than one it guessed. If the forge declaration
+is missing it stops right there, having created nothing. That, plus two status transitions on that one card — *work started*
 at workspace creation, *awaiting review* once the PR is open, landed wherever the
 declaration's visibility rule says — is its whole relationship with the board. Board
 access downstream is **caller-granted**: the `writer` always carries read and search into
@@ -487,7 +565,8 @@ dispatch; a surviving `tmp/ledger.md` is a **bonus** cross-check, not something 
 depends on, since scratch inside the worktree does not outlive it. It routes each finding to its owner (code
 → `coder`, docs → `writer`, approach-invalidating → a revised spec), re-runs `qa` over
 any code change, commits and pushes the round, updates the PR description with anything
-new it must carry, re-fires the review with a `@review` comment — and hands off again.
+new it must carry, re-fires the review through your declaration's own trigger — and
+hands off again.
 The 3× rule applies within each run.
 
 **A flat topology, and the lead never does the work.** The lead skill is the only
@@ -505,8 +584,8 @@ detach, their completion notifications route to the root session, and a resumed 
 report never reaches a subagent parent (see
 [`docs/issues/nested-subagent-result-routing.md`](docs/issues/nested-subagent-result-routing.md)).
 Running the orchestrator in the main session puts it exactly where the harness
-delivers. The heavy fan-out **code review runs on the PR** (the Claude GitHub review),
-outside the dispatch tree entirely.
+delivers. The heavy fan-out **code review runs on the PR**, by the reviewer the forge
+declaration names, outside the dispatch tree entirely.
 
 ### coder — builds the whole task
 
@@ -611,7 +690,8 @@ from the one that wrote it. Reports pass/fail with evidence, the tests it added,
 already-satisfied results, and its review findings — the lead routes them to the
 `coder`. **Does not** fix feature code — a pin probe's temporary, restored revert (below)
 is the single exception — and never weakens a failing test to make the suite pass.
-The heavy, independent code review runs again on the **PR** — the Claude GitHub review.
+The heavy, independent code review runs again on the **PR** — by whatever reviewer the
+forge declaration names, or not at all where it names none.
 
 **On a findings round it consumes the coder's pin evidence instead of re-deriving it.**
 Each behavioural fix arrives marked **demonstrated**, **not demonstrated**, or **nothing
@@ -994,7 +1074,7 @@ PR review all still run in their own contexts over everything it produced.
 **Verification is layered**: the `writer` authors the spec → the `auditor` gates it
 ready-to-build → `coder` writes per-scenario tests → `qa` fills coverage gaps and reviews
 the diff → the `auditor` gates the result against its acceptance criteria → the PR opens →
-the Claude GitHub review reviews it, and its findings come back through another `lead` run.
+the declared reviewer reviews it, and its findings come back through another `lead` run.
 The layers hold when the deliverable is **prose rather than code** — a spec, a doc, an
 agent definition, on a project with no test runner: the two middle layers change medium,
 not existence. Per-scenario tests become **one inspectable assertion per scenario** (the
@@ -1056,7 +1136,9 @@ ca77y-agentic/
     │   ├── skills/
     │   │   ├── lead/SKILL.md             # the lead — the pipeline orchestrator,
     │   │   │                             #   run in the main session
-    │   │   └── board/SKILL.md            # helps write/repair the BOARD.md
+    │   │   ├── board/SKILL.md            # helps write/repair the BOARD.md
+    │   │   │                             #   declaration; not a per-run resolver
+    │   │   └── forge/SKILL.md            # helps write/repair the FORGE.md
     │   │                                 #   declaration; not a per-run resolver
     │   └── agents/                       # pipeline subagents:
     │                                     #   analyst, auditor, coder, qa, writer
