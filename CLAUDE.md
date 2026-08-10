@@ -71,7 +71,8 @@ grep -h '^\*\*Board access is granted by your caller\.\*\*' \
 
 The repo ships `ca77y-engineering` (pipeline: `analyst`, `auditor`, `coder`, `qa`,
 `writer`, plus the `lead`, `board`, and `forge` skills) and `ca77y-library` (research crew:
-`researcher`, `librarian`, `scribe`, `clerk`). They install independently, and **no
+`researcher`, `librarian`, `scribe`, `clerk`, plus the `bootstrap` skill). They install
+independently, and **no
 plugin manifest can declare a dependency on another plugin** — so the only thing keeping
 that true is how the agents are written:
 
@@ -85,7 +86,7 @@ Dispatch names are plugin-qualified, so **moving an agent between plugins means 
 every `ca77y-<plugin>:<agent>` string that names it.** This should print nothing:
 
 ```bash
-grep -rn 'ca77y-engineering:\(researcher\|librarian\|scribe\|clerk\)' plugins/
+grep -rn 'ca77y-engineering:\(researcher\|librarian\|scribe\|clerk\|bootstrap\)' plugins/
 grep -rn 'ca77y-library:\(analyst\|auditor\|coder\|qa\|writer\|lead\|board\|forge\)' plugins/
 ```
 
