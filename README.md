@@ -22,13 +22,19 @@ The toolkit is **two plugins**, each its own roster:
   Claude, and the independent code review running on the opened PR. The `lead` is a
   **skill run in the main session** (`/ca77y-engineering:lead <task>`), not a
   subagent; every other pipeline role is a subagent it dispatches directly, flat.
-  It also carries the **board skill** (`/ca77y-engineering:board`), which helps you write
-  or repair the `BOARD.md` declaration that tells the pipeline *how this project
-  tracks work* — the bindings for reading, searching, creating, and transitioning cards,
-  the card shape and status vocabulary, and what the pipeline is permitted to write. The
-  `lead` and the `analyst` read that declaration directly, at its fixed path, before
-  touching a card; you invoke the skill yourself to set a project up or see what it
-  currently says.
+  It also carries **two declaration skills you invoke yourself**, never the pipeline.
+  The **board skill** (`/ca77y-engineering:board`) helps you write or repair the
+  `BOARD.md` declaration that tells the pipeline *how this project tracks work* — the
+  bindings for reading, searching, creating, and transitioning cards, the card shape and
+  status vocabulary, and what the pipeline is permitted to write; the `lead` and the
+  `analyst` read that declaration directly, at its fixed path, before touching a card.
+  The **forge skill** (`/ca77y-engineering:forge`) does the same for the `FORGE.md`
+  declaration that tells it *where the work goes* — the repository and its remote, the
+  target branch, where worktrees and branch names come from, the commit and push
+  convention, the bindings for opening and updating a change, and the review. The `lead`
+  alone reads that one, before it creates a workspace, and **stops without it** — so
+  `forge` is the one you run before your first `lead` run, while a project with no board
+  declaration runs trackerless.
 - **`ca77y-library`** — the research crew `researcher → librarian · scribe · clerk`
   that grows and maintains the project's Markdown research library: deep dives that
   produce cited wiki entries, cited answers out of the wiki, raw-note ingestion, and
