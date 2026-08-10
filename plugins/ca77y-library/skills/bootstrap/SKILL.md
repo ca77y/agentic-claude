@@ -35,7 +35,7 @@ library/
     └── README.md
 ```
 
-Every file under `resources/library/` in this skill is a **real file to copy**, not prose to transcribe — copy the whole `resources/library/` tree into the target project's `library/` preserving structure, then edit only the copies (never `resources/`) to fill in tokens. Most of the tree is **invariant** — the same text regardless of what the project researches — because it encodes shared conventions the library agents already assume: `CLAUDE.md`, `_meta/librarian.md`, the three `_meta/templates/` files, and `raw/README.md` / `wiki/README.md` copy over with no edits at all beyond the date token in `librarian.md`.
+Every file under `resources/library/` in this skill is a **real file to copy**, not prose to transcribe — copy the whole `resources/library/` tree into the target project's `library/` preserving structure, then edit only the copies (never `resources/`) to fill in tokens. Most of the tree is **invariant** — the same text regardless of what the project researches — because it encodes shared conventions the library agents already assume: `CLAUDE.md`, the three `_meta/templates/` files, and `raw/README.md` / `wiki/README.md` copy over with no edits at all. `_meta/librarian.md` is invariant the same way in its body of conventions, but its header carries the `{{TODAY}}` and `{{PROJECT_NAME}}` tokens listed below.
 
 **Token replacement.** After copying, replace every `{{TOKEN}}` in the copied files (never in `resources/` itself) with the values gathered above:
 

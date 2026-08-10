@@ -1,6 +1,6 @@
 # Library
 
-A Markdown-first research wiki for {{PROJECT_NAME}}. It stores research memory and source provenance, not implementation authority. The repository root is an Obsidian vault, so use wikilinks and backlinks for internal navigation.
+A Markdown-first research wiki for {{PROJECT_NAME}}. It stores research memory and source provenance, not implementation authority. It is Obsidian-compatible — internal navigation uses wikilinks and backlinks, which resolve when the repository is opened as a vault and read as plain Markdown when it isn't.
 
 ## Layout
 
