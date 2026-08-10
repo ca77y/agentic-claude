@@ -14,8 +14,8 @@ ca77y-agentic/
 |   |   |-- .claude-plugin/plugin.json   # Claude manifest (agents whitelist)
 |   |   |-- plugin.json                  # root manifest, mirrors the Claude one
 |   |   |-- skills/lead/SKILL.md         # the lead skill - the pipeline orchestrator
-|   |   |-- skills/board/SKILL.md        # helps write/repair the ISSUE_TRACKING.md declaration
-|   |   |   `-- references/              # loaded only to author an ISSUE_TRACKING.md
+|   |   |-- skills/board/SKILL.md        # helps write/repair the BOARD.md declaration
+|   |   |   `-- references/              # loaded only to author a BOARD.md
 |   |   `-- agents/*.md                  # analyst, auditor, coder, qa, writer
 |   `-- ca77y-library/
 |       |-- .claude-plugin/plugin.json   # Claude manifest (agents whitelist)
@@ -76,7 +76,7 @@ The library crew is dispatched directly by whichever agent needs library work �
 optionally (see *Two plugins, one optional edge* below).
 
 `board` is the second skill, and the only one nothing dispatches automatically: the
-`lead` and the `analyst` **read** `docs/ISSUE_TRACKING.md` directly, at that fixed path,
+`lead` and the `analyst` **read** `docs/BOARD.md` directly, at that fixed path,
 rather than invoking anything — bindings for locate/read/search/create/transition (plus
 comment and update where the project authorises them), the card shape, the status
 vocabulary, the visibility rule, and the write authority all come straight from that one
@@ -88,7 +88,7 @@ nothing changes what the declaration says and nothing else in the pipeline.
 **The skill itself remains, narrowed to authoring.** It no longer resolves anything per
 run — there is nothing left to resolve, since every agent reads the fixed declaration
 itself — but it stays a skill rather than collapsing into a line of prose, because its
-authoring half is substantial: it owns `references/authoring-issue-tracking.md`,
+authoring half is substantial: it owns `references/authoring-board.md`,
 [`PRODUCT.md`](PRODUCT.md) advertises it as the tool for writing a declaration, and it
 remains a legitimate user-invocable setup and inspection entry point — collapsing it to
 one line would orphan that reference. That reference is loaded on the **job**, not on the
@@ -440,7 +440,7 @@ or is carried as a named follow-up. The failure this guards against is not docum
 drift but a worker believing something false about its own situation — a definition
 telling a freshly dispatched coder it was resumed with a build context it never had. A
 mechanical guard is still unbuilt; making the rule bind is tracked as `SMR-183` on the
-board (see [`ISSUE_TRACKING.md`](ISSUE_TRACKING.md)).
+board (see [`BOARD.md`](BOARD.md)).
 
 **Why the prescription was removed rather than inverted.** The skill once mandated
 `run_in_background: false` on every fresh dispatch and, six lines later, called a resume
@@ -1510,7 +1510,7 @@ toolkit can be run on its own definitions: in-flight specs in `specs/`, the spec
 story scaffolds in `_templates/`.
 
 Its board is **Linear** — the `Agentic Claude` project in team `Smerfy` — declared in
-[`ISSUE_TRACKING.md`](./ISSUE_TRACKING.md): bindings onto the Linear MCP tools, the card
+[`BOARD.md`](./BOARD.md): bindings onto the Linear MCP tools, the card
 shape, the two permitted transitions, the visibility rule, and the write authority. That
 declaration is what every board-touching agent reads directly, at its fixed path, when
 the pipeline runs here, so the repo doubles as the worked example of a **hosted** board

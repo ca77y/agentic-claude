@@ -4,7 +4,7 @@ the issue body, fill every placeholder, and delete the sections that do not appl
 
 Title, type label, priority, and blocking relations are Linear *fields* — set them on
 the issue itself and never restate them in the body. There is no H1 here for the same
-reason: the issue's title is the heading. Field rules live in ../ISSUE_TRACKING.md.
+reason: the issue's title is the heading. Field rules live in ../BOARD.md.
 
 Linear rewrites `-` bullets to `*` and wraps bare URLs in `<…>` on save. Cosmetic, and
 not worth fighting — the content round-trips intact.

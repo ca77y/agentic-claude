@@ -23,7 +23,7 @@ The toolkit is **two plugins**, each its own roster:
   **skill run in the main session** (`/ca77y-engineering:lead <task>`), not a
   subagent; every other pipeline role is a subagent it dispatches directly, flat.
   It also carries the **board skill** (`/ca77y-engineering:board`), which helps you write
-  or repair the `ISSUE_TRACKING.md` declaration that tells the pipeline *how this project
+  or repair the `BOARD.md` declaration that tells the pipeline *how this project
   tracks work* — the bindings for reading, searching, creating, and transitioning cards,
   the card shape and status vocabulary, and what the pipeline is permitted to write. The
   `lead` and the `analyst` read that declaration directly, at its fixed path, before
@@ -102,7 +102,7 @@ harness, no dispatcher bridge.
 **Nothing in the pipeline knows what tracks your work.** *Board* and *card* are roles,
 not formats: a board can be Markdown files committed in the repo, a hosted tracker
 behind an MCP server or a CLI, a documented REST API, or nothing at all. Which one it is
-gets **declared once, at a fixed path** — `docs/ISSUE_TRACKING.md` — and every
+gets **declared once, at a fixed path** — `docs/BOARD.md` — and every
 board-touching agent reads that declaration directly, itself, whenever it needs it.
 There is no per-run resolution step and nothing handed between agents: the file is the
 pipeline's whole interface to your tracker.
@@ -116,7 +116,7 @@ pipeline's whole interface to your tracker.
 | **Visibility** | where a write must land to be seen **now** — for a repo-local board, the root checkout left uncommitted; for a hosted one, the bound call |
 | **Write authority** | the exhaustive list of operations the pipeline may perform. **Declared by your project; defaults to the two status transitions and nothing else** — grant more (comment, attach the PR, update a card) and the pipeline uses it, applying authorised fixes rather than reporting them |
 
-**Declare your board in `docs/ISSUE_TRACKING.md`** — the bindings, the card shape, the
+**Declare your board in `docs/BOARD.md`** — the bindings, the card shape, the
 statuses, and what the pipeline may write. That path is fixed, on purpose: every
 board-touching agent reads it directly, with no discovery step and nothing to search
 for. Fixing *where the declaration lives* asserts nothing about your tracker — the
@@ -130,7 +130,7 @@ proceeds without one (below), and relays the recommendation to write one in its 
 because a project document that appears mid-pipeline is a side effect you didn't ask
 for.
 
-**A missing declaration does not block a run.** With none at `docs/ISSUE_TRACKING.md`,
+**A missing declaration does not block a run.** With none at `docs/BOARD.md`,
 the pipeline runs trackerless: acceptance criteria come from the spec's requirements and
 scenarios, there are no status transitions to make, and the handoff says so plainly. The
 `analyst` still shapes and fit-gates its stories and returns them in its report as the
@@ -145,7 +145,7 @@ Three shapes the declaration covers today, none of them privileged:
 - **A hosted tracker over MCP** (Linear, Jira, GitHub Issues) — bindings are tool
   calls, transitions are API writes, and no checkout is involved at all. This is what
   this repo itself uses; its declaration is
-  [`docs/ISSUE_TRACKING.md`](docs/ISSUE_TRACKING.md), pointed at from the root
+  [`docs/BOARD.md`](docs/BOARD.md), pointed at from the root
   `CLAUDE.md`.
 - **A CLI or documented REST endpoint** — bindings are commands. Credentials come from
   the mechanism's own configured auth; `.env` files are never read.
@@ -233,7 +233,7 @@ behind it — is the separate `ca77y-library` plugin; everything from `analyst` 
 
 ᴸ ships in the **`ca77y-library`** plugin; every other row is **`ca77y-engineering`**.
 Board resolution is not a pipeline stage: every row above that touches a card reads
-`docs/ISSUE_TRACKING.md` itself, directly, at its fixed path (see
+`docs/BOARD.md` itself, directly, at its fixed path (see
 [Bring your own board](#bring-your-own-board)); the `board` skill (below) is a standalone
 setup and inspection tool, not something the pipeline invokes per run.
 
@@ -300,7 +300,7 @@ commit, push, and open the PR. (Orchestration runs on the session's model; the
 workers keep the models pinned in their own frontmatter.)
 
 Its input is a **prompt**. Before anything else it **reads the tracking declaration**
-(`docs/ISSUE_TRACKING.md`, at its fixed path), so that if the prompt references a card it
+(`docs/BOARD.md`, at its fixed path), so that if the prompt references a card it
 reads that card — and what it links — through the declaration's own bindings rather than
 an assumed tracker. That, plus two status transitions on that one card — *work started*
 at workspace creation, *awaiting review* once the PR is open, landed wherever the
@@ -1056,7 +1056,7 @@ ca77y-agentic/
     │   ├── skills/
     │   │   ├── lead/SKILL.md             # the lead — the pipeline orchestrator,
     │   │   │                             #   run in the main session
-    │   │   └── board/SKILL.md            # helps write/repair the ISSUE_TRACKING.md
+    │   │   └── board/SKILL.md            # helps write/repair the BOARD.md
     │   │                                 #   declaration; not a per-run resolver
     │   └── agents/                       # pipeline subagents:
     │                                     #   analyst, auditor, coder, qa, writer

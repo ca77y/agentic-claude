@@ -1,7 +1,7 @@
-# Issue tracking
+# The board
 
-How this project tracks work, read directly at this fixed path — `docs/ISSUE_TRACKING.md`
-— by every board-touching agent, with no per-run resolution step in between. Keep it true,
+How this project tracks work, read directly at this fixed path — `docs/BOARD.md` — by
+every board-touching agent, with no per-run resolution step in between. Keep it true,
 because the pipeline binds real calls to what it says.
 
 ## The board

@@ -1,18 +1,20 @@
-# Authoring `ISSUE_TRACKING.md`
+# Authoring `BOARD.md`
 
 Load this only when a project's board declaration has to be **written or repaired**. Reading back an existing one needs nothing from this file — `SKILL.md` alone covers that.
 
-`ISSUE_TRACKING.md` is the project's own answer to *how do we track work*. Every board-touching agent reads it directly; a human maintains it. It is prose a person can read, not config — but every claim in it has to be true enough to bind a call to.
+`BOARD.md` is the project's own answer to *how do we track work*. Every board-touching agent reads it directly; a human maintains it. It is prose a person can read, not config — but every claim in it has to be true enough to bind a call to.
 
 ## Where it goes, and what it is called
 
-Exactly `docs/ISSUE_TRACKING.md` — a fixed path, the same way `docs/AGENTS_IMPROVEMENTS.md` is fixed. Do not rename it, do not split it across files, and do not write it anywhere else. If the project already documents its board somewhere else — a rules page beside the cards, a section of a `CLAUDE.md` — the new file **points at that page and fills the gaps it leaves** rather than restating it; two declarations that can disagree are worse than one that is thin.
+Exactly `docs/BOARD.md` — a fixed path, the same way `docs/AGENTS_IMPROVEMENTS.md` is fixed. Do not rename it, do not split it across files, and do not write it anywhere else. If the project already documents its board somewhere else — a rules page beside the cards, a section of a `CLAUDE.md` — the new file **points at that page and fills the gaps it leaves** rather than restating it; two declarations that can disagree are worse than one that is thin.
 
 ## If the user says a declaration already exists
 
 Take them at their word — and do not go hunting for it, and do not write a second one. What matters is only whether it is at the fixed path. Tell them so, and give them the fix:
 
-1. **Move the file to `docs/ISSUE_TRACKING.md`,** or write a new declaration there that points at the existing page and fills its gaps, per *Where it goes* above.
+**One old name is worth checking for by hand: `docs/ISSUE_TRACKING.md`.** That is where this declaration used to live, so a project set up against an earlier version of the toolkit has a perfectly good declaration that no agent will ever read — and because a board is allowed to be absent, its runs go trackerless without complaining. When the user mentions it, or when they report that the pipeline stopped seeing their board after an upgrade, that is the cause. The fix is the move below, and nothing about the file's contents needs to change.
+
+1. **Move the file to `docs/BOARD.md`,** or write a new declaration there that points at the existing page and fills its gaps, per *Where it goes* above.
 2. Then invoke the skill again — it will read the file directly, at that path, and report what it currently says, including anything the declaration leaves unbound.
 
 Offer to make that move yourself if they want, subject to the same rule as everything else here: only when they invoked the skill directly, never mid-run.
@@ -39,11 +41,11 @@ Eight questions. Ask the user only what the project cannot tell you — read the
 ## The template
 
 ````markdown
-# Issue tracking
+# The board
 
-How this project tracks work, read directly at this fixed path — `docs/ISSUE_TRACKING.md`
-— by every board-touching agent, with no per-run resolution step in between. Keep it
-true, because the pipeline binds real calls to what it says.
+How this project tracks work, read directly at this fixed path — `docs/BOARD.md` — by
+every board-touching agent, with no per-run resolution step in between. Keep it true,
+because the pipeline binds real calls to what it says.
 
 ## The board
 
@@ -102,7 +104,7 @@ Three shapes, none privileged. Copy the closest and cut what does not apply.
 
 ## Before calling it done
 
-- **Check the file landed at `docs/ISSUE_TRACKING.md`, exactly.** Every board-touching agent reads that one path directly; nothing to wire into context, and nothing to point at it for the pipeline's own sake.
+- **Check the file landed at `docs/BOARD.md`, exactly.** Every board-touching agent reads that one path directly; nothing to wire into context, and nothing to point at it for the pipeline's own sake.
 - **Verify it against a real card.** Run the `locate` and `read` bindings against a card that already exists. A declaration nobody has read a card through is a plan, not a working one — and it will read as correct right up until a status is written into the wrong place.
 - **Check every operation** the project wants available is bound, and every one it does not is marked *not available* rather than left out.
 - **Check the status values are spelled the way the board spells them**, including case and punctuation.

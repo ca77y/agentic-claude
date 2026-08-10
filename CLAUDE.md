@@ -94,7 +94,7 @@ The rationale for the split is recorded in
 
 No agent may name a tracker, a card path, a status symbol, or a card field as a fact
 about "the project". All of it comes from the fixed declaration at
-[`docs/ISSUE_TRACKING.md`](docs/ISSUE_TRACKING.md) — bindings for
+[`docs/BOARD.md`](docs/BOARD.md) — bindings for
 locate/read/search/create/transition (plus comment and update where the project
 authorises them), the card shape, the status vocabulary, the visibility rule, and the
 write authority. When editing an agent, treat any concrete tracker detail as a bug
@@ -102,7 +102,7 @@ unless it is explicitly framed as *one board's realization* of a semantic (the
 README's Obsidian Tasks example, the analyst's format-quirk rule).
 
 The declaration's own **path** is the one tracker fact this repo *does* hardcode, and
-deliberately: every board-touching agent reads `docs/ISSUE_TRACKING.md` directly, with
+deliberately: every board-touching agent reads `docs/BOARD.md` directly, with
 no per-run resolution step and no discovery order in between. That is narrower than it
 sounds — fixing where the declaration lives asserts nothing about the board itself,
 because the declaration is still what says which board, which statuses, and what may be
