@@ -1,0 +1,3 @@
+# Obsidian local/generated state
+.obsidian/workspace.json
+.obsidian/workspace-mobile.json

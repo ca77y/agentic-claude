@@ -32,7 +32,13 @@ The toolkit is **two plugins**, each its own roster:
 - **`ca77y-library`** — the research crew `researcher → librarian · scribe · clerk`
   that grows and maintains the project's Markdown research library: deep dives that
   produce cited wiki entries, cited answers out of the wiki, raw-note ingestion, and
-  library health audits.
+  library health audits. It also carries the **bootstrap skill**
+  (`/ca77y-library:bootstrap`), which scaffolds the fixed `library/` folder — README,
+  CLAUDE.md, `_meta/` (index, taxonomy, log, librarian conventions, templates), `raw/`,
+  `wiki/` — that every agent above reads and writes directly, in a project that
+  doesn't have one yet, and asks whether to also bootstrap the project's Obsidian vault
+  config for the library's own plugins (Dataview, Templater, Breadcrumbs). You invoke
+  it once, before the crew's first run on a project.
 
 **The two are independent installs.** `ca77y-library` needs nothing else. The pipeline
 runs fine without it — the `analyst` reads library wiki pages directly — and reaches for
@@ -1063,6 +1069,9 @@ ca77y-agentic/
     └── ca77y-library/
         ├── .claude-plugin/plugin.json    # Claude manifest (agents whitelist)
         ├── plugin.json                   # root manifest (mirrors the Claude one)
+        ├── skills/
+        │   └── bootstrap/SKILL.md        # scaffolds the fixed library/ folder in a
+        │                                 #   new project; create-once, not a repair tool
         └── agents/                       # library subagents:
                                           #   clerk, librarian, researcher, scribe
 ```
