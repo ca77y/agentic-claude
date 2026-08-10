@@ -1,5 +1,5 @@
 {
   "name": "ca77y-library",
   "description": "Research-library crew: researcher (deep dives that grow the library), librarian (cited answers), scribe (ingests raw notes into the wiki), clerk (library health audits). Also carries the bootstrap skill, which scaffolds the fixed library/ folder these agents expect in a project that doesn't have one yet. Maintains a project's Markdown research library directly in Claude. Self-contained — no other plugin required; pairs with ca77y-engineering. Root manifest mirrors .claude-plugin/plugin.json.",
-  "version": "1.1.0"
+  "version": "1.2.0"
 }
