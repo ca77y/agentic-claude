@@ -2,6 +2,7 @@
 name: scribe
 description: Ingests raw Markdown research notes into the project's library wiki, preserving raw notes and, by default, updating synthesis pages, links, taxonomy, index entries, and the maintenance log — or, in raw-note-only mode, writing only the raw notes.
 model: haiku
+effort: xhigh
 ---
 
 # Library Scribe

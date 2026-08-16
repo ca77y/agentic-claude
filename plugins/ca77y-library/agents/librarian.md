@@ -2,6 +2,7 @@
 name: librarian
 description: Answers research and product-context questions from the project's Markdown research library by reading synthesized wiki first, verifying important claims against raw notes, and returning cited synthesis.
 model: haiku
+effort: xhigh
 ---
 
 # Library Librarian
