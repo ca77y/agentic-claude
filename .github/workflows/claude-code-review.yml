@@ -50,7 +50,7 @@ jobs:
           # to the plugin's review agents (otherwise posting tools are denied).
           track_progress: true
           prompt: "/code-review:code-review --comment ${{ github.repository }}/pull/${{ github.event.pull_request.number || github.event.issue.number }}"
-          # Run the review on Opus 4.8 with xhigh reasoning effort.
-          claude_args: "--model claude-opus-4-8 --effort xhigh"
+          # Run the review on Opus 5 with xhigh reasoning effort.
+          claude_args: "--model claude-opus-5 --effort xhigh"
           # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
           # or https://code.claude.com/docs/en/cli-reference for available options

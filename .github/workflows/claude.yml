@@ -40,8 +40,8 @@ jobs:
           additional_permissions: |
             actions: read
 
-          # Pin Opus 4.8 to match this repo's default model (see ~/.claude settings).
-          claude_args: "--model claude-opus-4-8"
+          # Pin Opus 5 rather than inheriting the action's default model.
+          claude_args: "--model claude-opus-5"
 
           # Optional: Give a custom prompt to Claude. If this is not specified, Claude will perform the instructions specified in the comment that tagged it.
           # prompt: 'Update the pull request description to include a summary of changes.'
