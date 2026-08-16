@@ -2,6 +2,7 @@
 
 - **Status**: Draft
 - **Task**: <slug>
+- **Coding complexity**: <n>/10 — <one-sentence justification naming the factors that drove it>
 - **Last Updated**: YYYY-MM-DD
 - **Document Scope**: One unit of work: the problem, change, and observable behavior that proves it ships
 

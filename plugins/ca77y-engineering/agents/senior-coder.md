@@ -1,7 +1,7 @@
 ---
-name: coder
-description: Builds the whole task from its validated spec — implements the code and scenario tests with minimal scoped changes, and leaves the finished work in the story worktree for the lead to commit. The lead routes qa and acceptance-gate findings back to it either by resuming it or via a fresh dispatch carrying the findings, and it applies the set in one go; PR-review findings arrive the same way, or in the initial dispatch when the run is fixing an already-open PR. Does not split work, write specs, commit, push, or open PRs.
-model: sonnet
+name: senior-coder
+description: The higher-complexity build tier — the `lead` dispatches it when the spec's **Coding complexity** score is 5 or above, when that score is absent or unreadable, and when a problem has survived the junior-coder's three attempts. Builds the whole task from its validated spec — implements the code and scenario tests with minimal scoped changes, and leaves the finished work in the story worktree for the lead to commit. The lead routes qa and acceptance-gate findings back to it either by resuming it or via a fresh dispatch carrying the findings, and it applies the set in one go; PR-review findings arrive the same way, or in the initial dispatch when the run is fixing an already-open PR. Does not split work, write specs, commit, push, or open PRs.
+model: opus
 effort: high
 ---
 

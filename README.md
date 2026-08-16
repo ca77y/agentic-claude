@@ -17,7 +17,9 @@ about the tracker itself — see [Bring your own board](#bring-your-own-board).
 
 The toolkit is **two plugins**, each its own roster:
 
-- **`ca77y-engineering`** — the pipeline `analyst → lead → writer → coder → writer`, with
+- **`ca77y-engineering`** — the pipeline `analyst → lead → writer → coder → writer`, where
+  the build step is `junior-coder` or `senior-coder` depending on the complexity score the
+  spec carries, with
   `qa` (validation plus the local code review) and the `auditor` gating native to
   Claude, and the independent code review running on the opened PR. The `lead` is a
   **skill run in the main session** (`/ca77y-engineering:lead <task>`), not a
@@ -70,7 +72,7 @@ The end-to-end flow:
       ▼              │                                                   │
 ┌────────────┐   wiki   ┌──────────┐  story   ┌────────────┐  task  ┌──────────┐
 │ researcher │ ───────▶ │ analyst  │ ───────▶ │ lead skill │ ─────▶ │  writer  │ spec
-└────────────┘  pages   └──────────┘  cards   │ (the main  │        │  coder   │ build
+└────────────┘  pages   └──────────┘  cards   │ (the main  │        │ jr/sr    │ build
       │                      │                │  session)  │        │    qa    │ test+review
       │ library              │ fit gate       └────────────┘        │  auditor │ accept
       ▼                      ▼                      │               │  writer  │ docs
@@ -304,13 +306,18 @@ a subagent. The first stage — `researcher`, and the `librarian`, `scribe`, `cl
 behind it — is the separate `ca77y-library` plugin; everything from `analyst` onward is
 `ca77y-engineering`.
 
+The **coder** step is two agents behind one role: `junior-coder` and `senior-coder`, the
+same definition pinned to a cheap and a strong model. The `writer` scores each spec's
+coding complexity 1–10, and the `lead` routes the build on that score — below 5 to the
+junior, 5 or above to the senior.
+
 | Stage | Agent | In | Out |
 | --- | --- | --- | --- |
 | Research ᴸ | `researcher` | a topic | a cited wiki entry + raw sources in the library |
 | Analysis | `analyst` | wiki pages + your input | board-ready **story cards** (fit-proven) |
 | Orchestration | `lead` (skill, main session) | one task (a prompt, maybe naming a card) | a single open PR, gated and handed off for review |
 | Spec | `writer` | the task | a validated spec in the specs area |
-| Build | `coder` | the validated spec | the finished work in the story worktree |
+| Build | `junior-coder` / `senior-coder` | the validated spec, routed on its complexity score | the finished work in the story worktree |
 | Validation & review | `qa` | the work in progress | pass/fail + filled test (or checklist) gaps + code-review findings |
 | Readiness & acceptance | `auditor` | the spec, the built work vs its criteria, or a story card | ready / not-ready verdict |
 | Docs | `writer` | the finished task | durable docs (format/lint self-checked); spec converted & removed |
@@ -399,7 +406,7 @@ access downstream is **caller-granted**: the `writer` always carries read and se
 every spec pass; the `auditor` carries **read and search** into the lead's spec-readiness
 gate and **read** into its acceptance gate, and performs the mechanical equality check and
 the readiness gate's board-side duplicate detection itself, in each; the
-`coder` and `qa` get no board access and need none.
+coder tiers and `qa` get no board access and need none.
 
 1. **Read the task** — the prompt, the referenced card if any, the docs it touches,
    and the relevant code.
@@ -435,11 +442,14 @@ the readiness gate's board-side duplicate detection itself, in each; the
    outcome, never a reason to invent one), or it is defined but **not trustworthy
    here**, reported as unrunnable and attributed to nobody. See **The commit model**
    below.
-4. **Build** — dispatches **one** `coder` with the spec's path, and **records its
-   agentId when the dispatch produces one**. The coder implements and reports; the
-   lead trusts that reported state.
+4. **Build** — reads the spec's **Coding complexity** score and dispatches **one** coder
+   on it: below 5 the `junior-coder`, 5 or above the `senior-coder`, and the
+   `senior-coder` whenever the score cannot be read. It **records the score, the tier,
+   and the agentId when the dispatch produces one**. The coder implements and reports;
+   the lead trusts that reported state, and does not re-score the task.
 5. **Validate & review** — **commits the coder's build**, then dispatches `qa` to
-   validate it and review the diff; routes its findings back to the same coder —
+   validate it and review the diff; routes its findings back to the same coder, at the
+   tier step 4 dispatched —
    resuming it by agentId when one is held, or a fresh dispatch carrying the findings
    when it is not, either way continuing on the report that dispatch delivers (see
    **Dispatch and resume** below) — **commits that round's work** when the coder
@@ -579,10 +589,13 @@ depends on, since scratch inside the worktree does not outlive it. It routes eac
 any code change, commits and pushes the round, updates the PR description with anything
 new it must carry, re-fires the review through your declaration's own trigger — and
 hands off again.
-The 3× rule applies within each run.
+The 3× rule applies within each run. Its one carve-out is the coder promotion: a problem
+that survives a `junior-coder`'s three attempts moves to a fresh `senior-coder` rather
+than stopping the run, once per run, with its own three attempts before the hard stop.
 
 **A flat topology, and the lead never does the work.** The lead skill is the only
-orchestrator, and it runs in the main session: it dispatches `writer`, `coder`, `qa`,
+orchestrator, and it runs in the main session: it dispatches `writer`, the coder tier in
+play, `qa`,
 and `auditor` directly, and no pipeline agent dispatches or resumes another — every
 worker is a leaf at depth 1. Each leaf does its one job and returns, and the lead
 **trusts that result**: it never writes, tests, reviews, or judges the work itself, and
@@ -599,9 +612,32 @@ Running the orchestrator in the main session puts it exactly where the harness
 delivers. The heavy fan-out **code review runs on the PR**, by the reviewer the forge
 declaration names, outside the dispatch tree entirely.
 
-### coder — builds the whole task
+### junior-coder / senior-coder — build the whole task
 
-Takes the validated spec and the story worktree and delivers the task end to end.
+**Two agents, one definition.** Everything below the frontmatter is byte-identical
+between them; they differ only in the model they are pinned to — `junior-coder` on Haiku,
+`senior-coder` on Opus. The contract is deliberately the same, so the routing decision is
+about cost, never about how carefully the work gets done.
+
+**The spec decides which one builds.** The `writer` scores every spec's **Coding
+complexity** 1–10 in its metadata header, justified against surface area, blast radius,
+pattern novelty, external dependency behaviour, and unsettled unknowns. The `lead` reads
+that score and routes: **below 5 → `junior-coder`**, **5 or above → `senior-coder`**. The
+`lead` does not re-score or override — the number comes from the agent that wrote the
+Requirements and Tasks it measures. A score that is missing, unparseable, or out of range
+routes to `senior-coder`, so an unreadable score costs capability rather than correctness.
+
+Once dispatched, the tier is fixed for the run — every later findings round goes back to
+the same tier. The one exception is the **3× rule's promotion**: if a problem survives a
+junior's three attempts, the `lead` dispatches a fresh `senior-coder` to finish the task,
+handing it what the junior already tried and why it did not close. That happens at most
+once per run, replaces the tier rather than adding a second builder, and gives the senior
+its own three attempts before the usual hard stop applies. A senior that exhausts its
+three attempts stops the run and reports, exactly as before.
+
+Everything from here down describes both tiers identically.
+
+Each takes the validated spec and the story worktree and delivers the task end to end.
 **It never commits** — its work stays in the tree for the lead, which commits the
 build and each fix round itself. It is **not its own reviewer** — `qa` reviews its
 work in a separate context — and the lead owns every gate over it.
@@ -824,7 +860,12 @@ prompt, so the `lead` grants both by default rather than leaving them to be requ
 
 - **Spec pass**, before any code exists: authors the task's spec (Goal → Acceptance
   criteria (verbatim transcription) → Design → Requirements with WHEN/THEN scenarios →
-  Tasks → Already satisfied criteria) against the acceptance criteria the
+  Tasks → Already satisfied criteria) — plus the **Coding complexity** score in the
+  spec's metadata header, an integer 1–10 written *after* Requirements and Tasks are
+  drafted and justified against surface area, blast radius, pattern novelty, external
+  dependency behaviour, and unsettled unknowns; that score is what routes the build to
+  the `junior-coder` or the `senior-coder`, so it is a real output of this pass rather
+  than a label — against the acceptance criteria the
   work will be judged on — **transcribing the card's own `## Acceptance criteria`
   verbatim into a labelled `AC1`…`ACn` section, taken after any criterion correction it
   makes, so the auditor's mechanical equality check, run inside each gate that uses this
@@ -1153,7 +1194,8 @@ ca77y-agentic/
     │   │   └── forge/SKILL.md            # helps write/repair the FORGE.md
     │   │                                 #   declaration; not a per-run resolver
     │   └── agents/                       # pipeline subagents:
-    │                                     #   analyst, auditor, coder, qa, writer
+    │                                     #   analyst, auditor, junior-coder,
+    │                                     #   senior-coder, qa, writer
     └── ca77y-library/
         ├── .claude-plugin/plugin.json    # Claude manifest (agents whitelist)
         ├── plugin.json                   # root manifest (mirrors the Claude one)

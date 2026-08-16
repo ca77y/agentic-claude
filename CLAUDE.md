@@ -38,20 +38,20 @@ dispatched agent carries: the dependency-provisioning status handed over with th
 the rule that the root checkout may be **read** for dependency and vendor sources but
 **never written**, and the ban on invoking a project CLI through a bare fetch-and-run —
 lives as one canonical "Addressing the story worktree." paragraph duplicated
-**byte-identically** across five files — the four worker agents plus the `lead` skill
+**byte-identically** across six files — the five worker agents plus the `lead` skill
 (the skill creates the worktree and names it to every dispatch, so it carries the
 paragraph verbatim):
-`plugins/ca77y-engineering/agents/{coder,writer,qa,auditor}.md` and
+`plugins/ca77y-engineering/agents/{junior-coder,senior-coder,writer,qa,auditor}.md` and
 `plugins/ca77y-engineering/skills/lead/SKILL.md`. There is no
 shared-include mechanism across these `.md` files, so the copies are deliberate — but
 they carry the same drift hazard as the two manifests below: sharpen the wording in one
 and the others silently fall out of sync. **Whenever you edit that paragraph, edit all
-five and verify they still match before you push** (this should print `1` — a single
-distinct copy across all five files):
+six and verify they still match before you push** (this should print `1` — a single
+distinct copy across all six files):
 
 ```bash
 grep -h '^\*\*Addressing the story worktree\.\*\*' \
-  plugins/ca77y-engineering/agents/{coder,writer,qa,auditor}.md \
+  plugins/ca77y-engineering/agents/{junior-coder,senior-coder,writer,qa,auditor}.md \
   plugins/ca77y-engineering/skills/lead/SKILL.md | sort -u | wc -l
 ```
 
@@ -67,10 +67,42 @@ grep -h '^\*\*Board access is granted by your caller\.\*\*' \
   plugins/ca77y-engineering/agents/{writer,auditor}.md | sort -u | wc -l
 ```
 
+## The two coder tiers differ by model, never by contract
+
+`junior-coder` and `senior-coder` are **one agent definition shipped twice**. Their
+frontmatter differs — `name`, `description`, the `model` that is the whole point of the
+split (`haiku` and `opus`), and the `effort` each tier runs at (`xhigh` and `high`, per
+*Model and effort assignment* in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — the
+junior tier is the higher of the two on purpose) — and **everything below the frontmatter
+is byte-identical**. That is not an accident to be tidied up: the `lead` routes between them
+on the spec's **Coding complexity** score alone, so any behavioural difference between the
+two files would make the score a silent behaviour switch instead of a cost decision, and a
+task would be built to a different contract depending on how the `writer` scored it.
+
+This is why the shared body keeps **generic `coder` role language** ("What a fresh coder
+carries", "the `coder`'s own fix") and second-person "you" throughout. Do not specialise
+it — no "as the junior, escalate earlier", no senior-only rule. A tier-specific fact
+belongs in that file's `description`, which is the only place the two may legitimately
+disagree. **Whenever you edit either body, apply the same edit to the other and verify
+before you push** — this should print the `ok` line and nothing else:
+
+```bash
+body() { awk 'f>1{print} /^---$/{f++}' "$1"; }
+diff <(body plugins/ca77y-engineering/agents/junior-coder.md) \
+     <(body plugins/ca77y-engineering/agents/senior-coder.md) \
+  && echo "ok: coder bodies identical"
+```
+
+`body` strips everything up to and including the closing `---` fence rather than a fixed
+line count. The two frontmatters happen to be the same length today, so an offset-based
+`tail -n +7` would also pass — but it would break silently the moment either tier gains or
+loses a frontmatter line, comparing the files skewed and reporting drift that is not there.
+The fence-based form has no offset to keep in sync; leave it that way.
+
 ## Two plugins — keep the cross-plugin edge soft
 
-The repo ships `ca77y-engineering` (pipeline: `analyst`, `auditor`, `coder`, `qa`,
-`writer`, plus the `lead`, `board`, and `forge` skills) and `ca77y-library` (research crew:
+The repo ships `ca77y-engineering` (pipeline: `analyst`, `auditor`, `junior-coder`,
+`senior-coder`, `qa`, `writer`, plus the `lead`, `board`, and `forge` skills) and `ca77y-library` (research crew:
 `researcher`, `librarian`, `scribe`, `clerk`, plus the `bootstrap` skill). They install
 independently, and **no
 plugin manifest can declare a dependency on another plugin** — so the only thing keeping
@@ -87,7 +119,7 @@ every `ca77y-<plugin>:<agent>` string that names it.** This should print nothing
 
 ```bash
 grep -rn 'ca77y-engineering:\(researcher\|librarian\|scribe\|clerk\|bootstrap\)' plugins/
-grep -rn 'ca77y-library:\(analyst\|auditor\|coder\|qa\|writer\|lead\|board\|forge\)' plugins/
+grep -rn 'ca77y-library:\(analyst\|auditor\|junior-coder\|senior-coder\|qa\|writer\|lead\|board\|forge\)' plugins/
 ```
 
 The rationale for the split is recorded in

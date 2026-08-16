@@ -18,7 +18,7 @@ ca77y-agentic/
 |   |   |   `-- references/              # loaded only to author a BOARD.md
 |   |   |-- skills/forge/SKILL.md        # helps write/repair the FORGE.md declaration
 |   |   |   `-- references/              # loaded only to author a FORGE.md
-|   |   `-- agents/*.md                  # analyst, auditor, coder, qa, writer
+|   |   `-- agents/*.md                  # analyst, auditor, junior-coder, senior-coder, qa, writer
 |   `-- ca77y-library/
 |       |-- .claude-plugin/plugin.json   # Claude manifest (agents whitelist)
 |       |-- plugin.json                  # root manifest, mirrors the Claude one
@@ -64,7 +64,7 @@ Nine agents and two skills across **two plugins**, one group each:
 
 | Plugin | Agents | Role |
 | --- | --- | --- |
-| `ca77y-engineering` | the `lead`, `board`, and `forge` **skills**, plus `analyst`, `writer`, `coder`, `qa`, `auditor` | idea → shipped PR |
+| `ca77y-engineering` | the `lead`, `board`, and `forge` **skills**, plus `analyst`, `writer`, `junior-coder`, `senior-coder`, `qa`, `auditor` | idea → shipped PR |
 | `ca77y-library` | `researcher`, `librarian`, `scribe`, `clerk` | grows and maintains the target project's Markdown research library |
 
 The flow is `researcher → analyst → lead → writer → coder → writer`, with `qa`
@@ -125,7 +125,7 @@ other role is told what it has when it is dispatched:
 | `auditor`, in the `lead`'s acceptance gate | **read** only |
 | `auditor`, in the `analyst`'s story-advisor gate | read and search, granted by that caller |
 | `analyst` | search, read, create |
-| `coder`, `qa` | none |
+| `junior-coder`, `senior-coder`, `qa` | none |
 
 The `auditor`'s three rows are the point of the model: one definition is dispatched by two
 callers for three different needs, so its access cannot be a fact about the file — and
@@ -378,8 +378,9 @@ into the context of a session that only wants one of them.
 ## A flat topology — the orchestrator is the main session
 
 The pipeline is deliberately flat, and the orchestrator is the **main session**,
-running the `lead` skill. It dispatches every pipeline agent directly — `writer`,
-`coder`, `qa`, `auditor` — and **no pipeline agent dispatches or resumes another**:
+running the `lead` skill. It dispatches every pipeline agent directly — `writer`, the
+coder tier in play (`junior-coder` or `senior-coder`), `qa`, `auditor` — and **no
+pipeline agent dispatches or resumes another**:
 every worker is a leaf at depth 1. Each leaf does its one job and returns; the lead
 **trusts that result** and never does the work itself, never re-checks it, and never
 steps in when a dispatch fails (it retries or escalates). The `writer`'s docs are
@@ -517,9 +518,33 @@ agentId it actually holds.
 ## Model and effort assignment
 
 Models are pinned per agent in the agent definitions. The current split: `opus` for
-`analyst`, `qa`, and `writer`; `sonnet` for `auditor`, `clerk`, `coder`, and
-`researcher`; `haiku` for `librarian` and `scribe`. Effort is set on every
-agent except the two haiku ones — it is unsupported there and setting it breaks dispatch.
+`analyst`, `qa`, and `senior-coder`; `sonnet` for `auditor`, `clerk`, `researcher`, and
+`writer`; `haiku` for `junior-coder`, `librarian`, and `scribe`. **Effort is set on every agent**,
+including the haiku ones, which run at `xhigh` — the cheapest models are the ones that
+benefit most from spending longer on a task.
+
+That last point is a deliberate reversal of an earlier rule here, and the reason is worth
+recording so it is not re-reverted. Anthropic's public API does not accept `effort` on
+Haiku 4.5 at all, and `xhigh` is not one of that model's levels; this repo previously
+recorded that setting it broke dispatch. It is set anyway because **this project does not
+resolve the `haiku` alias to that model**, and its runtime drops a parameter the served
+model does not support rather than rejecting the request. If you are porting these agent
+definitions to a setup that talks to the public API directly, drop the `effort` line from
+the three haiku agents — there it is an error, not a no-op.
+
+**The build stage is the one place the model is chosen per task rather than per agent.**
+`junior-coder` and `senior-coder` are the same definition shipped at two model pins (see
+*The two coder tiers* in the root [`CLAUDE.md`](../CLAUDE.md)), and the `lead` routes
+between them on the **Coding complexity** score the `writer` puts in the spec's metadata
+header: below 5 the junior, 5 or above the senior. A score the `lead` cannot read routes to
+the senior, so the failure mode of a missing score is cost, never a stalled or mis-built
+run. The tier is fixed for the run once dispatched; the only thing that changes it is the
+3× rule's one promotion, which moves a junior's unfinished problem to the senior and gives
+it a fresh three attempts before the hard stop applies.
+
+The junior tier runs at a **higher** effort than the senior one (`xhigh` vs `high`). That
+is not a mistake to tidy up: effort compensates for capability, so the cheaper model is
+given more room to work, while the stronger model reaches the same bar with less.
 The `lead` skill has no model of its own — a skill runs on the session's model, so
 orchestration cost moves with the user's model choice (accepted: orchestration is
 low-volume when handoffs are paths).
@@ -1076,11 +1101,17 @@ permanent, accepted coverage gap. A fourth term for that case was considered and
 instead. In the prose-deliverable branch the same three terms apply to the analogue
 described in that section, which is why `qa` needs no second branch to consume them.
 
-**The two definitions are two sides of one defect, not a canonical pair.** `coder.md`
-produces the evidence and `qa.md` consumes it — different jobs, so the surrounding prose is
-deliberately different in each file and **no byte-identical drift check applies**: the root
-`CLAUDE.md`'s two `sort -u` paragraph checks are not extended, and a third would fail on a
-correct pair. What must cross the boundary intact is the three terms themselves.
+**The two definitions are two sides of one defect, not a canonical pair.** The coder
+definitions produce the evidence and `qa.md` consumes it — different jobs, so the
+surrounding prose is deliberately different in each file and **no byte-identical drift
+check applies across that boundary**: the root `CLAUDE.md`'s `sort -u` paragraph checks are
+not extended to it, and one that was would fail on a correct pair. What must cross the
+boundary intact is the three terms themselves.
+
+The coder-tier body check in the root `CLAUDE.md` is **not** a counter-example to this. It
+runs along a different axis — between `junior-coder.md` and `senior-coder.md`, which are one
+definition at two model pins and so *must* match exactly — never between a producer and its
+consumer.
 
 **Trusting a demonstrated pin is not an agent gating its own work.** `qa` still runs the
 validation, still reviews the diff in its own context, and the acceptance gate and PR
