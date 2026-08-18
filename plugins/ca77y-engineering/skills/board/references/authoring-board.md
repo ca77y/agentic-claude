@@ -1,33 +1,33 @@
 # Authoring `BOARD.md`
 
-Load this only when a project's board declaration has to be **written or repaired**. Reading back an existing one needs nothing from this file — `SKILL.md` alone covers that.
+Load this only when a project's board declaration has to be **written or repaired**. Reading back an existing one needs nothing from this file.
 
 `BOARD.md` is the project's own answer to *how do we track work*. Every board-touching agent reads it directly; a human maintains it. It is prose a person can read, not config — but every claim in it has to be true enough to bind a call to.
 
 ## Where it goes, and what it is called
 
-Exactly `docs/BOARD.md` — a fixed path, the same way `docs/AGENTS_IMPROVEMENTS.md` is fixed. Do not rename it, do not split it across files, and do not write it anywhere else. If the project already documents its board somewhere else — a rules page beside the cards, a section of a `CLAUDE.md` — the new file **points at that page and fills the gaps it leaves** rather than restating it; two declarations that can disagree are worse than one that is thin.
+Exactly `docs/BOARD.md` — a fixed path, like `docs/AGENTS_IMPROVEMENTS.md`. Do not rename it, split it across files, or write it anywhere else. If the project already documents its board elsewhere — a rules page beside the cards, a section of a `CLAUDE.md` — the new file **points at that page and fills the gaps it leaves** rather than restating it; two declarations that can disagree are worse than one that is thin.
 
 ## If the user says a declaration already exists
 
-Take them at their word — and do not go hunting for it, and do not write a second one. What matters is only whether it is at the fixed path. Tell them so, and give them the fix:
+Take them at their word — do not go hunting for it, and do not write a second one. All that matters is whether it is at the fixed path. Tell them so, and give them the fix:
 
-**One old name is worth checking for by hand: `docs/ISSUE_TRACKING.md`.** That is where this declaration used to live, so a project set up against an earlier version of the toolkit has a perfectly good declaration that no agent will ever read — and because a board is allowed to be absent, its runs go trackerless without complaining. When the user mentions it, or when they report that the pipeline stopped seeing their board after an upgrade, that is the cause. The fix is the move below, and nothing about the file's contents needs to change.
+**One old name is worth checking for by hand: `docs/ISSUE_TRACKING.md`.** That is where this declaration used to live, so a project set up against an earlier toolkit has a good declaration no agent reads — and because a board may be absent, its runs go trackerless without complaining. A user reporting the pipeline stopped seeing their board after an upgrade has this cause; the contents need no change.
 
 1. **Move the file to `docs/BOARD.md`,** or write a new declaration there that points at the existing page and fills its gaps, per *Where it goes* above.
-2. Then invoke the skill again — it will read the file directly, at that path, and report what it currently says, including anything the declaration leaves unbound.
+2. Then invoke the skill again — it reads the file directly at that path and reports what it says, including anything left unbound.
 
-Offer to make that move yourself if they want, subject to the same rule as everything else here: only when they invoked the skill directly, never mid-run.
+Offer to make the move yourself, subject to *Write it only when the user asked for it* below.
 
 ## Write it only when the user asked for it
 
 - **The user invoked the skill directly** → interview them, write the file, and tell them what to check.
-- **A `lead` or `analyst` run is in progress** → never write it. Put the draft in your report and let the user decide. A file that appears in someone's repo mid-pipeline is a side effect they did not ask for, and a declaration authored without them is a guess wearing the authority of a project document.
+- **A `lead` or `analyst` run is in progress** → never write it; put the draft in your report and let the user decide (per `SKILL.md`, *Two ways you are invoked*).
 - **Never write credentials, tokens, cookies, or private endpoints into it.** Name the mechanism and say it is already authenticated ("the Linear MCP server, connected in this workspace"). If a reader would need a secret to use what the file describes, describe it differently.
 
 ## What it must answer
 
-Eight questions. Ask the user only what the project cannot tell you — read the rest from the repo, the available tooling, and the way existing work is referenced in commits and PRs.
+Eight questions. Ask the user only what the project cannot tell you — read the rest from the repo, the available tooling, and how existing work is referenced in commits and PRs.
 
 1. **What system holds the work?** Name it, and say whether it is files in this repo or a service.
 2. **How is it reached from a session?** A project skill, an MCP server (name the tools), a CLI (name the command and that it is already logged in), repo files, or a documented HTTP endpoint.
@@ -104,8 +104,8 @@ Three shapes, none privileged. Copy the closest and cut what does not apply.
 
 ## Before calling it done
 
-- **Check the file landed at `docs/BOARD.md`, exactly.** Every board-touching agent reads that one path directly; nothing to wire into context, and nothing to point at it for the pipeline's own sake.
-- **Verify it against a real card.** Run the `locate` and `read` bindings against a card that already exists. A declaration nobody has read a card through is a plan, not a working one — and it will read as correct right up until a status is written into the wrong place.
+- **Check the file landed at `docs/BOARD.md`, exactly.** Every board-touching agent reads that one path directly; nothing else needs wiring.
+- **Verify it against a real card.** Run the `locate` and `read` bindings against a card that already exists — a declaration nobody has read a card through reads as correct right up until a status lands in the wrong place.
 - **Check every operation** the project wants available is bound, and every one it does not is marked *not available* rather than left out.
 - **Check the status values are spelled the way the board spells them**, including case and punctuation.
 - **Check no credential got written down**, including in a URL.
