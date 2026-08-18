@@ -21,9 +21,10 @@ The toolkit is **two plugins**, each its own roster:
   the build step is `junior-coder` or `senior-coder` depending on the complexity score the
   spec carries, with
   `qa` (validation plus the local code review) and the `auditor` gating native to
-  Claude, and the independent code review running on the opened PR. The `lead` is a
-  **skill run in the main session** (`/ca77y-engineering:lead <task>`), not a
-  subagent; every other pipeline role is a subagent it dispatches directly, flat.
+  Claude, and the independent code review running on the opened PR. The `analyst` and the
+  `lead` are **skills run in the main session** (`/ca77y-engineering:analyst <intent>`,
+  `/ca77y-engineering:lead <task>`), not subagents — they are the two you invoke
+  yourself; every other pipeline role is a subagent one of them dispatches directly, flat.
   It also carries **two declaration skills you invoke yourself**, never the pipeline.
   The **board skill** (`/ca77y-engineering:board`) helps you write or repair the
   `BOARD.md` declaration that tells the pipeline *how this project tracks work* — the
@@ -301,8 +302,9 @@ the optional companion; a project with no board declaration runs trackerless.
 
 `researcher → analyst → lead → writer → coder → writer`, with `qa` (validation plus the
 local code review) and the `auditor` gating natively in Claude, and the independent code
-review on the opened PR. The `lead` is a skill the main session runs; everything else is
-a subagent. The first stage — `researcher`, and the `librarian`, `scribe`, `clerk` crew
+review on the opened PR. The `analyst` and the `lead` are **skills the main session
+runs** — the two you invoke yourself; everything else is a subagent one of them
+dispatches. The first stage — `researcher`, and the `librarian`, `scribe`, `clerk` crew
 behind it — is the separate `ca77y-library` plugin; everything from `analyst` onward is
 `ca77y-engineering`.
 
@@ -314,7 +316,7 @@ junior, 5 or above to the senior.
 | Stage | Agent | In | Out |
 | --- | --- | --- | --- |
 | Research ᴸ | `researcher` | a topic | a cited wiki entry + raw sources in the library |
-| Analysis | `analyst` | wiki pages + your input | board-ready **story cards** (fit-proven) |
+| Analysis | `analyst` (skill, main session) | wiki pages + your input | board-ready **story cards** (fit-proven) |
 | Orchestration | `lead` (skill, main session) | one task (a prompt, maybe naming a card) | a single open PR, gated and handed off for review |
 | Spec | `writer` | the task | a validated spec in the specs area |
 | Build | `junior-coder` / `senior-coder` | the validated spec, routed on its complexity score | the finished work in the story worktree |
@@ -360,11 +362,23 @@ library knowledge — not tickets or code.
 Output: a cited synthesis, the new wiki entry + raw-source paths, contradictions and
 uncertainty, and the audit result. **Does not** write cards, specs, or code.
 
-### analyst — turns research into fit-proven stories
+### analyst — the skill that turns research into fit-proven stories
+
+The `analyst` is a **skill, not a subagent**: invoking
+`/ca77y-engineering:analyst <intent>` makes the **main session itself** the analyst,
+dispatching its advisor gate — and the optional library crew — flat beneath it. Like the
+`lead`, nothing in the toolkit dispatches it; you invoke it yourself.
 
 Takes one or more wiki pages plus your input and produces **board-ready story
 cards**. Its defining job is **fit**: proving each story belongs in the product
 before recording it.
+
+Because it runs in your session it can **ask you the questions that are actually
+yours** — how many stories the work should become, which framing you want, whether an
+adjacency is in scope — instead of guessing and reporting the guess. It still settles the
+fit work itself from the sources rather than asking its way through the gate, and it
+delegates broad sweeps to `Explore`/`general-purpose` so a wide intake doesn't flood your
+context.
 
 The **fit & conflict gate** runs on every candidate story across six dimensions,
 each with a *fits / conflicts / unknown* verdict backed by concrete evidence:
@@ -383,6 +397,13 @@ invoke the `lead`. When the declaration is absent — or it leaves `create` unbo
 analyst still shapes and gates every story and returns them **in its report** rather
 than inventing somewhere to file them. **Does not** write specs, code, or tests.
 
+Invoking it with **`--fast`** steps every agent it dispatches one model tier down —
+`auditor` and `clerk` to Haiku, `librarian` already at the floor and unchanged — and
+nothing else: not the fit gate, not the advisor gate, not any agent's effort. Being a
+skill, **it runs on your session's model and `--fast` cannot change that** — the flag
+reaches its gate and its library lookups, not the analysis itself. For a cheaper intake,
+change your session model; `--fast` alone won't give you one.
+
 ### lead — the skill that takes one task to one reviewed PR
 
 The `lead` is a **skill, not a subagent**: invoking `/ca77y-engineering:lead <task>`
@@ -392,7 +413,18 @@ single open PR, and writes neither code nor specs — it dispatches, gates,
 commits, and ships. Invoking the `lead` is explicit permission to branch, worktree,
 commit, push, and open the PR — each of those exactly as your `docs/FORGE.md` binds it,
 and no further. (Orchestration runs on the session's model; the
-workers keep the models pinned in their own frontmatter.)
+workers keep the models pinned in their own frontmatter — unless you invoke it
+`--fast`, below.)
+
+**`/ca77y-engineering:lead --fast <task>`** runs the same pipeline a model tier cheaper.
+Every dispatch steps one rung down the ladder `opus → sonnet → haiku`, and haiku is the
+floor: `writer` and `auditor` run on Haiku, `qa` and `senior-coder` on Sonnet, and
+`junior-coder` is already at the floor and unchanged. It steps **the model and nothing
+else** — the build still routes on the spec's complexity score (a hard task is still the
+senior's, just on Sonnet), every agent keeps the effort its frontmatter sets (a dispatch
+carries no effort parameter), and no gate's bar moves. The lead never sets or clears the
+flag itself, and it reports which models a run actually used, so a `--fast` report is
+never mistaken for a full-tier one.
 
 Its input is a **prompt**. Before anything else it **reads both declarations** at their
 fixed paths — `docs/BOARD.md`, so that if the prompt references a card it reads that
@@ -1191,10 +1223,11 @@ ca77y-agentic/
     │   │   │                             #   run in the main session
     │   │   ├── board/SKILL.md            # helps write/repair the BOARD.md
     │   │   │                             #   declaration; not a per-run resolver
-    │   │   └── forge/SKILL.md            # helps write/repair the FORGE.md
-    │   │                                 #   declaration; not a per-run resolver
+    │   │   ├── forge/SKILL.md            # helps write/repair the FORGE.md
+    │   │   │                             #   declaration; not a per-run resolver
+    │   │   └── analyst/SKILL.md          # idea → fit-proven cards on the board
     │   └── agents/                       # pipeline subagents:
-    │                                     #   analyst, auditor, junior-coder,
+    │                                     #   auditor, junior-coder,
     │                                     #   senior-coder, qa, writer
     └── ca77y-library/
         ├── .claude-plugin/plugin.json    # Claude manifest (agents whitelist)

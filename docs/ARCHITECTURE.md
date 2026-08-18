@@ -13,12 +13,13 @@ ca77y-agentic/
 |   |-- ca77y-engineering/
 |   |   |-- .claude-plugin/plugin.json   # Claude manifest (agents whitelist)
 |   |   |-- plugin.json                  # root manifest, mirrors the Claude one
+|   |   |-- skills/analyst/SKILL.md      # the analyst skill - idea to fit-proven cards
 |   |   |-- skills/lead/SKILL.md         # the lead skill - the pipeline orchestrator
 |   |   |-- skills/board/SKILL.md        # helps write/repair the BOARD.md declaration
 |   |   |   `-- references/              # loaded only to author a BOARD.md
 |   |   |-- skills/forge/SKILL.md        # helps write/repair the FORGE.md declaration
 |   |   |   `-- references/              # loaded only to author a FORGE.md
-|   |   `-- agents/*.md                  # analyst, auditor, junior-coder, senior-coder, qa, writer
+|   |   `-- agents/*.md                  # auditor, junior-coder, senior-coder, qa, writer
 |   `-- ca77y-library/
 |       |-- .claude-plugin/plugin.json   # Claude manifest (agents whitelist)
 |       |-- plugin.json                  # root manifest, mirrors the Claude one
@@ -60,25 +61,34 @@ the Claude manifest means it does not exist at runtime.
 
 ## The agent roster
 
-Nine agents and two skills across **two plugins**, one group each:
+Nine agents and five skills across **two plugins**, one group each:
 
-| Plugin | Agents | Role |
+| Plugin | Agents and skills | Role |
 | --- | --- | --- |
-| `ca77y-engineering` | the `lead`, `board`, and `forge` **skills**, plus `analyst`, `writer`, `junior-coder`, `senior-coder`, `qa`, `auditor` | idea → shipped PR |
-| `ca77y-library` | `researcher`, `librarian`, `scribe`, `clerk` | grows and maintains the target project's Markdown research library |
+| `ca77y-engineering` | the `analyst`, `lead`, `board`, and `forge` **skills**, plus `writer`, `junior-coder`, `senior-coder`, `qa`, `auditor` | idea → shipped PR |
+| `ca77y-library` | `researcher`, `librarian`, `scribe`, `clerk`, plus the `bootstrap` **skill** | grows and maintains the target project's Markdown research library |
 
 The flow is `researcher → analyst → lead → writer → coder → writer`, with `qa`
 (validation plus the local code review) and the `auditor` gating, and the independent
-code review running on the opened PR. The `lead` is not an agent: it is a **skill the
-user invokes in the main session** (`/ca77y-engineering:lead <task>`), and the main
-session then orchestrates. Under it, `writer`, `coder`, `qa`, and `auditor` are all
-**leaves it dispatches directly** — no pipeline agent dispatches or resumes another.
-The library crew is dispatched directly by whichever agent needs library work — the
-`researcher` within its own plugin, and the `analyst` across the plugin boundary,
+code review running on the opened PR. Neither the `analyst` nor the `lead` is an agent:
+both are **skills the user invokes in the main session**
+(`/ca77y-engineering:analyst <intent>`, `/ca77y-engineering:lead <task>`), and the main
+session then orchestrates. Under the `lead`, `writer`, `coder`, `qa`, and `auditor` are
+all **leaves it dispatches directly** — no pipeline agent dispatches or resumes another.
+The library crew is dispatched directly by whichever agent or skill needs library work —
+the `researcher` within its own plugin, and the `analyst` across the plugin boundary,
 optionally (see *Two plugins, one optional edge* below).
 
-`board` and `forge` are the other two skills, and the only ones nothing dispatches
-automatically. Taking the board first: the
+**The two user-invoked entry points are both skills, and that is deliberate.** They are
+the same kind of thing — a human starts them, nothing in the toolkit dispatches either,
+and both orchestrate subagents beneath them — so shaping one as a skill and the other as
+an agent made their difference an accident of history rather than a design. The `analyst`
+was an agent until it was converted; what the conversion bought is recorded under
+*Why the analyst is a skill* below, along with what it cost.
+
+`board` and `forge` are the setup skills — like the `analyst` and the `lead`, nothing
+dispatches them automatically, but unlike those two they author a declaration rather than
+run a pipeline over one. Taking the board first: the
 `lead` and the `analyst` **read** `docs/BOARD.md` directly, at that fixed path,
 rather than invoking anything — bindings for locate/read/search/create/transition (plus
 comment and update where the project authorises them), the card shape, the status
@@ -111,20 +121,58 @@ instead. The `analyst` has no such route at all: its definition states outright 
 reading the declaration is a file read with no skill to invoke, and where the declaration
 is absent it returns its shaped stories in its report rather than reaching for anything.
 
+## Why the analyst is a skill
+
+The `analyst` shipped as an **agent** from the pipeline redesign that introduced it, and
+stayed one when the `lead` was converted to a main-session skill six weeks later — the
+conversion simply did not extend to it. The two are the same kind of thing: a human
+invokes each directly, **nothing in either plugin dispatches either one**, and both
+orchestrate subagents beneath them. Every reference to the `analyst` outside its own
+definition is descriptive — the `board` skill noting it is the only holder of `create`,
+the `researcher` naming it in a boundary about what is *not* the researcher's job — and
+no `ca77y-engineering:analyst` dispatch string exists anywhere. Nor could the one plausible
+caller reach it: `ca77y-library` may never dispatch a `ca77y-engineering` role
+(*Two plugins, one optional edge*).
+
+What the conversion buys:
+
+- **The user can steer the intake.** Story shaping is the stage a human most wants a say
+  in — how many stories, which framing, whether an adjacency is in scope — and an agent
+  is fire-and-forget by construction. The skill asks those questions and only those; the
+  fit work is still settled from the sources, not handed back.
+- **One shape for one role.** `--fast`, board access, and orchestration now read the same
+  way across both entry points, instead of the analyst needing a caller-granted story for
+  facts that were never about a caller.
+
+What it costs, accepted rather than hidden:
+
+- **Context isolation.** An agent's wide intake sweep stayed in its own window; a skill's
+  lands in the user's session. The mitigation is in the skill: delegate broad sweeps to
+  `Explore` or `general-purpose` and keep the findings, reading directly only where the
+  answer must be exact — which the fit gate's cited evidence still requires.
+- **The `opus` pin.** The analyst ran on `opus` regardless of the user's session model;
+  it now runs on whatever they are on. That is a guarantee genuinely lost, and it is the
+  one reason to reverse this decision if intake quality drops on cheaper sessions.
+
+The adversarial property is untouched either way: the story advisor gate is a **separate
+`auditor` subagent**, so the critique is still never performed by the context that shaped
+the stories.
+
 ## Board access is granted per dispatch, not held by role
 
 Which agents can reach the board is a property of **the dispatch**, not of the agent. The
-`lead` reads the declaration itself and holds whatever the declaration grants it. Every
-other role is told what it has when it is dispatched:
+two user-invoked skills — the `analyst` and the `lead` — read the declaration themselves
+and hold whatever it grants them; nobody dispatches them, so there is no caller to grant
+them anything. Every *agent* is told what it has when it is dispatched:
 
 | Role | Board access |
 | --- | --- |
-| `lead` | read, the two status transitions, comment, PR attachment, and the card-content updates the declaration authorises |
+| `analyst` (skill) | search, read, create |
+| `lead` (skill) | read, the two status transitions, comment, PR attachment, and the card-content updates the declaration authorises |
 | `writer`, spec pass | read **and** search |
 | `auditor`, in the `lead`'s spec-readiness gate | read **and** search |
 | `auditor`, in the `lead`'s acceptance gate | **read** only |
 | `auditor`, in the `analyst`'s story-advisor gate | read and search, granted by that caller |
-| `analyst` | search, read, create |
 | `junior-coder`, `senior-coder`, `qa` | none |
 
 The `auditor`'s three rows are the point of the model: one definition is dispatched by two
@@ -430,8 +478,10 @@ the dispatch tree entirely; `qa`'s local review is a single-context pass.
 
 The `analyst` and `researcher` are separate top-level orchestrators, **not** part of
 the lead's tree: they run their own sub-dispatch — the analyst's advisor gate and
-library lookups, the researcher's subquestion decomposition and library writes. Their
-fresh, synchronous depth-2 dispatches are the pattern the harness delivers correctly;
+library lookups, the researcher's subquestion decomposition and library writes. The
+`analyst`'s are now depth-1, dispatched from the main session exactly as the `lead`'s
+are, since it became a skill; the `researcher` is still an agent, so its remain depth-2.
+Fresh, synchronous dispatches at either depth are the pattern the harness delivers correctly;
 the worker definitions' report-channel hygiene (final text is the report, never
 `SendMessage` as a reporting or escalation channel) keeps those trees clean too.
 
@@ -518,8 +568,10 @@ agentId it actually holds.
 ## Model and effort assignment
 
 Models are pinned per agent in the agent definitions. The current split: `opus` for
-`analyst`, `qa`, and `senior-coder`; `sonnet` for `auditor`, `clerk`, `researcher`, and
-`writer`; `haiku` for `junior-coder`, `librarian`, and `scribe`. **Effort is set on every agent**,
+`qa` and `senior-coder`; `sonnet` for `auditor`, `clerk`, `researcher`, and
+`writer`; `haiku` for `junior-coder`, `librarian`, and `scribe`. The five skills carry no
+pin at all — a skill runs on the session's model — so the `analyst`, which held `opus`
+while it was an agent, now runs on whatever the user is on. **Effort is set on every agent**,
 including the haiku ones, which run at `xhigh` — the cheapest models are the ones that
 benefit most from spending longer on a task.
 
@@ -553,6 +605,52 @@ The frontmatter is the only source of truth for both. Note that nesting resolves
 subagent's model against the *main conversation* rather than the dispatching agent, so
 an agent reached through a chain and carrying no `model:` of its own inherits the
 session model.
+
+### `--fast` steps the model, and only the model
+
+The frontmatter pin is the default, not a ceiling: the `Agent` call takes a `model`
+argument that overrides it per dispatch. `--fast` is the one thing in this toolkit that
+uses it. The user puts the flag on an invocation of the **`analyst`** or the **`lead`** —
+the two entry points a human invokes directly, and both skills — and that orchestrator
+then passes `model:` explicitly on every dispatch it makes, one tier down the ladder
+`opus → sonnet → haiku`, with **haiku the floor**. Without the flag it passes no `model:`
+at all, which is what keeps the default identical to the behaviour that predates it.
+
+Because both entry points are skills, **neither steps its own model down** — a skill runs
+on the session's model, which is the user's to choose and not the flag's to touch. For the
+`lead` that costs nothing: it dispatches all of the work. For the `analyst` it is a real
+limit and its own file says so — the flag reaches its gate and its optional library
+lookups, while the analysis itself runs wherever the session runs. A user who wants a
+cheap intake changes their session model; `--fast` alone will not deliver one.
+
+Four properties are what make the flag safe to hand a user, and each is stated in both
+files rather than left to be inferred:
+
+- **It does not change which agent is dispatched.** The build still routes on the spec's
+  **Coding complexity** score; `--fast` is not a second route into the junior tier. A
+  complex task on a fast run is still the senior's, running on `sonnet`.
+- **It does not change effort.** A dispatch carries no effort parameter — the harness
+  exposes `model` and nothing else — so every agent keeps the effort its frontmatter
+  sets. This is the asymmetry that shapes the whole design, and it is why the coder
+  tiers are still **two files** rather than one file dispatched at two models: the tiers
+  differ in effort as well as model (`xhigh` vs `high`, per the reversal recorded above),
+  and effort is reachable only from frontmatter.
+- **It does not lower a bar.** Every gate still has to return the same verdict before the
+  run ships; the flag buys a cheaper grader, not a cheaper standard.
+- **It does not propagate.** Neither orchestrator passes the flag into a prompt. The
+  pipeline is flat, so the `lead`'s workers dispatch no pipeline agent at all, and the
+  built-ins they may reach carry no pin to step down — nesting resolves those against the
+  main conversation anyway.
+
+Neither orchestrator may set or clear the flag on its own, which keeps model tier a
+**user** decision rather than a per-run judgement the pipeline makes about how hard a
+task looks — the same reason the `lead` does not re-score a spec's complexity. Both
+record it: the `lead` in the ledger and the handoff, the `analyst` in its report, so a
+stepped-down run's output is never read as a full-tier one.
+
+**The tables in those two files carry a `Pinned` column, and it must match the
+frontmatter.** That column is what makes the mapping checkable rather than remembered;
+the root [`CLAUDE.md`](../CLAUDE.md) carries the check to run when a pin changes.
 
 ## The story worktree contract
 

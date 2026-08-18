@@ -99,10 +99,37 @@ line count. The two frontmatters happen to be the same length today, so an offse
 loses a frontmatter line, comparing the files skewed and reporting drift that is not there.
 The fence-based form has no offset to keep in sync; leave it that way.
 
+## `--fast` restates the model pins — keep the `Pinned` column honest
+
+The `analyst` and `lead` skills each accept a `--fast` flag that steps every dispatch
+one model tier down (`opus → sonnet → haiku`, haiku the floor), and each carries a table
+of what that resolves to. Those tables have a **`Pinned` column restating the agent's own
+frontmatter `model:`** — deliberately, because an orchestrator cannot read another
+plugin's frontmatter at run time and has to carry the mapping. That makes it a copy, and
+copies drift: **change any agent's `model:` and the two tables silently start lying.**
+Run this whenever you touch a pin (every row should print `ok`; `auditor` appears twice
+because both tables dispatch it):
+
+```bash
+grep -hoE '`ca77y-(engineering|library):[a-z-]+` \| `(haiku|sonnet|opus)`' \
+  plugins/ca77y-engineering/skills/lead/SKILL.md \
+  plugins/ca77y-engineering/skills/analyst/SKILL.md \
+| tr -d '`|' | sed 's/ca77y-//; s/:/ /' | while read -r plug agent pin; do
+    real=$(awk -F': ' '/^model: /{print $2; exit}' "plugins/ca77y-$plug/agents/$agent.md")
+    [ "$pin" = "$real" ] && echo "ok    $agent  $pin" || echo "DRIFT $agent  table=$pin  frontmatter=$real"
+  done
+```
+
+`effort` is deliberately **not** in those tables and must not be added: a dispatch takes
+no effort parameter, so `--fast` cannot move it and a column implying otherwise would be
+a promise the harness cannot keep. The rationale for the whole arrangement is in
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) under *`--fast` steps the model, and only
+the model*.
+
 ## Two plugins — keep the cross-plugin edge soft
 
-The repo ships `ca77y-engineering` (pipeline: `analyst`, `auditor`, `junior-coder`,
-`senior-coder`, `qa`, `writer`, plus the `lead`, `board`, and `forge` skills) and `ca77y-library` (research crew:
+The repo ships `ca77y-engineering` (pipeline: `auditor`, `junior-coder`,
+`senior-coder`, `qa`, `writer`, plus the `analyst`, `lead`, `board`, and `forge` skills) and `ca77y-library` (research crew:
 `researcher`, `librarian`, `scribe`, `clerk`, plus the `bootstrap` skill). They install
 independently, and **no
 plugin manifest can declare a dependency on another plugin** — so the only thing keeping
