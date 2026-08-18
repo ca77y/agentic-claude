@@ -783,8 +783,12 @@ entry clears anything. That mechanism stays the open assumption above.
 [`CLAUDE.md`](../CLAUDE.md)'s Worktrees section, which may name `.worktrees/<branch>`
 concretely. In the product prose it is stated exactly once — in the `lead` skill's
 workspace-creation step, where a `lead` is standing when the guard hits, its first write
-being that step's ledger — with the open-PR fix run's recovery step pointing at it rather
-than restating it, the third arrangement in *Four ways an obligation gets repeated* below.
+being that step's ledger. That step carries the imperative (`EnterWorktree` by `path`,
+never by `name`) and points at the skill's
+[`references/recovery.md`](../plugins/ca77y-engineering/skills/lead/references/recovery.md),
+which holds the two forms, why `name` is wrong here, and the escalation when entry does not
+clear the refusal; the open-PR fix run's recovery step points at the same place rather than
+restating it, the third arrangement in *Four ways an obligation gets repeated* below.
 The root [`README.md`](../README.md) describes the same step in the user's voice, as it does
 every other agent behaviour. It sits deliberately
 **outside** the canonical `**Addressing the story worktree.**` paragraph: the remedy is one

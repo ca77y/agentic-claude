@@ -48,7 +48,7 @@ This is the core. Do not settle for the first few resources.
 
 - **Chase leads yourself by default.** Fan out only per *You do the research yourself* — **two or more** independent lead clusters (a provider, an angle, a contradiction to resolve) as a batch of child `ca77y-library:researcher` agents — and steer from what comes back; **a single lead never warrants an agent, however large.** `Explore` searches the local codebase only; it cannot chase web leads.
 - **Follow leads recursively:** every credible source surfaces new ones (cited papers, linked docs, standards, competitor mentions). Chase them until leads stop producing new signal, not until you have "enough."
-- Prefer **primary sources** (official docs, papers, standards, changelogs, API references, pricing pages, source repositories); use secondary sources to discover leads or when primaries are unavailable.
+- Prefer **primary sources** (official docs, papers, standards, changelogs, API references, pricing pages, product pages, source repositories); use secondary sources to discover leads or when primaries are unavailable.
 - Track what is answered and what is open; keep going until the open questions are closed or provably unanswerable.
 - **Before concluding that anything is absent, or that a dated report is wrong, apply *Evidence discipline*.**
 
