@@ -15,7 +15,7 @@ ca77y-agentic/
 |   |   |-- plugin.json                  # root manifest, mirrors the Claude one
 |   |   |-- skills/analyst/SKILL.md      # the analyst skill - idea to fit-proven cards
 |   |   |-- skills/lead/SKILL.md         # the lead skill - the pipeline orchestrator
-|   |   |   `-- references/              # its rare branches: open-PR fix run, recovery, --fast, gate escalations
+|   |   |   `-- references/              # its rare branches: open-PR fix run, recovery, gate escalations
 |   |   |-- skills/board/SKILL.md        # helps write/repair the BOARD.md declaration
 |   |   |   `-- references/              # loaded only to author a BOARD.md
 |   |   |-- skills/forge/SKILL.md        # helps write/repair the FORGE.md declaration
@@ -1093,13 +1093,16 @@ content, which is what lets a `ca77y-library` agent — which has no dispatcher 
 a path — find its own references. The root [`CLAUDE.md`](../CLAUDE.md) carries the check
 that every pointer resolves to a file that exists.
 
-Today's split: the `lead` skill's open-PR fix run, recovery, `--fast`, and gate
+Today's split: the `lead` skill's open-PR fix run, recovery, and gate
 escalations (promotion, `mis-worded`, a failing lint floor); the coder pair's findings
 round (one reference, loaded by both tiers — the body identity rule above is unchanged);
 the writer's docs pass; the auditor's acceptance gate; the researcher's fan-out and
 evidence discipline. `qa`, the `analyst`, `board`, `forge`, `bootstrap`, and the three
 small library agents were left whole: their branches are under a kilobyte each, not worth
-a read call.
+a read call. **Frequency vetoes the move**: `--fast` is dispatcher-shaped, but it is a
+frequent companion of a normal run, not a rare branch — so both `--fast` sections (the
+`lead`'s and the `analyst`'s) stay inline in their `SKILL.md`, and a branch some project
+fires on most runs earns its way back into the body the same way.
 
 ## Verifying that a mechanism was really removed
 
