@@ -15,15 +15,19 @@ ca77y-agentic/
 |   |   |-- plugin.json                  # root manifest, mirrors the Claude one
 |   |   |-- skills/analyst/SKILL.md      # the analyst skill - idea to fit-proven cards
 |   |   |-- skills/lead/SKILL.md         # the lead skill - the pipeline orchestrator
+|   |   |   `-- references/              # its rare branches: open-PR fix run, recovery, --fast, gate escalations
 |   |   |-- skills/board/SKILL.md        # helps write/repair the BOARD.md declaration
 |   |   |   `-- references/              # loaded only to author a BOARD.md
 |   |   |-- skills/forge/SKILL.md        # helps write/repair the FORGE.md declaration
 |   |   |   `-- references/              # loaded only to author a FORGE.md
-|   |   `-- agents/*.md                  # auditor, junior-coder, senior-coder, qa, writer
+|   |   |-- agents/*.md                  # auditor, junior-coder, senior-coder, qa, writer
+|   |   `-- references/                  # the agents' on-demand branches (coder fix round, writer docs pass, auditor acceptance gate)
 |   `-- ca77y-library/
 |       |-- .claude-plugin/plugin.json   # Claude manifest (agents whitelist)
 |       |-- plugin.json                  # root manifest, mirrors the Claude one
-|       `-- agents/*.md                  # clerk, librarian, researcher, scribe
+|       |-- agents/*.md                  # clerk, librarian, researcher, scribe
+|       |-- skills/bootstrap/SKILL.md    # scaffolds a project's research library
+|       `-- references/                  # the researcher's on-demand branches (fan-out, evidence discipline)
 |-- docs/                                # this documentation (work is tracked in Linear)
 |-- .obsidian/                           # vendored vault config and plugins
 `-- CLAUDE.md                            # repo maintenance rules
@@ -1000,9 +1004,10 @@ arrangements deliberately, and reaching for the wrong one is how wording drifts:
   a **closed vocabulary** — the three outcome terms, in the same words — so a drift check
   would be checking the wrong property as well as failing on a correct pair.
 - **Stated once, pointed at from everywhere else.** Used *within* a single definition,
-  where no drift check exists at all. `writer.md` carries the docs pass's reconciliation
-  duty in one subsection, and the numbered step that used to hold that content is now a
-  pointer at it; the same file's *What shipped is the run's diff, not the spec* is the
+  where no drift check exists at all. The writer's docs pass (now the on-demand
+  `references/writer-docs-pass.md`, see *Branches load on demand* below) carries its
+  reconciliation duty in one subsection, and the numbered step that used to hold that
+  content is now a pointer at it; the same pass's *What shipped is the run's diff, not the spec* is the
   arrangement again, stated whole in one subsection with the step that establishes what
   shipped, the spec-conversion step, and the *Final report* contract line each reaching it
   by name rather than restating it; `### Applying a finding` likewise cross-references the
@@ -1039,6 +1044,62 @@ arrangements deliberately, and reaching for the wrong one is how wording drifts:
   extract both passages by their stable anchors, `diff` them, and permit only the
   substitution set's spans — but nothing does it, so a fourth unlisted substitution or a
   dropped clause is caught only by reading the two passages side by side.
+
+## Branches load on demand — the body is the happy path
+
+A definition's body is loaded whole into every dispatch of that role, whether or not
+the dispatch takes a given path through it. Once the rules themselves were as tight as
+they could be made without dropping any, the remaining cost was structural: a coder on
+its first build was carrying the whole findings-round protocol, a writer authoring a spec
+was carrying the docs pass, an auditor on a readiness gate was carrying the acceptance
+gate's four grades and three sub-cases. So each body now carries **one happy path plus
+its guardrails**, and each branch the role takes only sometimes lives in a reference file
+the role reads when the branch fires.
+
+**Who decides the branch decides where it lives.** Three cases, and the first is the
+clean one:
+
+- **The dispatcher decides.** The coder's fix round, the writer's docs pass, and the
+  auditor's acceptance gate are all modes the `lead` chooses when it dispatches. The
+  whole branch leaves the body; the body keeps a one-sentence pointer whose trigger *is*
+  the dispatch, and the `lead` names the reference path in that dispatch — paths, not
+  content, as with everything else it hands over. A role never loads a mode it was not
+  dispatched in, and the `lead` stays the one place that knows which mode a dispatch is.
+- **The role decides at run time.** The researcher's fan-out fires when a topic divides;
+  its evidence discipline fires on an empty or suspicious search. Nobody can name the file
+  in advance, so the **trigger stays in the body** as one hard imperative — the condition
+  and the file in the same sentence — and only the handling moves. The hazard is a model
+  under pressure that never reads the reference and improvises the branch, which is why
+  the trigger is an imperative and not a hint.
+- **A guardrail is not a branch.** Never provision the worktree, the equality check
+  before any grading, the 3× hard stop, report-is-return-value: these hold on the happy
+  path however conditionally they are phrased, and moving one would be exactly the way to
+  let a model reason past it. They stay in the body. When it is unclear which of the three
+  a sentence is, it stays.
+
+Moving is not trimming. A rule in a reference file is a rule; the reference's header says
+it binds as if written in the definition, alongside the definition's own rules. The
+canonical duplicated paragraphs stay in the bodies — the drift greps read the bodies,
+and a paragraph every dispatch must carry cannot live in a file only some dispatches
+read.
+
+**Where they live.** Agent references sit at the plugin root,
+`plugins/<plugin>/references/`, never under `agents/` (the harness scans that directory
+for definitions), and a body addresses them as
+`${CLAUDE_PLUGIN_ROOT}/references/<file>.md`; skill references sit beside the skill,
+`skills/<name>/references/`, addressed as `${CLAUDE_SKILL_DIR}/references/<file>.md`.
+Both placeholders are substituted by the harness anywhere they appear in agent and skill
+content, which is what lets a `ca77y-library` agent — which has no dispatcher to hand it
+a path — find its own references. The root [`CLAUDE.md`](../CLAUDE.md) carries the check
+that every pointer resolves to a file that exists.
+
+Today's split: the `lead` skill's open-PR fix run, recovery, `--fast`, and gate
+escalations (promotion, `mis-worded`, a failing lint floor); the coder pair's findings
+round (one reference, loaded by both tiers — the body identity rule above is unchanged);
+the writer's docs pass; the auditor's acceptance gate; the researcher's fan-out and
+evidence discipline. `qa`, the `analyst`, `board`, `forge`, `bootstrap`, and the three
+small library agents were left whole: their branches are under a kilobyte each, not worth
+a read call.
 
 ## Verifying that a mechanism was really removed
 

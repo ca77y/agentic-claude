@@ -103,16 +103,18 @@ The fence-based form has no offset to keep in sync; leave it that way.
 
 The `analyst` and `lead` skills each accept a `--fast` flag that steps every dispatch
 one model tier down (`opus → sonnet → haiku`, haiku the floor), and each carries a table
-of what that resolves to. Those tables have a **`Pinned` column restating the agent's own
-frontmatter `model:`** — deliberately, because an orchestrator cannot read another
-plugin's frontmatter at run time and has to carry the mapping. That makes it a copy, and
-copies drift: **change any agent's `model:` and the two tables silently start lying.**
-Run this whenever you touch a pin (every row should print `ok`; `auditor` appears twice
-because both tables dispatch it):
+of what that resolves to — the analyst's inline in its `SKILL.md`, the lead's in the
+on-demand `skills/lead/references/fast.md` (see *Branches load on demand* below). Those
+tables have a **`Pinned` column restating the agent's own frontmatter `model:`** —
+deliberately, because an orchestrator cannot read another plugin's frontmatter at run
+time and has to carry the mapping. That makes it a copy, and copies drift: **change any
+agent's `model:` and the two tables silently start lying.** Run this whenever you touch
+a pin (every row should print `ok`; `auditor` appears twice because both tables dispatch
+it):
 
 ```bash
 grep -hoE '`ca77y-(engineering|library):[a-z-]+` \| `(haiku|sonnet|opus)`' \
-  plugins/ca77y-engineering/skills/lead/SKILL.md \
+  plugins/ca77y-engineering/skills/lead/references/fast.md \
   plugins/ca77y-engineering/skills/analyst/SKILL.md \
 | tr -d '`|' | sed 's/ca77y-//; s/:/ /' | while read -r plug agent pin; do
     real=$(awk -F': ' '/^model: /{print $2; exit}' "plugins/ca77y-$plug/agents/$agent.md")
@@ -125,6 +127,51 @@ no effort parameter, so `--fast` cannot move it and a column implying otherwise 
 a promise the harness cannot keep. The rationale for the whole arrangement is in
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) under *`--fast` steps the model, and only
 the model*.
+
+## Branches load on demand — the body is the happy path
+
+An agent or skill body carries **one happy path plus its guardrails**. A branch the role
+takes only sometimes — a second mode it is dispatched in (the coder's fix round, the
+writer's docs pass, the auditor's acceptance gate), a rare gate outcome (the lead's
+promotion, a `mis-worded` grade, a failing lint floor), a recovery path, a fan-out — lives
+in a **reference file** the role reads when the branch fires, so a dispatch never pays
+for a mode it is not running. The rule for where a sentence goes: **who decides the
+branch decides where it lives.** Decided by the dispatcher → the text leaves the body and
+the `lead` names the file in the dispatch; decided by the role at run time → the trigger
+stays in the body as one hard imperative naming the condition and the file, the handling
+moves out; a guardrail that holds on the happy path (never provision the worktree, the
+equality check before grading, the 3× stop) **stays in the body** however conditionally
+it is phrased. Moving is not trimming: a rule moved to a reference is still a rule.
+
+Where they live and how they are addressed — the harness substitutes both placeholders
+anywhere they appear in agent and skill content:
+
+- **Agent references** at the **plugin root**, `plugins/<plugin>/references/<file>.md`,
+  addressed as `${CLAUDE_PLUGIN_ROOT}/references/<file>.md`. Never under `agents/`,
+  which the harness scans for agent definitions.
+- **Skill references** beside the skill, `skills/<name>/references/<file>.md`, addressed
+  as `${CLAUDE_SKILL_DIR}/references/<file>.md`.
+
+The drift hazard is a pointer to a file that was renamed or never created — the role
+reads the pointer, the read fails, and it improvises the branch. This resolves every
+pointer in every plugin and should print only `ok` lines:
+
+```bash
+grep -rnoE '\$\{CLAUDE_(PLUGIN_ROOT|SKILL_DIR)\}/references/[a-z-]+\.md' plugins/ \
+| while IFS=: read -r file _ ref; do
+    case "$ref" in
+      *PLUGIN_ROOT*) root=$(echo "$file" | sed -E 's#^(plugins/[^/]+)/.*#\1#') ;;
+      *)             root=$(echo "$file" | sed -E 's#^(.*/skills/[^/]+)/.*#\1#') ;;
+    esac
+    target="$root/references/${ref##*/}"
+    [ -f "$target" ] && echo "ok    $file -> $target" || echo "MISSING $file -> $target"
+  done
+```
+
+The canonical duplicated paragraphs above stay in the **bodies** — the drift greps read
+the bodies, and a reference file is not loaded by every dispatch. A reference file that
+needs the forge declaration says "the forge declaration", never `docs/FORGE.md`, so the
+reader count in the forge section stays at three.
 
 ## Two plugins — keep the cross-plugin edge soft
 

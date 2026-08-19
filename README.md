@@ -1220,24 +1220,36 @@ ca77y-agentic/
     │   ├── plugin.json                   # root manifest (mirrors the Claude one)
     │   ├── skills/
     │   │   ├── lead/SKILL.md             # the lead — the pipeline orchestrator,
-    │   │   │                             #   run in the main session
+    │   │   │   └── references/           #   run in the main session; its rare
+    │   │   │                             #   branches load on demand from here
     │   │   ├── board/SKILL.md            # helps write/repair the BOARD.md
     │   │   │                             #   declaration; not a per-run resolver
     │   │   ├── forge/SKILL.md            # helps write/repair the FORGE.md
     │   │   │                             #   declaration; not a per-run resolver
     │   │   └── analyst/SKILL.md          # idea → fit-proven cards on the board
-    │   └── agents/                       # pipeline subagents:
-    │                                     #   auditor, junior-coder,
-    │                                     #   senior-coder, qa, writer
+    │   ├── agents/                       # pipeline subagents:
+    │   │                                 #   auditor, junior-coder,
+    │   │                                 #   senior-coder, qa, writer
+    │   └── references/                   # the agents' on-demand branches: coder
+    │                                     #   fix round, writer docs pass, auditor
+    │                                     #   acceptance gate
     └── ca77y-library/
         ├── .claude-plugin/plugin.json    # Claude manifest (agents whitelist)
         ├── plugin.json                   # root manifest (mirrors the Claude one)
         ├── skills/
         │   └── bootstrap/SKILL.md        # scaffolds the fixed library/ folder in a
         │                                 #   new project; create-once, not a repair tool
-        └── agents/                       # library subagents:
-                                          #   clerk, librarian, researcher, scribe
+        ├── agents/                       # library subagents:
+        │                                 #   clerk, librarian, researcher, scribe
+        └── references/                   # the researcher's on-demand branches:
+                                          #   fan-out, evidence discipline
 ```
+
+An agent or skill body carries its happy path and guardrails; a branch it takes only
+sometimes — a second mode the lead dispatches it in, a rare gate outcome, a fan-out —
+lives under `references/` and is read when that branch fires, so a dispatch never loads a
+mode it is not running. The bodies address them through `${CLAUDE_PLUGIN_ROOT}` and
+`${CLAUDE_SKILL_DIR}`, which the harness substitutes in agent and skill content.
 
 Each plugin carries two manifests: Claude reads `.claude-plugin/plugin.json`; the root
 `plugin.json` mirrors it (kept in sync per the toolkit's version-drift rule). They live

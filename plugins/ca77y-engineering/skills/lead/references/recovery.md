@@ -27,7 +27,7 @@ This move is yours alone: a dispatched worker's working directory is pinned at l
 The ledger (`tmp/ledger.md`, per *Context discipline*) plus `git log` — never recollection — are the source of truth for where the pipeline stands. Before doing anything else, read them and re-establish:
 
 - the current workflow step and what is currently awaited — a completed round is collected, never re-dispatched;
-- whether the run is `--fast`, so no later dispatch silently drops the model step;
+- whether the run is `--fast` — if so, re-read `${CLAUDE_SKILL_DIR}/references/fast.md` before the next dispatch — so no later dispatch silently drops the model step;
 - the coder tier in play, any senior fallback, and any promotion already made — the tier never re-routes from the score mid-run;
 - the agentIds you hold, so a round resumes where it can and goes fresh where it cannot, per *Dispatch, resume, and collection*;
 - the commits already made and the round counters per gate, so the *3× rule* counts every attempt;
