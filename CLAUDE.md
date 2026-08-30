@@ -256,7 +256,7 @@ These should each print nothing, except the third, which prints exactly the thre
 that may read the declaration:
 
 ```bash
-grep -rnE '@review|`gh`|gh pr |GitHub app|Claude GitHub|origin/' \
+grep -rnE '@codex|`gh`|gh pr |GitHub app|Codex GitHub|origin/' \
   plugins/ca77y-engineering/agents/ \
   plugins/ca77y-engineering/skills/{lead,board}/ plugins/ca77y-library/
 grep -rnE '\b(master|trunk)\b|branch `main`|origin/main' plugins/
