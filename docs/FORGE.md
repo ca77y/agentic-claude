@@ -30,12 +30,16 @@ a shell command, never a tool call.
   it, and nothing in the pipeline commits to it, checks it out in a worktree, or pushes
   it. A long-running branch may take `master` *into* itself with an ordinary merge; that
   is the only direction traffic ever runs.
-- **Story worktrees** — `.worktrees/<branch>`, at the repository root, one per story,
-  covered by the committed `.gitignore` entry `.worktrees/` (alongside `/tmp/`, for the
-  run-local scratch at the root of each worktree). A branch name containing `/` nests,
-  and that is correct rather than a mistake:
-  `.worktrees/tokwieci/smr-148-make-the-coder-demonstrate-each-pinning-test-red-not-just`
-  is an ordinary path here.
+- **Story worktrees** — `.worktrees/<card-id>-<slug>`, at the repository root, one per
+  story, covered by the committed `.gitignore` entry `.worktrees/` (alongside `/tmp/`, for
+  the run-local scratch at the root of each worktree). **The issue's identifier leads the
+  directory name**, so `ls .worktrees/`, a `git worktree list`, and a stray process's
+  working directory each name their story without a lookup:
+  `.worktrees/smr-148-make-the-coder-demonstrate-each-pinning-test-red-not-just`.
+  That means dropping the branch name's leading `tokwieci/` rather than letting it nest —
+  a nested path buries the identifier one level down, which is the opposite of the point.
+  A run that names no issue has no identifier to lead with and takes the descriptive slug
+  alone; it is the only kind of directory here that does not start with one.
 - **Branch name** — the executing issue's own `gitBranchName` field, read from Linear
   through [`BOARD.md`](./BOARD.md)'s *read* binding. Linear supplies it already formed
   (`tokwieci/smr-148-make-the-coder-demonstrate-each-pinning-test-red-not-just`), and it
@@ -74,7 +78,9 @@ never push `master`.
 ## Operations
 
 - **branch** — created with the worktree, in one step:
-  `git worktree add .worktrees/<branch> -b <branch> master`.
+  `git worktree add .worktrees/<card-id>-<slug> -b <branch> master`. The directory and
+  the branch differ deliberately: `<branch>` is Linear's `gitBranchName` verbatim, while
+  the directory drops its leading `tokwieci/` so the identifier leads.
 - **remove a worktree** — `git worktree remove <path>` — *the human's, after the merge.*
 - **commit** — `git -C <worktree> add <paths>` (never `-f`, so ignored scratch cannot be
   swept in) then `git -C <worktree> commit`.
