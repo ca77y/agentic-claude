@@ -88,8 +88,8 @@ never push `master`.
 - **comment on the change** — `gh pr comment <number> --body <text>`.
 - **read the change** — `gh pr view <number> --json title,body,url,baseRefName,headRefName`
   and `gh pr diff <number>`. This is the recovery path on a fix run whose worktree is gone.
-- **re-fire the review** — `gh pr comment <number> --body "@review rerun the PR review"`.
-  The literal `@review` is the trigger; see *The review*.
+- **fire the review** — `gh pr comment <number> --body "@codex review"`. The `@codex`
+  mention is the trigger; see *The review*.
 - **merge** — *not available.* Merging, and the merge method, are the human's.
 
 ## The change artifact
@@ -118,21 +118,27 @@ one for the same story: a fix run reuses the open PR and its branch.
 
 ## The review
 
-**A repository workflow** — `.github/workflows/claude-code-review.yml`, running
-`anthropics/claude-code-action` with the `code-review` plugin.
+**Codex**, OpenAI's GitHub app, mentioned on the PR. It is installed on the repository
+and configured on Codex's side — **nothing in this repository fires it**, and
+`.github/workflows/` holds `claude.yml` alone.
 
-- **Fired** automatically when a PR is **opened** — `pull_request: [opened]` only, not on
-  push and not on synchronize. Pushing a fix round does not re-fire it.
-- **Re-fired** by a comment containing the literal `@review`, on the PR or on a review
-  thread. `@claude` is a different handle, bound to the general assistant, and does
-  **not** fire this review.
-- **Findings** land as inline comments on the PR. They re-enter the pipeline only when a
-  human invokes `ca77y-engineering:lead` again with them, or with the PR.
+- **Fired** by commenting on the PR with a **`@codex`** mention — `@codex review` for a
+  review of the whole diff, and the mention may carry an instruction after it. `@claude`
+  is a different handle, bound to the general assistant, and does **not** fire a review.
+- **Re-fired** the same way: another `@codex review` comment, once a fix round is pushed.
+- **Whether a review also runs automatically when a PR opens** is a Codex-side setting
+  this repository does not declare. Do not read this file for it, and do not assume a
+  freshly opened PR has been reviewed.
+- **Findings** land as comments on the PR. They re-enter the pipeline only when a human
+  invokes `ca77y-engineering:lead` again with them, or with the PR.
 - **Nothing waits for it.** The pipeline does not poll, diff baselines, or watch for a
   first comment: a run ends with the PR open and reported as not yet reviewed.
+- **Silence is not a clean bill.** There is no workflow run and so no log to read — a
+  review that never fired looks exactly like one that found nothing. Check the PR's own
+  comments for Codex's reply before treating a diff as reviewed.
 
-There is no other CI — no test job, no lint job, no required status check. A PR is
-mergeable as soon as a human is satisfied with it.
+There is no CI — no test job, no lint job, no required status check. A PR is mergeable as
+soon as a human is satisfied with it.
 
 ## What the pipeline may write
 
@@ -143,8 +149,8 @@ The `lead` alone writes anything here. Permitted, and expected:
 - **push** — the story branch to `origin`: once when the PR opens, then once per fix
   round.
 - **open one PR** — against `master`, carrying the description above.
-- **update that PR's description**, and **comment on it** — including the `@review`
-  re-fire.
+- **update that PR's description**, and **comment on it** — including the `@codex review`
+  fire.
 
 Everything else is the human's, and is reported rather than done:
 
