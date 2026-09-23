@@ -1,0 +1,5 @@
+{
+  "name": "slop-eng",
+  "description": "Outcome-driven proposal shaping and verified delivery: shape turns ideas into proposals or specs with observable acceptance; explicitly invoked deliver implements or repairs a change through a verified PR, routing each task to haiku, sonnet, or opus by its complexity score with fresh QA or auditor validation; bootstrap writes the project's board and forge declarations once. Agents: coder, writer (production), qa, auditor (fresh report-only validators). Uses slop-lib when installed; works without it. Root manifest mirrors .claude-plugin/plugin.json.",
+  "version": "3.0.0"
+}

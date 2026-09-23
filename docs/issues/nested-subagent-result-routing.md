@@ -3,9 +3,9 @@
 Nested orchestration — a subagent that dispatches and resumes its own children and
 collects their reports — is not supported by the Claude Code harness. An orchestrator
 that is itself a subagent cannot reliably receive its children's results, so the
-toolkit's pipeline runs flat: the orchestrator is the main session, via the `lead`
-skill (`plugins/ca77y-engineering/skills/lead/SKILL.md`), and every pipeline agent is
-a leaf below it. This note records the limitation so the sealed-lead topology is not
+toolkit's workflows run flat: the orchestrator is the main session, via the entry-point
+skills (`deliver`, `shape`, `research`, and the rest), and every plugin agent is a leaf
+below it. This note records the limitation so the sealed-lead topology is not
 re-attempted while the harness behaves this way.
 
 ## What was investigated
@@ -64,5 +64,5 @@ so neither primitive offers a non-main orchestrator that collects its own childr
 An upstream fix to child result routing for intermediate parents — a nested child's
 completion (fresh or resumed) delivered to the subagent that dispatched it, plus a
 collection primitive (`TaskOutput` or equivalent) available to subagents. If that
-ships, converting the `lead` skill back into a sealed subagent — hand it a card, get
+ships, converting the `deliver` skill into a sealed subagent — hand it a card, get
 back a PR, one notification — could become a story again.

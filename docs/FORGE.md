@@ -1,9 +1,6 @@
 # The forge
 
-How this project gets a story from a branch to a reviewed change, read directly at this
-fixed path — `docs/FORGE.md` — by the `lead`, before it creates a workspace. Keep it
-true, because the pipeline binds real commands to what it says, and because a run
-**stops** rather than guess when this file is missing.
+This declaration binds repository and publication operations to the destinations below. Authorization comes from the user's actual request and established conversation scope. Configuring an operation does not request its execution. Explicit invocation of the deliver skill requests a PR endpoint and authorizes the corresponding task workspace, commits, verified push, and PR creation or update without another publication request. Missing bindings block the affected operation while authorized local preparation may continue.
 
 ## The repository
 
@@ -11,164 +8,139 @@ true, because the pipeline binds real commands to what it says, and because a ru
 <https://github.com/ca77y/agentic-claude>
 
 One remote, `origin` — `git@github.com:ca77y/agentic-claude.git`, over SSH. There is no
-fork and no upstream: the checkout the pipeline runs in is the canonical one, and
-`origin` is the only place anything is ever pushed.
+fork or upstream. The checkout is canonical, and `origin` is the only push destination.
 
 ## Reaching it
 
-The **`gh` CLI**, already authenticated on this machine — the `ca77y` account, its token
-in the system keyring, git operations over SSH. Nothing to authenticate; no credentials
-live in this repo, and none belong in this file.
-
-The GitHub MCP server is also connected in this workspace and is **not** what the
-pipeline uses. One mechanism per operation, and here it is `gh`: every binding below is
-a shell command, never a tool call.
+The **`gh` CLI**, already authenticated on this machine as `ca77y`; git operations use
+SSH. The GitHub MCP server connected in this workspace is deliberately unused by these bindings. No
+credentials live in this repository or belong in this file.
 
 ## Branches and worktrees
 
-- **Target branch** — `master`. Every story branches off it, every change opens against
-  it, and nothing in the pipeline commits to it, checks it out in a worktree, or pushes
-  it. A long-running branch may take `master` *into* itself with an ordinary merge; that
-  is the only direction traffic ever runs.
-- **Story worktrees** — `.worktrees/<card-id>-<slug>`, at the repository root, one per
-  story, covered by the committed `.gitignore` entry `.worktrees/` (alongside `/tmp/`, for
-  the run-local scratch at the root of each worktree). **The issue's identifier leads the
-  directory name**, so `ls .worktrees/`, a `git worktree list`, and a stray process's
-  working directory each name their story without a lookup:
-  `.worktrees/smr-148-make-the-coder-demonstrate-each-pinning-test-red-not-just`.
-  That means dropping the branch name's leading `tokwieci/` rather than letting it nest —
-  a nested path buries the identifier one level down, which is the opposite of the point.
-  A run that names no issue has no identifier to lead with and takes the descriptive slug
-  alone; it is the only kind of directory here that does not start with one.
-- **Branch name** — the executing issue's own `gitBranchName` field, read from Linear
-  through [`BOARD.md`](./BOARD.md)'s *read* binding. Linear supplies it already formed
-  (`tokwieci/smr-148-make-the-coder-demonstrate-each-pinning-test-red-not-just`), and it
-  is where the one name shared by the issue, the branch, the spec file, and the PR comes
-  from. Where a run names no issue, branch as `<type>/<slug>` on the same lowercase-kebab
-  slug the spec file takes.
-- **Removal** — once the PR merges, the worktree and its branch go: `git worktree remove
-  <path>`, then delete the branch. GitHub does not delete it (`deleteBranchOnMerge` is
-  off). That is the human's step, after the merge — the pipeline never removes a worktree
-  and never deletes a branch.
+- **Default working checkout** — implementation requested without the deliver skill may remain an uncommitted local change on `master` in the repository root. Explicit deliver invocation requests a PR and uses the story branch and worktree. Other requested commit/PR endpoints or explicit isolation requests also use a separate branch and worktree.
+- **Target branch** — `master`. Every story branches from it and every PR targets it.
+  Automated operations never commit to it, check it out in a story worktree, or push it.
+- **Story worktrees** — `.worktrees/<card-id>-<slug>` at the repository root, covered by
+  the committed `.gitignore` entry `.worktrees/`. The issue identifier leads the directory
+  name — the branch name's leading `tokwieci/` is dropped rather than nested — so
+  `ls .worktrees/` and `git worktree list` name each story without a lookup:
+  `.worktrees/smr-200-card-content-access`. A run with no issue uses the slug alone.
+- **Temp folder** — `.tmp/` at the root of the current checkout or worktree, covered
+  by the committed `/.tmp/` entry. Store workflow ledgers in `.tmp/ledgers/`;
+  preserve ledgers and their required evidence during scratch cleanup and after completion.
+- **Branch name** — the issue's `gitBranchName`, read through [`BOARD.md`](./BOARD.md).
+  Linear supplies a legal ref such as
+  `tokwieci/smr-200-card-content-access`. Without
+  an issue, use `<type>/<lowercase-kebab-slug>`.
+- **Removal** — after the PR merges, the human runs `git worktree remove <path>` and
+  deletes the branch. Neither operation has an automated grant.
 
 ## Commits
 
-**Conventional Commits, type prefix only — no scope.** `docs:` for a spec or a
-documentation pass, `feat:` for a build, `fix:` for a fix round. From this repo's own
-story branches:
+The commit convention is **Conventional Commits**. Use `docs:` or `docs(<area>):` for
+specification and documentation, `feat:` or `feat(<area>):` for a build, and `fix:` or
+`fix(<area>):` for a fix round. A message names the issue when it adds the spec, and a
+pre-ship fix names the round whose findings it applies. Illustrative subjects:
 
 ```text
-docs: add spec for SMR-148 pinning-demonstration obligation
-feat: make the coder demonstrate each pinning test red
-fix: address qa round 1 findings on the pinning-demonstration rule
-docs: fold the pinning-demonstration rule into README/ARCHITECTURE
+docs(spec): add SMR-200 spec for card-content access
+feat(cards): support scoped card-content refinement
+fix(cards): correct the reference target for review round 1
 ```
 
-A pre-ship round commit names, in that same subject, **which round's findings it
-applies** — `qa round 1`, `PR review` — and its body names any tests the previous round
-added. That is what lets the next fresh dispatch read a diff as a reason rather than as
-a difference.
-
-**Push once, when the PR opens.** The story branch has no remote before that, so every
-commit up to it — the spec, the spec-format-fix commit where the floor produced one, each
-pre-ship round — stays local in the worktree. After the PR is open, each fix round is
-pushed as it is committed. Never force-push, never amend or rebase a pushed commit, and
-never push `master`.
+Push once when the PR opens. Before that, the spec, build, and pre-ship round commits
+stay local in the worktree. After the PR exists, push each fix round once its affected
+validation and acceptance checks pass. Intermediate repair checkpoints stay local;
+an unresolved blocking finding prevents publication.
+Never force-push, amend or rebase pushed history, or push `master`.
 
 ## Operations
 
-- **branch** — created with the worktree, in one step:
-  `git worktree add .worktrees/<card-id>-<slug> -b <branch> master`. The directory and
-  the branch differ deliberately: `<branch>` is Linear's `gitBranchName` verbatim, while
-  the directory drops its leading `tokwieci/` so the identifier leads.
-- **remove a worktree** — `git worktree remove <path>` — *the human's, after the merge.*
-- **commit** — `git -C <worktree> add <paths>` (never `-f`, so ignored scratch cannot be
-  swept in) then `git -C <worktree> commit`.
-- **push** — `git -C <worktree> push -u origin <branch>` the first time, at PR-open time;
-  `git -C <worktree> push` on each fix round after.
+- **branch** — create new work with
+  `git worktree add .worktrees/<card-id>-<slug> -b <branch> master`; recover a missing
+  worktree for an existing story branch with
+  `git worktree add .worktrees/<card-id>-<slug> <branch>`. The directory and branch differ
+  deliberately: `<branch>` is Linear's `gitBranchName` verbatim.
+- **remove a worktree** — `git worktree remove <path>` — *the human's, after merge*.
+- **commit** — `git -C <worktree> add <paths>` (never `-f`), then
+  `git -C <worktree> commit`.
+- **push** — `git -C <worktree> push -u origin <branch>` the first time, immediately
+  before the PR opens; `git -C <worktree> push` on each later verified fix round.
 - **open the change** —
-  `gh pr create --base master --head <branch> --title <title> --body-file <path>`. Its
-  output is the PR's URL; **that** is the link, never one assembled from a pattern.
-- **update the change** — `gh pr edit <number> --body-file <path>`, and `--title` for the
-  title.
-- **comment on the change** — `gh pr comment <number> --body <text>`.
-- **read the change** — `gh pr view <number> --json title,body,url,baseRefName,headRefName`
-  and `gh pr diff <number>`. This is the recovery path on a fix run whose worktree is gone.
-- **fire the review** — `gh pr comment <number> --body "@codex review"`. The `@codex`
-  mention is the trigger; see *The review*.
-- **merge** — *not available.* Merging, and the merge method, are the human's.
+  `gh pr create --repo ca77y/agentic-claude --base master --head <branch> --title <title> --body-file <path>`.
+  Its output is the PR URL; that output is the link, never a constructed pattern.
+- **update the change** —
+  `gh pr edit <number> --repo ca77y/agentic-claude --body-file <path>`, with `--title`
+  when the title changes.
+- **comment on the change** —
+  `gh pr comment <number> --repo ca77y/agentic-claude --body <text>`.
+- **read the change** —
+  `gh pr view <number> --repo ca77y/agentic-claude --json title,body,url,baseRefName,headRefName`
+  and `gh pr diff <number> --repo ca77y/agentic-claude`.
+- **fire the review** —
+  `gh pr comment <number> --repo ca77y/agentic-claude --body '@codex review'`.
+  Explicit deliver invocation authorizes this one message after the PR opens and after
+  each validated fix push on an existing PR.
+- **merge** — *not available*. Merging and the merge method are the human's.
 
 ## The change artifact
 
-A **GitHub pull request**. *PR* is the word this repo uses for it, in its documentation
-and in the pipeline's prose. One per story, opened against `master`, and never a second
-one for the same story: a fix run reuses the open PR and its branch.
+A **GitHub pull request**, one per story, opened against `master`. A fix run reuses the
+same PR and branch.
 
-- **Title** — an imperative sentence naming the outcome, not a Conventional Commits
-  subject: *Make the coder demonstrate each pinning test red, not just name it*. The
-  repository squash-merges, so this title becomes `master`'s commit subject with the PR
-  number appended.
-- **Description** — Markdown under `##` headings, in this order, dropping any that does
-  not apply rather than leaving it empty: `## Task` (the issue identifier and its URL,
-  then what the task was and why) · `## Spec` (its path, its gate outcome, and that it
-  was converted and removed) · `## What was built` · `## Tests` · `## Gates and rounds` ·
-  `## Acceptance gate` · `## Docs` · `## Production hazards / blockers` ·
-  `## Board follow-ups` · `## Commits (<n>)` · `## Card status` · `## Review` ·
-  `## Remaining risks / follow-ups`. A later fix round **appends** a
-  `## Review round <n> — addressed` section rather than rewriting what is already there.
-- **Link** — whatever `gh pr create` printed. Attaching it to the issue is the board's
-  business, authorised by [`BOARD.md`](./BOARD.md) under *attach the PR*; this file is
-  only where the link comes from.
-- **Labels, reviewers, assignees, milestones, draft state** — unused here. Do not set
-  them.
+- **Title** — an imperative sentence naming the outcome, not a commit subject.
+- **Description** — Markdown under applicable `##` headings, in this order:
+  `## Task` · `## Spec` · `## What was built` · `## Tests` ·
+  `## Gates and rounds` · `## Acceptance gate` · `## Docs` ·
+  `## Production hazards / blockers` · `## Board follow-ups` ·
+  `## Commits (<n>)` · `## Card status` · `## Review` ·
+  `## Remaining risks / follow-ups`. Drop inapplicable sections rather than leaving
+  them empty. A fix run appends `## Review round <n> — addressed`.
+- **Link** — exactly the URL printed by `gh pr create`; attaching it to Linear is
+  governed by [`BOARD.md`](./BOARD.md).
+- **Labels, reviewers, assignees, milestones, and draft state** — unused here.
 
 ## The review
 
-**Codex**, OpenAI's GitHub app, mentioned on the PR. It is installed on the repository
-and configured on Codex's side — **nothing in this repository fires it**, and
-`.github/workflows/` holds `claude.yml` alone.
+**Codex**, OpenAI's GitHub app, mentioned on the PR. It is installed on the repository and
+configured on Codex's side — nothing in this repository fires it, and `.github/workflows/`
+holds `claude.yml` alone.
 
-- **Fired** by commenting on the PR with a **`@codex`** mention — `@codex review` for a
-  review of the whole diff, and the mention may carry an instruction after it. `@claude`
-  is a different handle, bound to the general assistant, and does **not** fire a review.
-- **Re-fired** the same way: another `@codex review` comment, once a fix round is pushed.
-- **Whether a review also runs automatically when a PR opens** is a Codex-side setting
-  this repository does not declare. Do not read this file for it, and do not assume a
-  freshly opened PR has been reviewed.
-- **Findings** land as comments on the PR. They re-enter the pipeline only when a human
-  invokes `ca77y-engineering:lead` again with them, or with the PR.
-- **Nothing waits for it.** The pipeline does not poll, diff baselines, or watch for a
-  first comment: a run ends with the PR open and reported as not yet reviewed.
-- **Silence is not a clean bill.** There is no workflow run and so no log to read — a
-  review that never fired looks exactly like one that found nothing. Check the PR's own
-  comments for Codex's reply before treating a diff as reviewed.
+- **Fired** by a PR comment with a `@codex` mention — `@codex review` for a review of the
+  whole diff. `@claude` is a different handle, bound to the general assistant, and does
+  **not** fire a review.
+- **Re-fired** the same way, with another `@codex review`, once a fix round is pushed.
+- **Whether a review also runs automatically when a PR opens** is a Codex-side setting this
+  repository does not declare, so do not assume it: fire the review after opening the PR.
+- **Findings** land as comments on the PR. They re-enter delivery only when the user
+  invokes the deliver skill again with them or with the PR.
+- **Nothing waits for it.** No poll, baseline diff, or watch for a first comment; a run
+  ends with the PR open and reported as not yet reviewed.
+- **Silence is not a clean bill.** There is no workflow run and so no log — a review that
+  never fired looks exactly like one that found nothing. Check the PR's comments for
+  Codex's reply before treating a diff as reviewed.
 
-There is no CI — no test job, no lint job, no required status check. A PR is mergeable as
-soon as a human is satisfied with it.
+No CI or required status check is currently defined in the repository.
 
-## What the pipeline may write
+## Operation conditions
 
-The `lead` alone writes anything here. Permitted, and expected:
+- **Read PR or diff** — the requested task requires that information from the bound repository.
+- **Create or recover workspace** — an explicit deliver invocation, another requested commit/PR endpoint, or explicit isolation request authorizes one story branch and worktree under `.worktrees/`, following the configured derivation. Recover the existing story branch/worktree for repair; do not create a second workspace.
+- **Commit** — the user explicitly invoked deliver or otherwise requested a commit or PR endpoint. Stage only attributable paths in the authorized story worktree, without forced staging, and use Conventional Commits. A local-change-only request does not authorize commits.
+- **Push** — the user explicitly invoked deliver or otherwise requested publication of the same change, and required validation and acceptance have passed. Push only the story branch to `origin`; first push when opening the PR, later pushes for verified repairs. Keep intermediate checkpoints local; blocking findings prevent a push.
+- **Open PR** — the user explicitly invoked deliver or otherwise requested a PR. Open one against `master` in the bound repository and retain its real returned URL. Reuse the existing PR for story repair.
+- **Update PR** — the explicit deliver invocation or other requested publication/repair scope includes that same PR; title/body must reflect the same change and preserve unused metadata restrictions. Do not widen scope or create another PR.
+- **Trigger review** — explicit deliver invocation authorizes one `@codex review` comment after the PR opens and one after each verified fix push on that PR. Record the observed result; later findings resume through a user request.
+- **Comment** — any other PR comment requires the user's explicit authorization for that message. Configuration alone does not authorize communication.
+- **Remove worktree or branch** — user-controlled cleanup after merge; no automated grant.
 
-- **branch and worktree** — one of each per story, under `.worktrees/`, off `master`.
-- **commit** — in the story worktree only, per the commit model.
-- **push** — the story branch to `origin`: once when the PR opens, then once per fix
-  round.
-- **open one PR** — against `master`, carrying the description above.
-- **update that PR's description**, and **comment on it** — including the `@codex review`
-  fire.
+The following operations have no automated grant:
 
-Everything else is the human's, and is reported rather than done:
-
-- **Never merge**, and never enable auto-merge.
-- **Never force-push, amend a pushed commit, rebase a pushed branch, or delete a branch,
-  a tag, or a remote ref.**
-- **Never push `master`**, commit to it, or check it out in a worktree.
-- **Never open a second PR for a story, and never close one.**
-- **Never cut a release or a tag** — and note that a version bump is separately a human
-  decision, per the root [`CLAUDE.md`](../CLAUDE.md).
-- **Never touch another repository**, and never add a second remote.
-
-No other agent reaches git except to read: the `writer`'s docs pass runs `git diff` and
-`git log` inside the story worktree against commit references it was handed, and that is
-the whole of it.
+- Never merge or enable auto-merge.
+- Never force-push, amend a pushed commit, rebase a pushed branch, or delete a branch,
+  tag, or remote ref.
+- Never push `master`, commit to it, or check it out in a story worktree.
+- Never open a second PR for a story, and never close one.
+- Never cut a release or tag.
+- Never touch another repository or add another remote.

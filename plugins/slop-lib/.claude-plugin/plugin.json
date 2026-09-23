@@ -1,0 +1,15 @@
+{
+  "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
+  "name": "slop-lib",
+  "description": "Research with provenance, or ask the existing project-local Markdown library: research investigates new sources and persists cited evidence and synthesis; ask answers from the library without internet requests or writes; bootstrap scaffolds the library once, with optional Obsidian settings. Agents: researcher, librarian, scribe (production), clerk (fresh report-only validator). Self-contained — no other plugin required.",
+  "version": "2.0.0",
+  "author": {
+    "name": "ca77y"
+  },
+  "agents": [
+    "./agents/clerk.md",
+    "./agents/librarian.md",
+    "./agents/researcher.md",
+    "./agents/scribe.md"
+  ]
+}

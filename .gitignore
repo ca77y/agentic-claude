@@ -11,7 +11,10 @@
 # Story worktrees
 .worktrees/
 
-# Run-local pipeline scratch, at the root of each story worktree
+# Local workflow state and scratch (ledgers live in .tmp/ledgers/), at the root of each checkout or worktree
+/.tmp/
+
+# Preserve ignore protection for existing scratch files
 /tmp/
 
 # Python bytecode from hook scripts

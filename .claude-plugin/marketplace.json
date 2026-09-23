@@ -1,20 +1,20 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
-  "name": "ca77y-agentic",
-  "description": "Personal agentic toolkit: an idea-to-shipped development pipeline and a research-library crew, as two independently installable plugins of native Claude Code subagents.",
+  "name": "agentic-slop",
+  "description": "Personal agentic toolkit: proposal shaping and verified delivery, plus a research library, as two independently installable Claude Code plugins.",
   "owner": {
     "name": "ca77y"
   },
   "plugins": [
     {
-      "name": "ca77y-engineering",
-      "source": "./plugins/ca77y-engineering",
-      "description": "Idea-to-shipped development pipeline: analyst, lead, writer, coder, qa, auditor, plus the board skill. One task in, one PR out. Uses ca77y-library when it is installed; works without it."
+      "name": "slop-eng",
+      "source": "./plugins/slop-eng",
+      "description": "Shape proposals and deliver verified, authorized changes through a PR, with complexity-routed coder/writer production and fresh QA or auditor validation. Uses slop-lib when installed; works without it."
     },
     {
-      "name": "ca77y-library",
-      "source": "./plugins/ca77y-library",
-      "description": "Research-library crew: researcher, librarian, scribe, clerk. Grows and maintains a project's Markdown research library in place. Standalone — installable with or without ca77y-engineering."
+      "name": "slop-lib",
+      "source": "./plugins/slop-lib",
+      "description": "Research with provenance and ask the existing Markdown library, with researcher, librarian, scribe, and fresh clerk validation. Standalone — installable with or without slop-eng."
     }
   ]
 }
