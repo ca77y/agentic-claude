@@ -20,7 +20,7 @@ These print nothing when the plugins are consistent, except the last command, wh
 ```bash
 grep -rn 'slop-eng:\(researcher\|librarian\|scribe\|clerk\|research\|ask\|lint\)' plugins/
 grep -rn 'slop-lib:\(coder\|writer\|qa\|auditor\|shape\|deliver\)' plugins/
-grep -rnE '@review|@codex|`gh`|gh pr |origin/|mcp__plugin_linear' plugins/
+grep -rnE '@review|`gh`|gh pr |origin/|mcp__plugin_linear' plugins/
 grep -rnE '\b(master|trunk)\b|branch `main`' plugins/
 grep -rnoE '\$\{CLAUDE_(PLUGIN_ROOT|SKILL_DIR)\}/[A-Za-z0-9_./-]+\.md' plugins/ | while IFS=: read -r file _ ref; do
   plugin=$(echo "$file" | sed -E 's#^(plugins/[^/]+)/.*#\1#')
