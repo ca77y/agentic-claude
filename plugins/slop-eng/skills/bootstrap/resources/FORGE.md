@@ -1,36 +1,35 @@
 # Forge declaration
 
-## Repository and access
+Configuration does not authorize execution; the user's request does. An operation not bound here has no grant.
 
-{{REPOSITORY_REMOTES_AND_PERMITTED_DESTINATIONS}}
-{{FORGE_ACCESS_MECHANISM_OR_EXPLICIT_NONE}}
+## Repository
 
-## Branches and workspace
+- Remote and permitted push destinations: {{REMOTES_AND_DESTINATIONS}}
+- Forge and how it is reached, without credentials: {{FORGE_ACCESS_OR_NONE}}
+- Target branch and its protection: {{TARGET_BRANCH_AND_PROTECTION}}
+- Default working checkout: {{DEFAULT_CHECKOUT}}
 
-{{TARGET_BRANCH_PROTECTION}}
-{{BRANCH_DERIVATION_WORKSPACE_PATH_IGNORE_AND_RECOVERY}}
+## Workspace
 
-Temp folder: `.tmp/` relative to the project root unless a different path is configured. Keep its ignore rule aligned with the selected path. Store workflow ledgers in `<temp-folder>/ledgers/` and preserve ledgers and required evidence during scratch cleanup and after completion.
-{{USER_OWNED_CLEANUP}}
+- Branch name: {{BRANCH_DERIVATION}}
+- Story worktree path and its ignore rule: {{WORKTREE_PATH_AND_IGNORE}}
+- Temp folder: `.tmp/` at the root of each checkout, ignored.
+- Cleanup after merge: {{CLEANUP_OWNER}}
 
-## Commits and publication
+## Commits and push
 
-{{COMMIT_CONVENTION_AND_AUTHORIZATION}}
-{{LOCAL_CHECKPOINTS_AND_VALIDATED_PUSH_CONDITIONS}}
+- Commit convention: {{COMMIT_CONVENTION}}
+- When to push: {{PUSH_CONDITIONS}}
 
-Configuration alone does not authorize execution. Explicit invocation of a workflow whose endpoint is a PR authorizes its task branch/workspace, attributable commits, verified push, and PR creation or update without a second publication request. An ordinary implementation request outside that workflow may remain local in the default checkout and does not authorize commits or publication. Comments and review requests require explicit user authorization.
+## Pull request
 
-## Operations
-
-{{BRANCH_COMMIT_PUSH_CREATE_UPDATE_READ_AND_COMMENT_BINDINGS}}
-{{UNAVAILABLE_OPERATIONS_AND_USER_OWNED_DECISIONS}}
-
-## Change artifact and review
-
-{{TITLE_BODY_METADATA_TARGET_AND_ONE_CHANGE_PER_TASK_RULE}}
-{{REAL_RETURNED_URL_SOURCE}}
-{{REVIEW_TRIGGER_OR_EXPLICIT_NONE_AND_REQUIRED_CHECKS}}
+- Create, update, read, comment: {{PR_BINDINGS}}
+- Title and body: {{TITLE_AND_BODY}}
+- Review trigger and where findings land: {{REVIEW_TRIGGER_OR_NONE}}
+- Required checks: {{CHECKS_OR_NONE}}
 
 ## Restrictions
 
-{{MERGE_FORCE_PUSH_HISTORY_REF_RELEASE_CLEANUP_AND_DESTINATION_RESTRICTIONS}}
+Autonomous work never does these; an explicit user request for one authorizes it.
+
+{{RESTRICTIONS}}

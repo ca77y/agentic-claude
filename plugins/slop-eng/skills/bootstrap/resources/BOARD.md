@@ -1,28 +1,43 @@
 # Board declaration
 
-## Identity and access
+Configuration does not authorize execution; the user's request does. An operation not bound here has no grant.
 
-{{BOARD_IDENTITY_OR_EXPLICIT_NONE}}
-{{ACCESS_MECHANISM_AND_AUTHORIZED_SCOPE}}
+## Board
 
-## Operations and authorization
+- Tracker, project, and team: {{BOARD_IDENTITY_OR_NONE}}
+- Access, without credentials: {{ACCESS}}
 
-{{LOCATE_READ_SEARCH_BINDINGS}}
-{{CREATE_BINDING_INITIAL_STATUS_AND_REQUIRED_USER_REQUEST}}
-{{TRANSITION_BINDING_SOURCE_STATE_PRECONDITIONS_AND_ALLOWED_TRANSITIONS}}
-{{CONTENT_REFINEMENT_PR_LINK_AND_COMMENT_CONDITIONS}}
+## Operations
 
-Configuration alone does not authorize execution. An unavailable or unspecified operation has no automated grant. Comments require explicit user authorization. Acceptance criteria must not be rewritten to match an implementation.
+- Locate, read, search: {{READ_BINDINGS}}
+- Create, with initial status: {{CREATE_BINDING}}
+- Transition: {{TRANSITION_BINDING}}
+- Update content and relations: {{UPDATE_BINDING}}
+- Attach a PR: {{PR_LINK_BINDING}}
+- Comment: {{COMMENT_BINDING}}
 
-## Item schema and acceptance
+## Cards
 
-{{IDENTITY_TYPE_PRIORITY_DEPENDENCIES_BODY_AND_ACCEPTANCE_FORMAT}}
+- Identity and spec naming: {{IDENTITY}}
+- Type and priority: {{TYPE_AND_PRIORITY}}
+- Dependencies: {{DEPENDENCIES}}
+- Body and acceptance criteria format: {{BODY_AND_ACCEPTANCE}}
 
-## Statuses and visibility
+## Statuses
 
-{{FULL_STATUS_VOCABULARY_AND_WRITE_DESTINATION}}
-{{USER_OWNED_READINESS_TERMINAL_AND_GOAL_DECISIONS}}
+- Statuses: {{STATUSES}}
+- User-owned decisions: {{USER_DECISIONS}}
 
-## Restrictions
+## Delivery
 
-{{EXISTING_PROJECT_RESTRICTIONS_AND_UNAVAILABLE_OPERATIONS}}
+- When delivery starts: {{ON_START}}
+- When the PR opens: {{ON_PR_OPEN}}
+- On a repair run: {{ON_REPAIR}}
+
+## Other conditions
+
+- Filing a card: {{CREATE_CONDITION}}
+- Editing card content: {{EDIT_CONDITION}}
+- Comments: {{COMMENT_CONDITION}}
+
+Never rewrite an acceptance criterion to match an implementation.

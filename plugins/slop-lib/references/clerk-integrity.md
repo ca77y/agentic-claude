@@ -1,5 +1,5 @@
-# Library integrity and affected links
+# Library integrity
 
-Inspect changed artifacts and affected citations, frontmatter, anchors, navigation entries, registered tags, and provenance log claims against actual files. Use project templates and conventions, including a plain-Markdown navigation fallback. Template expressions in template files are intentional; unresolved author instructions in content are findings.
+Check the files in scope and what they affect — citations, frontmatter against the schema in `library/_meta/librarian.md`, anchors, index lines and their summaries, registered tags, and log claims — against the actual files and the project conventions. Template expressions inside template files are intentional; leftover author instructions in content are findings.
 
-Resolve wikilinks, heading/block anchors, and Markdown links according to project conventions. Distinguish ambiguous mechanical matches from demonstrated broken targets. Check that deferred raw-note metadata was completed by the integration owner, and distinguish unsynthesized raw notes from missing navigation. Run available scoped mechanical checks; report gaps without installing tools or repairing files.
+Resolve wikilinks, heading and block anchors, and Markdown links as the conventions define them, and separate an ambiguous match from a demonstrably broken target. Check that metadata the raw-note writers deferred was completed by the integrator, and tell an unsynthesized raw note apart from missing navigation.

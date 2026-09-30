@@ -1,13 +1,11 @@
-# Source persistence and synthesis
+# Persisting research
 
-Read before writing research evidence or synthesis. Read the project's `library/_meta/librarian.md` and use its templates; do not create a competing metadata format. The core specification and validation gates apply to nontrivial persisted changes.
+Use the templates in `library/_meta/templates/` and the frontmatter and registered tags that `library/_meta/librarian.md` requires; don't invent another metadata format.
 
-Save source identity (URL, title/author or equivalent), access date, source/version date when available, supporting passages, supported claims, and material caveats. Separate paraphrase from quotation and inference from retrieved fact. Retain stable anchors or block IDs where conventions provide them. Inaccessible sources are unretrieved leads, not evidence for their contents.
+Raw notes hold the source identity (URL, title, author), the access date, the published or version date, the supporting passages, and the claims they support, with quotation, paraphrase, and inference kept apart. Use the block anchors the conventions provide. Append to an existing raw note in a dated section instead of rewriting it. An inaccessible source is an unretrieved lead, not evidence.
 
-Preserve raw source notes. Synthesis links consequential claims to the supporting saved evidence and source identity, includes conflicting findings and uncertainty, and answers the actual question. A product decision may be identified as user-supplied context, but research does not manufacture one. A supported inconclusive conclusion is useful; failure to retrieve evidence is a limitation, not a finding of absence.
+Synthesis answers the actual question, links each consequential claim to the raw note that supports it, and keeps conflicts and uncertainty visible. A supported inconclusive answer is useful; research doesn't manufacture product decisions.
 
-For the standard library layout, copy the relevant `_meta/templates/` template, give pages the required frontmatter, use registered tags, and provide plain-Markdown navigation alongside any optional Obsidian features. Raw-note-only batches can defer shared index/log writes according to conventions; the integration owner must complete required shared metadata before claiming persisted synthesis complete. No always-on service is required.
+When delegating, give each scribe new raw-note paths of its own and serialize edits to existing notes. After all raw-note writes return, one owner integrates the synthesis, index, taxonomy, and log, completing any metadata the raw-note writers deferred.
 
-If production is delegated, give scribe writers disjoint new raw-note paths and serialize edits to existing notes. Require returned paths plus any unpersisted provenance payloads, contradictions, access limits, and evaluated failures. Collect outstanding writes before one owner integrates synthesis, index, taxonomy, and log. Keep each role's references beside its own manual and keep researchers on returned evidence only. Integration belongs to the main agent or one designated scribe, never both concurrently.
-
-Give a fresh validator the final changed paths, draft answer, relevant raw evidence, spec identity, and affected links/metadata. The audit covers that scope; a full-vault audit is not a prerequisite. Arrange corrections separately, preserving raw source content, then dispatch a fresh validator for the corrected candidate. Return the answer with artifact links and the actual validation result.
+Brief the final clerk with the changed paths, the draft answer, the raw evidence, the spec revision, and the affected links and metadata; it checks that scope, not the whole library.

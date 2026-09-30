@@ -1,0 +1,2 @@
+# Scaffold templates carry {{TOKENS}} and Templater expressions Prettier would rewrite
+plugins/*/skills/*/resources/

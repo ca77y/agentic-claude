@@ -1,5 +1,5 @@
-# Evidence and answer support
+# Answer and evidence support
 
-Inspect the exact draft and the cited source passages independently. Trace consequential claims to evidence, identify unsupported inference, conflicting accounts, dates, version limits, and coverage gaps. Missing retrieval does not prove absence; an unfetched lead supports no claim about its contents.
+Read the exact draft and the cited passages yourself. Trace each consequential claim to its evidence, and look for unsupported inference, conflicting accounts, dates, version limits, and coverage gaps. Failed retrieval proves nothing absent, and an unfetched lead supports no claim about its contents. A clearly supported "the evidence doesn't cover this" can pass.
 
-An existing-library answer permits local reading only. Do not retrieve new sources, persist the draft, or repair a gap. Return pass/fail/unverified for the actual scope; a clearly supported evidence gap can be a valid answer.
+For an answer from the existing library, read locally only; retrieve nothing new.

@@ -1,17 +1,10 @@
 # OS state
 .DS_Store
 
-# Obsidian local/generated state — the rest of .obsidian/ is committed so the
-# vault (Task Board, Templater scaffolds, graph) works from a fresh clone.
-.obsidian/workspace.json
-.obsidian/workspace-mobile.json
-.obsidian/plugins/task-board/tasks.json
-.obsidian/plugins/task-board/task-board-logs.log
-
 # Story worktrees
 .worktrees/
 
-# Local workflow state and scratch (ledgers live in .tmp/ledgers/), at the root of each checkout or worktree
+# Local workflow state and scratch, including the delivery ledger, at the root of each checkout or worktree
 /.tmp/
 
 # Preserve ignore protection for existing scratch files
@@ -20,3 +13,6 @@
 # Python bytecode from hook scripts
 __pycache__/
 *.pyc
+
+# Plugin eval reports
+plugins/*/evals/results/

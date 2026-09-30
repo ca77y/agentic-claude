@@ -1,5 +1,5 @@
 # Research-spec readiness
 
-Assess question fit, authorized scope, evidence standards, proposed artifacts, convention fit, and verifiable acceptance. Evidence requirements must permit supported uncertainty rather than force a predetermined answer. Spec drafting needs no prevalidated spec; nontrivial persistence requires this gate first.
+Judge the question's fit, the authorized scope, the evidence standards, the planned artifacts, convention fit, and whether acceptance is verifiable. The evidence standards must allow a supported uncertain answer rather than force a conclusion.
 
-For bootstrap, compare setup scope and templates with project facts and existing content. Missing output files are expected. Flag material unspecified choices or destructive rerun behavior before production.
+For a setup spec, compare the scope and templates with the project facts and existing content, and flag unspecified material choices and anything a rerun would destroy.

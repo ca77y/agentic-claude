@@ -1,7 +1,5 @@
-# Sole-writer integration
+# Integration
 
-Wait for outstanding raw-note writes and collect their paths, evidence relationships, raw dispositions, and deferred metadata. Only one owner writes synthesis and shared metadata: the main agent or this designated scribe. Report ownership collisions before writes.
+You are the only writer of the synthesis and shared metadata for this batch; if another writer is active, report it before writing. Wait for outstanding raw-note writes and collect their paths, evidence, and deferred metadata.
 
-Use the project's wiki/topic templates. Preserve raw notes and cite consequential claims to their supporting passages. Retain uncertainty, contradictions, and unretrieved leads; research does not choose product policy. Complete the navigation index, registered taxonomy, and provenance log. Distinguish a raw note indexed for navigation from one already synthesized.
-
-Return produced paths, each supplied raw note's disposition, source relationships, and unresolved decisions. A fresh clerk evaluates the exact integrated candidate; do not run your own checks.
+Use the wiki and topic templates. Cite consequential claims to their supporting raw-note passages, and keep uncertainty, contradictions, and unretrieved leads visible; research doesn't choose product policy. Complete the index, taxonomy, and log, and tell a raw note indexed for navigation apart from one already synthesized. Report each supplied raw note's disposition.

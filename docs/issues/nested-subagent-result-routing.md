@@ -5,7 +5,8 @@ collects their reports — is not supported by the Claude Code harness. An orche
 that is itself a subagent cannot reliably receive its children's results, so the
 toolkit's workflows run flat: the orchestrator is the main session, via the entry-point
 skills (`deliver`, `shape`, `research`, and the rest), and every plugin agent is a leaf
-below it. This note records the limitation so the sealed-lead topology is not
+below it. A leaf may still dispatch the built-in read-only `Explore` agent: a one-shot
+search whose report returns to the leaf itself, with nothing to resume or route. This note records the limitation so the sealed-lead topology is not
 re-attempted while the harness behaves this way.
 
 ## What was investigated
@@ -28,7 +29,7 @@ Established empirically (card findings 1–10, sessions of 2026-08-01/02):
   child's completion does not return into its parent's turn.
 - **Completion notifications route to the root session from any depth.** In the
   audited session, all 15 depth-2 task-notifications delivered to the main session
-  came from *resumed* workers; zero came from the fresh, synchronous dispatches —
+  came from _resumed_ workers; zero came from the fresh, synchronous dispatches —
   a clean split along the resume/fresh boundary (n=39).
 - **A resumed child's report leaks to the main session.** Reproduced minimally: a
   stand-in parent resumed its child via `SendMessage`; the child's report never
@@ -36,7 +37,7 @@ Established empirically (card findings 1–10, sessions of 2026-08-01/02):
   `<task-notification>` instead. This held with agent teams enabled too.
 - **Subagents have no `TaskOutput`.** Across 43 subagents, `TaskOutput` was called
   zero times while every lead searched for it and failed (`ToolSearch
-  select:TaskOutput` → no match). The tool exists only in the main-session roster,
+select:TaskOutput` → no match). The tool exists only in the main-session roster,
   so a subagent orchestrator's collection rule mandating it could never execute.
 - **Prose cannot fix it.** No agent-definition wording can reroute the harness's
   notification delivery; workers denied a working report channel invented

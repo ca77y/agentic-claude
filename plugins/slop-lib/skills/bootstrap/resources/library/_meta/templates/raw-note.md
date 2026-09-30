@@ -1,11 +1,14 @@
 ---
 title: <% tp.file.title %>
 type: raw
+summary:
 tags: []
 aliases: []
 source:
 accessed: <% tp.date.now("YYYY-MM-DD") %>
-up: "[[Library Index]]"
+published: unknown
+provider:
+up: "[[library/_meta/index|Library Index]]"
 related: []
 created: <% tp.date.now("YYYY-MM-DD") %>
 updated: <% tp.date.now("YYYY-MM-DD") %>
@@ -20,7 +23,7 @@ updated: <% tp.date.now("YYYY-MM-DD") %>
 
 ## Key evidence
 
--
+-  ^e1
 
 ## Limitations
 

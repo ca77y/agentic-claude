@@ -1,9 +1,10 @@
 ---
 title: <% tp.file.title %>
 type: moc
+summary:
 tags: []
 aliases: []
-up: "[[Library Index]]"
+up: "[[library/_meta/index|Library Index]]"
 related: []
 created: <% tp.date.now("YYYY-MM-DD") %>
 updated: <% tp.date.now("YYYY-MM-DD") %>

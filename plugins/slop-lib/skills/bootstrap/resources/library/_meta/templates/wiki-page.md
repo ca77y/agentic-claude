@@ -1,11 +1,12 @@
 ---
 title: <% tp.file.title %>
 type: wiki
+summary:
 status: active
 confidence: medium
 tags: []
 aliases: []
-up: "[[Library Index]]"
+up: "[[library/_meta/index|Library Index]]"
 related: []
 created: <% tp.date.now("YYYY-MM-DD") %>
 updated: <% tp.date.now("YYYY-MM-DD") %>
@@ -18,7 +19,7 @@ updated: <% tp.date.now("YYYY-MM-DD") %>
 
 ## Claims
 
-- Claim with citation to a source block ID
+- Claim, cited as [[raw/YYYY-MM-DD-slug#^e1]]
 
 ## Design considerations
 

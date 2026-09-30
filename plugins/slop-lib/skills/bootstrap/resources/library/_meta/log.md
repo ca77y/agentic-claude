@@ -1,6 +1,7 @@
 ---
 title: Library Maintenance Log
 type: moc
+summary: Chronological record of library changes
 tags: []
 created: {{TODAY}}
 updated: {{TODAY}}

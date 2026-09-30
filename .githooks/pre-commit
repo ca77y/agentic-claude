@@ -1,0 +1,15 @@
+#!/bin/sh
+# Format staged Markdown, JSON and YAML, then validate the plugins and the marketplace.
+set -e
+cd "$(git rev-parse --show-toplevel)"
+
+staged=$(git diff --cached --name-only --diff-filter=ACMR)
+formattable=$(printf '%s\n' "$staged" | grep -E '\.(md|json|ya?ml)$' || true)
+if [ -n "$formattable" ]; then
+  printf '%s\n' "$formattable" | tr '\n' '\0' | xargs -0 prettier --write --ignore-unknown --log-level warn
+  printf '%s\n' "$formattable" | tr '\n' '\0' | xargs -0 git add
+fi
+
+for target in . plugins/slop-eng plugins/slop-lib; do
+  claude plugin validate --strict "$target"
+done

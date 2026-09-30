@@ -1,19 +1,12 @@
-# Specification and acceptance
+# Specification
 
-Read before a nontrivial change. The core skill requires the spec gate before implementation and a separate fresh validator for final acceptance.
+Brief the writer with the user's requirements, the acceptance source verbatim, the spec path in the project's spec location (normally `docs/specs/`), the repository and product evidence, and any existing spec to reuse. Ask for a proportionate spec:
 
-## Proportionate specification
+- the problem and intended outcome, scope, and exclusions;
+- the intended approach, constraints, and dependencies;
+- observable acceptance criteria, one behavior each, and how each will be verified;
+- when the work splits into independent parts, the tasks it breaks into.
 
-Use the project's durable spec location, normally `docs/specs/`. Reuse an existing spec when it covers the current request; retain its acceptance source and validate current fit. Include the problem/outcome, scope and exclusions, intended behavior or approach, relevant constraints and dependencies, observable acceptance criteria, and how each can be verified. Require an overall integer complexity score from 1 to 10 with a short rationale, and the same for every task. Identify at least one task in a one-task spec. Overall complexity accounts for integration, uncertainty and consequences; tasks are scored independently using the delivery matrix. Add missing scores to reused specs before the next delivery gate. A reused spec and its revalidation are evidence inputs: its historical author does not set a tier for a new task. A short document can be sufficient; no fixed story template, board card or separate shaping run is required. Trivial work without a spec still has a scored ledger assignment.
+For card-backed work the card is the acceptance source. A criterion that is wrong or ambiguous is corrected in the spec with the original wording and the reason beside it; the card itself changes only as `docs/BOARD.md` allows. Report every correction in the final response.
 
-Keep user requirements distinguishable from implementation decisions. For card-backed work, use the bound source as the acceptance source, preserve the relevant wording, and disclose inaccessible evidence. Identify assumptions and current evidence. Do not require unrelated board or forge operations to validate a local change.
-
-Give a fresh validator the spec identity and repository/product evidence. Independent design challenge is required for high-risk or materially uncertain approaches. Resolve blocking ambiguity, revise the spec, and dispatch a new validator for the revision. A passed gate is recorded evidence for that spec, not an automatic request for human approval or permission to publish.
-
-## Candidate acceptance
-
-Give another fresh validator the validated spec, candidate identity including uncommitted content, changed paths, relevant baseline/raw evidence, and required checks. Ask for correctness and acceptance together, with proportionate regression coverage and affected documentation. Checks should exercise meaningful behavior or artifact properties; mechanical skill validation alone does not prove a workflow's behavior.
-
-Retain pass/fail/unverified observations and blocking findings. Missing dependencies or an unavailable defined check remain unverified. Group relevant small checks in one fresh validation assignment. Arrange product or test corrections as production work outside the validator, then obtain a newly dispatched validator's verdict on the changed candidate.
-
-If a correction changes the contract materially, revise and validate the spec first. Never weaken a criterion to erase a defect. A spec pass and an implementation pass apply only to their identified artifacts; later changes invalidate affected evidence. Preserve specifications and evidence needed for recovery rather than relying on a disposable worktree snapshot.
+Brief the spec auditor with the spec revision, the acceptance source, and the repository and product evidence, and ask it to challenge the design when the approach is high-risk or uncertain. Brief QA with the validated spec, the candidate revision including uncommitted content, the changed paths, the baseline evidence, and the required checks, and ask for correctness and acceptance in one pass.

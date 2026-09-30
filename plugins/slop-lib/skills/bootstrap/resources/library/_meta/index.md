@@ -1,6 +1,7 @@
 ---
 title: Library Index
 type: moc
+summary: Entry point to the {{PROJECT_NAME}} research library
 tags:
   - index
 aliases:
@@ -16,7 +17,7 @@ updated: {{TODAY}}
 ## Wiki Pages
 
 ```dataview
-TABLE title, tags, updated, confidence
+TABLE summary, confidence, status, updated
 FROM "library/wiki"
 WHERE type = "wiki"
 SORT updated DESC
@@ -25,12 +26,14 @@ SORT updated DESC
 ## Raw Notes
 
 ```dataview
-TABLE title, source, accessed, up
+TABLE summary, source, accessed
 FROM "library/raw"
 WHERE type = "raw"
 SORT file.name ASC
 ```
 
-## Plain-Markdown Fallback
+## Plain-Markdown Index
+
+One line per page: `- [[path|title]] — summary (updated YYYY-MM-DD)`.
 
 No research pages have been added yet.

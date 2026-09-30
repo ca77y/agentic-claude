@@ -1,6 +1,7 @@
 ---
 title: Library Taxonomy
 type: moc
+summary: Controlled tag vocabulary
 tags: []
 created: {{TODAY}}
 updated: {{TODAY}}
