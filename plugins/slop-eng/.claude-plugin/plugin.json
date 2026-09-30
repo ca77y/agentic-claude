@@ -2,7 +2,7 @@
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "slop-eng",
   "description": "Outcome-driven proposal shaping and verified delivery: shape turns ideas into proposals or specs with observable acceptance; explicitly invoked deliver implements or repairs a change through a verified PR, with fresh QA or auditor validation; bootstrap writes the project's board and forge declarations once. Agents: coder, writer (production), qa, auditor (fresh report-only validators). Uses slop-lib when installed; works without it.",
-  "version": "4.0.0",
+  "version": "4.1.0",
   "author": {
     "name": "ca77y"
   }

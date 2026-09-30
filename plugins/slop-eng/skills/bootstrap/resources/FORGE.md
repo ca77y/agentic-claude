@@ -26,6 +26,7 @@ Configuration does not authorize execution; the user's request does. An operatio
 - Create, update, read, comment: {{PR_BINDINGS}}
 - Title and body: {{TITLE_AND_BODY}}
 - Review trigger and where findings land: {{REVIEW_TRIGGER_OR_NONE}}
+- Review status, started and finished, as commands that can be polled, with time limits: {{REVIEW_STATUS_OR_NONE}}
 - Required checks: {{CHECKS_OR_NONE}}
 
 ## Restrictions

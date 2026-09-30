@@ -1,7 +1,7 @@
 name: Claude Code Review
 
 on:
-  # Runs when a PR opens, and on demand when a PR comment mentions "@review".
+  # Runs when a PR opens, and on demand when a PR comment is "@review" or starts with "@review" and a space or line break.
   # "@claude" stays bound to the general assistant in claude.yml.
   # docs/FORGE.md declares this trigger; change one, change both.
   pull_request:
@@ -15,8 +15,8 @@ jobs:
   claude-review:
     if: |
       github.event_name == 'pull_request' ||
-      (github.event_name == 'issue_comment' && github.event.issue.pull_request && contains(github.event.comment.body, '@review')) ||
-      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@review'))
+      (github.event_name == 'issue_comment' && github.event.issue.pull_request && (github.event.comment.body == '@review' || startsWith(github.event.comment.body, '@review ') || startsWith(github.event.comment.body, format('@review{0}', fromJSON('"\n"'))) || startsWith(github.event.comment.body, format('@review{0}', fromJSON('"\r"'))))) ||
+      (github.event_name == 'pull_request_review_comment' && (github.event.comment.body == '@review' || startsWith(github.event.comment.body, '@review ') || startsWith(github.event.comment.body, format('@review{0}', fromJSON('"\n"'))) || startsWith(github.event.comment.body, format('@review{0}', fromJSON('"\r"')))))
 
     runs-on: ubuntu-latest
     permissions:

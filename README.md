@@ -19,7 +19,7 @@ Each agent pins its model and effort in its definition: the writer and auditor r
 
 ## Review loop
 
-`deliver` fires the review the forge declaration names once the PR opens (unless the declaration says opening fires it), then ends with the PR open and reported as not yet reviewed; it never waits on or polls the review. Review findings come back by invoking `deliver` again with the findings or the PR: a repair run on the same branch and PR that pushes the verified fix and re-fires the declared review.
+Once the PR opens, `deliver` fires the review the forge declaration names (unless opening fires it) and waits for it with monitors: one until the review starts, then one until it finishes. Each finished review starts a round: findings are sorted into defects and non-issues, the defects are fixed and verified by a fresh QA, and the fix is pushed and reviewed again. After at most three rounds, or once no defect remains, `deliver` reports what was fixed, each non-issue with its reason, and anything left unfixed. Invoking `deliver` with a PR and its findings enters the same loop.
 
 ## Ledgers
 
