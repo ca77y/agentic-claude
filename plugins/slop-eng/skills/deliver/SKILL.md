@@ -15,9 +15,9 @@ The ledger is always `.tmp/ledger.md` at the worktree root. Before the first wri
 
 ## Gates
 
-The `slop-eng:deliver-gates` workflow runs the gates: it dispatches the writer, coder, and fresh validators, and keeps the spec and implementation budgets of three failures each. You never edit the work or judge it yourself.
+A change is nontrivial when it alters behavior, contracts, data, architecture, configuration semantics, or procedures, or needs a design decision; a bug fix alters behavior. Size doesn't decide; when unsure, treat it as nontrivial. Typos, formatting, and similarly settled edits are trivial.
 
-A change is nontrivial when it alters behavior, contracts, data, architecture, configuration semantics, or procedures, or needs a design decision. Size doesn't decide; when unsure, treat it as nontrivial. Typos, formatting, and similarly settled edits are trivial.
+The `slop-eng:deliver-gates` workflow runs the gates: it dispatches the writer, coder, and fresh validators, and keeps the spec and implementation budgets of three failures each. You never edit the work or judge it yourself.
 
 Read enough of the repository, or dispatch `Explore`, to fill the workflow's `args`, an object:
 

@@ -44,7 +44,7 @@ Run the evals last; they call models, so run them only before a release. Every c
 for p in plugins/slop-eng plugins/slop-lib; do
   claude plugin eval "$p" --tag trigger --runs 1 --ablation none --trust-plugin
 done
-claude plugin eval plugins/slop-eng --tag smoke --allow-tools Bash Write Edit Agent --scaffold --ablation none --trust-plugin
+claude plugin eval plugins/slop-eng --tag smoke --allow-tools Bash Write Edit Agent Workflow --scaffold --ablation none --trust-plugin
 ```
 
 Change a plugin's `version` in `.claude-plugin/plugin.json` only when the user asks for that bump.
