@@ -15,16 +15,16 @@ The ledger is always `.tmp/ledger.md` at the worktree root. Before the first wri
 
 ## Gates
 
-A change is nontrivial when it alters behavior, contracts, data, architecture, configuration semantics, or procedures, or needs a design decision; a bug fix alters behavior. Size doesn't decide; when unsure, treat it as nontrivial. Typos, formatting, and similarly settled edits are trivial.
+A change is hard when it alters behavior, contracts, data, architecture, configuration semantics, or procedures, or needs a design decision; a bug fix alters behavior. Size doesn't decide; when unsure, treat it as hard. Typos, formatting, and similarly settled edits are easy.
 
 The `slop-eng:deliver-gates` workflow runs the gates: it dispatches the writer, coder, and fresh validators, and keeps the spec and implementation budgets of three failures each. You never edit the work or judge it yourself.
 
 Read enough of the repository, or dispatch `Explore`, to fill the workflow's `args`, an object:
 
-- `mode`: `nontrivial` or `trivial`; `producer`: for trivial work, `coder` or, for a documentation-only change, `writer`.
+- `mode`: `hard` or `easy`; `producer`: for easy work, `coder` or, for a documentation-only change, `writer`.
 - `request`: the user's request; `acceptance`: the acceptance source verbatim, which is the card for card-backed work.
 - `worktree`: its absolute path; `base`: the commit the story branch started from.
-- `spec`: for nontrivial work, the absolute spec path in the project's spec location, named as `docs/BOARD.md` declares.
+- `spec`: for hard work, the absolute spec path in the project's spec location, named as `docs/BOARD.md` declares.
 - `context`: the repository and product evidence, existing specs to reuse, project rules, and the checks the project requires.
 - `pluginRoot`: `${CLAUDE_PLUGIN_ROOT}`; `skillDir`: `${CLAUDE_SKILL_DIR}`.
 - `failures`: the run's counts so far, when continuing it; `decision`: the user's answer, when rerunning after `blocked`.

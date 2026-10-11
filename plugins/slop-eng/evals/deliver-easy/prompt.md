@@ -1,5 +1,5 @@
 ---
-name: deliver-trivial
+name: deliver-easy
 tags: [smoke]
 allowed_tools:
   [Read, Write, Edit, Bash, Glob, Grep, Agent, Skill, TaskStop, Workflow]

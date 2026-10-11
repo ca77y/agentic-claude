@@ -44,20 +44,20 @@ const fail = (area = 'code') => ({
   limits: 'none',
 })
 
-test('nontrivial work runs the gates in order', async () => {
-  const { result, labels } = await run('deliver-gates.js', { ...ARGS, mode: 'nontrivial' })
+test('hard work runs the gates in order', async () => {
+  const { result, labels } = await run('deliver-gates.js', { ...ARGS, mode: 'hard' })
   assert.deepEqual(labels, ['writer:spec', 'auditor:spec#1', 'coder', 'writer:docs', 'qa#1'])
   assert.equal(result.status, 'passed')
   assert.equal(result.spec.revision, 'rev2')
 })
 
 test('args may arrive as a JSON string', async () => {
-  const { result } = await run('deliver-gates.js', JSON.stringify({ ...ARGS, mode: 'nontrivial' }))
+  const { result } = await run('deliver-gates.js', JSON.stringify({ ...ARGS, mode: 'hard' }))
   assert.equal(result.status, 'passed')
 })
 
 test('validator briefs hold no producer report', async () => {
-  const { calls } = await run('deliver-gates.js', { ...ARGS, mode: 'nontrivial' }, {
+  const { calls } = await run('deliver-gates.js', { ...ARGS, mode: 'hard' }, {
     coder: [{ status: 'done', changed: ['calc.py'], open: 'PRODUCER-NOTE' }],
   })
   for (const c of calls.filter((c) => c.role === 'qa' || c.role === 'auditor')) {
@@ -66,13 +66,13 @@ test('validator briefs hold no producer report', async () => {
 })
 
 test('a spec failure loops back to the writer and a new auditor', async () => {
-  const { result, labels } = await run('deliver-gates.js', { ...ARGS, mode: 'nontrivial' }, { auditor: [fail('spec')] })
+  const { result, labels } = await run('deliver-gates.js', { ...ARGS, mode: 'hard' }, { auditor: [fail('spec')] })
   assert.deepEqual(labels.slice(0, 4), ['writer:spec', 'auditor:spec#1', 'writer:spec-fix', 'auditor:spec#2'])
   assert.equal(result.failures.spec, 1)
 })
 
 test('a third implementation failure stops with every attempt', async () => {
-  const { result, labels } = await run('deliver-gates.js', { ...ARGS, mode: 'nontrivial' }, { qa: [fail(), fail(), fail()] })
+  const { result, labels } = await run('deliver-gates.js', { ...ARGS, mode: 'hard' }, { qa: [fail(), fail(), fail()] })
   assert.equal(result.status, 'budget_exhausted')
   assert.equal(result.failures.implementation, 3)
   assert.equal(result.attempts.filter((a) => a.outcome === 'fail').length, 3)
@@ -81,31 +81,31 @@ test('a third implementation failure stops with every attempt', async () => {
 })
 
 test('QA findings route by area', async () => {
-  const { labels } = await run('deliver-gates.js', { ...ARGS, mode: 'nontrivial' }, { qa: [fail('docs')] })
+  const { labels } = await run('deliver-gates.js', { ...ARGS, mode: 'hard' }, { qa: [fail('docs')] })
   assert.deepEqual(labels.slice(4), ['qa#1', 'writer:docs', 'qa#2'])
 })
 
 test('a spec finding from QA reopens the spec gate', async () => {
-  const { labels } = await run('deliver-gates.js', { ...ARGS, mode: 'nontrivial' }, { qa: [fail('spec')] })
+  const { labels } = await run('deliver-gates.js', { ...ARGS, mode: 'hard' }, { qa: [fail('spec')] })
   assert.deepEqual(labels.slice(5), ['writer:spec', 'auditor:spec#2', 'coder', 'writer:docs', 'qa#2'])
 })
 
 test('a coder spec defect reopens the spec with its count kept', async () => {
-  const { result, labels } = await run('deliver-gates.js', { ...ARGS, mode: 'nontrivial', failures: { spec: 1 } }, {
+  const { result, labels } = await run('deliver-gates.js', { ...ARGS, mode: 'hard', failures: { spec: 1 } }, {
     coder: [{ status: 'spec_defect', changed: [], open: 'criterion 2 contradicts 1' }],
   })
   assert.deepEqual(labels, ['writer:spec', 'auditor:spec#1', 'coder', 'writer:spec', 'auditor:spec#2', 'coder', 'writer:docs', 'qa#1'])
   assert.equal(result.failures.spec, 1)
 })
 
-test('trivial work skips the spec', async () => {
-  const { result, labels } = await run('deliver-gates.js', { ...ARGS, spec: undefined, mode: 'trivial' })
+test('easy work skips the spec', async () => {
+  const { result, labels } = await run('deliver-gates.js', { ...ARGS, spec: undefined, mode: 'easy' })
   assert.deepEqual(labels, ['coder', 'qa#1'])
   assert.equal(result.spec, null)
 })
 
-test('trivial documentation work goes to the writer and an auditor', async () => {
-  const { labels } = await run('deliver-gates.js', { ...ARGS, spec: undefined, mode: 'trivial', producer: 'writer' })
+test('easy documentation work goes to the writer and an auditor', async () => {
+  const { labels } = await run('deliver-gates.js', { ...ARGS, spec: undefined, mode: 'easy', producer: 'writer' })
   assert.deepEqual(labels, ['writer:docs', 'auditor#1'])
 })
 
@@ -125,14 +125,14 @@ test('unverified, blocked, and null results return blocked', async () => {
     [{ coder: [{ status: 'blocked', changed: [], open: 'which base?' }] }, 'which base?'],
     [{ coder: [null] }, 'returned nothing'],
   ]) {
-    const { result } = await run('deliver-gates.js', { ...ARGS, mode: 'nontrivial' }, queued)
+    const { result } = await run('deliver-gates.js', { ...ARGS, mode: 'hard' }, queued)
     assert.equal(result.status, 'blocked')
     assert.match(result.blocker, new RegExp(reason))
   }
 })
 
 test('an abandoned approach costs a failure and retries', async () => {
-  const { result, labels } = await run('deliver-gates.js', { ...ARGS, mode: 'trivial', spec: undefined }, {
+  const { result, labels } = await run('deliver-gates.js', { ...ARGS, mode: 'easy', spec: undefined }, {
     coder: [{ status: 'unworkable', changed: [], open: 'regex approach' }],
   })
   assert.deepEqual(labels, ['coder', 'coder', 'qa#1'])
@@ -142,8 +142,8 @@ test('an abandoned approach costs a failure and retries', async () => {
 test('every dispatched agent exists in the plugin', async () => {
   const roles = new Set()
   for (const [args, queued] of [
-    [{ ...ARGS, mode: 'nontrivial' }, { qa: [fail('spec')] }],
-    [{ ...ARGS, spec: undefined, mode: 'trivial', producer: 'writer' }, {}],
+    [{ ...ARGS, mode: 'hard' }, { qa: [fail('spec')] }],
+    [{ ...ARGS, spec: undefined, mode: 'easy', producer: 'writer' }, {}],
   ]) {
     const { calls } = await run('deliver-gates.js', args, queued)
     calls.forEach((c) => roles.add(c.role))

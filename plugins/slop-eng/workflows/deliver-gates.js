@@ -11,7 +11,7 @@ export const meta = {
 
 const BUDGET = 3
 const input = typeof args === 'string' ? JSON.parse(args) : args || {}
-const mode = input.mode || 'nontrivial'
+const mode = input.mode || 'hard'
 const failures = { spec: 0, implementation: 0, ...(input.failures || {}) }
 const attempts = []
 let specRevision = null
@@ -76,7 +76,7 @@ function list(findings) {
 }
 
 function specLine() {
-  if (!input.spec) return 'Spec: none; this is trivial work.'
+  if (!input.spec) return 'Spec: none; this is easy work.'
   return specRevision
     ? `Validated spec: ${input.spec} at revision ${specRevision}.`
     : `Validated spec: ${input.spec}.`
@@ -166,7 +166,7 @@ async function build(findings) {
     await specGate(`these findings say the spec is wrong:\n${list(byArea('spec'))}`)
     return build(null)
   }
-  const single = mode === 'trivial' ? input.producer || 'coder' : null
+  const single = mode === 'easy' ? input.producer || 'coder' : null
   const coderTask = findings
     ? `Fix these findings, adding regression tests where they are missing:\n${list(single === 'coder' ? findings : byArea('code'))}`
     : `Implement the request with regression tests. ${specLine()}`
@@ -189,7 +189,7 @@ async function build(findings) {
 }
 
 async function verify() {
-  const role = mode === 'trivial' && input.producer === 'writer' ? 'auditor' : 'qa'
+  const role = mode === 'easy' && input.producer === 'writer' ? 'auditor' : 'qa'
   let earlier = input.findings || []
   for (;;) {
     phase('Verify')
@@ -214,7 +214,7 @@ async function verify() {
 
 let result
 try {
-  if (mode === 'nontrivial') await specGate(null)
+  if (mode === 'hard') await specGate(null)
   await build(mode === 'repair' ? input.findings || [] : null)
   const candidate = await verify()
   result = { status: 'passed', candidate, findings: [], blocker: null }

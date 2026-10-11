@@ -6,7 +6,7 @@
 
 ## Scope
 
-- `plugins/slop-eng/workflows/deliver-gates.js`: the gate engine, in three modes: `nontrivial` (spec, build, verify), `trivial` (build, verify), and `repair` (fix given defects, verify).
+- `plugins/slop-eng/workflows/deliver-gates.js`: the gate engine, in three modes: `hard` (spec, build, verify), `easy` (build, verify), and `repair` (fix given defects, verify).
 - `plugins/slop-eng/workflows/deliver-repair.js`: a wrapper that runs `deliver-gates` in `repair` mode, for review rounds.
 - `plugins/slop-eng/skills/deliver/`: the skill keeps what a script cannot do (worktree, commits, push, PR, card, review wait, finding triage, report) and runs the workflows for the gates.
 - README and CLAUDE.md describe the current state.
@@ -27,21 +27,21 @@ From [`docs/issues/deliver-workflow-spike.md`](../issues/deliver-workflow-spike.
 
 `args` is an object, or the same object as a JSON string:
 
-| Field        | Meaning                                                                                                           |
-| ------------ | ----------------------------------------------------------------------------------------------------------------- |
-| `mode`       | `nontrivial`, `trivial`, or `repair`.                                                                             |
-| `request`    | The user's request.                                                                                               |
-| `acceptance` | The acceptance source, verbatim.                                                                                  |
-| `worktree`   | Absolute path of the story worktree.                                                                              |
-| `base`       | The commit the story branch started from.                                                                         |
-| `spec`       | Absolute spec path: where to write it (`nontrivial`), or the validated spec (`repair`); omitted for trivial work. |
-| `context`    | Repository and product evidence, project rules, and the checks the project requires.                              |
-| `producer`   | `trivial` only: `coder` (default) or `writer`.                                                                    |
-| `findings`   | `repair` only: the defects, each `{location, problem, area}` with `area` one of `spec`, `code`, `docs`.           |
-| `failures`   | Failures already counted this run, `{spec, implementation}`; zero when omitted.                                   |
-| `decision`   | The user's answer to an earlier `blocked` result, when rerunning.                                                 |
-| `pluginRoot` | Absolute path of the plugin, so briefs can name its references.                                                   |
-| `skillDir`   | Absolute path of the `deliver` skill, for `references/specification.md`.                                          |
+| Field        | Meaning                                                                                                  |
+| ------------ | -------------------------------------------------------------------------------------------------------- |
+| `mode`       | `hard`, `easy`, or `repair`.                                                                             |
+| `request`    | The user's request.                                                                                      |
+| `acceptance` | The acceptance source, verbatim.                                                                         |
+| `worktree`   | Absolute path of the story worktree.                                                                     |
+| `base`       | The commit the story branch started from.                                                                |
+| `spec`       | Absolute spec path: where to write it (`hard`), or the validated spec (`repair`); omitted for easy work. |
+| `context`    | Repository and product evidence, project rules, and the checks the project requires.                     |
+| `producer`   | `easy` only: `coder` (default) or `writer`.                                                              |
+| `findings`   | `repair` only: the defects, each `{location, problem, area}` with `area` one of `spec`, `code`, `docs`.  |
+| `failures`   | Failures already counted this run, `{spec, implementation}`; zero when omitted.                          |
+| `decision`   | The user's answer to an earlier `blocked` result, when rerunning.                                        |
+| `pluginRoot` | Absolute path of the plugin, so briefs can name its references.                                          |
+| `skillDir`   | Absolute path of the `deliver` skill, for `references/specification.md`.                                 |
 
 ### Verdicts and producer reports
 
@@ -55,9 +55,9 @@ Every validator returns, through `schema`:
 
 ### Gates
 
-- **Spec** (`nontrivial`, and whenever the spec is reopened): `slop-eng:writer` drafts or revises the spec, then a fresh `slop-eng:auditor` judges it. On `fail` the spec budget takes a failure and the writer fixes the findings; a new auditor judges again.
-- **Build**: `slop-eng:coder` implements against the validated spec, then `slop-eng:writer` updates affected documentation, sequentially, so neither edits under the other. Trivial work runs only the named producer.
-- **Verify**: a fresh `slop-eng:qa` judges the candidate, documentation included; trivial work by the writer goes to a fresh auditor. On `fail` the implementation budget takes a failure and the findings go back by area: `code` to the coder, `docs` to the writer, `spec` to the spec gate. A new validator judges again.
+- **Spec** (`hard`, and whenever the spec is reopened): `slop-eng:writer` drafts or revises the spec, then a fresh `slop-eng:auditor` judges it. On `fail` the spec budget takes a failure and the writer fixes the findings; a new auditor judges again.
+- **Build**: `slop-eng:coder` implements against the validated spec, then `slop-eng:writer` updates affected documentation, sequentially, so neither edits under the other. Easy work runs only the named producer.
+- **Verify**: a fresh `slop-eng:qa` judges the candidate, documentation included; easy work by the writer goes to a fresh auditor. On `fail` the implementation budget takes a failure and the findings go back by area: `code` to the coder, `docs` to the writer, `spec` to the spec gate. A new validator judges again.
 - **Repair** starts at the producers with the given findings, then verifies.
 
 A producer that reports `spec_defect` reopens the spec gate with its count kept, and the build restarts against the revised spec. `unworkable` costs its gate a failure. A budget reaching three ends the run.
@@ -87,10 +87,10 @@ The ledger keeps what the workflow does not persist: `run` lines, a `workflow` l
 
 ## Acceptance criteria
 
-1. Nontrivial work runs writer, auditor, coder, documentation writer, and QA in that order; verified by the deliver smoke eval and a dry run of the script against stub agents.
+1. Hard work runs writer, auditor, coder, documentation writer, and QA in that order; verified by the deliver smoke eval and a dry run of the script against stub agents.
 2. Every verdict comes from a fresh `agent()` call whose brief holds no producer report; verified by reading the brief builders.
 3. A third failure in either budget returns `budget_exhausted` with every attempt and stops; verified by a stubbed dry run where every verdict fails.
-4. Trivial work runs no writer or auditor for a spec; verified by a stubbed dry run.
+4. Easy work runs no writer or auditor for a spec; verified by a stubbed dry run.
 5. A repair run starts at the producers with the given findings and adds to the passed failure counts; verified by a stubbed dry run.
 6. An `unverified` verdict, a producer's `blocked`, or a null agent result returns `blocked` with the reason; verified by stubbed dry runs.
 7. No script names a tracker, forge, branch, or commit convention; verified by the CLAUDE.md greps.

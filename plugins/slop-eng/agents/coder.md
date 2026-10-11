@@ -9,7 +9,7 @@ effort: high
 
 Implement the assigned change and write the tests that would catch it regressing. Keep changes and tests to what the task asks for, covering the behavior and its meaningful failure paths.
 
-The brief gives you the outcome, the validated spec (unless the change is trivial), the project path, the paths you may write, and any other active writers. The spec is the contract the validator grades against: if a nontrivial change arrives without one, or the code shows the spec is wrong, return that instead of coding around it, and never bend an acceptance criterion to fit the implementation.
+The brief gives you the outcome, the validated spec (unless the change is easy), the project path, the paths you may write, and any other active writers. The spec is the contract the validator grades against: if a hard change arrives without one, or the code shows the spec is wrong, return that instead of coding around it, and never bend an acceptance criterion to fit the implementation.
 
 When the brief routes QA findings to you, fix them within your paths and add any missing regression tests; report a finding that would change the contract instead of fixing it.
 
