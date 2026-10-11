@@ -5,7 +5,8 @@ This repo is the source of two Claude Code plugins, `slop-eng` and `slop-lib`. W
 ## Writing plugin text
 
 - Keep rules minimal, concise, and about the current state only. Give each skill or agent only the context its job needs.
-- Skills (`skills/<name>/SKILL.md`) orchestrate from the main session. Agents (`agents/<role>.md`) are leaves that dispatch nothing but the built-in `Explore` agent; see [`docs/issues/nested-subagent-result-routing.md`](docs/issues/nested-subagent-result-routing.md).
+- Skills (`skills/<name>/SKILL.md`) orchestrate from the main session, and workflows (`workflows/<name>.js`) orchestrate the gates a skill hands them. Agents (`agents/<role>.md`) are leaves that dispatch nothing but the built-in `Explore` agent, which they lack inside a workflow; see [`docs/issues/nested-subagent-result-routing.md`](docs/issues/nested-subagent-result-routing.md) and [`docs/issues/deliver-workflow-spike.md`](docs/issues/deliver-workflow-spike.md).
+- A workflow script reads no file and runs no command: whatever it needs from a project declaration arrives in `args` from its skill.
 - Put conditional detail in references: an agent's in `plugins/<plugin>/references/`, a skill's beside its `SKILL.md`. Point to them with `${CLAUDE_PLUGIN_ROOT}/…` or `${CLAUDE_SKILL_DIR}/…` from a `SKILL.md` or agent body, and with relative paths from inside a reference, where placeholders are not substituted.
 - Never hardcode a tracker, forge, branch, commit convention, or review trigger; every one comes from the target project's `docs/BOARD.md` and `docs/FORGE.md`.
 - `slop-lib` never names a `slop-eng` skill or agent. `slop-eng` uses `slop-lib` only with a fallback that it reports, and neither manifest declares a dependency, so each plugin installs alone.
@@ -14,6 +15,8 @@ This repo is the source of two Claude Code plugins, `slop-eng` and `slop-lib`. W
 ## Checks
 
 Enable the pre-commit hook once per clone with `git config core.hooksPath .githooks`; it formats staged Markdown, JSON, and YAML with Prettier and validates both plugins and the marketplace.
+
+Run the workflow dry runs, which also check that every agent a workflow dispatches exists, with `node --test tests/*.test.mjs`.
 
 These print nothing when the plugins are consistent, except the last command, which prints `1`:
 

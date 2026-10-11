@@ -138,3 +138,16 @@ test('an abandoned approach costs a failure and retries', async () => {
   assert.deepEqual(labels, ['coder', 'coder', 'qa#1'])
   assert.equal(result.failures.implementation, 1)
 })
+
+test('every dispatched agent exists in the plugin', async () => {
+  const roles = new Set()
+  for (const [args, queued] of [
+    [{ ...ARGS, mode: 'nontrivial' }, { qa: [fail('spec')] }],
+    [{ ...ARGS, spec: undefined, mode: 'trivial', producer: 'writer' }, {}],
+  ]) {
+    const { calls } = await run('deliver-gates.js', args, queued)
+    calls.forEach((c) => roles.add(c.role))
+  }
+  assert.deepEqual([...roles].sort(), ['auditor', 'coder', 'qa', 'writer'])
+  for (const role of roles) readFileSync(new URL(`../agents/${role}.md`, dir))
+})
