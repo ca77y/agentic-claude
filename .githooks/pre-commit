@@ -10,6 +10,6 @@ if [ -n "$formattable" ]; then
   printf '%s\n' "$formattable" | tr '\n' '\0' | xargs -0 git add
 fi
 
-for target in . plugins/slop-eng plugins/slop-lib; do
+for target in . plugins/slopify; do
   claude plugin validate --strict "$target"
 done

@@ -1,20 +1,15 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
   "name": "agentic-slop",
-  "description": "Personal agentic toolkit: proposal shaping and verified delivery, plus a research library, as two independently installable Claude Code plugins.",
+  "description": "Personal agentic toolkit: proposal shaping, verified delivery, and a research library, as one Claude Code plugin.",
   "owner": {
     "name": "ca77y"
   },
   "plugins": [
     {
-      "name": "slop-eng",
-      "source": "./plugins/slop-eng",
-      "description": "Shape proposals and deliver verified, authorized changes through a PR, with coder/writer production and fresh QA or auditor validation. Uses slop-lib when installed; works without it."
-    },
-    {
-      "name": "slop-lib",
-      "source": "./plugins/slop-lib",
-      "description": "Research with provenance, ask the existing Markdown library, and lint it, with researcher, librarian, scribe, and fresh clerk validation. Standalone — installable with or without slop-eng."
+      "name": "slopify",
+      "source": "./plugins/slopify",
+      "description": "Shape proposals, deliver verified authorized changes through a PR, and research with provenance into a project library you can ask and lint, with fresh QA, auditor, and clerk validation."
     }
   ]
 }
