@@ -145,9 +145,11 @@ const RESEARCH_SCHEMA = {
 
 const RAW_SCHEMA = {
   type: 'object',
-  required: ['produced', 'deferredMetadata'],
+  required: ['produced', 'deferredMetadata', 'skipped', 'reason'],
   properties: {
-    produced: { ...STRINGS, description: 'Absolute paths of the raw notes written or appended; an empty array when none' },
+    produced: { ...STRINGS, description: 'Absolute paths of the raw notes written or appended; an empty array when you deliberately wrote nothing' },
+    skipped: { type: 'boolean', description: 'true only when you deliberately wrote nothing because the evidence has nothing for this source' },
+    reason: { type: 'string', description: 'When skipped is true, why nothing was written; otherwise an empty string' },
     deferredMetadata: { ...STRINGS, description: 'Index, taxonomy, or log entries left for the integrator' },
   },
 }
@@ -174,6 +176,11 @@ const attempts = []
 let specFailures = 0
 let persistFailures = 0
 let persisted = null // latest integration or repair result
+let pendingWritten = [] // raw notes written since the last integration returned
+let pendingDeferred = [] // deferred metadata not yet integrated
+let pendingLeads = [] // planned sources with no retrieved evidence, for the integrator
+const retrievalTries = {} // sub-question id -> researcher attempts without a result
+const MAX_RETRIEVAL_TRIES = 2
 let currentRaw = [] // the authoritative current list of raw notes; the latest structured list wins
 
 function blocked(gate, needs) {
@@ -185,13 +192,16 @@ function blocked(gate, needs) {
   }
 }
 
+// POSIX (/x), drive-letter (C:\x, C:/x), and UNC (\\host\x) paths are absolute.
+const ABSOLUTE = /^(?:\/|[A-Za-z]:[\\/]|\\\\)/
+
 // Only absolute Markdown paths count as paths; anything else in an agent's report is prose.
 function onlyPaths(items) {
   const out = []
   for (const x of Array.isArray(items) ? items : []) {
     if (typeof x === 'string') {
       const t = x.trim()
-      if (/^\/[^\n]*\.md$/.test(t) && !out.includes(t)) out.push(t)
+      if (ABSOLUTE.test(t) && !/[\r\n]/.test(t) && /\.md$/i.test(t) && !out.includes(t)) out.push(t)
     }
   }
   return out
@@ -199,8 +209,9 @@ function onlyPaths(items) {
 
 function toAbs(p) {
   const t = typeof p === 'string' ? p.trim() : ''
-  if (!t || t.startsWith('/') || !projectRoot) return t
-  return `${projectRoot.replace(/\/+$/, '')}/${t.replace(/^\.\//, '')}`
+  if (!t || ABSOLUTE.test(t) || !projectRoot) return t
+  const sep = projectRoot.includes('\\') && !projectRoot.includes('/') ? '\\' : '/'
+  return `${projectRoot.replace(/[\\/]+$/, '')}${sep}${t.replace(/^\.[\\/]/, '')}`
 }
 
 function normSource(x) {
@@ -220,6 +231,20 @@ function sameSource(a, b) {
 
 // The integrator's and every repair's rawNotes is the authoritative current list; the latest
 // structured list supersedes earlier ones. An empty or path-free list is not trusted.
+function samePlanNote(a, b) {
+  const x = [...a.subQuestions].sort().join('|')
+  const y = [...b.subQuestions].sort().join('|')
+  return a.path === b.path && sameSource(a.source, b.source) && x === y
+}
+
+// After a revision, sub-questions of added or changed planned notes need their notes written.
+function markPlanChanges(oldPlan) {
+  for (const n of spec.plannedRawNotes) {
+    if (oldPlan.some(o => samePlanNote(o, n))) continue
+    for (const id of n.subQuestions) if (evidence[id]) dirty.add(id)
+  }
+}
+
 function adoptRawList(result) {
   const latest = onlyPaths(result && result.rawNotes)
   if (latest.length) currentRaw = latest
@@ -253,6 +278,7 @@ let spec = null
 // A failed or unverified verdict, and each revision forced by a spec issue, count against the budget.
 async function passSpec(reason, issues) {
   phase('Spec')
+  const oldPlan = spec ? spec.plannedRawNotes : null
   let findings = issues
   let why = reason
   while (true) {
@@ -291,7 +317,10 @@ Planned raw notes:
 ${JSON.stringify(spec.plannedRawNotes, null, 2)}`,
         { agentType: 'slopify:library-clerk', label: 'judge spec', phase: 'Spec', schema: VERDICT_SCHEMA },
       )
-      if (verdict && verdict.verdict === 'pass') return true
+      if (verdict && verdict.verdict === 'pass') {
+        if (oldPlan) markPlanChanges(oldPlan)
+        return true
+      }
       specFailures += 1
       findings = verdict ? verdict.findings : ['The clerk did not return a verdict.']
       attempts.push({
@@ -317,12 +346,17 @@ const dirty = new Set() // sub-questions whose evidence has no raw note yet
 let verdict = null
 
 // One writer per planned raw note, plus one per retrieved source the plan does not cover.
-function buildJobs(ids) {
+function buildJobs(ids, leads) {
   const idSet = new Set(ids)
   const jobs = []
   for (const n of spec.plannedRawNotes) {
     const subs = n.subQuestions.filter(id => idSet.has(id))
-    if (subs.length) jobs.push({ kind: 'planned', key: n.path, path: n.path, source: n.source, title: '', subs })
+    if (!subs.length) continue
+    const hasFindings = subs.some(id => (evidence[id].findings || []).length > 0)
+    const sources = subs.flatMap(id => evidence[id].sources || [])
+    const rests = !n.source || sources.length === 0 || sources.some(src => sameSource(n.source, src.url))
+    if (hasFindings && rests) jobs.push({ kind: 'planned', key: n.path, path: n.path, source: n.source, title: '', subs })
+    else leads.push(`${n.source || n.path}: planned for ${n.path}, but no retrieved finding rests on it; record it as an unretrieved lead, not as evidence`)
   }
   const extra = new Map()
   for (const id of ids) {
@@ -351,7 +385,7 @@ function jobPrompt(job) {
   return `${WHERE}
 ${BOUNDS}
 
-Assignment: raw notes. ${target} Record only the findings that rest on that source; other sources have their own writers. The library keeps one raw note per canonical source: before creating the note, search the raw notes' source fields for the canonical source, and if a note for it already exists, append a dated section to that note instead of rewriting it. Write only that note, and leave the index, taxonomy, and log untouched; return their entries as deferred metadata. In produced, return the absolute path of the note you wrote or appended.
+Assignment: raw notes. ${target} Record only the findings that rest on that source; other sources have their own writers. The library keeps one raw note per canonical source: before creating the note, search the raw notes' source fields for the canonical source, and if a note for it already exists, append a dated section to that note instead of rewriting it. Write only that note, and leave the index, taxonomy, and log untouched; return their entries as deferred metadata. In produced, return the absolute path of the note you wrote or appended. If the evidence has nothing for this source, write nothing and return skipped true with the reason.
 
 Research spec: ${spec.path} (revision ${spec.revision})
 
@@ -382,17 +416,26 @@ ${list(context.supported)}`,
       ),
     )
     const issues = []
+    const retry = []
     toRun.forEach((s, i) => {
       if (results[i]) {
+        retrievalTries[s.id] = 0
         evidence[s.id] = results[i]
         if (materialIssue(results[i].specIssue)) issues.push(`Sub-question ${s.id}: ${results[i].specIssue.change}`)
         else if (results[i].specIssue && results[i].specIssue.change) log(`Sub-question ${s.id}: non-material spec note ignored`)
       } else {
-        evidence[s.id] = { findings: [], sources: [], contradictions: [], limits: ['The researcher did not return.'], specIssue: { material: false, change: '' } }
-        log(`Sub-question ${s.id}: no researcher result; recorded as a retrieval limit`)
+        retrievalTries[s.id] = (retrievalTries[s.id] || 0) + 1
+        if (retrievalTries[s.id] < MAX_RETRIEVAL_TRIES) {
+          retry.push(s.id)
+          log(`Sub-question ${s.id}: no researcher result; retrieving it again`)
+        } else {
+          // No evidence: recorded as a retrieval limit, and no raw note is written for it.
+          evidence[s.id] = { findings: [], sources: [], contradictions: [], limits: ['The researcher did not return.'], specIssue: { material: false, change: '' } }
+          log(`Sub-question ${s.id}: no researcher result after ${retrievalTries[s.id]} attempts; recorded as a retrieval limit`)
+        }
       }
     })
-    for (const s of toRun) dirty.add(s.id)
+    for (const s of toRun) if (evidence[s.id] && !retry.includes(s.id)) dirty.add(s.id)
     pending = []
     persisted = null
     if (issues.length) {
@@ -405,6 +448,11 @@ ${list(context.supported)}`,
       }
       pending = spec.changedSubQuestions.filter(id => spec.subQuestions.some(s => s.id === id))
       for (const s of spec.subQuestions) if (!evidence[s.id] && !pending.includes(s.id)) pending.push(s.id)
+      for (const id of retry) if (!pending.includes(id)) pending.push(id)
+      continue
+    }
+    if (retry.length) {
+      pending = retry
       continue
     }
   }
@@ -413,9 +461,9 @@ ${list(context.supported)}`,
   if (!persisted) {
     phase('Persist')
     const ids = spec.subQuestions.filter(s => evidence[s.id] && dirty.has(s.id)).map(s => s.id)
-    const written = []
-    const deferred = []
-    let todo = buildJobs(ids)
+    const leads = []
+    let todo = buildJobs(ids, leads)
+    pendingLeads.push(...leads.filter(l => !pendingLeads.includes(l)))
     for (const id of ids) {
       if (!todo.some(j => j.subs.includes(id))) log(`Sub-question ${id}: no planned note and no source; nothing to persist`)
     }
@@ -424,7 +472,7 @@ ${list(context.supported)}`,
         todo.map(job => () =>
           agent(jobPrompt(job), {
             agentType: 'slopify:library-scribe',
-            label: `raw note ${job.kind === 'planned' ? job.path.split('/').pop() : job.key.slice(0, 40)}`,
+            label: `raw note ${job.kind === 'planned' ? job.path.split(/[\\/]/).pop() : job.key.slice(0, 40)}`,
             phase: 'Persist',
             schema: RAW_SCHEMA,
           }),
@@ -433,12 +481,19 @@ ${list(context.supported)}`,
       const failed = []
       raw.forEach((r, i) => {
         const paths = r ? onlyPaths(r.produced) : []
+        if (r && !paths.length && r.skipped === true && typeof r.reason === 'string' && r.reason.trim()) {
+          // A deliberate no-op is not a failure; the source becomes an unretrieved lead.
+          const lead = `${todo[i].source || todo[i].key}: no raw note written (${r.reason.trim()}); record it as an unretrieved lead, not as evidence`
+          if (!pendingLeads.includes(lead)) pendingLeads.push(lead)
+          pendingDeferred.push(...(r.deferredMetadata || []))
+          return
+        }
         if (!paths.length) {
           failed.push(todo[i])
           return
         }
-        for (const p of paths) if (!written.includes(p)) written.push(p)
-        deferred.push(...(r.deferredMetadata || []))
+        for (const p of paths) if (!pendingWritten.includes(p)) pendingWritten.push(p)
+        pendingDeferred.push(...(r.deferredMetadata || []))
       })
       todo = failed
       if (todo.length) {
@@ -449,7 +504,7 @@ ${list(context.supported)}`,
       }
     }
     for (const id of ids) dirty.delete(id)
-    for (const p of written) if (!currentRaw.includes(p)) currentRaw.push(p)
+    for (const p of pendingWritten) if (!currentRaw.includes(p)) currentRaw.push(p)
 
     // Exactly one integrator, after every raw-note write has returned.
     const integrated = await agent(
@@ -463,11 +518,14 @@ Question: ${question}
 Raw notes written by this run:
 ${list(currentRaw)}
 
-Raw notes written in this pass:
-${list(written)}
+Raw notes written since the last integration:
+${list(pendingWritten)}
 
 Deferred metadata:
-${list(deferred)}
+${list(pendingDeferred)}
+
+Planned sources with no retrieved evidence (keep each visible as an unretrieved lead in the library's format; cite nothing about its contents):
+${list(pendingLeads)}
 
 Retrieval limits and contradictions reported by researchers:
 ${JSON.stringify(
@@ -485,6 +543,9 @@ ${JSON.stringify(
     }
     persisted = integrated
     adoptRawList(persisted)
+    pendingWritten = []
+    pendingDeferred = []
+    pendingLeads = []
   }
 
   // Validate: a fresh clerk, after integration.

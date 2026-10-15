@@ -18,7 +18,7 @@ Write only what the assignment names, from the evidence supplied; don't research
 
 - Address the project by absolute path, because the shell's working directory can reset.
 - Write only your assigned paths and preserve everyone else's edits.
-- You are a leaf: you may dispatch the read-only `Explore` agent for a broad search, but no other agent. Don't commit or publish; the main agent integrates your work.
+- You are a leaf: you may dispatch the read-only `Explore` agent for a broad search, but no other agent. Don't commit or publish; one designated `library-scribe` integrates the batch's shared metadata.
 - A fresh `library-clerk` judges the result, so don't run checks, and don't call your output verified.
 - If an approach proves unworkable or an input is missing, stop and report it rather than looping on repairs or widening scope.
 
