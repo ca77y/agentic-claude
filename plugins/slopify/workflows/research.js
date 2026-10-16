@@ -178,6 +178,7 @@ let persistFailures = 0
 let persisted = null // latest integration or repair result
 let pendingWritten = [] // raw notes written since the last integration returned
 let pendingDeferred = [] // deferred metadata not yet integrated
+const planAdds = new Map() // planned note path -> ids of sub-questions added to it by a plan change
 let pendingLeads = [] // planned sources with no retrieved evidence, for the integrator
 const retrievalTries = {} // sub-question id -> researcher attempts without a result
 const MAX_RETRIEVAL_TRIES = 2
@@ -215,19 +216,23 @@ function toAbs(p) {
 }
 
 // Compare sources by a simple normal form: single forward slashes, lower case, and no fragment,
-// query, scheme, leading www., leading ./, or trailing slash.
+// utm_* tracking parameter, scheme, leading www., leading ./, or trailing slash. Other query
+// parameters stay, because they can name a different source (watch?v=A, item?id=1).
 function normSource(x) {
   return String(x || '')
     .trim()
     .replace(/\\/g, '/')
     .toLowerCase()
     .replace(/#.*$/, '')
-    .replace(/\?.*$/, '')
+    .replace(/\?(.*)$/, (m, q) => {
+      const kept = q.split('&').filter(param => param && !/^utm_/.test(param))
+      return kept.length ? `?${kept.join('&')}` : ''
+    })
     .replace(/^[a-z][a-z0-9+.-]*:\/\//, '')
     .replace(/\/{2,}/g, '/')
     .replace(/^www\./, '')
     .replace(/^\.\//, '')
-    .replace(/\/+$/, '')
+    .replace(/\/+(\?|$)/, '$1')
 }
 
 function sameSource(a, b) {
@@ -242,26 +247,42 @@ function matchingNote(plan, n) {
   return plan.find(o => (o.source && n.source ? sameSource(o.source, n.source) : o.path === n.path))
 }
 
-// Raw notes are append-only and one per source, so a note that exists keeps its path: a revised
-// plan that moves it is rewritten back to the written path.
-function pinWrittenPaths(plan, oldPlan) {
-  return plan.map(n => {
-    const o = oldPlan && matchingNote(oldPlan, n)
-    if (o && o.path !== n.path && currentRaw.includes(o.path)) {
-      log(`Planned note for ${n.source} moved to ${n.path}; keeping the written path ${o.path}`)
-      return { ...n, path: o.path }
-    }
-    return n
-  })
+// Compare paths with forward slashes, no repeated slashes, and a lower-case drive letter.
+function normPath(p) {
+  return String(p || '')
+    .trim()
+    .replace(/\\/g, '/')
+    .replace(/^([a-z]):/i, (m, d) => `${d.toLowerCase()}:`)
+    .replace(/(.)\/{2,}/g, '$1/')
 }
 
-// After a revision, mark the sub-questions whose evidence still has to be written: all of an
-// added note's, and only the newly added sub-questions of a note that continues.
+function isWritten(path) {
+  const x = normPath(path)
+  return [...currentRaw, ...pendingWritten].some(w => normPath(w) === x)
+}
+
+// Raw notes are append-only and one per source, so a revised plan must not move a note that is
+// already written. Each move is a finding for the spec reviser.
+function movedNotes(plan, oldPlan) {
+  const moved = []
+  for (const n of plan) {
+    const o = oldPlan && matchingNote(oldPlan, n)
+    if (o && normPath(o.path) !== normPath(n.path) && isWritten(o.path)) {
+      moved.push(`The raw note for ${n.source} is already written at ${o.path}; keep that path (the revised plan moves it to ${n.path}).`)
+    }
+  }
+  return moved
+}
+
+// After a revision, record per planned note the sub-questions newly added to it (all of a new
+// note's), so only that note receives their evidence.
 function markPlanChanges(oldPlan) {
   for (const n of spec.plannedRawNotes) {
     const o = matchingNote(oldPlan, n)
-    const added = o ? n.subQuestions.filter(id => !o.subQuestions.includes(id)) : n.subQuestions
-    for (const id of added) if (evidence[id]) dirty.add(id)
+    const added = (o ? n.subQuestions.filter(id => !o.subQuestions.includes(id)) : n.subQuestions).filter(id => evidence[id])
+    if (!added.length) continue
+    if (!planAdds.has(n.path)) planAdds.set(n.path, new Set())
+    for (const id of added) planAdds.get(n.path).add(id)
   }
 }
 
@@ -327,8 +348,18 @@ ${findings && findings.length ? `\nFindings to resolve:\n${list(findings)}` : ''
       specFailures += 1
       attempts.push({ gate: 'spec', approach: 'library-scribe spec draft', failed: 'the scribe did not return' })
     } else {
-      const plan = (draft.plannedRawNotes || []).map(n => ({ ...n, path: toAbs(n.path) }))
-      spec = { ...draft, plannedRawNotes: pinWrittenPaths(plan, oldPlan) }
+      spec = { ...draft, plannedRawNotes: (draft.plannedRawNotes || []).map(n => ({ ...n, path: toAbs(n.path) })) }
+      const moved = movedNotes(spec.plannedRawNotes, oldPlan)
+      if (moved.length) {
+        // Not judged: the file and the plan must agree, so the scribe revises again.
+        specFailures += 1
+        findings = moved
+        why = 'The revision moved raw notes that are already written; keep their paths.'
+        attempts.push({ gate: 'spec', approach: `spec revision ${spec.revision}`, failed: moved.join('; ') })
+        log(`Spec revision ${spec.revision} moves written raw notes; sending it back to the scribe`)
+        if (specFailures >= MAX_FAILURES) return false
+        continue
+      }
       const verdict = await agent(
         `${WHERE}
 
@@ -373,7 +404,8 @@ function buildJobs(ids, leads) {
   const idSet = new Set(ids)
   const jobs = []
   for (const n of spec.plannedRawNotes) {
-    const subs = n.subQuestions.filter(id => idSet.has(id))
+    const adds = planAdds.get(n.path)
+    const subs = n.subQuestions.filter(id => idSet.has(id) || (adds && adds.has(id)))
     if (!subs.length) continue
     const hasFindings = subs.some(id => (evidence[id].findings || []).length > 0)
     // Whether the evidence really rests on the source is the scribe's call (skipped).
@@ -526,6 +558,7 @@ ${list(context.supported)}`,
       }
     }
     for (const id of ids) dirty.delete(id)
+    planAdds.clear()
     for (const p of pendingWritten) if (!currentRaw.includes(p)) currentRaw.push(p)
 
     // Exactly one integrator, after every raw-note write has returned.
