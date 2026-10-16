@@ -3,7 +3,7 @@ export const meta = {
   description:
     'Wait for a pull request review, sort its findings, fix the real defects, and push each round only after a fresh qa passes, for at most three rounds or until a review is clean',
   whenToUse:
-    'Run only when the user invokes /slopify:review-pr or asks for the slopify review-pr workflow; deliver-story and deliver-bugfix also run it as their last step. Args: {pr, worktree?, spec?, story?, findings?, projectRoot?, answers?}, or the pull request as a plain string. pr names the pull request, worktree is its story worktree, spec and story are the acceptance source when known, findings are review findings to use in round 1 instead of waiting, projectRoot defaults to the session project directory, and answers maps a blocked need id to the answer.',
+    'Run only when the user invokes /slopify:review-pr or asks for the slopify review-pr workflow; deliver-story and deliver-bugfix also run it as their last step. Args: {pr, worktree?, spec?, story?, test?, findings?, projectRoot?, answers?}, or the pull request as a plain string. pr names the pull request, worktree is its story worktree, spec and story are the acceptance source when known, test is the regression test path that belongs with the spec on the ledger, findings are review findings to use in round 1 instead of waiting, projectRoot defaults to the session project directory, and answers maps a blocked need id to the answer.',
   phases: [
     { title: 'Locate', detail: 'scout-checkpoint reports the PR, worktree, and ledger state; scout-card reads the PR card; pusher recovers a missing worktree' },
     { title: 'Wait', detail: 'watcher waits for review n, one dispatch at a time' },
@@ -170,6 +170,7 @@ const input = normalize(args) || {};
 const pr = str(input.pr);
 const projectRoot = str(input.projectRoot);
 const storyText = str(input.story);
+const testPath = str(Array.isArray(input.test) ? input.test[0] : input.test);
 const answers = input.answers && typeof input.answers === 'object' ? input.answers : {};
 
 if (!pr) {
@@ -302,16 +303,46 @@ let baseCommit = '';
 let dirtyPaths = [];
 
 const list = (items) => (items && items.length ? items.map((x) => `- ${x}`).join('\n') : '- none');
-const intOf = (s) => {
-  const m = String(s || '').match(/\d+/);
-  return m ? parseInt(m[0], 10) : 0;
+// A checkpoint value that says there is nothing, in prose or as a bare word. Scouts answer an absent file
+// as "MISSING (test -f found no file ...)".
+const isNone = (v) => !String(v || '').trim() || /^(none|absent|n\/a|not found|missing)\b/i.test(String(v).trim());
+// Present values have a shape: a path, a sha, a ref name. Prose is never a value.
+const pathLike = (t) => /^[^\s()<>:;,'"`]+$/.test(t) && (t.includes('/') || /\.\w+$/.test(t));
+const SHAPES = {
+  worktree: pathLike,
+  ledger: pathLike,
+  spec: pathLike,
+  head: (t) => /^[0-9a-f]{7,64}$/i.test(t),
+  base: (t) => /^[0-9a-f]{7,64}$/i.test(t),
+  'story-revision': (t) => /^[0-9a-f]{7,64}$/i.test(t),
+  branch: (t) => /^\w[\w./-]*$/.test(t),
 };
+// A checkpoint item's value, or '' when it says there is none or lacks the expected shape. A shaped item
+// is its first token, so a path followed by a remark is the path.
+function val(res, key) {
+  const v = fact(res, key);
+  if (isNone(v)) return '';
+  const ok = SHAPES[key];
+  if (!ok) return v;
+  const tok = v.trim().split(/\s+/)[0].replace(/[.,;]+$/, '');
+  return ok(tok) ? tok : '';
+}
+// The highest round on 'review <n> fired|ended' text, else a bare number; never a digit run from a timestamp.
+function reviewRound(v) {
+  const t = String(v || '').trim();
+  if (isNone(t)) return 0;
+  let best = 0;
+  for (const m of t.matchAll(/review\s+(\d+)\s+(?:fired|ended)/gi)) best = Math.max(best, parseInt(m[1], 10));
+  if (best) return best;
+  const bare = t.match(/^(?:round\s+)?(\d+)$/i);
+  return bare ? parseInt(bare[1], 10) : 0;
+}
 const need = (id, kind, what, evidence) => ({ id, kind, what, evidence: String(evidence || '') });
 
 function checkpointOf() {
   const out = {};
-  const branch = fact(cp, 'branch');
-  const ledger = fact(cp, 'ledger');
+  const branch = val(cp, 'branch');
+  const ledger = val(cp, 'ledger');
   if (worktree) out.worktree = worktree;
   if (branch) out.branch = branch;
   if (specPath) out.spec = specPath;
@@ -330,13 +361,15 @@ function answersFor(prefix) {
   return keys.length ? `\nAnswers the user gave to earlier open decisions:\n${keys.map((k) => `- ${k}: ${answers[k]}`).join('\n')}` : '';
 }
 
+const isTmp = (p) => /(^|\/)\.tmp(\/|$)/.test(String(p || ''));
+
 function parseDirty(v) {
   const t = String(v || '').trim();
-  if (!t || /^none$/i.test(t)) return [];
+  if (isNone(t)) return [];
   return t
     .split(/[\n,]+/)
     .map((x) => x.trim())
-    .filter((x) => x && !/^none$/i.test(x));
+    .filter((x) => x && !isNone(x) && !/[\s()]/.test(x) && !isTmp(x));
 }
 
 function samePath(a, b) {
@@ -356,7 +389,17 @@ const CHECKPOINT_KEYS = 'worktree branch head base dirty ledger review-fired rev
 
 // A validator verdict counts only when it passes, carries no blocking finding, and names the revision
 // the brief gave it in evaluated. A brief with no revision to name accepts any evaluated.
-const named = (v, rev) => !rev || String(v.evaluated || '').toLowerCase().includes(String(rev).toLowerCase());
+// Revisions match when the briefed text appears in evaluated, or when every full-length hash in the brief
+// is a prefix of (or extends) a hash in evaluated, so a short sha matches its full form.
+function sameRev(evaluated, rev) {
+  const e = String(evaluated || '').toLowerCase();
+  const r = String(rev || '').toLowerCase();
+  if (!r || e.includes(r)) return true;
+  const rt = r.match(/\b[0-9a-f]{7,64}\b/g) || [];
+  const et = e.match(/\b[0-9a-f]{7,64}\b/g) || [];
+  return rt.length > 0 && rt.every((x) => et.some((y) => x.startsWith(y) || y.startsWith(x)));
+}
+const named = (v, rev) => sameRev(v.evaluated, rev);
 const passes = (v, rev) => !!v && v.verdict === 'pass' && !v.findings.some((f) => f.blocking) && named(v, rev);
 function problems(v, rev) {
   if (!v) return ['no verdict returned'];
@@ -418,10 +461,10 @@ Its description and state:
 ${prDescription || 'not readable: docs/FORGE.md declares no read binding for it'}`,
     { label: 'card', phase: 'Locate' },
   );
-  hasCard = !!card && !!fact(card, 'story-revision');
+  hasCard = !!card && !!val(card, 'story-revision');
 }
 
-if (!worktree) worktree = fact(cp, 'worktree');
+if (!worktree) worktree = val(cp, 'worktree');
 if (!worktree) {
   const recovered = await agent(
     `${WHERE}
@@ -430,7 +473,7 @@ ${AUTH}
 Recover the story worktree for this pull request's head branch, as docs/FORGE.md declares: check the branch out in a worktree named as docs/FORGE.md names it, and change nothing else. Return the worktree's absolute path as the reference of an operation named worktree.
 
 Pull request: ${pr}
-Branch: ${fact(cp, 'branch') || 'the pull request head branch'}`,
+Branch: ${val(cp, 'branch') || 'the pull request head branch'}`,
     { agentType: 'slopify:pusher', label: 'recover worktree', phase: 'Locate', schema: PUSHER_SCHEMA },
   );
   const op = recovered && recovered.done ? recovered.operations.find((o) => /worktree/i.test(o.op) && /^\//.test(o.reference)) : null;
@@ -451,14 +494,14 @@ Branch: ${fact(cp, 'branch') || 'the pull request head branch'}`,
 }
 
 if (!specPath) {
-  const m = fact(cp, 'spec').match(/^(\S+)/);
-  specPath = m && !/^none$/i.test(m[1]) ? m[1] : '';
+  const m = val(cp, 'spec').match(/^(\S+)/);
+  specPath = m ? m[1].replace(/@[0-9a-f]{7,64}$/i, '') : '';
 }
-head = fact(cp, 'head');
-baseCommit = fact(cp, 'base');
+head = val(cp, 'head');
+baseCommit = val(cp, 'base');
 dirtyPaths = parseDirty(fact(cp, 'dirty'));
-const branch = fact(cp, 'branch');
-const prDescription = fact(cp, 'pr');
+const branch = val(cp, 'branch');
+const prDescription = val(cp, 'pr');
 completed.push('locate');
 
 // The acceptance source for every qa and lens-finding brief.
@@ -482,7 +525,7 @@ function acceptance(failFindings) {
 }
 
 // Resume rule: round = the highest review fired after the last done publish, else 1.
-const fired = intOf(fact(cp, 'review-fired'));
+const fired = reviewRound(fact(cp, 'review-fired'));
 const startRound = fired >= 1 ? Math.min(fired, FINAL_ROUND) : 1;
 for (let k = 1; k < startRound; k++) skipped.push(`round-${k}`);
 if (givenFindings.length && startRound > 1) log('Findings in args apply to round 1 only; this run resumes at a later round and waits for its review');
@@ -531,12 +574,11 @@ Worktree: ${worktree}`,
 async function sortFindings(r, findings) {
   await loadCard();
   phase('Sort');
-  const verdicts = await parallel(
-    findings.map((f) => () =>
-      lens('lens-finding',
-        `${WHERE}
+  const judge = (f, attempt) =>
+    lens('lens-finding',
+      `${WHERE}
 
-Judge whether the change of this pull request is free of the defect that one review finding describes. The change runs from the base revision to the candidate revision, committed in the worktree ${worktree}; ignore uncommitted changes. Report the candidate revision in evaluated.
+Judge whether the change of this pull request is free of the defect that one review finding describes. The change runs from the base revision to the candidate revision, committed in the worktree ${worktree}; ignore uncommitted changes. Report the candidate revision in evaluated.${attempt > 1 ? ' An earlier verdict on this finding was missing or named another revision; judge it afresh.' : ''}
 
 Pull request: ${pr}
 Base revision: ${baseCommit || 'not reported; use the merge base of the pull request branch and the target branch docs/FORGE.md declares'}
@@ -545,10 +587,18 @@ ${acceptance([])}
 
 Review ${r}, finding ${f.id}${f.location ? ` at ${f.location}` : ''}:
 ${f.text}`,
-        { label: `sort ${f.id}`, phase: 'Sort' },
-      ),
-    ),
-  );
+      { label: `sort ${f.id}${attempt > 1 ? ' again' : ''}`, phase: 'Sort' },
+    );
+  // A verdict is usable when it names the candidate revision and a pass carries no blocking finding.
+  const usable = (v) => !!v && named(v, head) && !(v.verdict === 'pass' && v.findings.some((x) => x.blocking));
+  const verdicts = await parallel(findings.map((f) => () => judge(f, 1)));
+  const again = findings.map((f, i) => i).filter((i) => !usable(verdicts[i]));
+  if (again.length) {
+    const second = await parallel(again.map((i) => () => judge(findings[i], 2)));
+    again.forEach((i, k) => {
+      verdicts[i] = second[k] || verdicts[i];
+    });
+  }
   const out = { defects: [], nonIssues: [], unverified: [] };
   findings.forEach((f, i) => {
     let v = verdicts[i];
@@ -565,6 +615,28 @@ ${f.text}`,
 }
 
 // ---- Fix -------------------------------------------------------------------
+
+// Worktree-relative form of a path, for comparing the same file spelled two ways.
+const relPath = (p) => {
+  const t = String(p || '').trim();
+  return worktree && t.startsWith(worktree + '/') ? t.slice(worktree.length + 1) : t.replace(/^\.\//, '');
+};
+
+// Everything the round commits: the producers' reported paths plus every path that was dirty when the round
+// began (validators judged the whole worktree), without .tmp/ and without the spec, which is committed alone.
+function stagedPaths(st) {
+  const out = [];
+  const seen = new Set();
+  for (const p of [...st.stage, ...st.dirtyAll]) {
+    if (!p || isTmp(p) || isSpec(p) || seen.has(relPath(p))) continue;
+    seen.add(relPath(p));
+    out.push(p);
+  }
+  return out;
+}
+
+// Work already in the worktree from an interrupted run or from an earlier attempt of this round.
+const carriedPaths = (st) => [...new Set([...st.dirtyAll, ...st.stage])].filter((p) => !isTmp(p));
 
 const workBrief = (items) =>
   list(items.map((i) => `${i.id}${i.location ? ` at ${i.location}` : ''}: ${i.text}${i.why ? ` (the lens found: ${i.why})` : ''}`));
@@ -627,7 +699,7 @@ ${workBrief(items)}${mismatch ? `\nThe coder's reason for the revision:\n${misma
 }
 
 function coderCall(r, items, st) {
-  const dirty = st.dirty.filter((p) => !isDoc(p));
+  const dirty = carriedPaths(st).filter((p) => !isDoc(p));
   return agent(
     `${WHERE}
 ${NO_FORGE_WRITES}
@@ -644,7 +716,7 @@ ${workBrief(items)}${dirtyBrief(dirty)}`,
 }
 
 function docWriterCall(r, items, st) {
-  const dirty = st.dirty.filter((p) => isDoc(p) && !isSpec(p));
+  const dirty = carriedPaths(st).filter((p) => isDoc(p) && !isSpec(p));
   return agent(
     `${WHERE}
 ${NO_FORGE_WRITES}
@@ -686,9 +758,18 @@ async function produce(r, st) {
       () => (ranCoder ? coderCall(r, codeItems, st) : Promise.resolve(null)),
       () => (ranDocs ? docWriterCall(r, docItems, st) : Promise.resolve(null)),
     ]);
-    st.dirty = []; // interrupted work is briefed once
     let c = res[0];
     const w = res[1];
+    // Record what each producer left before any retry or early return: it is in the worktree either way.
+    if (c) {
+      for (const p of [...c.changed, ...c.tests]) st.stage.add(p);
+      st.coder = c;
+    }
+    if (w) {
+      for (const p of w.produced) if (!isSpec(p)) st.stage.add(p);
+      st.docsChanged = st.docsChanged || w.produced.some((p) => !isSpec(p));
+      st.writer = w;
+    }
     if (ranDocs) {
       if (!w) {
         fixFailures += 1;
@@ -698,9 +779,6 @@ async function produce(r, st) {
       }
       if (w.storyBlockers.length) return { stop: stop(`fix-r${r}`, w.storyBlockers.map((b, i) => need(`r${r}-story-${i + 1}`, 'story', b, 'raised by the writer while fixing documentation'))) };
       if (w.openDecisions.length) return { stop: stop(`fix-r${r}`, w.openDecisions.map((d, i) => need(`r${r}-decision-${i + 1}`, 'decision', d, 'raised by the writer while fixing documentation'))) };
-      for (const p of w.produced) if (!isSpec(p)) st.stage.add(p);
-      st.docsChanged = st.docsChanged || w.produced.some((p) => !isSpec(p));
-      st.writer = w;
     }
     if (ranCoder) {
       // A spec mismatch goes back through the spec gate and spends the spec budget, then the coder runs again.
@@ -712,6 +790,10 @@ async function produce(r, st) {
         const rev = await reviseSpec(r, [], c.specMismatch, st);
         if (rev.stop) return rev;
         c = await coderCall(r, codeItems, st);
+        if (c) {
+          for (const p of [...c.changed, ...c.tests]) st.stage.add(p);
+          st.coder = c;
+        }
       }
       if (!c) {
         fixFailures += 1;
@@ -719,8 +801,6 @@ async function produce(r, st) {
         if (fixFailures >= MAX_FAILURES) return { stop: stop(`fix-r${r}`, [need(`r${r}-fix`, 'validation', 'A code fix; the coder did not return.', 'coder returned nothing')]) };
         continue;
       }
-      for (const p of [...c.changed, ...c.tests]) st.stage.add(p);
-      st.coder = c;
     }
     st.label = (ranCoder && st.coder ? st.coder.revision : ranDocs && st.writer ? st.writer.revision : st.label) || st.specRevision || '';
     return { ok: true };
@@ -750,7 +830,7 @@ async function validate(r, st, defects) {
 Judge the fixes made for the review defects below on pull request ${pr} (validation ${st.validations} of round ${r}).
 Revision: ${cand.text}.
 Changed paths:
-${list([...st.stage])}
+${list(stagedPaths(st))}
 
 ${acceptance(failFindings)}
 
@@ -792,7 +872,7 @@ Judge that the documentation claims in the changed paths are true against the co
 // ---- Push ------------------------------------------------------------------
 
 function pushBrief(r, st, summary) {
-  const staged = [...st.stage];
+  const staged = stagedPaths(st);
   const steps = [
     `If ${worktree}/.tmp/ledger.md does not exist, create it with the line: <time> run 1: review-pr ${pr} | worktree ${worktree} | branch ${branch || '<branch>'}`,
   ];
@@ -806,7 +886,10 @@ function pushBrief(r, st, summary) {
   );
   const lines = [];
   if (st.specRevised) {
-    lines.push(`<time> done spec ${specPath}@<its git hash-object> commit <sha of the spec commit> story <the story revision on the ledger's last done spec line>`);
+    lines.push(
+      `<time> done spec ${specPath}@<its git hash-object> commit <sha of the spec commit> story <the story revision on the ledger's last done spec line>` +
+        (testPath ? ` test ${testPath}` : ' and, when that last done spec line ends with test <path>, the same test <path>'),
+    );
   }
   lines.push(
     `only if the ledger already holds a done spec line: <time> done implement commit <sha of the implementation commit> spec <git hash-object of ${specPath || 'the spec'}> pushed`,
@@ -825,7 +908,7 @@ Return the implementation commit sha as the reference of a commit operation, and
 
 async function refreshHead(r, pushed) {
   const res = await scout('scout-checkpoint', checkpointPrompt('head dirty', `Report only head and dirty, after the push of round ${r}.`), { label: 'checkpoint after push', phase: 'Push' });
-  const h = res ? fact(res, 'head') : '';
+  const h = res ? val(res, 'head') : '';
   if (h) head = h;
   else {
     const op = pushed.operations.find((o) => /commit/i.test(o.op) && o.reference);
@@ -891,7 +974,7 @@ for (let r = startRound; r <= MAX_ROUNDS && !ended; r++) {
   const st = {
     base: sorted.defects.map((d) => ({ id: d.finding.id, location: d.finding.location, text: d.finding.text, why: d.why })),
     feedback: [],
-    dirty: dirtyPaths.slice(),
+    dirtyAll: dirtyPaths.slice(),
     stage: new Set(),
     docsChanged: false,
     specRevised: false,

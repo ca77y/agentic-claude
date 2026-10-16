@@ -477,9 +477,17 @@ const slugOf = (s) =>
     .slice(0, 6)
     .join("-");
 // A scout's "no value" comes in many spellings: empty, "none", "none: no branch name given".
-const isNone = (v) => !String(v || "").trim() || /^\s*none(?![\w/-]|\.\w)/i.test(String(v));
+const isNone = (v) =>
+  !String(v || "").trim() ||
+  /^\s*(none|absent|missing|n\/a|not found)(?![\w/-]|\.\w)/i.test(String(v));
 const clean = (v) => (isNone(v) ? "" : String(v).trim());
 const val = (res, key) => clean(fact(res, key));
+// A checkpoint or card value counts as present only in its expected shape, never as prose.
+const shaped = (v, re) => (re.test(String(v || "")) ? String(v).trim() : "");
+const PATH_RE = /^\/[\w@.+\- /]+$/; // an absolute path
+const REL_PATH_RE = /^[\w@.+/-]+$/; // a relative path
+const REF_RE = /^(https?:\/\/\S+|[\w@.+/#-]+(?: ?\d+)?)$/; // a PR URL, path, or number
+const HEX_RE = /^[0-9a-f]{7,64}$/i;
 const splitList = (v) =>
   isNone(v)
     ? []
@@ -532,35 +540,60 @@ function sameRevision(evaluated, revision) {
   const r = String(revision || "");
   return !!r && (e.includes(r) || e.includes(r.slice(0, 12)));
 }
-// A verdict counts only for the revision it judged.
-function passedOn(v, revision) {
-  return passed(v) && sameRevision(v.evaluated, revision);
+// A verdict is usable only when it is on the revision it was briefed with and is coherent: a
+// fail names a blocking finding, a pass names none. A null or unusable verdict is re-run, not fixed.
+function usable(v, revision) {
+  if (!v || !sameRevision(v.evaluated, revision)) return false;
+  const blocking = (v.findings || []).some((f) => f.blocking);
+  if (v.verdict === "fail") return blocking;
+  if (v.verdict === "pass") return !blocking;
+  return true;
 }
-function findingsOf(name, v, revision) {
-  if (!v) return [{ from: name, location: name, problem: "no verdict returned", blocking: true }];
-  const out = (v.findings || []).map((f) => ({ from: name, ...f }));
-  if (v.verdict === "pass" && !sameRevision(v.evaluated, revision))
+// What a fixer can act on: a fail's blocking findings, and what an unverified verdict could not check.
+function blockingOf(name, v) {
+  if (!v || v.verdict === "pass") return [];
+  const out = (v.findings || []).filter((f) => f.blocking).map((f) => ({ from: name, ...f }));
+  if (v.verdict === "unverified") {
+    const lim = v.limits && !isNone(v.limits) ? v.limits : "";
     out.push({
       from: name,
       location: name,
-      problem: `judged "${v.evaluated}", not the revision ${revision}`,
+      problem: `could not check${lim ? `: ${lim}` : " (no reason given)"}`,
       blocking: true,
     });
-  if (v.verdict !== "pass" && !out.length)
-    out.push({
-      from: name,
-      location: name,
-      problem: `verdict ${v.verdict} with no finding listed`,
-      blocking: true,
-    });
-  if (v.limits && !/^\s*none\s*$/i.test(v.limits))
-    out.push({
-      from: name,
-      location: name,
-      problem: `could not check: ${v.limits}`,
-      blocking: v.verdict !== "pass",
-    });
+  }
   return out;
+}
+// Dispatch validators, and re-run any whose verdict is missing or on another revision. Those
+// re-runs have their own bound and spend neither the spec nor the implementation budget.
+async function judge(items, revision, step) {
+  const out = new Array(items.length).fill(null);
+  let rounds = 0;
+  while (true) {
+    const todo = items.map((_, i) => i).filter((i) => !usable(out[i], revision));
+    if (!todo.length) return { verdicts: out };
+    if (rounds >= MAX_FAILURES) {
+      attempts.push({
+        gate: "validator",
+        approach: `${todo.map((i) => items[i].name).join(", ")} on ${revision}`,
+        failed: "no usable verdict after repeated dispatches",
+      });
+      return {
+        stop: stop(step, [
+          need(step, 1, "validation", `A usable verdict from ${todo.map((i) => items[i].name).join(", ")} on revision ${revision}.`, `${rounds} dispatches returned no verdict, a verdict on another revision, or a fail with no blocking finding`),
+        ]),
+      };
+    }
+    if (rounds > 0)
+      attempts.push({
+        gate: "validator",
+        approach: `re-run ${todo.map((i) => items[i].name).join(", ")}`,
+        failed: "no verdict, or a verdict on another revision",
+      });
+    const res = await parallel(todo.map((i) => () => items[i].call()));
+    todo.forEach((i, k) => (out[i] = res[k]));
+    rounds += 1;
+  }
 }
 const findingText = (f) =>
   `${f.from} (${f.blocking ? "blocking" : "note"}) at ${f.location}: ${f.problem}`;
@@ -796,9 +829,9 @@ if (!cardRes) {
     need("locate", 1, "prerequisite", "A readable story: the card, or the story text.", "scout-card did not return"),
   ]);
 }
-const storySource = val(cardRes, "story-source").toLowerCase();
+const storySource = ((/^\s*(card|text|none)\b/i.exec(fact(cardRes, "story-source")) || [])[1] || "").toLowerCase();
 const story = storySource === "text" ? storyArg : fact(cardRes, "story");
-const storyRevision = fact(cardRes, "story-revision");
+const storyRevision = shaped(fact(cardRes, "story-revision"), HEX_RE);
 if (!story || storySource === "none") {
   return stop("locate", [
     need("locate", 1, "input", "A story the board can read, or the story text.", (cardRes.gaps || []).join("; ") || cardRes.answer),
@@ -816,8 +849,8 @@ if (isNone(criteria) && !/\n/.test(criteria.trim())) {
     need("locate", 1, "story", "The story states no acceptance criteria; it needs observable ones from shape.", cardRes.answer),
   ]);
 }
-const cardId = val(cardRes, "card");
-const boardBranch = val(cardRes, "branch");
+const cardId = shaped(val(cardRes, "card"), /^\S{1,100}$/);
+const boardBranch = shaped(val(cardRes, "branch"), REL_PATH_RE);
 const slug = slugOf(cardId) || slugOf(storyArg);
 // The card title is the first line of a card-backed story; its lowercase kebab slug names the spec.
 const titleSlug = (storySource === "card" ? story.split("\n")[0].replace(/^#+\s*/, "") : "")
@@ -827,7 +860,7 @@ const titleSlug = (storySource === "card" ? story.split("\n")[0].replace(/^#+\s*
   .slice(0, 60)
   .replace(/-+$/, "");
 const specRel =
-  val(cardRes, "spec-path") ||
+  shaped(val(cardRes, "spec-path"), /^[\w@.+/-]+\.md$/) ||
   `docs/specs/${[cardId.toLowerCase().replace(/[^a-z0-9]+/g, "-"), titleSlug].filter(Boolean).join("-") || slug}.md`;
 const STORY_BLOCK = `The story, verbatim, is the acceptance source (story revision ${storyRevision}):
 <<<STORY
@@ -852,12 +885,12 @@ if (!cpRes) {
   ]);
 }
 const sameHash = (a, b) => !!a && !!b && (a.startsWith(b) || b.startsWith(a));
-const cpWorktree = val(cpRes, "worktree");
+const cpWorktree = shaped(val(cpRes, "worktree"), PATH_RE);
 if (cpWorktree.startsWith("/")) state.worktree = cpWorktree.replace(/\/+$/, "");
-state.branch = val(cpRes, "branch") || boardBranch;
-state.ledger = val(cpRes, "ledger");
-state.pr = val(cpRes, "pr").split("\n")[0].trim();
-const cpDirty = splitList(fact(cpRes, "dirty")).filter((p) => !/^\.tmp(\/|$)/.test(p));
+state.branch = shaped(val(cpRes, "branch"), REL_PATH_RE) || boardBranch;
+state.ledger = shaped(val(cpRes, "ledger"), PATH_RE);
+state.pr = shaped(val(cpRes, "pr").split("\n")[0].trim(), REF_RE);
+const cpDirty = splitList(fact(cpRes, "dirty")).filter((p) => REL_PATH_RE.test(p) && !/^\.tmp(\/|$)/.test(p));
 const cpSpec = parseSpec(val(cpRes, "spec"));
 if (cpSpec) {
   state.specPath = cpSpec.path;
@@ -869,7 +902,7 @@ let specRevision = state.specHash;
 const doneSpec = parseDoneSpec(val(cpRes, "done-spec"));
 const doneImpl = parseDoneImplement(val(cpRes, "done-implement"));
 const donePub = parseDonePublish(val(cpRes, "done-publish"));
-const ledgerStory = val(cpRes, "ledger-story") || (doneSpec ? doneSpec.story : "");
+const ledgerStory = shaped(val(cpRes, "ledger-story"), HEX_RE) || (doneSpec ? doneSpec.story : "");
 
 // The currency chain: each link depends on the one before it.
 const specCurrent =
@@ -936,7 +969,7 @@ async function specGate(findings) {
       `${WHERE}
 Work in the story worktree ${state.worktree}; address every file by absolute path. ${exists ? `Revise the spec at ${state.specPath} against the story below.` : `Write the spec at ${state.specPath}.`} Write only that one file. ${NO_WRITES}
 
-The spec holds: the problem and intended outcome, scope, and exclusions; the story verbatim as the acceptance source; the approach, with each advisor's view recorded as adopted or rejected and the reason; observable acceptance criteria, one behavior each, and how each is verified; and the tasks it breaks into. Return the tasks (id, summary, and paths each task may write, relative to the worktree root, files or directories, no globs, disjoint between tasks) and the documentation files to update as docs.
+The spec holds: the problem and intended outcome, scope, and exclusions; the story verbatim as the acceptance source; the approach, with each advisor's view recorded as adopted or rejected and the reason; observable acceptance criteria, one behavior each, and how each is verified; and the tasks it breaks into. Return the tasks (id, summary, and paths each task may write, relative to the worktree root, files or directories, no globs, disjoint between tasks, and including the test files the task adds) and the documentation files to update as docs.
 
 Story authority: you may clarify an ambiguous criterion in the spec without changing its meaning, keeping the original wording beside the clarification. A criterion that is wrong, or a story that cannot be built as stated, is a story blocker: report it in storyBlockers and change nothing about the goal, scope, or criteria. ${DECIDE}
 ${answersFor("spec")}
@@ -988,15 +1021,20 @@ The story worktree is ${state.worktree}. ${what}
 Spec: ${state.specPath}, revision ${specRevision}. Set evaluated to exactly that revision.
 
 ${STORY_BLOCK}${pending.length ? `\n\nEarlier findings to recheck:\n${list(pending)}` : ""}`;
-    const [ls, lc] = await parallel([
-      () => lens("lens-scope", brief("Judge whether the spec covers the story's criteria, with no added or dropped scope."), { label: "scope", phase: "Spec gate" }),
-      () => lens("lens-consistency", brief("Judge whether the spec agrees with the repository's constraints and its existing specs."), { label: "consistency", phase: "Spec gate" }),
-    ]);
+    const j = await judge(
+      [
+        { name: "lens-scope", call: () => lens("lens-scope", brief("Judge whether the spec covers the story's criteria, with no added or dropped scope."), { label: "scope", phase: "Spec gate" }) },
+        { name: "lens-consistency", call: () => lens("lens-consistency", brief("Judge whether the spec agrees with the repository's constraints and its existing specs."), { label: "consistency", phase: "Spec gate" }) },
+      ],
+      specRevision,
+      "spec-gate",
+    );
+    if (j.stop) return j.stop;
+    const [ls, lc] = j.verdicts;
     record("lens-scope", ls, specRevision);
     record("lens-consistency", lc, specRevision);
-    if (!(passedOn(ls, specRevision) && passedOn(lc, specRevision))) {
-      const fs = [...findingsOf("lens-scope", ls, specRevision), ...findingsOf("lens-consistency", lc, specRevision)];
-      pending = fs.map(findingText);
+    if (!(passed(ls) && passed(lc))) {
+      pending = [...blockingOf("lens-scope", ls), ...blockingOf("lens-consistency", lc)].map(findingText);
       if (fail("spec", `spec revision ${specRevision}`, pending.join("; "))) return exhausted("spec-gate", "spec");
       continue;
     }
@@ -1149,18 +1187,30 @@ ${
 ${dirtyIn.length ? `\n${DIRTY_SENTENCE}\nPaths:\n${list(dirtyIn)}\n` : ""}${fnd.length ? `\nFix these findings, reported by an independent validator of candidate ${ctx.judged}, and change only what they require:\n${list(fnd.map(findingText))}\n` : ""}`;
 }
 
+// Coders run first, then writers, so documentation is written against code that exists. Within
+// a stage, producers with disjoint paths run together; otherwise one after another.
 async function runJobs(jobs, ctx) {
-  const call = (j) => {
-    const prompt = jobPrompt(j, jobs, ctx);
-    return j.kind === "writer"
-      ? callWriter(prompt, `docs ${j.id}`, ctx.phase, WRITER_SCHEMA)
-      : callCoder(prompt, `code ${j.id}`, ctx.phase);
-  };
-  const disjoint = !jobs.some((a, i) => jobs.some((b, k) => k > i && overlaps(a.paths, b.paths)));
-  if (jobs.length > 1 && disjoint) return parallel(jobs.map((j) => () => call(j)));
-  const out = [];
-  for (const j of jobs) out.push(await call(j));
-  return out;
+  const results = new Array(jobs.length).fill(null);
+  for (const kind of ["coder", "writer"]) {
+    const idx = jobs.map((_, i) => i).filter((i) => jobs[i].kind === kind);
+    const part = idx.map((i) => jobs[i]);
+    if (!part.length) continue;
+    const call = (j) => {
+      const prompt = jobPrompt(j, part, ctx);
+      return kind === "writer"
+        ? callWriter(prompt, `docs ${j.id}`, ctx.phase, WRITER_SCHEMA)
+        : callCoder(prompt, `code ${j.id}`, ctx.phase);
+    };
+    const disjoint = !part.some((a, i) => part.some((b, k) => k > i && overlaps(a.paths, b.paths)));
+    let res;
+    if (part.length > 1 && disjoint) res = await parallel(part.map((j) => () => call(j)));
+    else {
+      res = [];
+      for (const j of part) res.push(await call(j));
+    }
+    idx.forEach((i, k) => (results[i] = res[k]));
+  }
+  return results;
 }
 
 function noteWork(results) {
@@ -1170,10 +1220,27 @@ function noteWork(results) {
   }
 }
 
-// The candidate label comes from what the coders report: one coder's own revision, or, after
-// several ran, their revisions joined. Validators judge the worktree's current state and echo it.
-function candidateAfter(ran) {
-  return unique(ran.filter((x) => x.kind === "coder" && x.result.revision).map((x) => x.result.revision)).join("&");
+// The candidate label is an identifier for the worktree's current state, built from what the
+// producers report: the coders' revisions (a lone coder's own is the true digest), plus the
+// documentation writers' revisions. After a writer-only fix, the previous code label carries on.
+function candidateAfter(ran, prev) {
+  const code =
+    unique(ran.filter((x) => x.kind === "coder" && x.result.revision).map((x) => x.result.revision)).join("&") ||
+    String(prev || "").split("~")[0];
+  const docs = unique(ran.filter((x) => x.kind === "writer").map((x) => x.result.revision || "unrevised"));
+  if (!code) return "";
+  return docs.length ? `${code}~docs-${docs.join(",")}` : code;
+}
+
+// What gets committed: the paths the validators judged, within the tasks' and documentation's assigned
+// paths, from the checkpoint's dirty list and what the producers reported. The rest is reported.
+function commitSet(scopes) {
+  const all = unique([...startDirty, ...touched]).filter((p) => p && !/^\.tmp(\/|$)/.test(p) && !within(p, state.specPath));
+  const inScope = all.filter((p) => scopes.some((s) => within(p, s)));
+  const outside = all.filter((p) => !inScope.includes(p));
+  if (outside.length)
+    limits.push(`Uncommitted paths outside the assigned paths, not committed: ${outside.join(", ")}`);
+  return inScope;
 }
 
 // Returns {stop} | {mismatch} | {ok: true, candidate}.
@@ -1185,11 +1252,6 @@ async function implement() {
     : [];
   const all = [...jobs, ...docsJobs];
   const dirtyNow = unique([...startDirty, ...touched]);
-  const outsideDirty = dirtyNow.filter(
-    (p) => !within(p, state.specPath) && !all.some((j) => j.paths.some((s) => within(p, s))),
-  );
-  if (outsideDirty.length)
-    limits.push(`Uncommitted paths outside every task, not committed: ${outsideDirty.join(", ")}`);
   const ran = [];
   let todo = all;
   while (todo.length) {
@@ -1206,7 +1268,7 @@ async function implement() {
   const mismatch = ran.map((x) => x.result.specMismatch).filter((m) => m && m.trim());
   if (mismatch.length) return { mismatch: mismatch.join("; ") };
   done("implement");
-  return { ok: true, candidate: candidateAfter(ran), ran };
+  return { ok: true, candidate: candidateAfter(ran, ""), ran };
 }
 
 // Fresh qa and lenses judge the candidate; producers fix; new validators judge again.
@@ -1217,20 +1279,22 @@ async function validate(first) {
   const jobs = [...plan.tasks.map((t) => ({ id: t.id, kind: "coder", summary: t.summary, paths: t.paths })), ...docsJobs];
   let findings = null;
   let prior = [];
+  let fixRound = 0;
   while (true) {
     if (findings) {
       phase("Validate");
       const byJob = {};
       const other = [];
+      const looksLikePath = (p) => /^[\w@.+/-]+$/.test(p) && /[./]/.test(p);
       for (const f of findings) {
         const p = pathOf(f.location);
-        const j = jobs.find((x) => x.paths.some((s) => within(p, s)));
+        const j = looksLikePath(p) ? jobs.find((x) => x.paths.some((s) => within(p, s))) : null;
         if (j) (byJob[j.id] = byJob[j.id] || []).push(f);
         else other.push(f);
       }
       const fixJobs = jobs.filter((j) => byJob[j.id] && byJob[j.id].length);
       if (other.length) {
-        const extra = other.map((f) => pathOf(f.location)).filter((p) => /^[\w./-]+$/.test(p));
+        const extra = other.map((f) => pathOf(f.location)).filter(looksLikePath);
         fixJobs.push({
           id: "fix",
           kind: "coder",
@@ -1251,7 +1315,9 @@ async function validate(first) {
           return { stop: exhausted("validate", "implementation") };
         continue; // the findings stay pending; try the fix again
       }
-      cand = candidateAfter(ran);
+      // A fix that leaves the label unchanged still produced new work: make the label new.
+      const next = candidateAfter(ran, cand);
+      cand = next && next === cand ? `${next}#${++fixRound}` : next;
       if (!cand)
         return { stop: stop("validate", [need("validate", 1, "prerequisite", "The candidate code revision after the fix.", "no producer or scout reported it")]) };
       findings = null;
@@ -1259,10 +1325,12 @@ async function validate(first) {
 
     phase("Validate");
     const changedList = [...touched];
-    const calls = [
-      () =>
-        callQa(
-          `${WHERE}
+    const items = [
+      {
+        name: "qa",
+        call: () =>
+          callQa(
+            `${WHERE}
 Validate the candidate in the story worktree ${state.worktree} against the validated spec and the story. Candidate revision: ${cand}. ${candidateNote(cand)}
 Spec: ${state.specPath}, revision ${specRevision}.
 Changed paths:
@@ -1271,26 +1339,28 @@ ${list(changedList)}
 ${STORY_BLOCK}
 
 Run the project's tests and the checks the spec requires, judge regression coverage, and judge each acceptance criterion and the affected documentation.${prior.length ? `\n\nEarlier findings to recheck:\n${list(prior)}` : ""}`,
-          "qa",
-          "Validate",
-        ),
+            "qa",
+            "Validate",
+          ),
+      },
     ];
     if (plan.docs.length)
-      calls.push(() =>
-        lens("lens-docs",
-          `${WHERE}
+      items.push({
+        name: "lens-docs",
+        call: () =>
+          lens("lens-docs",
+            `${WHERE}
 Judge whether the documentation claims in these files are true against the code in the story worktree ${state.worktree}. Candidate revision: ${cand}. ${candidateNote(cand)}
 Files:
 ${list(plan.docs)}${prior.length ? `\n\nEarlier findings to recheck:\n${list(prior)}` : ""}`,
-          { label: "docs", phase: "Validate" },
-        ),
-      );
-    const [q, d] = await parallel(calls);
-    record("qa", q, cand);
-    if (plan.docs.length) record("lens-docs", d, cand);
-    const ok = passedOn(q, cand) && (!plan.docs.length || passedOn(d, cand));
-    if (ok) return { ok: true, candidate: cand };
-    findings = [...findingsOf("qa", q, cand), ...(plan.docs.length ? findingsOf("lens-docs", d, cand) : [])];
+            { label: "docs", phase: "Validate" },
+          ),
+      });
+    const jd = await judge(items, cand, "validate");
+    if (jd.stop) return { stop: jd.stop };
+    jd.verdicts.forEach((v, i) => record(items[i].name, v, cand));
+    if (jd.verdicts.every(passed)) return { ok: true, candidate: cand };
+    findings = jd.verdicts.flatMap((v, i) => blockingOf(items[i].name, v));
     prior = findings.map(findingText);
     if (fail("implementation", `candidate ${cand}`, prior.join("; "))) return { stop: exhausted("validate", "implementation") };
   }
@@ -1325,9 +1395,10 @@ if (implCurrent) {
     break;
   }
   done("validate");
+  const commitPaths = commitSet([...plan.tasks.flatMap((t) => t.paths), ...plan.docs]);
   const c = await callPusher(
     pushBrief(
-      `Commit exactly these paths as they stand, staged by explicit path, with the commit convention docs/FORGE.md declares. Do not push. Commit nothing else, even if the worktree holds other uncommitted changes.\nPaths:\n${list([...touched])}`,
+      `Commit exactly these paths as they stand, staged by explicit path, with the commit convention docs/FORGE.md declares. Do not push. Commit nothing else, even if the worktree holds other uncommitted changes. If every path is already committed, make no commit and record the current HEAD sha in the ledger line.\nPaths:\n${list(commitPaths)}`,
       [`done implement commit <the new commit's sha> spec ${state.specHash}`],
     ),
     "commit the implementation",

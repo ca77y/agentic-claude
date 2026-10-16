@@ -9,7 +9,7 @@ export const meta = {
     { title: 'Gather', detail: 'scout-code, scout-tests, and scout-history' },
     { title: 'Reproduce', detail: 'coder builds and runs a reproduction in the reproduction directory only' },
     { title: 'Validate reproduction', detail: 'lens-repro runs the reproduction at least three times' },
-    { title: 'Report', detail: 'writer drafts the issue in the reproduction directory' },
+    { title: 'Report', detail: 'writer drafts the issue beside the reproduction directory, outside it' },
     { title: 'Validate report', detail: 'lens-bug-report judges the draft revision against the reproduction' },
     { title: 'File', detail: 'pusher files one Bug card through the board declaration' },
   ],
@@ -217,7 +217,17 @@ function words(text) {
 }
 
 function none(v) {
-  return !v || /^(none|absent|n\/a)\b/i.test(v)
+  return !v || /^(none|absent|n\/a|not found|missing)\b/i.test(v)
+}
+
+// A card identifier or URL is one token; prose such as "no card found" is not an identifier.
+function idOf(v) {
+  return !none(v) && /^[A-Za-z0-9][\w.:#\/-]*$/.test(v) ? v : ''
+}
+
+// The answer to a need this run raised, for the step that raised it; '' when none was given.
+function answerFor(id) {
+  return Object.prototype.hasOwnProperty.call(answers, id) && String(answers[id]).trim() !== '' ? String(answers[id]).trim() : ''
 }
 
 const WRITER_SCHEMA = {
@@ -340,11 +350,13 @@ Report: ${report}`,
     ),
 ])
 
-const cardId = fact(cardR, 'card-id')
+const cardId = idOf(fact(cardR, 'card-id'))
 const slug = slugify(cardId) || words(report) || 'report'
 const reproRel = `.tmp/repro/${slug}`
 const reproDir = projectRoot ? `${projectRoot}/${reproRel}` : reproRel
-const issuePath = `${reproDir}/issue.md`
+// The draft lives beside the reproduction directory, never in it, so it can't change the reproduction's digest.
+const issueRel = `.tmp/repro/${slug}.issue.md`
+const issuePath = projectRoot ? `${projectRoot}/${issueRel}` : issueRel
 
 let cp = null
 for (let i = 1; i <= MAX_FAILURES && !cp; i++) {
@@ -355,7 +367,7 @@ ${READ_ONLY}
 Report where a reproduce-bug run stands from its durable checkpoints. The run's reproduction directory is ${reproDir} (under the project's ignored .tmp/ folder). Return one evidence item per key that exists, with source set to the key and excerpt set to its value; omit a key that does not exist.
 
 Keys:
-- repro-dir: present only when the directory holds a reproduction: a runnable script or test, and the notes file recording its steps and observed output. Its value is the directory's absolute path, then "@", then its revision, computed from the directory with its issue.md left out: find <dir> -type f ! -name issue.md | sort | xargs git hash-object | git hash-object --stdin
+- repro-dir: present only when the directory holds a reproduction: a runnable script or test, and the notes file recording its steps and observed output. Its value is the directory's absolute path, then "@", then its revision, computed as: ${REPRO_REVISION}
 - bug-card: the identifier of an existing Bug card that reports this same bug, read through the board declaration; omit when there is none. The related-cards search found: ${fact(relatedR, 'bug-card') || 'none'}
 
 Report: ${report}`,
@@ -370,13 +382,16 @@ if (!cp) {
 }
 done('locate')
 
-const bugCard = fact(cp, 'bug-card') || fact(relatedR, 'bug-card')
+const bugCard = idOf(fact(cp, 'bug-card')) || idOf(fact(relatedR, 'bug-card'))
+// A reproduction is held only when the checkpoint reports "<dir>@<digest>" for this run's directory;
+// a missing-directory note, an empty value, or any other prose means there is none.
 const reproValue = fact(cp, 'repro-dir')
-const reproHeld = !none(reproValue)
-if (!none(bugCard)) checkpoint.bugCard = bugCard
+const reproMatch = reproValue.match(/^(\S+?)\/?@([0-9a-f]{7,64})$/i)
+const reproHeld = !!reproMatch && reproMatch[1].endsWith(reproRel)
+if (bugCard) checkpoint.bugCard = bugCard
 if (reproHeld) checkpoint.reproduction = reproDir
 
-if (!none(bugCard)) {
+if (bugCard) {
   // A Bug card already reports this bug: nothing to reproduce or file.
   for (const s of ['gather', 'reproduce', 'validate-repro', 'report', 'validate-report', 'file']) skip(s)
   return {
@@ -432,7 +447,7 @@ done('gather')
 
 // ---- Reproduce and validate the reproduction -------------------------------
 
-let reproRev = reproHeld ? reproValue.slice(reproValue.lastIndexOf('@') + 1).trim() : ''
+let reproRev = reproHeld ? reproMatch[2] : ''
 let reproSteps = []
 let reproObserved = ''
 let lastFindings = []
@@ -441,13 +456,13 @@ function reproOk(c) {
   return !!c && str(c.revision) !== '' && Array.isArray(c.steps) && c.steps.length > 0 && str(c.observed) !== ''
 }
 
-async function buildRepro(why) {
+async function buildRepro(why, answer) {
   return agent(
     `${WHERE}
 ${PRODUCER_BOUNDS}
 
 ${why}
-
+${answer ? `\nThe user's answer to what this step needed earlier: ${answer}\n` : ''}
 Your only writable path is the reproduction directory ${reproDir} (create it if needed): change no production code, no existing test, and nothing outside it. Write and run a reproduction script or test there that shows the reported failure. Record its steps and its observed output in a notes file in that directory, so a later run can read them. Return in steps the steps that reproduce the failure, in observed what the reproduction showed, and in revision the directory's digest, computed as: ${REPRO_REVISION} (with <dir> the reproduction directory). Return measurements as an empty array. If the failure does not reproduce, say so in open and leave steps empty.
 
 Report: ${report}
@@ -464,7 +479,7 @@ let reproFailures = 0
 if (!reproHeld) {
   phase('Reproduce')
   while (true) {
-    const c = await buildRepro('Reproduce the reported bug.')
+    const c = await buildRepro('Reproduce the reported bug.', answerFor('reproduce-1'))
     if (reproOk(c)) {
       reproRev = str(c.revision)
       reproSteps = c.steps
@@ -490,9 +505,9 @@ while (true) {
   reproVerdict = await lens('lens-repro',
     `${WHERE}
 
-Judge the reproduction in ${reproDir}, revision ${reproRev} (${REPRO_REVISION}, with its issue.md, if any, left out). Run it at least three times. The report it must show: ${report}
+Judge the reproduction in ${reproDir}, revision ${reproRev} (${REPRO_REVISION}). Run it at least three times. The report it must show: ${report}
 
-${reproSteps.length ? `The steps to run: ${reproSteps.join(' | ')}` : 'The directory holds the steps in its notes file.'}`,
+${reproSteps.length ? `The steps to run: ${reproSteps.join(' | ')}` : 'The directory holds the steps in its notes file.'}${answerFor('validate-repro-1') ? `\n\nContext the user gave after an earlier attempt: ${answerFor('validate-repro-1')}` : ''}`,
     { label: `repro (revision ${reproRev.slice(0, 7)})`, phase: 'Validate reproduction' },
   )
   const bad = problems('lens-repro', reproVerdict, reproRev)
@@ -507,7 +522,7 @@ ${reproSteps.length ? `The steps to run: ${reproSteps.join(' | ')}` : 'The direc
   lastFindings = bad
   phase('Reproduce')
   while (true) {
-    const c = await buildRepro(`A fresh lens did not pass the reproduction at revision ${reproRev}. Fix the reproduction in the directory so it reliably shows the reported failure; resolve these findings:\n${bad.join('\n\n')}`)
+    const c = await buildRepro(`A fresh lens did not pass the reproduction at revision ${reproRev}. Fix the reproduction in the directory so it reliably shows the reported failure; resolve these findings:\n${bad.join('\n\n')}`, answerFor('validate-repro-1'))
     if (reproOk(c)) {
       reproRev = str(c.revision)
       reproSteps = c.steps
@@ -530,11 +545,11 @@ done('validate-repro')
 // ---- Report and validate the report ----------------------------------------
 
 function draftOk(w) {
-  return !!w && Array.isArray(w.produced) && w.produced.length > 0 && w.produced.every(p => String(p).endsWith(`${reproRel}/issue.md`)) && str(w.revision) !== ''
+  return !!w && Array.isArray(w.produced) && w.produced.length > 0 && w.produced.every(p => String(p).endsWith(issueRel)) && str(w.revision) !== ''
 }
 
 const given = Object.keys(answers)
-  .filter(id => String(answers[id]).trim() !== '')
+  .filter(id => /^(issue|report)-/.test(id) && String(answers[id]).trim() !== '')
   .map(id => `- ${id}: ${answers[id]}`)
   .join('\n')
 
@@ -544,7 +559,7 @@ let reportFailures = 0
 const reportPrompt = (why) => `Address files by absolute path.
 ${PRODUCER_BOUNDS}
 
-${why} The issue is at ${issuePath}; write only that file. Use the card shape the project's board declaration gives for a bug: evidence, steps to reproduce, expected outcome, and observed outcome, each consistent with the reproduction in ${reproDir} (revision ${reproRev}), which you may read. If the report leaves the expected outcome unstated and the evidence cannot settle it, put the question in openDecisions rather than guessing. Return in revision the git hash-object digest of the issue, in produced its absolute path. Return tasks and docs as empty arrays.
+${why} The issue is at ${issuePath}; write only that file. Use the card shape the project's board declaration gives for a bug: evidence, steps to reproduce, expected outcome, and observed outcome, each consistent with the reproduction in ${reproDir}, which you may read; refer to the reproduction by its directory and steps, and pin no digest or revision of it in the issue. Decide anything that does not change what the bug is (formats, wording, references) yourself, and record it in the issue as a labelled assumption (a line starting "Assumption:"). The expected outcome may rest on the report and the code's evident contract (a function's name, docs, and tests); when it does, say so in the issue. Put a question in openDecisions only when the expected behavior is genuinely ambiguous. Return in revision the git hash-object digest of the issue, in produced its absolute path. Return tasks and docs as empty arrays.
 
 Report: ${report}
 ${given ? `\nAnswers to earlier questions:\n${given}\n` : ''}
@@ -557,16 +572,17 @@ ${evidenceText}`
 async function writeIssue(why, label) {
   while (true) {
     const w = await agent(reportPrompt(why), { agentType: 'slopify:writer', label, phase: 'Report', schema: WRITER_SCHEMA })
+    const open = w ? (w.openDecisions || []).map(s => String(s).trim()).filter(Boolean) : []
+    const blockers = w ? (w.storyBlockers || []).map(s => String(s).trim()).filter(Boolean) : []
+    if (open.length || blockers.length) {
+      // Reported before the draft check: a writer that blocks writes no draft, and retrying would hide why.
+      if (draftOk(w)) checkpoint.issue = issuePath
+      return stop('report', [
+        ...open.map((q, i) => ({ id: `issue-${i + 1}`, kind: 'decision', what: q, evidence: 'reported by the writer while drafting the issue' })),
+        ...blockers.map((b, i) => ({ id: `issue-blocker-${i + 1}`, kind: 'input', what: b, evidence: 'reported by the writer while drafting the issue' })),
+      ])
+    }
     if (draftOk(w)) {
-      const open = (w.openDecisions || []).map(s => String(s).trim()).filter(Boolean)
-      const blockers = [...(w.storyBlockers || [])]
-      if (open.length || blockers.length) {
-        checkpoint.issue = issuePath
-        return stop('report', [
-          ...open.map((q, i) => ({ id: `issue-${i + 1}`, kind: 'decision', what: q, evidence: 'reported by the writer while drafting the issue' })),
-          ...blockers.map((b, i) => ({ id: `issue-blocker-${i + 1}`, kind: 'input', what: b, evidence: 'reported by the writer while drafting the issue' })),
-        ])
-      }
       issueRev = str(w.revision)
       checkpoint.issue = issuePath
       return null
@@ -592,7 +608,7 @@ while (true) {
   reportVerdict = await lens('lens-bug-report',
     `${WHERE}
 
-Judge the bug report draft at ${issuePath}, revision ${issueRev}, against the reproduction in ${reproDir} (revision ${reproRev}, ${REPRO_REVISION} with issue.md left out). Name the draft revision as evaluated.
+Judge the bug report draft at ${issuePath}, revision ${issueRev}, against the reproduction in ${reproDir}, which lens-repro already validated: do not recompute its digest or re-judge the reproduction itself. Name the draft revision as evaluated.
 
 Original report: ${report}`,
     { label: `bug-report (revision ${issueRev.slice(0, 7)})`, phase: 'Validate report' },

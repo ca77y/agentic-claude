@@ -219,7 +219,12 @@ function words(text) {
 }
 
 function none(v) {
-  return !v || /^(none|absent|n\/a)\b/i.test(v)
+  return !v || /^(none|absent|n\/a|not found|missing)\b/i.test(v)
+}
+
+// A card identifier or URL is one token; prose such as "no card found" is not an identifier.
+function idOf(v) {
+  return !none(v) && /^[A-Za-z0-9][\w.:#\/-]*$/.test(v) ? v : ''
 }
 
 const CONTEXT_SCHEMA = {
@@ -330,7 +335,7 @@ Idea: ${idea}`,
     ),
 ])
 
-const cardId = fact(cardR, 'card-id')
+const cardId = idOf(fact(cardR, 'card-id'))
 const slug = slugify(cardId) || words(idea) || 'idea'
 const draftRel = `.tmp/shape/${slug}.md`
 const draftPath = projectRoot ? `${projectRoot}/${draftRel}` : draftRel
@@ -360,18 +365,21 @@ if (!cp) {
 }
 done('locate')
 
+// A draft exists only when the checkpoint reports "<path>@<digest>" for this run's draft path;
+// a missing-file note, an empty value, or any other prose means there is no draft.
 const draftValue = fact(cp, 'draft')
-const draftExists = !none(draftValue)
+const draftMatch = draftValue.match(/^(\S+)@([0-9a-f]{7,64})$/i)
+const draftExists = !!draftMatch && draftMatch[1].endsWith(draftRel)
 // draft-open's value is its excerpt alone: an empty excerpt means no marker, never the location.
 const openItem = (cp.evidence || []).find(e => e.source === 'draft-open')
 const openValue = openItem ? String(openItem.excerpt || '').trim() : ''
-const openFromCheckpoint = draftExists && !none(openValue) ? openValue.split(',').map(s => s.trim()).filter(Boolean) : []
+const openFromCheckpoint = draftExists && !none(openValue) ? openValue.split(',').map(x => x.trim()).filter(id => /^[a-z0-9-]+$/.test(id)) : []
 const filedValue = fact(cp, 'draft-filed')
-const draftFiled = !none(filedValue) ? filedValue : ''
+const draftFiled = draftExists ? idOf(filedValue) : ''
 if (draftExists) checkpoint.draft = draftPath
 if (draftFiled) checkpoint.filed = draftFiled
 
-let draftRev = draftExists ? draftValue.slice(draftValue.lastIndexOf('@') + 1).trim() : ''
+let draftRev = draftExists ? draftMatch[2] : ''
 let openIds = openFromCheckpoint
 const advisorViews = []
 
@@ -468,6 +476,33 @@ function draftOk(w) {
   return !!w && Array.isArray(w.produced) && w.produced.length > 0 && w.produced.every(p => String(p).endsWith(draftRel)) && str(w.revision) !== ''
 }
 
+function decisionNeeds(ids) {
+  return ids.map(id => ({
+    id,
+    kind: 'decision',
+    what: `Answer open decision ${id}; its question is in the marker in the draft`,
+    evidence: `<!-- open-decision ${id}: … --> in ${draftPath}`,
+  }))
+}
+
+// A writer that reports a story blocker, or open decisions that answers doesn't settle while it
+// wrote no draft, stops the run at once: retrying could never show the user the reason.
+function earlyStop(w, step) {
+  if (!w) return null
+  const blockers = (w.storyBlockers || []).map(b => String(b).trim()).filter(Boolean)
+  if (blockers.length) {
+    return stop(
+      step,
+      blockers.map((b, i) => ({ id: `draft-${i + 1}`, kind: 'input', what: b, evidence: 'reported by the writer while working on the story' })),
+    )
+  }
+  if (!draftOk(w)) {
+    const unanswered = (w.openDecisions || []).map(x => String(x).trim()).filter(id => id && !hasAnswer(id))
+    if (unanswered.length) return stop(step, decisionNeeds(unanswered))
+  }
+  return null
+}
+
 // Marked open decisions that answers doesn't settle block the run; settled ones go to a writer
 // that applies the answers. Returns a blocked result, or null once no decision is open.
 async function settle() {
@@ -475,15 +510,7 @@ async function settle() {
   while (openIds.length) {
     const unanswered = openIds.filter(id => !hasAnswer(id))
     if (unanswered.length) {
-      return stop(
-        'draft',
-        unanswered.map(id => ({
-          id,
-          kind: 'decision',
-          what: `Answer open decision ${id}; its question is in the marker in the draft`,
-          evidence: `<!-- open-decision ${id}: … --> in ${draftPath}`,
-        })),
-      )
+      return stop('draft', decisionNeeds(unanswered))
     }
     if (resolves >= MAX_FAILURES) {
       return stop('draft', [
@@ -502,6 +529,8 @@ Answers:
 ${given}`,
       { agentType: 'slopify:writer', label: `resolve ${openIds.join(' ')}`, phase: 'Draft', schema: WRITER_SCHEMA },
     )
+    const earlyResolve = earlyStop(w, 'draft')
+    if (earlyResolve) return earlyResolve
     if (!draftOk(w)) {
       attempts.push({ gate: 'draft', approach: `resolve ${openIds.join(', ')}`, failed: 'the writer did not return a draft revision at the draft path' })
       continue
@@ -530,14 +559,9 @@ Evidence:
 ${evidenceText}`,
       { agentType: 'slopify:writer', label: draftFailures ? `draft story (attempt ${draftFailures + 1})` : 'draft story', phase: 'Draft', schema: WRITER_SCHEMA },
     )
+    const early = earlyStop(w, 'draft')
+    if (early) return early
     if (draftOk(w)) {
-      if (w.storyBlockers && w.storyBlockers.length) {
-        checkpoint.draft = draftPath
-        return stop(
-          'draft',
-          w.storyBlockers.map((b, i) => ({ id: `draft-${i + 1}`, kind: 'input', what: b, evidence: 'reported by the writer while drafting the story' })),
-        )
-      }
       draftRev = str(w.revision)
       openIds = (w.openDecisions || []).map(s => String(s).trim()).filter(Boolean)
       checkpoint.draft = draftPath
@@ -608,6 +632,8 @@ Findings:
 ${bad.join('\n\n')}`,
       { agentType: 'slopify:writer', label: `revise story (round ${round})`, phase: 'Validate', schema: WRITER_SCHEMA },
     )
+    const earlyRevise = earlyStop(w, 'validate')
+    if (earlyRevise) return earlyRevise
     if (draftOk(w)) {
       draftRev = str(w.revision)
       openIds = (w.openDecisions || []).map(s => String(s).trim()).filter(Boolean)

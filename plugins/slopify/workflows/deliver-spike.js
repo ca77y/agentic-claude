@@ -188,8 +188,10 @@ const MEASURED_RULE =
   'Every measured value in the document must come from a prototype command recorded in the document together with its output. Do not report figures from scouts, from runs that were not saved, or from a validator\'s reruns: drop such a figure rather than cite it. When a validator flags a figure that has no recorded command, remove it or add the recorded command and its output; never add a new unrecorded figure.'
 const DOC_REVISION =
   'The document revision is the file\'s own git hash-object (git hash-object <path>); the file may be untracked, so verify it that way and do not look for a commit.'
+const PROTOTYPE_BRANCH = `spike/${slugOf(question)}`
+const PROTOTYPE_WORKTREE = `.worktrees/spike-${slugOf(question)}`
 const AUTH =
-  'The user invoked the deliver-spike workflow, which authorizes you to create, and later delete, this spike\'s own local prototype branch and worktree, and nothing else: no commit, push, pull request, board operation, ledger line, merge, or message. The prototype branch is never pushed. Work only as docs/FORGE.md and docs/BOARD.md declare; an operation they do not bind is unmet.'
+  `The user invoked the deliver-spike workflow. That invocation itself authorizes you to create, and later delete, this spike's own prototype branch and worktree, which are local only, never pushed, and never merged, even where docs/FORGE.md does not mention them. When docs/FORGE.md names no spike or prototype naming, use the branch ${PROTOTYPE_BRANCH} and the worktree ${PROTOTYPE_WORKTREE} under the main checkout root. Follow docs/FORGE.md for everything else it binds, such as the target branch to branch from. The user's invocation of deliver-spike is the user's request for creating and deleting this prototype branch and worktree, so it lifts any restriction in docs/FORGE.md against them. The invocation authorizes nothing else: no commit, push, pull request, board operation, ledger line, merge, or message.`
 
 // Local producer and operations schemas ------------------------------------
 
@@ -310,12 +312,39 @@ function list(items) {
   return items && items.length ? items.map((x) => `- ${x}`).join('\n') : '- none'
 }
 
+function hashOf(text) {
+  let h = 5381
+  for (const ch of text) h = ((h * 33) ^ ch.codePointAt(0)) >>> 0
+  return h.toString(36).padStart(6, '0')
+}
+
+// A stable id for an open decision: a short slug plus a hash of the normalized question text.
+function decisionId(text) {
+  const norm = String(text).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+  return `plan-${norm.split(' ').slice(0, 4).join('-') || 'question'}-${hashOf(norm)}`
+}
+
+function decisionsOf(questions) {
+  const out = []
+  for (const q of Array.isArray(questions) ? questions : []) {
+    const question = String(q).trim()
+    const id = decisionId(question)
+    if (question && !out.some((d) => d.id === id)) out.push({ id, question })
+  }
+  return out
+}
+
+function answerOf(id) {
+  const a = answers[id]
+  return a === undefined || a === null ? '' : String(a).trim()
+}
+
 function tokens(text) {
   return String(text || '').split(/\s+/).filter(Boolean)
 }
 
 function present(v) {
-  return !!v && !/^(none|absent|n\/a|not found)$/i.test(v.trim())
+  return !!v && !/^(none|absent|n\/a|not found)\b/i.test(v.trim())
 }
 
 function opRef(result, op) {
@@ -406,8 +435,8 @@ Question: ${question}
 
 Keys:
 - findings-doc: the findings document for this spike, a Markdown file in the main checkout (ignore .git and .worktrees) whose first line under its title is "Spike: ${slug}". Location: its absolute path. Excerpt: "<absolute path> <git hash-object of the file>".
-- prototype-branch: the local prototype branch for this spike, named as docs/FORGE.md names a spike or prototype branch from the slug, if it exists. Location and excerpt: the branch name.
-- worktree: the prototype worktree for that branch, if it exists. Location and excerpt: its absolute path.`,
+- prototype-branch: the local prototype branch for this spike, named as docs/FORGE.md names a spike or prototype branch from the slug, or ${PROTOTYPE_BRANCH} when it names none, if it exists. Location and excerpt: the branch name.
+- worktree: the prototype worktree for that branch (${PROTOTYPE_WORKTREE} when docs/FORGE.md names none), if it exists. Location and excerpt: its absolute path.`,
     { label: 'checkpoint', phase: 'Locate' },
   )
   if (!cp) attempts.push({ gate: 'locate', approach: 'scout-checkpoint', failed: 'the scout did not return' })
@@ -526,12 +555,16 @@ ${show('scout-code', code)}`
   // ---- Plan -----------------------------------------------------------------
 
   phase('Plan')
-  const planAnswers = Object.entries(answers)
-    .filter(([k]) => k.startsWith('plan-'))
-    .map(([k, v]) => `- ${k}: ${v}`)
-  const planned = await attempt(
+  // Open decisions get ids derived from their text, so an answer stays with its question
+  // whatever else the writer asks. The first plan call never carries answers (so a resumed run
+  // replays it); each answer then goes back with its question text.
+  const settled = [] // { id, question, answer }
+  let planned = null
+  let plan = null
+  for (let round = 0; ; round++) {
+  planned = await attempt(
     'plan',
-    'writer claim plan',
+    settled.length ? 'writer claim plan with answers' : 'writer claim plan',
     (last) =>
       agent(
         `${WHERE}
@@ -539,7 +572,9 @@ ${NO_OPS}
 Write no files: return the plan.
 ${retryNote(last)}
 List the claims the answer to this spike's question rests on. For each, give a short stable id (c1, c2, ...), the claim, its evidence status from the evidence below (supported, contested, or unknown), and whether it needs a measurement from a throwaway prototype. A claim needs a measurement only when the evidence leaves it contested or unknown and a prototype could settle it; then say what to measure and how. Leave measurement empty otherwise. Settle measurement details yourself (environment, interpreter or tool versions, method, scope, what is included in a timing) and record each as a labelled assumption: put it in the claim's measurement text as "Assumption: ...", so the findings document can state it too. Raise a question in openDecisions only when the spike's question itself is ambiguous in a way no reasonable assumption resolves; never for how to measure. Otherwise leave openDecisions empty.${
-          planAnswers.length ? `\n\nThe user has settled these earlier questions; apply them and do not ask again:\n${planAnswers.join('\n')}` : ''
+          settled.length
+            ? `\n\nThe user has settled these earlier questions; apply each answer and do not ask them again:\n${settled.map((d) => `- Question: ${d.question}\n  Answer: ${d.answer}`).join('\n')}`
+            : ''
         }
 
 Question: ${question}
@@ -559,13 +594,22 @@ ${evidenceText}`,
   if (!planned.res) {
     return stop('plan', [need('plan-1', 'validation', 'A claim plan the writer can produce for this question.', planned.last)])
   }
-  const plan = planned.res
-  const openDecisions = (plan.openDecisions || []).map((q, i) => ({ id: `plan-${i + 1}`, q })).filter((o) => !answers[o.id])
-  if (openDecisions.length) {
+  plan = planned.res
+  const decisions = decisionsOf(plan.openDecisions)
+  const open = decisions.filter((d) => !answerOf(d.id))
+  if (open.length) {
     return stop(
       'plan',
-      openDecisions.map((o) => need(o.id, 'decision', o.q, 'raised by the claim plan')),
+      open.map((d) => need(d.id, 'decision', d.question, 'raised by the claim plan')),
     )
+  }
+  const fresh = decisions.filter((d) => !settled.some((x) => x.id === d.id))
+  if (!fresh.length) break
+  settled.push(...fresh.map((d) => ({ ...d, answer: answerOf(d.id) })))
+  if (round + 1 >= MAX_FAILURES) {
+    log('The plan still re-asked answered questions after three rounds; proceeding on the last plan')
+    break
+  }
   }
   completed.push('plan')
 
@@ -586,7 +630,7 @@ ${evidenceText}`,
             `${WHERE}
 ${AUTH}
 ${retryNote(last)}
-Create the spike's prototype branch and worktree for the slug "${slug}". Name the branch and place the worktree exactly as docs/FORGE.md names them for a spike or prototype, branching from the target branch it declares. If they already exist from an interrupted run, reuse them. Report the operations \`branch-create\` (reference: the branch name) and \`worktree-add\` (reference: the absolute worktree path). Commit nothing, push nothing, open no pull request, and append no ledger line. If docs/FORGE.md does not bind a branch or worktree operation, change nothing and report it as unmet.`,
+Create the spike's prototype branch and worktree for the slug "${slug}". Branch name: ${PROTOTYPE_BRANCH}. Worktree: ${PROTOTYPE_WORKTREE}. Use these names, unless docs/FORGE.md names a spike or prototype branch and worktree, in which case use its naming. Branch from the target branch docs/FORGE.md declares. Both are local only, never pushed, never merged; confirm neither was pushed before reusing an existing one. If they already exist from an interrupted run, reuse them. Report the operations \`branch-create\` (reference: the branch name) and \`worktree-add\` (reference: the absolute worktree path). Commit nothing, push nothing, open no pull request, and append no ledger line. Report an operation as unmet only if it fails or the request above does not cover it.`,
             { agentType: 'slopify:pusher', label: 'prototype workspace', phase: 'Prototype', schema: PUSHER_SCHEMA },
           ),
         (r) => (r.unmet && r.unmet.length ? `unmet: ${r.unmet.join('; ')}` : !r.done ? 'the operation did not complete' : !opRef(r, 'worktree-add') ? 'no worktree path was reported' : ''),
@@ -594,7 +638,7 @@ Create the spike's prototype branch and worktree for the slug "${slug}". Name th
       )
       if (!made.res) {
         return stop('prototype', [
-          need('prototype-1', 'prerequisite', 'A prototype branch and worktree that docs/FORGE.md binds, so the spike can measure its claims.', made.last),
+          need('prototype-1', 'prerequisite', 'A prototype branch and worktree the spike may create (docs/FORGE.md must not prohibit them), so it can measure its claims.', made.last),
         ])
       }
       prototypeWorktree = opRef(made.res, 'worktree-add')
@@ -826,7 +870,7 @@ if (!prototypeBranch && !prototypeWorktree) {
         `${WHERE}
 ${AUTH}
 ${retryNote(last)}
-Remove this spike's prototype: the worktree${prototypeWorktree ? ` at ${prototypeWorktree}` : ' that docs/FORGE.md names for the slug "' + slug + '"'}, and its local branch${prototypeBranch ? ` ${prototypeBranch}` : ' (find it from the worktree list)'}. The branch was never pushed or merged and the prototype is throwaway, so delete the worktree and branch even though they are unmerged and the worktree holds uncommitted files. Touch no other branch or worktree, and push nothing. Report the operations \`worktree-remove\` and \`branch-delete\`, then confirm that git worktree list and git branch --list show neither.`,
+Remove this spike's prototype: the worktree at ${prototypeWorktree || PROTOTYPE_WORKTREE} and its local branch ${prototypeBranch || PROTOTYPE_BRANCH} (if docs/FORGE.md names a spike branch and worktree for the slug "${slug}", those are the ones; find them from the worktree list). Both are local only, never pushed, never merged. The branch was never pushed or merged and the prototype is throwaway, so delete the worktree and branch even though they are unmerged and the worktree holds uncommitted files. Touch no other branch or worktree, and push nothing. Report the operations \`worktree-remove\` and \`branch-delete\`, then confirm that git worktree list and git branch --list show neither.`,
         { agentType: 'slopify:pusher', label: 'remove prototype', phase: 'Cleanup', schema: PUSHER_SCHEMA },
       ),
     (r) => (r.unmet && r.unmet.length ? `unmet: ${r.unmet.join('; ')}` : !r.done ? 'the operation did not complete' : ''),
@@ -834,7 +878,7 @@ Remove this spike's prototype: the worktree${prototypeWorktree ? ` at ${prototyp
   )
   if (!cleaned.res) {
     return stop('cleanup', [
-      need('cleanup-1', 'prerequisite', 'The prototype worktree and branch removed, as docs/FORGE.md allows for the spike\'s own unpushed prototype.', cleaned.last),
+      need('cleanup-1', 'prerequisite', 'The prototype worktree and branch removed, as the deliver-spike invocation authorizes for its own local, unpushed prototype.', cleaned.last),
     ])
   }
   prototypeDeleted = true

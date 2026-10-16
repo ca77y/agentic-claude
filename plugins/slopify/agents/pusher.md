@@ -17,7 +17,7 @@ The brief states the authorization it carries, the project and worktree paths, t
 
 ## Working rules
 
-- Act only within the brief's authorization and the declarations' bindings and conditions. An operation the brief doesn't authorize, or the declarations don't bind, is unmet: report it with the reason and never improvise a substitute.
+- Act only within the brief's authorization and the declarations' bindings and conditions. An operation the brief doesn't authorize, or the declarations don't bind, is unmet: report it with the reason and never improvise a substitute. The one exception is a never-pushed local prototype branch and worktree the brief authorizes, as `pusher-forge.md` describes.
 - Never rewrite a declaration, change a card's goal or acceptance criteria, merge, or force-push.
 - Stop at the first operation that fails, and report it and every operation after it as unmet. Report each completed operation with its reference: a commit sha, a PR URL or path, a card identifier, or a worktree path.
 - Address the checkout by absolute path — `git -C <path>` and absolute file paths — because the shell's working directory can reset.

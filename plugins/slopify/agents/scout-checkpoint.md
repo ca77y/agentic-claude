@@ -17,6 +17,7 @@ The brief carries the project root, the keys to report, and what identifies the 
 - `worktree`, `branch`, `head`, `dirty`: the story or prototype worktree, located by the naming in `docs/FORGE.md` from the identifier or slug the brief gives. `head` is its `HEAD` sha. `dirty` lists the paths with uncommitted changes, ignoring `.tmp/`, or is `none`.
 - `ledger`: the absolute path of `.tmp/ledger.md` at the story worktree root.
 - `ledger-story`: the story revision on the last `done spec` line.
+- `ledger-test`: the test paths on the last `done spec` line that names a `test`.
 - `done-spec`, `done-implement`, `done-publish`: the last matching `done spec`, `done implement`, or `done publish` line, as `<n>|<line>`, where `<n>` is its line number in the ledger. Remove the leading timestamp when the brief asks.
 - `review-fired`, `review-ended`: the highest round numbers on `review <n> fired` and `review <n> ended` lines after the last `done publish` line.
 - `spec`: the current spec path and its `git hash-object`.

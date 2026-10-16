@@ -423,9 +423,17 @@ const slugOf = (s) =>
     .slice(0, 6)
     .join("-");
 // A scout's "no value" comes in many spellings: empty, "none", "none: no branch name given".
-const isNone = (v) => !String(v || "").trim() || /^\s*none(?![\w/-]|\.\w)/i.test(String(v));
+const isNone = (v) =>
+  !String(v || "").trim() ||
+  /^\s*(none|absent|missing|n\/a|not found)(?![\w/-]|\.\w)/i.test(String(v));
 const clean = (v) => (isNone(v) ? "" : String(v).trim());
 const val = (res, key) => clean(fact(res, key));
+// A checkpoint or card value counts as present only in its expected shape, never as prose.
+const shaped = (v, re) => (re.test(String(v || "")) ? String(v).trim() : "");
+const PATH_RE = /^\/[\w@.+\- /]+$/; // an absolute path
+const REL_PATH_RE = /^[\w@.+/-]+$/; // a relative path
+const REF_RE = /^(https?:\/\/\S+|[\w@.+/#-]+(?: ?\d+)?)$/; // a PR URL, path, or number
+const HEX_RE = /^[0-9a-f]{7,64}$/i;
 const splitList = (v) =>
   isNone(v)
     ? []
@@ -478,35 +486,60 @@ function sameRevision(evaluated, revision) {
   const r = String(revision || "");
   return !!r && (e.includes(r) || e.includes(r.slice(0, 12)));
 }
-// A verdict counts only for the revision it judged.
-function passedOn(v, revision) {
-  return passed(v) && sameRevision(v.evaluated, revision);
+// A verdict is usable only when it is on the revision it was briefed with and is coherent: a
+// fail names a blocking finding, a pass names none. A null or unusable verdict is re-run, not fixed.
+function usable(v, revision) {
+  if (!v || !sameRevision(v.evaluated, revision)) return false;
+  const blocking = (v.findings || []).some((f) => f.blocking);
+  if (v.verdict === "fail") return blocking;
+  if (v.verdict === "pass") return !blocking;
+  return true;
 }
-function findingsOf(name, v, revision) {
-  if (!v) return [{ from: name, location: name, problem: "no verdict returned", blocking: true }];
-  const out = (v.findings || []).map((f) => ({ from: name, ...f }));
-  if (v.verdict === "pass" && !sameRevision(v.evaluated, revision))
+// What a fixer can act on: a fail's blocking findings, and what an unverified verdict could not check.
+function blockingOf(name, v) {
+  if (!v || v.verdict === "pass") return [];
+  const out = (v.findings || []).filter((f) => f.blocking).map((f) => ({ from: name, ...f }));
+  if (v.verdict === "unverified") {
+    const lim = v.limits && !isNone(v.limits) ? v.limits : "";
     out.push({
       from: name,
       location: name,
-      problem: `judged "${v.evaluated}", not the revision ${revision}`,
+      problem: `could not check${lim ? `: ${lim}` : " (no reason given)"}`,
       blocking: true,
     });
-  if (v.verdict !== "pass" && !out.length)
-    out.push({
-      from: name,
-      location: name,
-      problem: `verdict ${v.verdict} with no finding listed`,
-      blocking: true,
-    });
-  if (v.limits && !/^\s*none\s*$/i.test(v.limits))
-    out.push({
-      from: name,
-      location: name,
-      problem: `could not check: ${v.limits}`,
-      blocking: v.verdict !== "pass",
-    });
+  }
   return out;
+}
+// Dispatch validators, and re-run any whose verdict is missing or on another revision. Those
+// re-runs have their own bound and spend neither the spec nor the implementation budget.
+async function judge(items, revision, step) {
+  const out = new Array(items.length).fill(null);
+  let rounds = 0;
+  while (true) {
+    const todo = items.map((_, i) => i).filter((i) => !usable(out[i], revision));
+    if (!todo.length) return { verdicts: out };
+    if (rounds >= MAX_FAILURES) {
+      attempts.push({
+        gate: "validator",
+        approach: `${todo.map((i) => items[i].name).join(", ")} on ${revision}`,
+        failed: "no usable verdict after repeated dispatches",
+      });
+      return {
+        stop: stop(step, [
+          need(step, 1, "validation", `A usable verdict from ${todo.map((i) => items[i].name).join(", ")} on revision ${revision}.`, `${rounds} dispatches returned no verdict, a verdict on another revision, or a fail with no blocking finding`),
+        ]),
+      };
+    }
+    if (rounds > 0)
+      attempts.push({
+        gate: "validator",
+        approach: `re-run ${todo.map((i) => items[i].name).join(", ")}`,
+        failed: "no verdict, or a verdict on another revision",
+      });
+    const res = await parallel(todo.map((i) => () => items[i].call()));
+    todo.forEach((i, k) => (out[i] = res[k]));
+    rounds += 1;
+  }
 }
 const findingText = (f) =>
   `${f.from} (${f.blocking ? "blocking" : "note"}) at ${f.location}: ${f.problem}`;
@@ -732,9 +765,9 @@ if (!cardRes) {
     need("locate", 1, "prerequisite", "A readable bug report: the card, or the report text.", "scout-card did not return"),
   ]);
 }
-const storySource = val(cardRes, "story-source").toLowerCase();
+const storySource = ((/^\s*(card|text|none)\b/i.exec(fact(cardRes, "story-source")) || [])[1] || "").toLowerCase();
 const story = storySource === "text" ? storyArg : fact(cardRes, "story");
-const storyRevision = fact(cardRes, "story-revision");
+const storyRevision = shaped(fact(cardRes, "story-revision"), HEX_RE);
 if (!story || storySource === "none") {
   return stop("locate", [
     need("locate", 1, "input", "A bug report the board can read, or the report text.", (cardRes.gaps || []).join("; ") || cardRes.answer),
@@ -745,8 +778,8 @@ if (!storyRevision) {
     need("locate", 1, "prerequisite", "The story revision digest from scout-card.", cardRes.answer),
   ]);
 }
-const cardId = val(cardRes, "card");
-const boardBranch = val(cardRes, "branch");
+const cardId = shaped(val(cardRes, "card"), /^\S{1,100}$/);
+const boardBranch = shaped(val(cardRes, "branch"), REL_PATH_RE);
 const slug = slugOf(cardId) || slugOf(storyArg);
 // The card title is the first line of a card-backed report; its lowercase kebab slug names the spec.
 const titleSlug = (storySource === "card" ? story.split("\n")[0].replace(/^#+\s*/, "") : "")
@@ -756,7 +789,7 @@ const titleSlug = (storySource === "card" ? story.split("\n")[0].replace(/^#+\s*
   .slice(0, 60)
   .replace(/-+$/, "");
 const specRel =
-  val(cardRes, "spec-path") ||
+  shaped(val(cardRes, "spec-path"), /^[\w@.+/-]+\.md$/) ||
   `docs/specs/${[cardId.toLowerCase().replace(/[^a-z0-9]+/g, "-"), titleSlug].filter(Boolean).join("-") || slug}.md`;
 const STORY_BLOCK = `The bug report, verbatim, is the acceptance source (story revision ${storyRevision}):
 <<<BUG
@@ -769,6 +802,7 @@ Report where this run stands. It is the delivery of the fix for ${cardId ? `card
 Report these keys, each as an evidence item with source set to the key; leave out a key that does not exist:
 - worktree, branch, head, dirty (comma-separated paths relative to the worktree root, or none), ledger
 - ledger-story: the story revision on the last done spec line
+- ledger-test: the comma-separated test paths on the most recent done spec line that has a test field
 - done-spec, done-implement, done-publish: the last such ledger line, with its leading timestamp removed and the ledger line number put in front as "<line number>|"
 - review-fired, review-ended
 - spec: "<absolute path>@<git hash-object>" of the spec at the path above
@@ -781,12 +815,12 @@ if (!cpRes) {
   ]);
 }
 const sameHash = (a, b) => !!a && !!b && (a.startsWith(b) || b.startsWith(a));
-const cpWorktree = val(cpRes, "worktree");
+const cpWorktree = shaped(val(cpRes, "worktree"), PATH_RE);
 if (cpWorktree.startsWith("/")) state.worktree = cpWorktree.replace(/\/+$/, "");
-state.branch = val(cpRes, "branch") || boardBranch;
-state.ledger = val(cpRes, "ledger");
-state.pr = val(cpRes, "pr").split("\n")[0].trim();
-const cpDirty = splitList(fact(cpRes, "dirty")).filter((p) => !/^\.tmp(\/|$)/.test(p));
+state.branch = shaped(val(cpRes, "branch"), REL_PATH_RE) || boardBranch;
+state.ledger = shaped(val(cpRes, "ledger"), PATH_RE);
+state.pr = shaped(val(cpRes, "pr").split("\n")[0].trim(), REF_RE);
+const cpDirty = splitList(fact(cpRes, "dirty")).filter((p) => REL_PATH_RE.test(p) && !/^\.tmp(\/|$)/.test(p));
 const cpSpec = parseSpec(val(cpRes, "spec"));
 if (cpSpec) {
   state.specPath = cpSpec.path;
@@ -798,13 +832,18 @@ let specRevision = state.specHash;
 const doneSpec = parseDoneSpec(val(cpRes, "done-spec"));
 const doneImpl = parseDoneImplement(val(cpRes, "done-implement"));
 const donePub = parseDonePublish(val(cpRes, "done-publish"));
-const ledgerStory = val(cpRes, "ledger-story") || (doneSpec ? doneSpec.story : "");
+const ledgerStory = shaped(val(cpRes, "ledger-story"), HEX_RE) || (doneSpec ? doneSpec.story : "");
 
 // The currency chain: each link depends on the one before it. A bug's done spec also
 // names the committed regression test.
+// A done spec line written after a spec revision may omit the test; an earlier line then knows it.
+const ledgerTests = (doneSpec && doneSpec.test ? doneSpec.test : val(cpRes, "ledger-test"))
+  .split(",")
+  .map((t) => t.trim())
+  .filter((t) => REL_PATH_RE.test(t));
 const specCurrent =
   !!doneSpec &&
-  !!doneSpec.test &&
+  ledgerTests.length > 0 &&
   state.specExists &&
   sameHash(doneSpec.hash, state.specHash) &&
   !!ledgerStory &&
@@ -847,13 +886,14 @@ else if (!state.specPath.startsWith("/")) state.specPath = `${state.worktree}/${
 // ---- Gather, reproduce, spec ------------------------------------------------
 
 let gathered = "";
-let repro = { tests: [], revision: "", observed: "", steps: [] }; // the committed or just-passed regression test
+let repro = { tests: [], files: [], revision: "", observed: "", steps: [] }; // the committed or just-passed regression test
 let specCommit = doneSpec ? doneSpec.commit : "";
 const fixTouched = new Set(); // paths the fix coder reported changing, for the commit
 const touched = new Set();
 
 if (specCurrent) {
-  repro.tests = doneSpec.test.split(",").map((t) => rel(t)).filter(Boolean);
+  repro.tests = ledgerTests.map((t) => rel(t)).filter(Boolean);
+  repro.files = repro.tests;
 }
 
 const isSpec = (p) => within(p, state.specPath);
@@ -885,23 +925,37 @@ ${dirtyNow.length ? `\n${DIRTY_SENTENCE}\nPaths:\n${list(dirtyNow)}\n` : ""}${pe
       problem = `the coder wrote no regression test${(r.open || []).length ? `: ${r.open.join("; ")}` : ""}`;
     if (r) for (const p of [...(r.changed || []), ...(r.tests || [])]) touched.add(rel(p));
     if (!problem) {
-      const v = await lens("lens-repro",
-        `${WHERE}
+      const jr = await judge(
+        [
+          {
+            name: "lens-repro",
+            call: () =>
+              lens("lens-repro",
+                `${WHERE}
 Judge whether the regression test(s) below reliably show the reported failure on the current production code in the worktree ${state.worktree}. Revision: ${r.revision}. ${candidateNote(r.revision)}
 Tests:
 ${list(r.tests)}
 
 ${STORY_BLOCK}${pending.length ? `\n\nEarlier findings to recheck:\n${list(pending)}` : ""}`,
-        { label: "repro", phase: "Reproduce" },
+                { label: "repro", phase: "Reproduce" },
+              ),
+          },
+        ],
+        r.revision,
+        "reproduce",
       );
+      if (jr.stop) return jr.stop;
+      const v = jr.verdicts[0];
       record("lens-repro", v, r.revision);
-      if (passedOn(v, r.revision)) {
-        repro = { tests: r.tests.map(rel), revision: r.revision, observed: r.observed || "", steps: r.steps || [] };
+      if (passed(v)) {
+        // The test and any fixtures or helpers the reproduction needed all belong to the spec commit.
+        const files = unique([...(r.changed || []), ...r.tests].map(rel)).filter((f) => f && !/^\.tmp(\/|$)/.test(f) && !isSpec(f));
+        repro = { tests: r.tests.map(rel), files, revision: r.revision, observed: r.observed || "", steps: r.steps || [] };
         done("reproduce");
         return null;
       }
-      problem = findingsOf("lens-repro", v, r.revision).map(findingText).join("; ");
-      pending = findingsOf("lens-repro", v, r.revision).map(findingText);
+      pending = blockingOf("lens-repro", v).map(findingText);
+      problem = pending.join("; ");
     } else pending = [problem];
     if (fail("reproduce", "regression test", problem)) {
       return stop("reproduce", [
@@ -969,25 +1023,24 @@ The worktree is ${state.worktree}. ${what}
 Spec: ${state.specPath}, revision ${specRevision}. Set evaluated to exactly that revision.
 
 ${STORY_BLOCK}${pending.length ? `\n\nEarlier findings to recheck:\n${list(pending)}` : ""}`;
-    const calls = [
-      () => lens("lens-scope", brief("Judge whether the spec covers the report's failure and its fix, with no added or dropped scope."), { label: "scope", phase: "Spec gate" }),
+    const items = [
+      { name: "lens-scope", call: () => lens("lens-scope", brief("Judge whether the spec covers the report's failure and its fix, with no added or dropped scope."), { label: "scope", phase: "Spec gate" }) },
     ];
     // lens-consistency joins only when the spec changes a documented contract.
     if (plan.docs.length)
-      calls.push(() => lens("lens-consistency", brief("Judge whether the spec agrees with the repository's constraints and its existing specs."), { label: "consistency", phase: "Spec gate" }));
-    const [ls, lc] = await parallel(calls);
-    record("lens-scope", ls, specRevision);
-    if (plan.docs.length) record("lens-consistency", lc, specRevision);
-    if (!(passedOn(ls, specRevision) && (!plan.docs.length || passedOn(lc, specRevision)))) {
-      const fs = [...findingsOf("lens-scope", ls, specRevision), ...(plan.docs.length ? findingsOf("lens-consistency", lc, specRevision) : [])];
-      pending = fs.map(findingText);
+      items.push({ name: "lens-consistency", call: () => lens("lens-consistency", brief("Judge whether the spec agrees with the repository's constraints and its existing specs."), { label: "consistency", phase: "Spec gate" }) });
+    const jd = await judge(items, specRevision, "spec-gate");
+    if (jd.stop) return jd.stop;
+    jd.verdicts.forEach((v, k) => record(items[k].name, v, specRevision));
+    if (!jd.verdicts.every(passed)) {
+      pending = jd.verdicts.flatMap((v, k) => blockingOf(items[k].name, v)).map(findingText);
       if (fail("spec", `spec revision ${specRevision}`, pending.join("; "))) return exhausted("spec-gate", "spec");
       continue;
     }
 
     const c = await callPusher(
       pushBrief(
-        `Commit exactly these files together in one commit, staged by explicit path: the spec ${state.specPath} and the regression test files:\n${list(repro.tests.map((t) => `${state.worktree}/${t}`))}\nFirst check that the spec's git hash-object is ${specRevision}; if it differs, commit nothing and report that as unmet. Use the commit convention docs/FORGE.md declares. Do not push.`,
+        `Commit exactly these files together in one commit, staged by explicit path: the spec ${state.specPath} and the regression test with the fixtures and helpers its reproduction needs:\n${list(repro.files.map((t) => `${state.worktree}/${t}`))}\nA file with no uncommitted change needs no staging. First check that the spec's git hash-object is ${specRevision}; if it differs, commit nothing and report that as unmet. Use the commit convention docs/FORGE.md declares. Do not push.`,
         [`done spec ${state.specPath}@${specRevision} commit <the new commit's sha> story ${storyRevision} test ${repro.tests.join(",")}`],
       ),
       "commit the spec and the test",
@@ -1043,7 +1096,7 @@ Work in the worktree ${state.worktree}; address every file by absolute path unde
 Fix the bug. Assigned paths (write only these): ${fixPaths().join(", ")}
 The regression test is already committed and passed an independent check; leave these files exactly as they are:
 ${list(repro.tests)}
-If the test is wrong or the spec cannot be implemented as written, say why in specMismatch and stop; never weaken the test or a criterion to fit.
+If the spec cannot be implemented as written, or the regression test cannot pass with a correct fix, say why in specMismatch and stop; never weaken the test or a criterion to fit.
 
 Spec: ${state.specPath} (revision ${specRevision}), validated before coding.
 ${STORY_BLOCK}
@@ -1082,10 +1135,12 @@ async function validate(first) {
     const base = specCommit
       ? `the commit ${specCommit}^ (resolve it with git rev-parse), the parent of the commit that added the regression test and the spec, so without the fix`
       : "the parent of the commit that added the regression test (find that commit with git log), so without the fix";
-    const [q, g] = await parallel([
-      () =>
-        callQa(
-          `${WHERE}
+    const items = [
+      {
+        name: "qa",
+        call: () =>
+          callQa(
+            `${WHERE}
 Validate the candidate in the worktree ${state.worktree} against the validated spec and the bug report. Candidate revision: ${cand}. ${candidateNote(cand)}
 Spec: ${state.specPath}, revision ${specRevision}.
 Changed paths:
@@ -1094,25 +1149,30 @@ ${list([...fixTouched, ...repro.tests])}
 ${STORY_BLOCK}
 
 Run the project's tests and the checks the spec requires, judge that the bug is fixed and that nothing regressed, and judge any affected documentation.${prior.length ? `\n\nEarlier findings to recheck:\n${list(prior)}` : ""}`,
-          "qa",
-          "Validate",
-        ),
-      () =>
-        lens("lens-regression",
-          `${WHERE}
+            "qa",
+            "Validate",
+          ),
+      },
+      {
+        name: "lens-regression",
+        call: () =>
+          lens("lens-regression",
+            `${WHERE}
 Judge whether the regression test(s) fail before the fix and pass after it.
 Tests:
 ${list(repro.tests)}
 Before: the base revision is ${base}. It is a real commit: export it with git archive into a temporary directory, copy the test files in from the worktree ${state.worktree}, and run them there; never change the worktree. After: run the tests in the worktree ${state.worktree} as it stands now, with HEAD plus its uncommitted changes. The candidate label "${cand}" is an identifier for that state, not a git object, so do not resolve it with git. Report it back unchanged in evaluated.
 
 ${STORY_BLOCK}${prior.length ? `\n\nEarlier findings to recheck:\n${list(prior)}` : ""}`,
-          { label: "regression", phase: "Validate" },
-        ),
-    ]);
-    record("qa", q, cand);
-    record("lens-regression", g, cand);
-    if (passedOn(q, cand) && passedOn(g, cand)) return { ok: true, candidate: cand };
-    findings = [...findingsOf("qa", q, cand), ...findingsOf("lens-regression", g, cand)];
+            { label: "regression", phase: "Validate" },
+          ),
+      },
+    ];
+    const jd = await judge(items, cand, "validate");
+    if (jd.stop) return { stop: jd.stop };
+    jd.verdicts.forEach((v, k) => record(items[k].name, v, cand));
+    if (jd.verdicts.every(passed)) return { ok: true, candidate: cand };
+    findings = jd.verdicts.flatMap((v, k) => blockingOf(items[k].name, v));
     prior = findings.map(findingText);
     if (fail("implementation", `candidate ${cand}`, prior.join("; "))) return { stop: exhausted("validate", "implementation") };
   }
@@ -1139,11 +1199,11 @@ if (implCurrent) {
     }
     if (next.stop) return next.stop;
     if (next.mismatch) {
-      // The test or the spec is wrong: reproduce again and revise the spec, with the spec budget.
+      // The spec goes back to its gate with the spec budget. The regression test already failed on the
+      // unfixed code and passed lens-repro, and the uncommitted fix is in the worktree now, so the
+      // reproduction is not run again.
       if (fail("spec", "fix against the spec and the test", next.mismatch)) return exhausted("spec", "spec");
-      const again = await reproduce([`The fix step reports: ${next.mismatch}`]);
-      if (again) return again;
-      const stopped = await specGate([`The fix step reports the spec or the test cannot be used as written: ${next.mismatch}`]);
+      const stopped = await specGate([`The fix step reports the spec cannot be implemented as written, or the regression test cannot pass with a correct fix: ${next.mismatch}. The regression test is fixed; revise the spec, or report a story blocker if the report itself is the problem.`]);
       if (stopped) return stopped;
       continue;
     }
@@ -1151,9 +1211,15 @@ if (implCurrent) {
     break;
   }
   done("validate");
+  // The validators judged the whole worktree: commit every dirty path within the fix's assigned paths,
+  // from the checkpoint's dirty list and the coder's reports, and report the rest.
+  const dirtyAll = unique([...(specCurrent ? cpDirty : []), ...fixTouched]).filter((p) => p && !/^\.tmp(\/|$)/.test(p) && !isSpec(p));
+  const commitPaths = dirtyAll.filter((p) => fixPaths().some((s) => within(p, s)));
+  const outside = dirtyAll.filter((p) => !commitPaths.includes(p));
+  if (outside.length) limits.push(`Uncommitted paths outside the assigned paths, not committed: ${outside.join(", ")}`);
   const c = await callPusher(
     pushBrief(
-      `Commit exactly these paths as they stand, staged by explicit path, with the commit convention docs/FORGE.md declares. Do not push. Commit nothing else, even if the worktree holds other uncommitted changes.\nPaths:\n${list([...fixTouched])}`,
+      `Commit exactly these paths as they stand, staged by explicit path, with the commit convention docs/FORGE.md declares. Do not push. Commit nothing else, even if the worktree holds other uncommitted changes. If every path is already committed, make no commit and record the current HEAD sha in the ledger line.\nPaths:\n${list(commitPaths)}`,
       [`done implement commit <the new commit's sha> spec ${state.specHash}`],
     ),
     "commit the fix",
@@ -1199,6 +1265,7 @@ try {
     worktree: state.worktree,
     spec: state.specPath,
     story,
+    test: repro.tests.join(","),
     projectRoot: projectRoot || undefined,
     answers,
   });
