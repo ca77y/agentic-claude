@@ -1,0 +1,7 @@
+---
+type: tool_used
+tool: Workflow
+input_match: '"name"\s*:\s*"(?:slopify:)?research"'
+min: 0
+max: 0
+---

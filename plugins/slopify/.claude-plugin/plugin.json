@@ -1,0 +1,9 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "slopify",
+  "description": "Outcome-driven engineering and research: shape turns ideas into proposals or specs with observable acceptance; explicitly invoked deliver implements or repairs a change through a verified PR, with fresh QA or auditor validation; the research workflow investigates new sources and persists cited evidence and synthesis in the project library; ask answers from that library without internet requests or writes; lint checks and repairs it; bootstrap sets up the board and forge declarations and the library once, with optional Obsidian settings. Agents: coder, writer (production), qa, auditor (fresh report-only validators), library-researcher, library-reader, library-scribe (library production), library-clerk (fresh report-only library validator).",
+  "version": "0.1.0",
+  "author": {
+    "name": "ca77y"
+  }
+}
