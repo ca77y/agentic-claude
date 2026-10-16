@@ -133,7 +133,7 @@ const RESEARCH_SCHEMA = {
         'Every distinct source whose content the findings quote or rest on to answer the question, one entry per canonical source. Leave out the research spec, the library conventions and templates, and any file you read only for orientation',
       items: {
         type: 'object',
-        required: ['url', 'title'],
+        required: ['url', 'title', 'origin'],
         properties: {
           url: { type: 'string', description: 'Canonical URL, or project file path' },
           title: { type: 'string' },
@@ -184,7 +184,7 @@ let persisted = null // latest integration or repair result
 let pendingWritten = [] // raw notes written since the last integration returned
 let pendingDeferred = [] // deferred metadata not yet integrated
 let writtenFor = [] // {source, sub}: evidence of a sub-question already written to that source's note
-let sourcePaths = [] // {source, path}: where each source's raw note was written; new evidence never clears it
+let sourcePaths = [] // {source, path, alias}: where each source's raw note was written; new evidence never clears it
 let pendingExisting = [] // library raw notes the research cites, for the integrator
 let pendingLeads = [] // planned sources with no retrieved evidence, for the integrator
 const retrievalTries = {} // sub-question id -> researcher attempts without a result
@@ -254,7 +254,7 @@ function isUrl(x) {
 // With a project root, a relative file path means the file under it.
 function canon(x) {
   const t = String(x || '').trim()
-  return !t || isUrl(t) || ABSOLUTE.test(t) || !projectRoot ? t : toAbs(t)
+  return !t || /^[a-z][a-z0-9+.-]*:\/\//i.test(t) || ABSOLUTE.test(t) || !projectRoot ? t : toAbs(t)
 }
 
 // Sources match exactly, except that a relative project path (when the project root is unknown)
@@ -292,7 +292,7 @@ function isWritten(path) {
 function writtenPairs() {
   const pairs = []
   for (const e of sourcePaths) {
-    if (isWritten(e.path) && !pairs.some(q => sameSource(q.source, e.source))) pairs.push(e)
+    if (!e.alias && isWritten(e.path) && !pairs.some(q => sameSource(q.source, e.source))) pairs.push(e)
   }
   return pairs
 }
@@ -451,8 +451,22 @@ function citedSources(id) {
   return { usable, notes }
 }
 
+// A short deterministic hash (base 36, multiplier 31) of the full source key.
+function hashOf(text) {
+  let h = 0
+  for (const ch of text) h = (Math.imul(h, 31) + ch.charCodeAt(0)) | 0
+  return (h >>> 0).toString(36)
+}
+
+// <the most specific part of the source>-<hash of the whole key>: the last path segments relative
+// to the project root (or of the URL), the tail of them kept, so distinct sources never share a
+// path, in this run or across runs.
 function slugOf(key) {
-  return key.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60).replace(/-+$/, '') || 'source'
+  const root = normSource(projectRoot)
+  let part = root && key.startsWith(`${root}/`) ? key.slice(root.length + 1) : key
+  part = part.split('/').slice(-3).join('/')
+  const words = part.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(-48).replace(/^-+/, '')
+  return `${words || 'source'}-${hashOf(key)}`
 }
 
 // Where this run's raw notes live, taken from the plan when it names one.
@@ -633,16 +647,14 @@ ${list(context.supported)}`,
           failed.push(todo[i])
           return
         }
-        const clash = sourcePaths.find(q => normPath(q.path) === normPath(paths[0]) && !sameSource(q.source, todo[i].source))
-        if (clash) {
-          // One path for two different sources would merge them; treat it as a failed write.
-          attempts.push({ gate: 'persist', approach: `raw note for ${todo[i].source}`, failed: `the scribe returned ${paths[0]}, which holds ${clash.source}` })
-          failed.push(todo[i])
-          return
-        }
+        // A writer that returns another source's path judged the two to be one canonical source:
+        // record this source against that path (an alias) instead of failing the write.
+        const own = normPath(paths[0]) === normPath(todo[i].path)
+        const holder = !own && sourcePaths.find(q => normPath(q.path) === normPath(paths[0]) && !sameSource(q.source, todo[i].source))
+        if (holder) log(`Raw note ${paths[0]} holds both ${holder.source} and ${todo[i].source}; the scribe judged them one canonical source, so they share it`)
         for (const p of paths) if (!pendingWritten.includes(p)) pendingWritten.push(p)
         pendingDeferred.push(...(r.deferredMetadata || []))
-        if (!sourcePaths.some(q => sameSource(q.source, todo[i].source))) sourcePaths.push({ source: todo[i].source, path: paths[0] })
+        if (!sourcePaths.some(q => sameSource(q.source, todo[i].source))) sourcePaths.push({ source: todo[i].source, path: paths[0], alias: !!holder })
         for (const sub of todo[i].subs) writtenFor.push({ source: todo[i].source, sub })
       })
       todo = failed
