@@ -184,7 +184,7 @@ let persisted = null // latest integration or repair result
 let pendingWritten = [] // raw notes written since the last integration returned
 let pendingDeferred = [] // deferred metadata not yet integrated
 let writtenFor = [] // {source, sub}: evidence of a sub-question already written to that source's note
-let sourcePaths = [] // {source, path, alias}: where each source's raw note was written; new evidence never clears it
+let sourcePaths = [] // {source, path}: where each source's raw note was written; new evidence never clears it
 let pendingExisting = [] // library raw notes the research cites, for the integrator
 let pendingLeads = [] // planned sources with no retrieved evidence, for the integrator
 const retrievalTries = {} // sub-question id -> researcher attempts without a result
@@ -222,6 +222,8 @@ function toAbs(p) {
   return `${projectRoot.replace(/[\\/]+$/, '')}${sep}${t.replace(/^\.[\\/]/, '')}`
 }
 
+const SCHEME = /^[a-z][a-z0-9+.-]*:\/\//i
+
 // Compare sources by a simple normal form: single forward slashes, lower case, and no plain fragment,
 // utm_* tracking parameter, scheme, leading www., leading ./, or trailing slash. Other query
 // parameters and hash routes (#/, #!) stay, because they can name a different source
@@ -236,7 +238,7 @@ function normSource(x) {
       const kept = q.split('&').filter(param => param && !/^utm_/.test(param))
       return kept.length ? `?${kept.join('&')}` : ''
     })
-    .replace(/^[a-z][a-z0-9+.-]*:\/\//, '')
+    .replace(SCHEME, '')
     .replace(/\/{2,}/g, '/')
     .replace(/^www\./, '')
     .replace(/^\.\//, '')
@@ -248,13 +250,13 @@ const FILE_PATH = /^(\/|[a-z]:\/)/
 // A URL has a scheme other than file://.
 function isUrl(x) {
   const t = String(x || '').trim()
-  return /^[a-z][a-z0-9+.-]*:\/\//i.test(t) && !/^file:\/\//i.test(t)
+  return SCHEME.test(t) && !/^file:\/\//i.test(t)
 }
 
 // With a project root, a relative file path means the file under it.
 function canon(x) {
   const t = String(x || '').trim()
-  return !t || /^[a-z][a-z0-9+.-]*:\/\//i.test(t) || ABSOLUTE.test(t) || !projectRoot ? t : toAbs(t)
+  return !t || SCHEME.test(t) || ABSOLUTE.test(t) || !projectRoot ? t : toAbs(t)
 }
 
 // Sources match exactly, except that a relative project path (when the project root is unknown)
@@ -292,7 +294,7 @@ function isWritten(path) {
 function writtenPairs() {
   const pairs = []
   for (const e of sourcePaths) {
-    if (!e.alias && isWritten(e.path) && !pairs.some(q => sameSource(q.source, e.source))) pairs.push(e)
+    if (isWritten(e.path) && !pairs.some(q => sameSource(q.source, e.source))) pairs.push(e)
   }
   return pairs
 }
@@ -537,12 +539,12 @@ function buildJobs(leads) {
 }
 
 function jobPrompt(job) {
-  const target = `Write the one raw note for the source ${job.source}${job.title ? ` (${job.title})` : ''} at ${job.path}. That path is yours alone; use it exactly, and if the note already exists, append a dated section instead of rewriting it.`
+  const target = `Write the one raw note for the source ${job.source}${job.title ? ` (${job.title})` : ''} at ${job.path}. That path is yours alone; use it exactly, and if the note already exists, append a dated section instead of rewriting it. The one exception: if another raw note already holds this same canonical source, append to that note instead and return its path.`
   const material = job.subs.map(id => ({ id, question: spec.subQuestions.find(s => s.id === id).question, evidence: evidence[id] }))
   return `${WHERE}
 ${BOUNDS}
 
-Assignment: raw notes. ${target} Record only the findings that rest on that source; other sources have their own writers. The library keeps one raw note per canonical source, so before writing, search the raw notes' source fields for the canonical source; if another note already has it, append to that note and return its path. Write only that note, and leave the index, taxonomy, and log untouched; return their entries as deferred metadata. In produced, return the absolute path of the note you wrote or appended. If the evidence has nothing for this source, write nothing and return skipped true with the reason.
+Assignment: raw notes. ${target} Record only the findings that rest on that source; other sources have their own writers. The library keeps one raw note per canonical source, so before writing, search the raw notes' source fields for the canonical source. Write only that note, and leave the index, taxonomy, and log untouched; return their entries as deferred metadata. In produced, return the absolute path of the note you wrote or appended. If the evidence has nothing for this source, write nothing and return skipped true with the reason.
 
 Research spec: ${spec.path} (revision ${spec.revision})
 
@@ -648,13 +650,13 @@ ${list(context.supported)}`,
           return
         }
         // A writer that returns another source's path judged the two to be one canonical source:
-        // record this source against that path (an alias) instead of failing the write.
+        // record this source against that path instead of failing the write.
         const own = normPath(paths[0]) === normPath(todo[i].path)
         const holder = !own && sourcePaths.find(q => normPath(q.path) === normPath(paths[0]) && !sameSource(q.source, todo[i].source))
         if (holder) log(`Raw note ${paths[0]} holds both ${holder.source} and ${todo[i].source}; the scribe judged them one canonical source, so they share it`)
         for (const p of paths) if (!pendingWritten.includes(p)) pendingWritten.push(p)
         pendingDeferred.push(...(r.deferredMetadata || []))
-        if (!sourcePaths.some(q => sameSource(q.source, todo[i].source))) sourcePaths.push({ source: todo[i].source, path: paths[0], alias: !!holder })
+        if (!sourcePaths.some(q => sameSource(q.source, todo[i].source))) sourcePaths.push({ source: todo[i].source, path: paths[0] })
         for (const sub of todo[i].subs) writtenFor.push({ source: todo[i].source, sub })
       })
       todo = failed
