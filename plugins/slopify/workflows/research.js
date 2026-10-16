@@ -178,7 +178,7 @@ let persistFailures = 0
 let persisted = null // latest integration or repair result
 let pendingWritten = [] // raw notes written since the last integration returned
 let pendingDeferred = [] // deferred metadata not yet integrated
-const planAdds = new Map() // planned note path -> ids of sub-questions added to it by a plan change
+let writtenFor = [] // {source, sub}: evidence of a sub-question already written to that source's note
 let pendingLeads = [] // planned sources with no retrieved evidence, for the integrator
 const retrievalTries = {} // sub-question id -> researcher attempts without a result
 const MAX_RETRIEVAL_TRIES = 2
@@ -215,15 +215,16 @@ function toAbs(p) {
   return `${projectRoot.replace(/[\\/]+$/, '')}${sep}${t.replace(/^\.[\\/]/, '')}`
 }
 
-// Compare sources by a simple normal form: single forward slashes, lower case, and no fragment,
+// Compare sources by a simple normal form: single forward slashes, lower case, and no plain fragment,
 // utm_* tracking parameter, scheme, leading www., leading ./, or trailing slash. Other query
-// parameters stay, because they can name a different source (watch?v=A, item?id=1).
+// parameters and hash routes (#/, #!) stay, because they can name a different source
+// (watch?v=A, item?id=1).
 function normSource(x) {
   return String(x || '')
     .trim()
     .replace(/\\/g, '/')
     .toLowerCase()
-    .replace(/#.*$/, '')
+    .replace(/#(?![/!]).*$/, '')
     .replace(/\?(.*)$/, (m, q) => {
       const kept = q.split('&').filter(param => param && !/^utm_/.test(param))
       return kept.length ? `?${kept.join('&')}` : ''
@@ -274,17 +275,12 @@ function movedNotes(plan, oldPlan) {
   return moved
 }
 
-// After a revision, record per planned note the sub-questions newly added to it (all of a new
-// note's), so only that note receives their evidence.
-function markPlanChanges(oldPlan) {
-  for (const n of spec.plannedRawNotes) {
-    const o = matchingNote(oldPlan, n)
-    const added = (o ? n.subQuestions.filter(id => !o.subQuestions.includes(id)) : n.subQuestions).filter(id => evidence[id])
-    if (!added.length) continue
-    if (!planAdds.has(n.path)) planAdds.set(n.path, new Set())
-    for (const id of added) planAdds.get(n.path).add(id)
-  }
+function writtenList() {
+  return [...currentRaw, ...pendingWritten.filter(w => !currentRaw.includes(w))]
 }
+
+const FIXED_PATHS =
+  'Their paths are fixed: raw notes are append-only and one per source, so the path of a written note is never a spec or research issue. Do not ask to move one.'
 
 // The integrator's and every repair's rawNotes is the authoritative current list; the latest
 // structured list supersedes earlier ones. An empty or path-free list is not trusted.
@@ -368,11 +364,14 @@ Judge the research spec at ${spec.path}, revision ${spec.revision}, for research
 Question: ${question}
 
 Planned raw notes:
-${JSON.stringify(spec.plannedRawNotes, null, 2)}`,
+${JSON.stringify(spec.plannedRawNotes, null, 2)}
+
+Raw notes already written:
+${list(writtenList())}
+${FIXED_PATHS}`,
         { agentType: 'slopify:library-clerk', label: 'judge spec', phase: 'Spec', schema: VERDICT_SCHEMA },
       )
       if (verdict && verdict.verdict === 'pass') {
-        if (oldPlan) markPlanChanges(oldPlan)
         return true
       }
       specFailures += 1
@@ -396,45 +395,48 @@ if (!(await passSpec('', []))) {
 
 const evidence = {} // sub-question id -> researcher result
 let pending = spec.subQuestions.map(s => s.id) // sub-questions to (re)retrieve
-const dirty = new Set() // sub-questions whose evidence has no raw note yet
 let verdict = null
 
-// One writer per planned raw note, plus one per retrieved source the plan does not cover.
-function buildJobs(ids, leads) {
-  const idSet = new Set(ids)
-  const jobs = []
-  for (const n of spec.plannedRawNotes) {
-    const adds = planAdds.get(n.path)
-    const subs = n.subQuestions.filter(id => idSet.has(id) || (adds && adds.has(id)))
-    if (!subs.length) continue
-    const hasFindings = subs.some(id => (evidence[id].findings || []).length > 0)
-    // Whether the evidence really rests on the source is the scribe's call (skipped).
-    if (hasFindings) jobs.push({ kind: 'planned', key: n.path, path: n.path, source: n.source, title: '', subs })
-    else leads.push(`${n.source || n.path}: planned for ${n.path}, but no retrieved finding was returned for its sub-questions; record it as an unretrieved lead, not as evidence`)
+// The sources a sub-question's evidence cites, other than the spec and the library's own conventions.
+function citedSources(id) {
+  const ev = evidence[id]
+  let srcs = ev.sources || []
+  if (!srcs.length && (ev.findings || []).length) {
+    srcs = spec.plannedRawNotes.filter(n => n.source && n.subQuestions.includes(id)).map(n => ({ url: n.source, title: '' }))
   }
-  const extra = new Map()
-  for (const id of ids) {
-    for (const src of evidence[id].sources || []) {
-      const own = sameSource(spec.path, src.url) || normSource(src.url).includes('library/_meta/')
-      const covered = own || spec.plannedRawNotes.some(n => (n.source ? sameSource(n.source, src.url) : n.subQuestions.includes(id)))
-      const key = normSource(src.url)
-      if (covered || !key) continue
-      if (!extra.has(key)) {
-        const job = { kind: 'new', key, path: '', source: src.url, title: src.title, subs: [] }
-        extra.set(key, job)
+  return srcs.filter(x => normSource(x.url) && !sameSource(spec.path, x.url) && !normSource(x.url).includes('library/_meta/'))
+}
+
+// One writer per source. It receives the evidence of every sub-question that cites the source,
+// whichever sub-questions the plan lists; coverage is per (source, sub-question).
+function buildJobs(leads) {
+  const jobs = []
+  for (const s of spec.subQuestions) {
+    if (!evidence[s.id]) continue
+    for (const src of citedSources(s.id)) {
+      if (writtenFor.some(e => e.sub === s.id && sameSource(e.source, src.url))) continue
+      let job = jobs.find(j => sameSource(j.source, src.url))
+      if (!job) {
+        const planned = spec.plannedRawNotes.find(n => n.source && sameSource(n.source, src.url))
+        job = { key: normSource(src.url), source: planned ? planned.source : src.url, title: src.title, path: planned ? planned.path : '', subs: [] }
         jobs.push(job)
       }
-      if (!extra.get(key).subs.includes(id)) extra.get(key).subs.push(id)
+      if (!job.subs.includes(s.id)) job.subs.push(s.id)
+    }
+  }
+  for (const n of spec.plannedRawNotes) {
+    const covered = jobs.some(j => sameSource(j.source, n.source)) || writtenFor.some(e => sameSource(e.source, n.source)) || isWritten(n.path)
+    if (n.source && !covered) {
+      leads.push(`${n.source}: planned for ${n.path}, but no retrieved evidence cites it; record it as an unretrieved lead, not as evidence`)
     }
   }
   return jobs
 }
 
 function jobPrompt(job) {
-  const target =
-    job.kind === 'planned'
-      ? `Write the one planned raw note at ${job.path} for the source ${job.source}. That path is yours alone.`
-      : `Write exactly one raw note for the source ${job.source}${job.title ? ` (${job.title})` : ''}, which the spec's plan does not cover, at the conventional raw-note path with a slug derived from the source (not from a sub-question).`
+  const target = job.path
+    ? `Write the one planned raw note at ${job.path} for the source ${job.source}. That path is yours alone.`
+    : `Write exactly one raw note for the source ${job.source}${job.title ? ` (${job.title})` : ''}, which the spec's plan does not cover, at the conventional raw-note path with a slug derived from the source (not from a sub-question).`
   const material = job.subs.map(id => ({ id, question: spec.subQuestions.find(s => s.id === id).question, evidence: evidence[id] }))
   return `${WHERE}
 ${BOUNDS}
@@ -489,7 +491,8 @@ ${list(context.supported)}`,
         }
       }
     })
-    for (const s of toRun) if (evidence[s.id] && !retry.includes(s.id)) dirty.add(s.id)
+    // New evidence for a sub-question has to be written again.
+    for (const s of toRun) if (evidence[s.id] && !retry.includes(s.id)) writtenFor = writtenFor.filter(e => e.sub !== s.id)
     pending = []
     persisted = null
     if (issues.length) {
@@ -514,19 +517,15 @@ ${list(context.supported)}`,
   // Persist
   if (!persisted) {
     phase('Persist')
-    const ids = spec.subQuestions.filter(s => evidence[s.id] && dirty.has(s.id)).map(s => s.id)
     const leads = []
-    let todo = buildJobs(ids, leads)
+    let todo = buildJobs(leads)
     pendingLeads.push(...leads.filter(l => !pendingLeads.includes(l)))
-    for (const id of ids) {
-      if (!todo.some(j => j.subs.includes(id))) log(`Sub-question ${id}: no planned note and no source; nothing to persist`)
-    }
     while (todo.length) {
       const raw = await parallel(
         todo.map(job => () =>
           agent(jobPrompt(job), {
             agentType: 'slopify:library-scribe',
-            label: `raw note ${job.kind === 'planned' ? job.path.split(/[\\/]/).pop() : job.key.slice(0, 40)}`,
+            label: `raw note ${job.path ? job.path.split(/[\\/]/).pop() : job.key.slice(0, 40)}`,
             phase: 'Persist',
             schema: RAW_SCHEMA,
           }),
@@ -540,6 +539,7 @@ ${list(context.supported)}`,
           const lead = `${todo[i].source || todo[i].key}: no raw note written (${r.reason.trim()}); record it as an unretrieved lead, not as evidence`
           if (!pendingLeads.includes(lead)) pendingLeads.push(lead)
           pendingDeferred.push(...(r.deferredMetadata || []))
+          for (const sub of todo[i].subs) writtenFor.push({ source: todo[i].source, sub })
           return
         }
         if (!paths.length) {
@@ -548,6 +548,7 @@ ${list(context.supported)}`,
         }
         for (const p of paths) if (!pendingWritten.includes(p)) pendingWritten.push(p)
         pendingDeferred.push(...(r.deferredMetadata || []))
+        for (const sub of todo[i].subs) writtenFor.push({ source: todo[i].source, sub })
       })
       todo = failed
       if (todo.length) {
@@ -557,8 +558,6 @@ ${list(context.supported)}`,
         log(`Raw-note writers returned no path for ${todo.length} note(s); retrying them`)
       }
     }
-    for (const id of ids) dirty.delete(id)
-    planAdds.clear()
     for (const p of pendingWritten) if (!currentRaw.includes(p)) currentRaw.push(p)
 
     // Exactly one integrator, after every raw-note write has returned.
@@ -612,7 +611,7 @@ Validate the persisted research: the changed paths, the draft answer, the raw ev
 
 Question: ${question}
 Spec: ${spec.path} (revision ${spec.revision})
-Raw notes:
+Raw notes (written; ${FIXED_PATHS}):
 ${list(currentRaw)}
 Synthesis:
 ${list(onlyPaths(persisted.synthesis))}
