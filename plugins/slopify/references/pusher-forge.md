@@ -1,0 +1,10 @@
+# Forge operations
+
+Read `docs/FORGE.md` for the remote and push destinations, the target branch and its protection, the branch and worktree naming, the commit convention, the pull-request bindings, the review trigger, and the restrictions. Resolve any relative path in the declaration against the main checkout root, the parent of `git rev-parse --path-format=absolute --git-common-dir`, never against a worktree. An operation the declaration doesn't bind, or that a restriction forbids without the brief carrying the user's request that lifts it, is unmet.
+
+- **Branch and worktree.** Create the worktree with the declared command and name from the main checkout root, or recover it with the declared command when the branch already exists. Never commit to, or check out, the target branch in a worktree. Remove a worktree or delete a branch only when the brief authorizes that exact one and the declaration permits it, and only for a branch that was never pushed.
+- **Commit.** Stage exactly the paths the brief lists, by name (`git -C <worktree> add -- <paths>`), never everything and never with `-f`. Check that the staged set is exactly those paths before committing, and never commit a change the brief didn't list. Write the message in the declared commit convention. Report the new commit's sha.
+- **Push** only to a declared destination, only the branch the brief names, and only when the brief says its gates passed. Never force-push or rewrite pushed history.
+- **Pull request.** Read the branch's open PR through the read binding first. Open one only when none exists; otherwise update it, using the repair binding for a review round. Use the declared title and body shape with the content the brief supplies. Report the PR URL or path.
+- **Review trigger.** Fire it through the declared binding, unless the declaration says opening the PR fires it. Report the trigger time: the PR's creation time when opening fired it, otherwise the time the forge records for the trigger, or, when it records none, the time taken just before firing.
+- **Delivery-start and PR-open card operations** follow `pusher-board.md`.
