@@ -133,7 +133,11 @@ const RESEARCH_SCHEMA = {
       items: {
         type: 'object',
         required: ['url', 'title'],
-        properties: { url: { type: 'string', description: 'Canonical URL, or project file path' }, title: { type: 'string' } },
+        properties: {
+          url: { type: 'string', description: 'Canonical URL, or project file path' },
+          title: { type: 'string' },
+          origin: { type: 'string', description: 'When url is a library raw note, the canonical source that note records in its source field; otherwise an empty string' },
+        },
       },
     },
     findings: { ...STRINGS, description: 'Each as: claim <- source (URL, title, author); retrieved date; published/version date; supporting passage (quote | paraphrase | inference)' },
@@ -178,7 +182,7 @@ let persistFailures = 0
 let persisted = null // latest integration or repair result
 let pendingWritten = [] // raw notes written since the last integration returned
 let pendingDeferred = [] // deferred metadata not yet integrated
-let writtenFor = [] // {source, sub}: evidence of a sub-question already written to that source's note
+let writtenFor = [] // {source, sub, path}: evidence of a sub-question already written to that source's note
 let pendingLeads = [] // planned sources with no retrieved evidence, for the integrator
 const retrievalTries = {} // sub-question id -> researcher attempts without a result
 const MAX_RETRIEVAL_TRIES = 2
@@ -236,16 +240,22 @@ function normSource(x) {
     .replace(/\/+(\?|$)/, '$1')
 }
 
+// Sources match exactly, except that a relative project path matches the absolute file path
+// that ends in it. A URL matches only itself.
+const FILE_PATH = /^(\/|[a-z]:\/)/
+
 function sameSource(a, b) {
   const x = normSource(a)
   const y = normSource(b)
-  return !!x && !!y && (x === y || x.endsWith('/' + y) || y.endsWith('/' + x))
+  if (!x || !y) return false
+  if (x === y) return true
+  const [long, short] = x.length >= y.length ? [x, y] : [y, x]
+  return FILE_PATH.test(long) && long.endsWith('/' + short)
 }
 
-// The planned note a revised plan's note continues: same canonical source (or, without a
-// source, same path).
-function matchingNote(plan, n) {
-  return plan.find(o => (o.source && n.source ? sameSource(o.source, n.source) : o.path === n.path))
+// A path inside the library (a raw note, wiki page, or convention file) is never a source.
+function inLibrary(u) {
+  return /(^|\/)library\/(raw|wiki|_meta)\//.test(normSource(u))
 }
 
 // Compare paths with forward slashes, no repeated slashes, and a lower-case drive letter.
@@ -262,25 +272,35 @@ function isWritten(path) {
   return [...currentRaw, ...pendingWritten].some(w => normPath(w) === x)
 }
 
-// Raw notes are append-only and one per source, so a revised plan must not move a note that is
-// already written. Each move is a finding for the spec reviser.
-function movedNotes(plan, oldPlan) {
+// source -> path of every raw note written so far that still exists
+function writtenPairs() {
+  const pairs = []
+  for (const e of writtenFor) {
+    if (e.path && isWritten(e.path) && !pairs.some(q => sameSource(q.source, e.source))) pairs.push({ source: e.source, path: e.path })
+  }
+  return pairs
+}
+
+// Raw notes are append-only and one per source, so a plan must not put a written source's note at
+// another path. Each such move is a finding for the spec reviser.
+function movedNotes(plan) {
   const moved = []
   for (const n of plan) {
-    const o = oldPlan && matchingNote(oldPlan, n)
-    if (o && normPath(o.path) !== normPath(n.path) && isWritten(o.path)) {
-      moved.push(`The raw note for ${n.source} is already written at ${o.path}; keep that path (the revised plan moves it to ${n.path}).`)
+    const w = n.source && writtenPairs().find(q => sameSource(q.source, n.source))
+    if (w && normPath(w.path) !== normPath(n.path)) {
+      moved.push(`The raw note for ${n.source} is already written at ${w.path}; keep that path (the plan puts it at ${n.path}).`)
     }
   }
   return moved
 }
 
-function writtenList() {
-  return [...currentRaw, ...pendingWritten.filter(w => !currentRaw.includes(w))]
-}
-
 const FIXED_PATHS =
-  'Their paths are fixed: raw notes are append-only and one per source, so the path of a written note is never a spec or research issue. Do not ask to move one.'
+  'These source-to-path pairs are fixed: raw notes are append-only and one per source, so the path of a written note is never a spec or research issue. Do not ask to move one.'
+
+function pairsText() {
+  const pairs = writtenPairs()
+  return pairs.length ? pairs.map(q => `- ${q.source} -> ${q.path}`).join('\n') : '- none'
+}
 
 // The integrator's and every repair's rawNotes is the authoritative current list; the latest
 // structured list supersedes earlier ones. An empty or path-free list is not trusted.
@@ -317,7 +337,6 @@ let spec = null
 // A failed or unverified verdict, and each revision forced by a spec issue, count against the budget.
 async function passSpec(reason, issues) {
   phase('Spec')
-  const oldPlan = spec ? spec.plannedRawNotes : null
   let findings = issues
   let why = reason
   while (true) {
@@ -336,7 +355,7 @@ Supported:
 ${list(context.supported)}
 Gaps:
 ${list(context.gaps)}
-${revising ? `\nRaw notes already written by this run (keep each planned path exactly: a raw note is append-only and one per source, so a written note is never moved):\n${list(currentRaw)}` : ''}
+${revising ? `\nRaw notes already written by this run, as source -> path (keep each exactly: a raw note is append-only and one per source, so a written note is never moved):\n${pairsText()}` : ''}
 ${findings && findings.length ? `\nFindings to resolve:\n${list(findings)}` : ''}`,
       { agentType: 'slopify:library-scribe', label: revising ? 'revise spec' : 'draft spec', phase: 'Spec', schema: SPEC_SCHEMA },
     )
@@ -345,7 +364,7 @@ ${findings && findings.length ? `\nFindings to resolve:\n${list(findings)}` : ''
       attempts.push({ gate: 'spec', approach: 'library-scribe spec draft', failed: 'the scribe did not return' })
     } else {
       spec = { ...draft, plannedRawNotes: (draft.plannedRawNotes || []).map(n => ({ ...n, path: toAbs(n.path) })) }
-      const moved = movedNotes(spec.plannedRawNotes, oldPlan)
+      const moved = movedNotes(spec.plannedRawNotes)
       if (moved.length) {
         // Not judged: the file and the plan must agree, so the scribe revises again.
         specFailures += 1
@@ -366,8 +385,8 @@ Question: ${question}
 Planned raw notes:
 ${JSON.stringify(spec.plannedRawNotes, null, 2)}
 
-Raw notes already written:
-${list(writtenList())}
+Raw notes already written, as source -> path:
+${pairsText()}
 ${FIXED_PATHS}`,
         { agentType: 'slopify:library-clerk', label: 'judge spec', phase: 'Spec', schema: VERDICT_SCHEMA },
       )
@@ -397,14 +416,26 @@ const evidence = {} // sub-question id -> researcher result
 let pending = spec.subQuestions.map(s => s.id) // sub-questions to (re)retrieve
 let verdict = null
 
-// The sources a sub-question's evidence cites, other than the spec and the library's own conventions.
+// The sources a sub-question's evidence cites, other than the spec and anything in the library.
+// A cited library raw note stands for the source its own source field records, when given.
 function citedSources(id) {
   const ev = evidence[id]
-  let srcs = ev.sources || []
-  if (!srcs.length && (ev.findings || []).length) {
-    srcs = spec.plannedRawNotes.filter(n => n.source && n.subQuestions.includes(id)).map(n => ({ url: n.source, title: '' }))
+  const usable = []
+  for (const x of ev.sources || []) {
+    let src = x
+    if (inLibrary(x.url)) {
+      if (x.origin && normSource(x.origin) && !inLibrary(x.origin)) src = { url: x.origin, title: x.title }
+      else {
+        log(`Sub-question ${id}: dropped library path ${x.url} as a source`)
+        continue
+      }
+    }
+    if (normSource(src.url) && !sameSource(spec.path, src.url)) usable.push(src)
   }
-  return srcs.filter(x => normSource(x.url) && !sameSource(spec.path, x.url) && !normSource(x.url).includes('library/_meta/'))
+  if (!usable.length && (ev.findings || []).length) {
+    for (const n of spec.plannedRawNotes) if (n.source && n.subQuestions.includes(id)) usable.push({ url: n.source, title: '' })
+  }
+  return usable
 }
 
 // One writer per source. It receives the evidence of every sub-question that cites the source,
@@ -413,7 +444,9 @@ function buildJobs(leads) {
   const jobs = []
   for (const s of spec.subQuestions) {
     if (!evidence[s.id]) continue
-    for (const src of citedSources(s.id)) {
+    const cited = citedSources(s.id)
+    if ((evidence[s.id].findings || []).length && !cited.length) log(`Sub-question ${s.id}: findings cite no usable source; no raw note will hold them`)
+    for (const src of cited) {
       if (writtenFor.some(e => e.sub === s.id && sameSource(e.source, src.url))) continue
       let job = jobs.find(j => sameSource(j.source, src.url))
       if (!job) {
@@ -539,7 +572,7 @@ ${list(context.supported)}`,
           const lead = `${todo[i].source || todo[i].key}: no raw note written (${r.reason.trim()}); record it as an unretrieved lead, not as evidence`
           if (!pendingLeads.includes(lead)) pendingLeads.push(lead)
           pendingDeferred.push(...(r.deferredMetadata || []))
-          for (const sub of todo[i].subs) writtenFor.push({ source: todo[i].source, sub })
+          for (const sub of todo[i].subs) writtenFor.push({ source: todo[i].source, sub, path: '' })
           return
         }
         if (!paths.length) {
@@ -548,7 +581,7 @@ ${list(context.supported)}`,
         }
         for (const p of paths) if (!pendingWritten.includes(p)) pendingWritten.push(p)
         pendingDeferred.push(...(r.deferredMetadata || []))
-        for (const sub of todo[i].subs) writtenFor.push({ source: todo[i].source, sub })
+        for (const sub of todo[i].subs) writtenFor.push({ source: todo[i].source, sub, path: paths[0] })
       })
       todo = failed
       if (todo.length) {
@@ -611,8 +644,10 @@ Validate the persisted research: the changed paths, the draft answer, the raw ev
 
 Question: ${question}
 Spec: ${spec.path} (revision ${spec.revision})
-Raw notes (written; ${FIXED_PATHS}):
+Raw notes:
 ${list(currentRaw)}
+Written raw notes, as source -> path. ${FIXED_PATHS}
+${pairsText()}
 Synthesis:
 ${list(onlyPaths(persisted.synthesis))}
 Metadata:

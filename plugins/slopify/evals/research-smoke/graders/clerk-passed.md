@@ -3,4 +3,4 @@ type: llm
 focus: last_message
 ---
 
-The final response reports that the research workflow finished and that an independent validator (the `library-clerk`, or a reviewer described as separate or fresh) passed the saved research, and it names the path of the synthesis page and the path of at least one raw note it saved in the library (not necessarily every note, and not a glob).
+Pass if the final response says the research finished and that a separate validator or reviewer (the `library-clerk`, or a reviewer described as fresh, separate, or final) checked and passed it, and it mentions at least one raw note file under `library/raw/` and the synthesis page under `library/wiki/`. It need not list every file, and a relative path is fine. Fail if it says the research is still running, was blocked, or failed validation, or if either kind of file is not mentioned.
