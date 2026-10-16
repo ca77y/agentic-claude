@@ -57,9 +57,10 @@ const CONTEXT_SCHEMA = {
 
 const SPEC_SCHEMA = {
   type: 'object',
-  required: ['path', 'revision', 'subQuestions', 'changedSubQuestions', 'plannedRawNotes'],
+  required: ['path', 'revision', 'date', 'subQuestions', 'changedSubQuestions', 'plannedRawNotes'],
   properties: {
     path: { type: 'string', description: 'Absolute path of the spec' },
+    date: { type: 'string', description: 'Today\'s date as YYYY-MM-DD, the one the spec and the raw-note names use' },
     plannedRawNotes: {
       type: 'array',
       description:
@@ -182,7 +183,9 @@ let persistFailures = 0
 let persisted = null // latest integration or repair result
 let pendingWritten = [] // raw notes written since the last integration returned
 let pendingDeferred = [] // deferred metadata not yet integrated
-let writtenFor = [] // {source, sub, path}: evidence of a sub-question already written to that source's note
+let writtenFor = [] // {source, sub}: evidence of a sub-question already written to that source's note
+let sourcePaths = [] // {source, path}: where each source's raw note was written; new evidence never clears it
+let pendingExisting = [] // library raw notes the research cites, for the integrator
 let pendingLeads = [] // planned sources with no retrieved evidence, for the integrator
 const retrievalTries = {} // sub-question id -> researcher attempts without a result
 const MAX_RETRIEVAL_TRIES = 2
@@ -240,22 +243,35 @@ function normSource(x) {
     .replace(/\/+(\?|$)/, '$1')
 }
 
-// Sources match exactly, except that a relative project path matches the absolute file path
-// that ends in it. A URL matches only itself.
 const FILE_PATH = /^(\/|[a-z]:\/)/
 
+// A URL has a scheme other than file://.
+function isUrl(x) {
+  const t = String(x || '').trim()
+  return /^[a-z][a-z0-9+.-]*:\/\//i.test(t) && !/^file:\/\//i.test(t)
+}
+
+// With a project root, a relative file path means the file under it.
+function canon(x) {
+  const t = String(x || '').trim()
+  return !t || isUrl(t) || ABSOLUTE.test(t) || !projectRoot ? t : toAbs(t)
+}
+
+// Sources match exactly, except that a relative project path (when the project root is unknown)
+// matches the absolute file path that ends in it. A URL matches only itself.
 function sameSource(a, b) {
-  const x = normSource(a)
-  const y = normSource(b)
+  const x = normSource(canon(a))
+  const y = normSource(canon(b))
   if (!x || !y) return false
   if (x === y) return true
   const [long, short] = x.length >= y.length ? [x, y] : [y, x]
   return FILE_PATH.test(long) && long.endsWith('/' + short)
 }
 
-// A path inside the library (a raw note, wiki page, or convention file) is never a source.
+// A project path inside the library (a raw note, wiki page, or convention file) is never a
+// source. A URL is never a project path.
 function inLibrary(u) {
-  return /(^|\/)library\/(raw|wiki|_meta)\//.test(normSource(u))
+  return !isUrl(u) && /(^|\/)library\/(raw|wiki|_meta)\//.test(normSource(u))
 }
 
 // Compare paths with forward slashes, no repeated slashes, and a lower-case drive letter.
@@ -275,8 +291,8 @@ function isWritten(path) {
 // source -> path of every raw note written so far that still exists
 function writtenPairs() {
   const pairs = []
-  for (const e of writtenFor) {
-    if (e.path && isWritten(e.path) && !pairs.some(q => sameSource(q.source, e.source))) pairs.push({ source: e.source, path: e.path })
+  for (const e of sourcePaths) {
+    if (isWritten(e.path) && !pairs.some(q => sameSource(q.source, e.source))) pairs.push(e)
   }
   return pairs
 }
@@ -416,49 +432,89 @@ const evidence = {} // sub-question id -> researcher result
 let pending = spec.subQuestions.map(s => s.id) // sub-questions to (re)retrieve
 let verdict = null
 
-// The sources a sub-question's evidence cites, other than the spec and anything in the library.
-// A cited library raw note stands for the source its own source field records, when given.
+// The sources a sub-question's evidence cites. Library paths are never sources: a cited raw note
+// is an existing note to cite (its origin only counts a planned source as covered), and other
+// library files are dropped. The spec is not a source either.
 function citedSources(id) {
   const ev = evidence[id]
   const usable = []
+  const notes = []
   for (const x of ev.sources || []) {
-    let src = x
     if (inLibrary(x.url)) {
-      if (x.origin && normSource(x.origin) && !inLibrary(x.origin)) src = { url: x.origin, title: x.title }
-      else {
-        log(`Sub-question ${id}: dropped library path ${x.url} as a source`)
-        continue
-      }
-    }
-    if (normSource(src.url) && !sameSource(spec.path, src.url)) usable.push(src)
+      if (/(^|\/)library\/raw\//.test(normSource(x.url))) notes.push({ path: canon(x.url), origin: x.origin || '' })
+      else log(`Sub-question ${id}: dropped library path ${x.url} as a source`)
+    } else if (normSource(x.url) && !sameSource(spec.path, x.url)) usable.push(x)
   }
-  if (!usable.length && (ev.findings || []).length) {
+  if (!usable.length && !notes.length && (ev.findings || []).length) {
     for (const n of spec.plannedRawNotes) if (n.source && n.subQuestions.includes(id)) usable.push({ url: n.source, title: '' })
   }
-  return usable
+  return { usable, notes }
+}
+
+function slugOf(key) {
+  return key.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60).replace(/-+$/, '') || 'source'
+}
+
+// Where this run's raw notes live, taken from the plan when it names one.
+function rawDir() {
+  for (const n of spec.plannedRawNotes) {
+    const m = normPath(n.path).match(/^(.*\/library\/raw)\/[^/]+$/i)
+    if (m) return m[1]
+  }
+  return projectRoot ? `${normPath(projectRoot).replace(/\/+$/, '')}/library/raw` : 'library/raw'
+}
+
+// Every job gets its exclusive path in code: the source's written path, else its planned path,
+// else <library>/raw/<date>-<slug of the source>.md, distinct from every other path in the batch.
+function assignPaths(jobs) {
+  const taken = new Set([...currentRaw, ...pendingWritten, ...sourcePaths.map(q => q.path), ...spec.plannedRawNotes.map(n => n.path)].map(normPath))
+  for (const job of jobs) {
+    const known = sourcePaths.find(q => sameSource(q.source, job.source))
+    const planned = spec.plannedRawNotes.find(n => n.source && sameSource(n.source, job.source))
+    if (known || planned) {
+      job.path = (known || planned).path
+    } else {
+      const date = /^\d{4}-\d{2}-\d{2}$/.test(spec.date || '') ? `${spec.date}-` : ''
+      const base = `${rawDir()}/${date}${slugOf(job.key)}`
+      let candidate = `${base}.md`
+      for (let n = 2; taken.has(normPath(candidate)); n += 1) candidate = `${base}-${n}.md`
+      job.path = candidate
+    }
+    taken.add(normPath(job.path))
+  }
 }
 
 // One writer per source. It receives the evidence of every sub-question that cites the source,
 // whichever sub-questions the plan lists; coverage is per (source, sub-question).
 function buildJobs(leads) {
   const jobs = []
+  const origins = []
   for (const s of spec.subQuestions) {
     if (!evidence[s.id]) continue
-    const cited = citedSources(s.id)
-    if ((evidence[s.id].findings || []).length && !cited.length) log(`Sub-question ${s.id}: findings cite no usable source; no raw note will hold them`)
-    for (const src of cited) {
+    const { usable, notes } = citedSources(s.id)
+    for (const note of notes) {
+      if (!pendingExisting.includes(note.path)) pendingExisting.push(note.path)
+      if (note.origin) origins.push(note.origin)
+    }
+    if ((evidence[s.id].findings || []).length && !usable.length && !notes.length) log(`Sub-question ${s.id}: findings cite no usable source; no raw note will hold them`)
+    for (const src of usable) {
       if (writtenFor.some(e => e.sub === s.id && sameSource(e.source, src.url))) continue
       let job = jobs.find(j => sameSource(j.source, src.url))
       if (!job) {
         const planned = spec.plannedRawNotes.find(n => n.source && sameSource(n.source, src.url))
-        job = { key: normSource(src.url), source: planned ? planned.source : src.url, title: src.title, path: planned ? planned.path : '', subs: [] }
+        job = { key: normSource(canon(planned ? planned.source : src.url)), source: planned ? planned.source : src.url, title: src.title, path: '', subs: [] }
         jobs.push(job)
       }
       if (!job.subs.includes(s.id)) job.subs.push(s.id)
     }
   }
+  assignPaths(jobs)
   for (const n of spec.plannedRawNotes) {
-    const covered = jobs.some(j => sameSource(j.source, n.source)) || writtenFor.some(e => sameSource(e.source, n.source)) || isWritten(n.path)
+    const covered =
+      jobs.some(j => sameSource(j.source, n.source)) ||
+      writtenFor.some(e => sameSource(e.source, n.source)) ||
+      origins.some(o => sameSource(o, n.source)) ||
+      isWritten(n.path)
     if (n.source && !covered) {
       leads.push(`${n.source}: planned for ${n.path}, but no retrieved evidence cites it; record it as an unretrieved lead, not as evidence`)
     }
@@ -467,14 +523,12 @@ function buildJobs(leads) {
 }
 
 function jobPrompt(job) {
-  const target = job.path
-    ? `Write the one planned raw note at ${job.path} for the source ${job.source}. That path is yours alone.`
-    : `Write exactly one raw note for the source ${job.source}${job.title ? ` (${job.title})` : ''}, which the spec's plan does not cover, at the conventional raw-note path with a slug derived from the source (not from a sub-question).`
+  const target = `Write the one raw note for the source ${job.source}${job.title ? ` (${job.title})` : ''} at ${job.path}. That path is yours alone; use it exactly, and if the note already exists, append a dated section instead of rewriting it.`
   const material = job.subs.map(id => ({ id, question: spec.subQuestions.find(s => s.id === id).question, evidence: evidence[id] }))
   return `${WHERE}
 ${BOUNDS}
 
-Assignment: raw notes. ${target} Record only the findings that rest on that source; other sources have their own writers. The library keeps one raw note per canonical source: before creating the note, search the raw notes' source fields for the canonical source, and if a note for it already exists, append a dated section to that note instead of rewriting it. Write only that note, and leave the index, taxonomy, and log untouched; return their entries as deferred metadata. In produced, return the absolute path of the note you wrote or appended. If the evidence has nothing for this source, write nothing and return skipped true with the reason.
+Assignment: raw notes. ${target} Record only the findings that rest on that source; other sources have their own writers. The library keeps one raw note per canonical source, so before writing, search the raw notes' source fields for the canonical source; if another note already has it, append to that note and return its path. Write only that note, and leave the index, taxonomy, and log untouched; return their entries as deferred metadata. In produced, return the absolute path of the note you wrote or appended. If the evidence has nothing for this source, write nothing and return skipped true with the reason.
 
 Research spec: ${spec.path} (revision ${spec.revision})
 
@@ -493,7 +547,7 @@ while (true) {
           `${WHERE}
 ${BOUNDS}
 
-Investigate this one sub-question of the research spec at ${spec.path} (revision ${spec.revision}), through the source provider the library conventions name (library/_meta/librarian.md). Meet the spec's evidence standards. List in sources only the sources whose content your findings quote or rest on to answer the question; never the spec, the library conventions, or files you read only for orientation. Set specIssue.material to true only if the spec itself must change (its question, scope, evidence standards, or planned artifacts); minor notes are not material.
+Investigate this one sub-question of the research spec at ${spec.path} (revision ${spec.revision}), through the source provider the library conventions name (library/_meta/librarian.md). Meet the spec's evidence standards. List in sources only the sources whose content your findings quote or rest on to answer the question; never the spec, the library conventions, or files you read only for orientation. If you rely on a note already in the library, give its path as url and the canonical source it records in origin. Set specIssue.material to true only if the spec itself must change (its question, scope, evidence standards, or planned artifacts); minor notes are not material.
 
 Question: ${question}
 Sub-question ${s.id}: ${s.question}
@@ -572,16 +626,24 @@ ${list(context.supported)}`,
           const lead = `${todo[i].source || todo[i].key}: no raw note written (${r.reason.trim()}); record it as an unretrieved lead, not as evidence`
           if (!pendingLeads.includes(lead)) pendingLeads.push(lead)
           pendingDeferred.push(...(r.deferredMetadata || []))
-          for (const sub of todo[i].subs) writtenFor.push({ source: todo[i].source, sub, path: '' })
+          for (const sub of todo[i].subs) writtenFor.push({ source: todo[i].source, sub })
           return
         }
         if (!paths.length) {
           failed.push(todo[i])
           return
         }
+        const clash = sourcePaths.find(q => normPath(q.path) === normPath(paths[0]) && !sameSource(q.source, todo[i].source))
+        if (clash) {
+          // One path for two different sources would merge them; treat it as a failed write.
+          attempts.push({ gate: 'persist', approach: `raw note for ${todo[i].source}`, failed: `the scribe returned ${paths[0]}, which holds ${clash.source}` })
+          failed.push(todo[i])
+          return
+        }
         for (const p of paths) if (!pendingWritten.includes(p)) pendingWritten.push(p)
         pendingDeferred.push(...(r.deferredMetadata || []))
-        for (const sub of todo[i].subs) writtenFor.push({ source: todo[i].source, sub, path: paths[0] })
+        if (!sourcePaths.some(q => sameSource(q.source, todo[i].source))) sourcePaths.push({ source: todo[i].source, path: paths[0] })
+        for (const sub of todo[i].subs) writtenFor.push({ source: todo[i].source, sub })
       })
       todo = failed
       if (todo.length) {
@@ -611,6 +673,9 @@ ${list(pendingWritten)}
 Deferred metadata:
 ${list(pendingDeferred)}
 
+Library raw notes the research cites (existing notes: cite them, do not rewrite them or re-append their evidence):
+${list(pendingExisting)}
+
 Planned sources with no retrieved evidence (keep each visible as an unretrieved lead in the library's format; cite nothing about its contents):
 ${list(pendingLeads)}
 
@@ -633,6 +698,7 @@ ${JSON.stringify(
     pendingWritten = []
     pendingDeferred = []
     pendingLeads = []
+    pendingExisting = []
   }
 
   // Validate: a fresh clerk, after integration.
