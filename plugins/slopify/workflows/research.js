@@ -214,11 +214,18 @@ function toAbs(p) {
   return `${projectRoot.replace(/[\\/]+$/, '')}${sep}${t.replace(/^\.[\\/]/, '')}`
 }
 
+// Compare sources by a simple normal form: single forward slashes, lower case, and no fragment,
+// query, scheme, leading www., leading ./, or trailing slash.
 function normSource(x) {
   return String(x || '')
     .trim()
+    .replace(/\\/g, '/')
     .toLowerCase()
-    .replace(/^[a-z]+:\/\//, '')
+    .replace(/#.*$/, '')
+    .replace(/\?.*$/, '')
+    .replace(/^[a-z][a-z0-9+.-]*:\/\//, '')
+    .replace(/\/{2,}/g, '/')
+    .replace(/^www\./, '')
     .replace(/^\.\//, '')
     .replace(/\/+$/, '')
 }
@@ -229,22 +236,37 @@ function sameSource(a, b) {
   return !!x && !!y && (x === y || x.endsWith('/' + y) || y.endsWith('/' + x))
 }
 
-// The integrator's and every repair's rawNotes is the authoritative current list; the latest
-// structured list supersedes earlier ones. An empty or path-free list is not trusted.
-function samePlanNote(a, b) {
-  const x = [...a.subQuestions].sort().join('|')
-  const y = [...b.subQuestions].sort().join('|')
-  return a.path === b.path && sameSource(a.source, b.source) && x === y
+// The planned note a revised plan's note continues: same canonical source (or, without a
+// source, same path).
+function matchingNote(plan, n) {
+  return plan.find(o => (o.source && n.source ? sameSource(o.source, n.source) : o.path === n.path))
 }
 
-// After a revision, sub-questions of added or changed planned notes need their notes written.
+// Raw notes are append-only and one per source, so a note that exists keeps its path: a revised
+// plan that moves it is rewritten back to the written path.
+function pinWrittenPaths(plan, oldPlan) {
+  return plan.map(n => {
+    const o = oldPlan && matchingNote(oldPlan, n)
+    if (o && o.path !== n.path && currentRaw.includes(o.path)) {
+      log(`Planned note for ${n.source} moved to ${n.path}; keeping the written path ${o.path}`)
+      return { ...n, path: o.path }
+    }
+    return n
+  })
+}
+
+// After a revision, mark the sub-questions whose evidence still has to be written: all of an
+// added note's, and only the newly added sub-questions of a note that continues.
 function markPlanChanges(oldPlan) {
   for (const n of spec.plannedRawNotes) {
-    if (oldPlan.some(o => samePlanNote(o, n))) continue
-    for (const id of n.subQuestions) if (evidence[id]) dirty.add(id)
+    const o = matchingNote(oldPlan, n)
+    const added = o ? n.subQuestions.filter(id => !o.subQuestions.includes(id)) : n.subQuestions
+    for (const id of added) if (evidence[id]) dirty.add(id)
   }
 }
 
+// The integrator's and every repair's rawNotes is the authoritative current list; the latest
+// structured list supersedes earlier ones. An empty or path-free list is not trusted.
 function adoptRawList(result) {
   const latest = onlyPaths(result && result.rawNotes)
   if (latest.length) currentRaw = latest
@@ -297,7 +319,7 @@ Supported:
 ${list(context.supported)}
 Gaps:
 ${list(context.gaps)}
-${revising ? `\nRaw notes already written by this run (keep their planned paths unless the revision requires otherwise):\n${list(currentRaw)}` : ''}
+${revising ? `\nRaw notes already written by this run (keep each planned path exactly: a raw note is append-only and one per source, so a written note is never moved):\n${list(currentRaw)}` : ''}
 ${findings && findings.length ? `\nFindings to resolve:\n${list(findings)}` : ''}`,
       { agentType: 'slopify:library-scribe', label: revising ? 'revise spec' : 'draft spec', phase: 'Spec', schema: SPEC_SCHEMA },
     )
@@ -305,7 +327,8 @@ ${findings && findings.length ? `\nFindings to resolve:\n${list(findings)}` : ''
       specFailures += 1
       attempts.push({ gate: 'spec', approach: 'library-scribe spec draft', failed: 'the scribe did not return' })
     } else {
-      spec = { ...draft, plannedRawNotes: (draft.plannedRawNotes || []).map(n => ({ ...n, path: toAbs(n.path) })) }
+      const plan = (draft.plannedRawNotes || []).map(n => ({ ...n, path: toAbs(n.path) }))
+      spec = { ...draft, plannedRawNotes: pinWrittenPaths(plan, oldPlan) }
       const verdict = await agent(
         `${WHERE}
 
@@ -353,10 +376,9 @@ function buildJobs(ids, leads) {
     const subs = n.subQuestions.filter(id => idSet.has(id))
     if (!subs.length) continue
     const hasFindings = subs.some(id => (evidence[id].findings || []).length > 0)
-    const sources = subs.flatMap(id => evidence[id].sources || [])
-    const rests = !n.source || sources.length === 0 || sources.some(src => sameSource(n.source, src.url))
-    if (hasFindings && rests) jobs.push({ kind: 'planned', key: n.path, path: n.path, source: n.source, title: '', subs })
-    else leads.push(`${n.source || n.path}: planned for ${n.path}, but no retrieved finding rests on it; record it as an unretrieved lead, not as evidence`)
+    // Whether the evidence really rests on the source is the scribe's call (skipped).
+    if (hasFindings) jobs.push({ kind: 'planned', key: n.path, path: n.path, source: n.source, title: '', subs })
+    else leads.push(`${n.source || n.path}: planned for ${n.path}, but no retrieved finding was returned for its sub-questions; record it as an unretrieved lead, not as evidence`)
   }
   const extra = new Map()
   for (const id of ids) {
