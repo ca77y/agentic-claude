@@ -185,6 +185,88 @@ function fact(result, key) {
   return hit ? String(hit.excerpt || hit.location || "").trim() : "";
 }
 
+// A scout's "no value": empty, or prose that opens with none, absent, missing, n/a, or not found,
+// as in "MISSING (test -f found no file)". A token that merely starts with the word, such as
+// none.txt or missing/x, is a value. With whole, only a reply that is nothing but that word (and
+// an optional parenthetical) is none, so a sentence like "Missing config files produce an error"
+// is a value.
+function absent(v, whole) {
+  const t = String(v == null ? "" : v).trim();
+  if (!t) return true;
+  const word = "(?:none|absent|missing|n\\/a|not found)";
+  const re = whole
+    ? new RegExp(`^${word}\\s*(?:\\([^)]*\\))?[.:]?$`, "i")
+    : new RegExp(`^${word}(?![\\w/-]|\\.\\w)`, "i");
+  return re.test(t);
+}
+
+// A checkpoint value counts only in its expected shape, never as prose. Kinds: path (absolute),
+// rel (relative path), sha, branch, ref (a PR URL, number, or path), rev (<path>@<hex>), id.
+// Returns the value, or '' when it is absent or has another shape. A value followed by a
+// parenthetical remark, or by a full stop, is the value.
+const SHAPES = {
+  path: /^\/[\w@.+\- /]+$/,
+  rel: /^[\w@.+/-]+$/,
+  sha: /^[0-9a-f]{7,64}$/i,
+  branch: /^\w[\w./-]*$/,
+  ref: /^(?:https?:\/\/\S+|(?:PR ?)?#?\d+|[\w@.+/#-]+(?: ?\d+)?)$/i,
+  rev: /^[\w@.+/-]+@[0-9a-f]{7,64}$/i,
+  id: /^[A-Za-z0-9][^\s()<>]{0,199}$/,
+};
+function shaped(kind, v) {
+  const re = SHAPES[kind];
+  const t = String(v == null ? "" : v)
+    .split("\n")[0]
+    .trim();
+  if (!re || absent(t)) return "";
+  if (re.test(t)) return t;
+  const m = /^(\S+)\s+[(\[]/.exec(t);
+  const tok = (m ? m[1] : t).replace(/[.,;:]+$/, "");
+  return tok && re.test(tok) ? tok : "";
+}
+
+// Whether the revision a validator reports judging is the one its brief named. A label such as
+// <sha>+<digest>, <sha>#2, or <shaA>&<shaB> must match whole: every hex component of 7 or more
+// characters matches (a short sha matches its full form) and the marks between them ("+", "#2",
+// "&") appear too. A brief naming no revision accepts any.
+function sameRev(briefed, evaluated) {
+  const b = String(briefed || "")
+    .trim()
+    .toLowerCase();
+  const e = String(evaluated || "")
+    .trim()
+    .toLowerCase();
+  if (!b || e.includes(b)) return true;
+  const HEX = /(?<![0-9a-z])[0-9a-f]{7,64}(?![0-9a-z])/g;
+  const bh = b.match(HEX) || [];
+  if (!bh.length) return false;
+  const eh = e.match(HEX) || [];
+  if (!bh.every((x) => eh.some((y) => x.startsWith(y) || y.startsWith(x))))
+    return false;
+  return b
+    .split(HEX)
+    .map((p) => p.trim())
+    .filter((p) => p && !/[a-z]{3}/.test(p))
+    .every((p) => e.includes(p));
+}
+
+// A short deterministic hash of text.
+function hashOf(text) {
+  let h = 5381;
+  for (const ch of String(text)) h = ((h * 33) ^ ch.codePointAt(0)) >>> 0;
+  return h.toString(36).padStart(6, "0");
+}
+// A file slug for free text: its first six words plus a hash of all of it, so two ideas that open
+// alike never share a file.
+function slugged(text, fallback) {
+  const norm = String(text || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+  const words = norm.split(" ").filter(Boolean).slice(0, 6).join("-");
+  return norm ? `${words}-${hashOf(norm)}` : fallback || "item";
+}
+
 // kind: 'story' | 'decision' | 'prerequisite' | 'validation' | 'input'
 function blocked(workflow, step, needs, extra) {
   return { status: "blocked", workflow, step, needs, ...(extra || {}) };
@@ -476,20 +558,11 @@ const slugOf = (s) =>
     .split(/\s+/)
     .slice(0, 6)
     .join("-");
-// A scout's "no value" comes in many spellings: empty, "none", "none: no branch name given".
-const isNone = (v) =>
-  !String(v || "").trim() ||
-  /^\s*(none|absent|missing|n\/a|not found)(?![\w/-]|\.\w)/i.test(String(v));
-const clean = (v) => (isNone(v) ? "" : String(v).trim());
+const clean = (v) => (absent(v) ? "" : String(v).trim());
 const val = (res, key) => clean(fact(res, key));
-// A checkpoint or card value counts as present only in its expected shape, never as prose.
-const shaped = (v, re) => (re.test(String(v || "")) ? String(v).trim() : "");
-const PATH_RE = /^\/[\w@.+\- /]+$/; // an absolute path
-const REL_PATH_RE = /^[\w@.+/-]+$/; // a relative path
-const REF_RE = /^(https?:\/\/\S+|[\w@.+/#-]+(?: ?\d+)?)$/; // a PR URL, path, or number
-const HEX_RE = /^[0-9a-f]{7,64}$/i;
+const isRel = (p) => shaped("rel", p) === p;
 const splitList = (v) =>
-  isNone(v)
+  absent(v)
     ? []
     : v
         .split(/[,\n]/)
@@ -535,15 +608,10 @@ function passed(v) {
     !(v.findings || []).some((f) => f.blocking)
   );
 }
-function sameRevision(evaluated, revision) {
-  const e = String(evaluated || "");
-  const r = String(revision || "");
-  return !!r && (e.includes(r) || e.includes(r.slice(0, 12)));
-}
 // A verdict is usable only when it is on the revision it was briefed with and is coherent: a
 // fail names a blocking finding, a pass names none. A null or unusable verdict is re-run, not fixed.
 function usable(v, revision) {
-  if (!v || !sameRevision(v.evaluated, revision)) return false;
+  if (!v || !revision || !sameRev(revision, v.evaluated)) return false;
   const blocking = (v.findings || []).some((f) => f.blocking);
   if (v.verdict === "fail") return blocking;
   if (v.verdict === "pass") return !blocking;
@@ -554,7 +622,7 @@ function blockingOf(name, v) {
   if (!v || v.verdict === "pass") return [];
   const out = (v.findings || []).filter((f) => f.blocking).map((f) => ({ from: name, ...f }));
   if (v.verdict === "unverified") {
-    const lim = v.limits && !isNone(v.limits) ? v.limits : "";
+    const lim = v.limits && !absent(v.limits, true) ? v.limits : "";
     out.push({
       from: name,
       location: name,
@@ -831,7 +899,7 @@ if (!cardRes) {
 }
 const storySource = ((/^\s*(card|text|none)\b/i.exec(fact(cardRes, "story-source")) || [])[1] || "").toLowerCase();
 const story = storySource === "text" ? storyArg : fact(cardRes, "story");
-const storyRevision = shaped(fact(cardRes, "story-revision"), HEX_RE);
+const storyRevision = shaped("sha", fact(cardRes, "story-revision"));
 if (!story || storySource === "none") {
   return stop("locate", [
     need("locate", 1, "input", "A story the board can read, or the story text.", (cardRes.gaps || []).join("; ") || cardRes.answer),
@@ -843,15 +911,15 @@ if (!storyRevision) {
   ]);
 }
 const criteria = fact(cardRes, "criteria");
-// A single line that says none; a list of criteria is never none.
-if (isNone(criteria) && !/\n/.test(criteria.trim())) {
+// Only a bare "none" reply means no criteria; a criterion that opens with "Missing ..." is one.
+if (absent(criteria, true) && !/\n/.test(criteria.trim())) {
   return stop("locate", [
     need("locate", 1, "story", "The story states no acceptance criteria; it needs observable ones from shape.", cardRes.answer),
   ]);
 }
-const cardId = shaped(val(cardRes, "card"), /^\S{1,100}$/);
-const boardBranch = shaped(val(cardRes, "branch"), REL_PATH_RE);
-const slug = slugOf(cardId) || slugOf(storyArg);
+const cardId = shaped("id", val(cardRes, "card"));
+const boardBranch = shaped("branch", val(cardRes, "branch"));
+const slug = slugOf(cardId) || slugged(storyArg, "story");
 // The card title is the first line of a card-backed story; its lowercase kebab slug names the spec.
 const titleSlug = (storySource === "card" ? story.split("\n")[0].replace(/^#+\s*/, "") : "")
   .toLowerCase()
@@ -860,7 +928,7 @@ const titleSlug = (storySource === "card" ? story.split("\n")[0].replace(/^#+\s*
   .slice(0, 60)
   .replace(/-+$/, "");
 const specRel =
-  shaped(val(cardRes, "spec-path"), /^[\w@.+/-]+\.md$/) ||
+  [shaped("rel", val(cardRes, "spec-path"))].filter((p) => /\.md$/.test(p))[0] ||
   `docs/specs/${[cardId.toLowerCase().replace(/[^a-z0-9]+/g, "-"), titleSlug].filter(Boolean).join("-") || slug}.md`;
 const STORY_BLOCK = `The story, verbatim, is the acceptance source (story revision ${storyRevision}):
 <<<STORY
@@ -885,14 +953,23 @@ if (!cpRes) {
   ]);
 }
 const sameHash = (a, b) => !!a && !!b && (a.startsWith(b) || b.startsWith(a));
-const cpWorktree = shaped(val(cpRes, "worktree"), PATH_RE);
+const cpWorktree = shaped("path", val(cpRes, "worktree"));
 if (cpWorktree.startsWith("/")) state.worktree = cpWorktree.replace(/\/+$/, "");
-state.branch = shaped(val(cpRes, "branch"), REL_PATH_RE) || boardBranch;
-state.ledger = shaped(val(cpRes, "ledger"), PATH_RE);
-state.pr = shaped(val(cpRes, "pr").split("\n")[0].trim(), REF_RE);
-const cpDirty = splitList(fact(cpRes, "dirty")).filter((p) => REL_PATH_RE.test(p) && !/^\.tmp(\/|$)/.test(p));
-const cpSpec = parseSpec(val(cpRes, "spec"));
-if (cpSpec) {
+state.branch = shaped("branch", val(cpRes, "branch")) || boardBranch;
+state.ledger = shaped("path", val(cpRes, "ledger"));
+state.pr = shaped("ref", val(cpRes, "pr"));
+const cpDirty = splitList(fact(cpRes, "dirty")).filter((p) => isRel(p) && !/^\.tmp(\/|$)/.test(p));
+// Only the story worktree's copy of the spec counts. Before the worktree exists a scout can only
+// report the main checkout's copy, and a path outside the worktree is another file.
+const cpSpecRaw = parseSpec(val(cpRes, "spec"));
+const cpSpec =
+  cpSpecRaw && state.worktree
+    ? {
+        ...cpSpecRaw,
+        path: cpSpecRaw.path.startsWith("/") ? cpSpecRaw.path : `${state.worktree}/${rel(cpSpecRaw.path)}`,
+      }
+    : null;
+if (cpSpec && cpSpec.path.startsWith(state.worktree + "/")) {
   state.specPath = cpSpec.path;
   state.specHash = cpSpec.hash;
   state.specExists = true;
@@ -902,7 +979,7 @@ let specRevision = state.specHash;
 const doneSpec = parseDoneSpec(val(cpRes, "done-spec"));
 const doneImpl = parseDoneImplement(val(cpRes, "done-implement"));
 const donePub = parseDonePublish(val(cpRes, "done-publish"));
-const ledgerStory = shaped(val(cpRes, "ledger-story"), HEX_RE) || (doneSpec ? doneSpec.story : "");
+const ledgerStory = shaped("sha", val(cpRes, "ledger-story")) || (doneSpec ? doneSpec.story : "");
 
 // The currency chain: each link depends on the one before it.
 const specCurrent =
@@ -944,7 +1021,6 @@ if (state.worktree) {
 }
 if (!state.ledger) state.ledger = `${state.worktree}/.tmp/ledger.md`;
 if (!state.specPath) state.specPath = `${state.worktree}/${specRel}`;
-else if (!state.specPath.startsWith("/")) state.specPath = `${state.worktree}/${state.specPath}`;
 
 // ---- Spec -------------------------------------------------------------------
 
@@ -1041,7 +1117,7 @@ ${STORY_BLOCK}${pending.length ? `\n\nEarlier findings to recheck:\n${list(pendi
 
     const c = await callPusher(
       pushBrief(
-        `Commit exactly this file, staged by explicit path: ${state.specPath}. First check that its git hash-object is ${specRevision}; if it differs, commit nothing and report that as unmet. Use the commit convention docs/FORGE.md declares. Do not push.`,
+        `Commit exactly this file, staged by explicit path: ${state.specPath}. First check that its git hash-object is ${specRevision}; if it differs, commit nothing and report that as unmet. If the file is already committed at that hash, make no commit and record the current HEAD sha in the ledger line. Use the commit convention docs/FORGE.md declares. Do not push.`,
         [`done spec ${state.specPath}@${specRevision} commit <the new commit's sha> story ${storyRevision}`],
       ),
       "commit the spec",
@@ -1163,6 +1239,7 @@ ${gathered}`;
 
 const touched = new Set(); // every path a producer reported changing, for the commit
 const startDirty = cpDirty;
+const fixScopes = []; // paths a fix job was assigned beyond the tasks' own, validated with the rest
 let candidate = "";
 let docsJobs = [];
 
@@ -1233,7 +1310,8 @@ function candidateAfter(ran, prev) {
 }
 
 // What gets committed: the paths the validators judged, within the tasks' and documentation's assigned
-// paths, from the checkpoint's dirty list and what the producers reported. The rest is reported.
+// paths and the paths a fix job was assigned, from the checkpoint's dirty list and what the producers
+// reported. The rest is reported.
 function commitSet(scopes) {
   const all = unique([...startDirty, ...touched]).filter((p) => p && !/^\.tmp(\/|$)/.test(p) && !within(p, state.specPath));
   const inScope = all.filter((p) => scopes.some((s) => within(p, s)));
@@ -1303,6 +1381,7 @@ async function validate(first) {
         });
         byJob.fix = other;
       }
+      for (const j of fixJobs) fixScopes.push(...j.paths);
       const res = await runJobs(fixJobs, { dirty: [], findings: byJob, judged: cand, phase: "Validate" });
       const ran = [];
       const failed = [];
@@ -1395,7 +1474,7 @@ if (implCurrent) {
     break;
   }
   done("validate");
-  const commitPaths = commitSet([...plan.tasks.flatMap((t) => t.paths), ...plan.docs]);
+  const commitPaths = commitSet([...plan.tasks.flatMap((t) => t.paths), ...plan.docs, ...fixScopes]);
   const c = await callPusher(
     pushBrief(
       `Commit exactly these paths as they stand, staged by explicit path, with the commit convention docs/FORGE.md declares. Do not push. Commit nothing else, even if the worktree holds other uncommitted changes. If every path is already committed, make no commit and record the current HEAD sha in the ledger line.\nPaths:\n${list(commitPaths)}`,
@@ -1437,6 +1516,11 @@ if (publishCurrent) {
 // ---- Review -----------------------------------------------------------------
 
 phase("Review");
+if (!state.pr) {
+  return stop("review", [
+    need("review", 1, "prerequisite", "The PR reference, to start the review.", "the checkpoint and the ledger name no PR"),
+  ]);
+}
 let review = null;
 try {
   review = await workflow("slopify:review-pr", {
@@ -1462,6 +1546,11 @@ if (review.status === "blocked") {
     ...review,
     completed: [...completed, ...(review.completed || []).map((s) => `review-pr:${s}`)],
   };
+}
+if (review.status !== "done") {
+  return stop("review", [
+    need("review", 1, "prerequisite", "A finished review of the PR.", `the review-pr workflow returned status ${JSON.stringify(review.status)}`),
+  ]);
 }
 done("review");
 

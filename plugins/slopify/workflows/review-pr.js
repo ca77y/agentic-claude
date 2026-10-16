@@ -141,6 +141,88 @@ function fact(result, key) {
   return hit ? String(hit.excerpt || hit.location || "").trim() : "";
 }
 
+// A scout's "no value": empty, or prose that opens with none, absent, missing, n/a, or not found,
+// as in "MISSING (test -f found no file)". A token that merely starts with the word, such as
+// none.txt or missing/x, is a value. With whole, only a reply that is nothing but that word (and
+// an optional parenthetical) is none, so a sentence like "Missing config files produce an error"
+// is a value.
+function absent(v, whole) {
+  const t = String(v == null ? "" : v).trim();
+  if (!t) return true;
+  const word = "(?:none|absent|missing|n\\/a|not found)";
+  const re = whole
+    ? new RegExp(`^${word}\\s*(?:\\([^)]*\\))?[.:]?$`, "i")
+    : new RegExp(`^${word}(?![\\w/-]|\\.\\w)`, "i");
+  return re.test(t);
+}
+
+// A checkpoint value counts only in its expected shape, never as prose. Kinds: path (absolute),
+// rel (relative path), sha, branch, ref (a PR URL, number, or path), rev (<path>@<hex>), id.
+// Returns the value, or '' when it is absent or has another shape. A value followed by a
+// parenthetical remark, or by a full stop, is the value.
+const SHAPES = {
+  path: /^\/[\w@.+\- /]+$/,
+  rel: /^[\w@.+/-]+$/,
+  sha: /^[0-9a-f]{7,64}$/i,
+  branch: /^\w[\w./-]*$/,
+  ref: /^(?:https?:\/\/\S+|(?:PR ?)?#?\d+|[\w@.+/#-]+(?: ?\d+)?)$/i,
+  rev: /^[\w@.+/-]+@[0-9a-f]{7,64}$/i,
+  id: /^[A-Za-z0-9][^\s()<>]{0,199}$/,
+};
+function shaped(kind, v) {
+  const re = SHAPES[kind];
+  const t = String(v == null ? "" : v)
+    .split("\n")[0]
+    .trim();
+  if (!re || absent(t)) return "";
+  if (re.test(t)) return t;
+  const m = /^(\S+)\s+[(\[]/.exec(t);
+  const tok = (m ? m[1] : t).replace(/[.,;:]+$/, "");
+  return tok && re.test(tok) ? tok : "";
+}
+
+// Whether the revision a validator reports judging is the one its brief named. A label such as
+// <sha>+<digest>, <sha>#2, or <shaA>&<shaB> must match whole: every hex component of 7 or more
+// characters matches (a short sha matches its full form) and the marks between them ("+", "#2",
+// "&") appear too. A brief naming no revision accepts any.
+function sameRev(briefed, evaluated) {
+  const b = String(briefed || "")
+    .trim()
+    .toLowerCase();
+  const e = String(evaluated || "")
+    .trim()
+    .toLowerCase();
+  if (!b || e.includes(b)) return true;
+  const HEX = /(?<![0-9a-z])[0-9a-f]{7,64}(?![0-9a-z])/g;
+  const bh = b.match(HEX) || [];
+  if (!bh.length) return false;
+  const eh = e.match(HEX) || [];
+  if (!bh.every((x) => eh.some((y) => x.startsWith(y) || y.startsWith(x))))
+    return false;
+  return b
+    .split(HEX)
+    .map((p) => p.trim())
+    .filter((p) => p && !/[a-z]{3}/.test(p))
+    .every((p) => e.includes(p));
+}
+
+// A short deterministic hash of text.
+function hashOf(text) {
+  let h = 5381;
+  for (const ch of String(text)) h = ((h * 33) ^ ch.codePointAt(0)) >>> 0;
+  return h.toString(36).padStart(6, "0");
+}
+// A file slug for free text: its first six words plus a hash of all of it, so two ideas that open
+// alike never share a file.
+function slugged(text, fallback) {
+  const norm = String(text || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+  const words = norm.split(" ").filter(Boolean).slice(0, 6).join("-");
+  return norm ? `${words}-${hashOf(norm)}` : fallback || "item";
+}
+
 // kind: 'story' | 'decision' | 'prerequisite' | 'validation' | 'input'
 function blocked(workflow, step, needs, extra) {
   return { status: "blocked", workflow, step, needs, ...(extra || {}) };
@@ -303,34 +385,25 @@ let baseCommit = '';
 let dirtyPaths = [];
 
 const list = (items) => (items && items.length ? items.map((x) => `- ${x}`).join('\n') : '- none');
-// A checkpoint value that says there is nothing, in prose or as a bare word. Scouts answer an absent file
-// as "MISSING (test -f found no file ...)".
-const isNone = (v) => !String(v || '').trim() || /^(none|absent|n\/a|not found|missing)\b/i.test(String(v).trim());
-// Present values have a shape: a path, a sha, a ref name. Prose is never a value.
-const pathLike = (t) => /^[^\s()<>:;,'"`]+$/.test(t) && (t.includes('/') || /\.\w+$/.test(t));
-const SHAPES = {
-  worktree: pathLike,
-  ledger: pathLike,
-  spec: pathLike,
-  head: (t) => /^[0-9a-f]{7,64}$/i.test(t),
-  base: (t) => /^[0-9a-f]{7,64}$/i.test(t),
-  'story-revision': (t) => /^[0-9a-f]{7,64}$/i.test(t),
-  branch: (t) => /^\w[\w./-]*$/.test(t),
-};
+// Each checkpoint key's expected shape (see shaped in the shared block); a key without one is text.
+const KINDS = { worktree: 'path', ledger: 'path', head: 'sha', base: 'sha', 'story-revision': 'sha', branch: 'branch' };
 // A checkpoint item's value, or '' when it says there is none or lacks the expected shape. A shaped item
-// is its first token, so a path followed by a remark is the path.
+// followed by a remark is the item. A text value is none only for a bare none reply.
 function val(res, key) {
   const v = fact(res, key);
-  if (isNone(v)) return '';
-  const ok = SHAPES[key];
-  if (!ok) return v;
-  const tok = v.trim().split(/\s+/)[0].replace(/[.,;]+$/, '');
-  return ok(tok) ? tok : '';
+  if (key === 'spec') return specOf(v);
+  const kind = KINDS[key];
+  return kind ? shaped(kind, v) : absent(v, true) ? '' : v;
+}
+// The spec's path from "<path>@<hash>" or a bare path, in the story worktree or relative to it.
+function specOf(v) {
+  const r = shaped('rev', v);
+  return r ? r.replace(/@[0-9a-f]{7,64}$/i, '') : shaped('path', v) || shaped('rel', v);
 }
 // The highest round on 'review <n> fired|ended' text, else a bare number; never a digit run from a timestamp.
 function reviewRound(v) {
   const t = String(v || '').trim();
-  if (isNone(t)) return 0;
+  if (absent(t)) return 0;
   let best = 0;
   for (const m of t.matchAll(/review\s+(\d+)\s+(?:fired|ended)/gi)) best = Math.max(best, parseInt(m[1], 10));
   if (best) return best;
@@ -365,11 +438,11 @@ const isTmp = (p) => /(^|\/)\.tmp(\/|$)/.test(String(p || ''));
 
 function parseDirty(v) {
   const t = String(v || '').trim();
-  if (isNone(t)) return [];
+  if (absent(t)) return [];
   return t
     .split(/[\n,]+/)
     .map((x) => x.trim())
-    .filter((x) => x && !isNone(x) && !/[\s()]/.test(x) && !isTmp(x));
+    .filter((x) => x && !absent(x) && !/[\s()]/.test(x) && !isTmp(x));
 }
 
 function samePath(a, b) {
@@ -378,28 +451,20 @@ function samePath(a, b) {
   return !!x && !!y && (x === y || x.endsWith('/' + y) || y.endsWith('/' + x));
 }
 
-// Documentation and the spec go to the writer; everything else goes to the coder.
+// Markdown and text documents and the spec go to the writer; everything else goes to the coder. The kind of
+// file decides, not its directory: code under docs/ or doc/ (docs/conf.py, pkg/doc/render.go) is code.
 const isSpec = (loc) => !!specPath && samePath(String(loc || '').replace(/:\d+(-\d+)?$/, ''), specPath);
 const isDoc = (loc) => {
   const p = String(loc || '').replace(/:\d+(-\d+)?$/, '');
-  return isSpec(p) || /(^|\/)docs?\//i.test(p) || /\.(md|mdx|rst|adoc)$/i.test(p) || /(^|\/)readme(\.[a-z]+)?$/i.test(p);
+  return isSpec(p) || /\.(md|mdx|rst|txt|adoc)$/i.test(p) || /(^|\/)readme$/i.test(p);
 };
 
 const CHECKPOINT_KEYS = 'worktree branch head base dirty ledger review-fired review-ended spec pr';
 
 // A validator verdict counts only when it passes, carries no blocking finding, and names the revision
-// the brief gave it in evaluated. A brief with no revision to name accepts any evaluated.
-// Revisions match when the briefed text appears in evaluated, or when every full-length hash in the brief
-// is a prefix of (or extends) a hash in evaluated, so a short sha matches its full form.
-function sameRev(evaluated, rev) {
-  const e = String(evaluated || '').toLowerCase();
-  const r = String(rev || '').toLowerCase();
-  if (!r || e.includes(r)) return true;
-  const rt = r.match(/\b[0-9a-f]{7,64}\b/g) || [];
-  const et = e.match(/\b[0-9a-f]{7,64}\b/g) || [];
-  return rt.length > 0 && rt.every((x) => et.some((y) => x.startsWith(y) || y.startsWith(x)));
-}
-const named = (v, rev) => sameRev(v.evaluated, rev);
+// the brief gave it in evaluated (see sameRev in the shared block). A brief with no revision to name
+// accepts any evaluated.
+const named = (v, rev) => sameRev(rev, v.evaluated);
 const passes = (v, rev) => !!v && v.verdict === 'pass' && !v.findings.some((f) => f.blocking) && named(v, rev);
 function problems(v, rev) {
   if (!v) return ['no verdict returned'];
@@ -493,10 +558,7 @@ Branch: ${val(cp, 'branch') || 'the pull request head branch'}`,
   skipped.push('workspace');
 }
 
-if (!specPath) {
-  const m = val(cp, 'spec').match(/^(\S+)/);
-  specPath = m ? m[1].replace(/@[0-9a-f]{7,64}$/i, '') : '';
-}
+if (!specPath) specPath = val(cp, 'spec');
 head = val(cp, 'head');
 baseCommit = val(cp, 'base');
 dirtyPaths = parseDirty(fact(cp, 'dirty'));
@@ -578,7 +640,7 @@ async function sortFindings(r, findings) {
     lens('lens-finding',
       `${WHERE}
 
-Judge whether the change of this pull request is free of the defect that one review finding describes. The change runs from the base revision to the candidate revision, committed in the worktree ${worktree}; ignore uncommitted changes. Report the candidate revision in evaluated.${attempt > 1 ? ' An earlier verdict on this finding was missing or named another revision; judge it afresh.' : ''}
+Judge whether the change of this pull request is free of the defect that one review finding describes. The change is the committed one: from the base revision to the candidate commit, read in the worktree ${worktree} with git diff <base> <candidate>. Ignore the worktree's uncommitted changes: an interrupted round can leave a fix there, and an uncommitted fix is not evidence that a finding is handled. Report the candidate revision in evaluated.${attempt > 1 ? ' An earlier verdict on this finding was missing or named another revision; judge it afresh.' : ''}
 
 Pull request: ${pr}
 Base revision: ${baseCommit || 'not reported; use the merge base of the pull request branch and the target branch docs/FORGE.md declares'}
@@ -903,7 +965,17 @@ ${AUTH}
 Publish the verified fixes of review round ${r} for pull request ${pr}. A fresh qa passed them. Work in the worktree ${worktree}${branch ? ` on branch ${branch}` : ''}, in this order:
 ${steps.map((x, i) => `${i + 1}. ${x}`).join('\n')}
 
-Return the implementation commit sha as the reference of a commit operation, and record every other operation. Put anything docs/BOARD.md or docs/FORGE.md does not bind in unmet.`;
+Return the implementation commit sha as the reference of an operation named "commit", the spec commit (if any) as "commit-spec", and record every other operation. Put anything docs/BOARD.md or docs/FORGE.md does not bind in unmet.`;
+}
+
+// The fix commit among the operations a push reported. The spec is committed first, alone, so the fix
+// commit is the commit operation the brief names `commit`, else the last commit that is not the spec's.
+function fixCommit(pushed) {
+  const commits = ((pushed && pushed.operations) || []).filter((o) => /commit/i.test(o.op) && o.reference);
+  const named = commits.filter((o) => o.op.trim().toLowerCase() === 'commit');
+  const rest = commits.filter((o) => !/spec/i.test(`${o.op} ${o.result}`));
+  const pick = named.length ? named[named.length - 1] : rest.length ? rest[rest.length - 1] : commits[commits.length - 1];
+  return pick ? pick.reference : '';
 }
 
 async function refreshHead(r, pushed) {
@@ -911,8 +983,8 @@ async function refreshHead(r, pushed) {
   const h = res ? val(res, 'head') : '';
   if (h) head = h;
   else {
-    const op = pushed.operations.find((o) => /commit/i.test(o.op) && o.reference);
-    if (op) head = op.reference;
+    const ref = fixCommit(pushed);
+    if (ref) head = ref;
   }
   dirtyPaths = res ? parseDirty(fact(res, 'dirty')) : [];
 }
@@ -1021,7 +1093,7 @@ for (let r = startRound; r <= MAX_ROUNDS && !ended; r++) {
     roundRecord(r, sorted, 'fixed', {
       defectsFixed: sorted.defects.map((d) => `${d.finding.id}: ${d.finding.text}`),
       validations: st.validationLog,
-      pushed: (pushed.operations.find((o) => /commit/i.test(o.op)) || {}).reference || '',
+      pushed: fixCommit(pushed),
       ...(pushed.unmet.length ? { unmet: pushed.unmet } : {}),
     }),
   );

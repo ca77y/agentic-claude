@@ -167,6 +167,88 @@ function fact(result, key) {
   return hit ? String(hit.excerpt || hit.location || "").trim() : "";
 }
 
+// A scout's "no value": empty, or prose that opens with none, absent, missing, n/a, or not found,
+// as in "MISSING (test -f found no file)". A token that merely starts with the word, such as
+// none.txt or missing/x, is a value. With whole, only a reply that is nothing but that word (and
+// an optional parenthetical) is none, so a sentence like "Missing config files produce an error"
+// is a value.
+function absent(v, whole) {
+  const t = String(v == null ? "" : v).trim();
+  if (!t) return true;
+  const word = "(?:none|absent|missing|n\\/a|not found)";
+  const re = whole
+    ? new RegExp(`^${word}\\s*(?:\\([^)]*\\))?[.:]?$`, "i")
+    : new RegExp(`^${word}(?![\\w/-]|\\.\\w)`, "i");
+  return re.test(t);
+}
+
+// A checkpoint value counts only in its expected shape, never as prose. Kinds: path (absolute),
+// rel (relative path), sha, branch, ref (a PR URL, number, or path), rev (<path>@<hex>), id.
+// Returns the value, or '' when it is absent or has another shape. A value followed by a
+// parenthetical remark, or by a full stop, is the value.
+const SHAPES = {
+  path: /^\/[\w@.+\- /]+$/,
+  rel: /^[\w@.+/-]+$/,
+  sha: /^[0-9a-f]{7,64}$/i,
+  branch: /^\w[\w./-]*$/,
+  ref: /^(?:https?:\/\/\S+|(?:PR ?)?#?\d+|[\w@.+/#-]+(?: ?\d+)?)$/i,
+  rev: /^[\w@.+/-]+@[0-9a-f]{7,64}$/i,
+  id: /^[A-Za-z0-9][^\s()<>]{0,199}$/,
+};
+function shaped(kind, v) {
+  const re = SHAPES[kind];
+  const t = String(v == null ? "" : v)
+    .split("\n")[0]
+    .trim();
+  if (!re || absent(t)) return "";
+  if (re.test(t)) return t;
+  const m = /^(\S+)\s+[(\[]/.exec(t);
+  const tok = (m ? m[1] : t).replace(/[.,;:]+$/, "");
+  return tok && re.test(tok) ? tok : "";
+}
+
+// Whether the revision a validator reports judging is the one its brief named. A label such as
+// <sha>+<digest>, <sha>#2, or <shaA>&<shaB> must match whole: every hex component of 7 or more
+// characters matches (a short sha matches its full form) and the marks between them ("+", "#2",
+// "&") appear too. A brief naming no revision accepts any.
+function sameRev(briefed, evaluated) {
+  const b = String(briefed || "")
+    .trim()
+    .toLowerCase();
+  const e = String(evaluated || "")
+    .trim()
+    .toLowerCase();
+  if (!b || e.includes(b)) return true;
+  const HEX = /(?<![0-9a-z])[0-9a-f]{7,64}(?![0-9a-z])/g;
+  const bh = b.match(HEX) || [];
+  if (!bh.length) return false;
+  const eh = e.match(HEX) || [];
+  if (!bh.every((x) => eh.some((y) => x.startsWith(y) || y.startsWith(x))))
+    return false;
+  return b
+    .split(HEX)
+    .map((p) => p.trim())
+    .filter((p) => p && !/[a-z]{3}/.test(p))
+    .every((p) => e.includes(p));
+}
+
+// A short deterministic hash of text.
+function hashOf(text) {
+  let h = 5381;
+  for (const ch of String(text)) h = ((h * 33) ^ ch.codePointAt(0)) >>> 0;
+  return h.toString(36).padStart(6, "0");
+}
+// A file slug for free text: its first six words plus a hash of all of it, so two ideas that open
+// alike never share a file.
+function slugged(text, fallback) {
+  const norm = String(text || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+  const words = norm.split(" ").filter(Boolean).slice(0, 6).join("-");
+  return norm ? `${words}-${hashOf(norm)}` : fallback || "item";
+}
+
 // kind: 'story' | 'decision' | 'prerequisite' | 'validation' | 'input'
 function blocked(workflow, step, needs, extra) {
   return { status: "blocked", workflow, step, needs, ...(extra || {}) };
@@ -188,10 +270,11 @@ const MEASURED_RULE =
   'Every measured value in the document must come from a prototype command recorded in the document together with its output. Do not report figures from scouts, from runs that were not saved, or from a validator\'s reruns: drop such a figure rather than cite it. When a validator flags a figure that has no recorded command, remove it or add the recorded command and its output; never add a new unrecorded figure.'
 const DOC_REVISION =
   'The document revision is the file\'s own git hash-object (git hash-object <path>); the file may be untracked, so verify it that way and do not look for a commit.'
-const PROTOTYPE_BRANCH = `spike/${slugOf(question)}`
-const PROTOTYPE_WORKTREE = `.worktrees/spike-${slugOf(question)}`
-const AUTH =
-  `The user invoked the deliver-spike workflow. That invocation itself authorizes you to create, and later delete, this spike's own prototype branch and worktree, which are local only, never pushed, and never merged, even where docs/FORGE.md does not mention them. When docs/FORGE.md names no spike or prototype naming, use the branch ${PROTOTYPE_BRANCH} and the worktree ${PROTOTYPE_WORKTREE} under the main checkout root. Follow docs/FORGE.md for everything else it binds, such as the target branch to branch from. The user's invocation of deliver-spike is the user's request for creating and deleting this prototype branch and worktree, so it lifts any restriction in docs/FORGE.md against them. The invocation authorizes nothing else: no commit, push, pull request, board operation, ledger line, merge, or message.`
+// The prototype's names come from docs/FORGE.md's "Spike prototypes" binding, read in Locate; the
+// script invents none. binding is '' when FORGE.md declares none, and then no prototype is built.
+let binding = ''
+const auth = () =>
+  `The user invoked the deliver-spike workflow. That invocation itself authorizes you to create, and later delete, this spike's own prototype branch and worktree, which are local only, never pushed, and never merged. Name them only as docs/FORGE.md's "Spike prototypes" binding names them:\n${binding}\nFollow docs/FORGE.md for everything else it binds, such as the target branch to branch from. The user's invocation of deliver-spike is the user's request for creating and deleting this prototype branch and worktree, so it lifts any restriction in docs/FORGE.md against them. The invocation authorizes nothing else: no commit, push, pull request, board operation, ledger line, merge, or message.`
 
 // Local producer and operations schemas ------------------------------------
 
@@ -303,19 +386,8 @@ function stop(step, needs) {
   return blocked(WORKFLOW, step, needs, { completed, checkpoint, attempts, rerun: RERUN })
 }
 
-function slugOf(text) {
-  const words = text.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean)
-  return words.slice(0, 6).join('-') || 'spike'
-}
-
 function list(items) {
   return items && items.length ? items.map((x) => `- ${x}`).join('\n') : '- none'
-}
-
-function hashOf(text) {
-  let h = 5381
-  for (const ch of text) h = ((h * 33) ^ ch.codePointAt(0)) >>> 0
-  return h.toString(36).padStart(6, '0')
 }
 
 // A stable id for an open decision: a short slug plus a hash of the normalized question text.
@@ -341,10 +413,6 @@ function answerOf(id) {
 
 function tokens(text) {
   return String(text || '').split(/\s+/).filter(Boolean)
-}
-
-function present(v) {
-  return !!v && !/^(none|absent|n\/a|not found)\b/i.test(v.trim())
 }
 
 function opRef(result, op) {
@@ -378,17 +446,11 @@ function passed(r) {
   return !!r && r.verdict === 'pass' && !(r.findings || []).some((f) => f.blocking)
 }
 
-function sameRevision(evaluated, revision) {
-  const e = String(evaluated || '')
-  const r = String(revision || '')
-  return !!r && (e.includes(r) || e.includes(r.slice(0, 12)))
-}
-
 // A verdict counts only for the revision it judged. When the brief could not name a revision
 // (a rerun that found the artifact already written), the verdict must still name what it judged.
 function passedOn(r, revision) {
   if (!passed(r)) return false
-  return revision ? sameRevision(r.evaluated, revision) : !!String(r.evaluated || '').trim()
+  return revision ? sameRev(revision, r.evaluated) : !!String(r.evaluated || '').trim()
 }
 
 function describe(name, r, revision) {
@@ -397,7 +459,7 @@ function describe(name, r, revision) {
   if (r.verdict === 'pass' && !items.length && !passedOn(r, revision)) {
     items.push(`judged "${r.evaluated}", not the briefed revision ${revision || '(none named)'}`)
   }
-  const limits = r.limits && r.limits !== 'none' ? `; limits: ${r.limits}` : ''
+  const limits = r.limits && !absent(r.limits, true) ? `; limits: ${r.limits}` : ''
   return `${name}: ${r.verdict}${items.length ? ` (${items.join('; ')})` : ''}${limits}`
 }
 
@@ -418,7 +480,7 @@ async function attempt(gate, label, run, check, fatal) {
 
 const retryNote = (last) => (last ? `\nThe previous attempt failed: ${last}\n` : '')
 
-const slug = slugOf(question)
+const slug = slugged(question, 'spike')
 
 // ---- Locate -----------------------------------------------------------------
 
@@ -434,9 +496,10 @@ Spike slug: ${slug}
 Question: ${question}
 
 Keys:
+- spike-binding: the "Spike prototypes" binding in docs/FORGE.md: its local branch pattern, its worktree pattern, and whether it permits deleting a never-pushed prototype, quoted. Leave the key out when docs/FORGE.md does not exist or has no such binding; invent no names.
 - findings-doc: the findings document for this spike, a Markdown file in the main checkout (ignore .git and .worktrees) whose first line under its title is "Spike: ${slug}". Location: its absolute path. Excerpt: "<absolute path> <git hash-object of the file>".
-- prototype-branch: the local prototype branch for this spike, named as docs/FORGE.md names a spike or prototype branch from the slug, or ${PROTOTYPE_BRANCH} when it names none, if it exists. Location and excerpt: the branch name.
-- worktree: the prototype worktree for that branch (${PROTOTYPE_WORKTREE} when docs/FORGE.md names none), if it exists. Location and excerpt: its absolute path.`,
+- prototype-branch: the local prototype branch that binding names for the slug above, if it exists. Location and excerpt: the branch name alone. Leave the key out when there is no binding.
+- worktree: the prototype worktree that binding names for the slug above, if it exists. Location and excerpt: its absolute path alone. Leave the key out when there is no binding.`,
     { label: 'checkpoint', phase: 'Locate' },
   )
   if (!cp) attempts.push({ gate: 'locate', approach: 'scout-checkpoint', failed: 'the scout did not return' })
@@ -448,13 +511,13 @@ if (!cp) {
 }
 completed.push('locate')
 
+const bindingFact = fact(cp, 'spike-binding')
+binding = absent(bindingFact) ? '' : bindingFact
 const docFact = fact(cp, 'findings-doc')
-const docParts = present(docFact) ? tokens(docFact) : []
-const doc = { path: docParts[0] || '', revision: docParts[1] || '' }
-const branchFact = fact(cp, 'prototype-branch')
-const worktreeFact = fact(cp, 'worktree')
-let prototypeBranch = present(branchFact) ? tokens(branchFact)[0] : ''
-let prototypeWorktree = present(worktreeFact) ? tokens(worktreeFact)[0] : ''
+const docParts = absent(docFact) ? [] : tokens(docFact)
+const doc = { path: shaped('path', docParts[0]), revision: shaped('sha', docParts[1]) }
+let prototypeBranch = shaped('branch', fact(cp, 'prototype-branch'))
+let prototypeWorktree = shaped('path', fact(cp, 'worktree'))
 if (doc.path) checkpoint.findingsDoc = doc.path
 if (prototypeBranch) checkpoint.branch = prototypeBranch
 if (prototypeWorktree) checkpoint.worktree = prototypeWorktree
@@ -463,6 +526,7 @@ let measurements = [] // from the coder; empty on a rerun that finds the documen
 let unknowns = []
 let protoRevision = ''
 let library = null
+let prototypeGap = '' // set when claims need a prototype but docs/FORGE.md declares no naming for one
 
 if (doc.path) {
   log(`Findings document ${doc.path} exists; skipping codebase, outside, plan, prototype, and findings`)
@@ -559,6 +623,7 @@ ${show('scout-code', code)}`
   // whatever else the writer asks. The first plan call never carries answers (so a resumed run
   // replays it); each answer then goes back with its question text.
   const settled = [] // { id, question, answer }
+  let carriedTried = false
   let planned = null
   let plan = null
   for (let round = 0; ; round++) {
@@ -598,6 +663,23 @@ ${evidenceText}`,
   const decisions = decisionsOf(plan.openDecisions)
   const open = decisions.filter((d) => !answerOf(d.id))
   if (open.length) {
+    // A rerun in a new session can word a question differently, which gives it a new id. Before
+    // blocking, give the writer the answers it was not asked about again, once, so an answer that
+    // already covers a reworded question settles it.
+    const carried = Object.keys(answers).filter(
+      (k) => k.startsWith('plan-') && answerOf(k) && !decisions.some((d) => d.id === k) && !settled.some((x) => x.id === k),
+    )
+    if (carried.length && !carriedTried && round + 1 < MAX_FAILURES) {
+      carriedTried = true
+      settled.push(
+        ...carried.map((k) => ({
+          id: k,
+          question: `an earlier question whose id was ${k}; its words ran: ${k.replace(/^plan-/, '').replace(/-[a-z0-9]{6,7}$/, '').replace(/-/g, ' ')}`,
+          answer: answerOf(k),
+        })),
+      )
+      continue
+    }
     return stop(
       'plan',
       open.map((d) => need(d.id, 'decision', d.question, 'raised by the claim plan')),
@@ -619,6 +701,10 @@ ${evidenceText}`,
   if (!toMeasure.length) {
     log('No claim needs a measurement; no prototype')
     skipped.push('prototype')
+  } else if (!binding && !prototypeWorktree) {
+    prototypeGap = `No prototype was built: docs/FORGE.md declares no "Spike prototypes" naming, so these claims were not measured: ${toMeasure.map((c) => c.id).join(', ')}`
+    log(prototypeGap)
+    skipped.push('prototype')
   } else {
     phase('Prototype')
     if (!prototypeWorktree) {
@@ -628,9 +714,9 @@ ${evidenceText}`,
         (last) =>
           agent(
             `${WHERE}
-${AUTH}
+${auth()}
 ${retryNote(last)}
-Create the spike's prototype branch and worktree for the slug "${slug}". Branch name: ${PROTOTYPE_BRANCH}. Worktree: ${PROTOTYPE_WORKTREE}. Use these names, unless docs/FORGE.md names a spike or prototype branch and worktree, in which case use its naming. Branch from the target branch docs/FORGE.md declares. Both are local only, never pushed, never merged; confirm neither was pushed before reusing an existing one. If they already exist from an interrupted run, reuse them. Report the operations \`branch-create\` (reference: the branch name) and \`worktree-add\` (reference: the absolute worktree path). Commit nothing, push nothing, open no pull request, and append no ledger line. Report an operation as unmet only if it fails or the request above does not cover it.`,
+Create the spike's prototype branch and worktree for the slug "${slug}", named as docs/FORGE.md's "Spike prototypes" binding names them. Branch from the target branch docs/FORGE.md declares. Both are local only, never pushed, never merged; confirm neither was pushed before reusing an existing one. If they already exist from an interrupted run, reuse them. Report the operations \`branch-create\` (reference: the branch name) and \`worktree-add\` (reference: the absolute worktree path). Commit nothing, push nothing, open no pull request, and append no ledger line. Report an operation as unmet only if it fails or the request above does not cover it.`,
             { agentType: 'slopify:pusher', label: 'prototype workspace', phase: 'Prototype', schema: PUSHER_SCHEMA },
           ),
         (r) => (r.unmet && r.unmet.length ? `unmet: ${r.unmet.join('; ')}` : !r.done ? 'the operation did not complete' : !opRef(r, 'worktree-add') ? 'no worktree path was reported' : ''),
@@ -705,7 +791,11 @@ Claims and their evidence status:
 ${plan.claims.map((c) => `- ${c.id} [${c.status}]: ${c.claim}${c.measurement ? ` (measurement: ${c.measurement})` : ''}`).join('\n')}
 
 Measurements from the prototype:
-${showMeasurements(measurements)}
+${showMeasurements(measurements)}${
+          prototypeGap
+            ? `\n\n${prototypeGap}. State each of those claims as unmeasured in the document, and list the missing prototype naming among the open unknowns.`
+            : ''
+        }
 
 Evidence:
 ${evidenceText}`,
@@ -723,6 +813,7 @@ ${evidenceText}`,
   doc.path = written.res.produced[0]
   doc.revision = written.res.revision.trim()
   unknowns = written.res.openDecisions || []
+  if (prototypeGap && !unknowns.some((u) => /prototype/i.test(u))) unknowns = [...unknowns, prototypeGap]
   checkpoint.findingsDoc = doc.path
   completed.push('findings')
 }
@@ -868,9 +959,9 @@ if (!prototypeBranch && !prototypeWorktree) {
     (last) =>
       agent(
         `${WHERE}
-${AUTH}
+${auth()}
 ${retryNote(last)}
-Remove this spike's prototype: the worktree at ${prototypeWorktree || PROTOTYPE_WORKTREE} and its local branch ${prototypeBranch || PROTOTYPE_BRANCH} (if docs/FORGE.md names a spike branch and worktree for the slug "${slug}", those are the ones; find them from the worktree list). Both are local only, never pushed, never merged. The branch was never pushed or merged and the prototype is throwaway, so delete the worktree and branch even though they are unmerged and the worktree holds uncommitted files. Touch no other branch or worktree, and push nothing. Report the operations \`worktree-remove\` and \`branch-delete\`, then confirm that git worktree list and git branch --list show neither.`,
+Remove this spike's prototype: ${prototypeWorktree ? `the worktree at ${prototypeWorktree}` : 'its worktree, if one exists'} and ${prototypeBranch ? `its local branch ${prototypeBranch}` : 'its local branch, if one exists'} (named by docs/FORGE.md's "Spike prototypes" binding for the slug "${slug}"; find them from the worktree list and the branch list). Both are local only, never pushed, never merged. The branch was never pushed or merged and the prototype is throwaway, so delete the worktree and branch even though they are unmerged and the worktree holds uncommitted files. Touch no other branch or worktree, and push nothing. Report the operations \`worktree-remove\` and \`branch-delete\`, then confirm that git worktree list and git branch --list show neither.`,
         { agentType: 'slopify:pusher', label: 'remove prototype', phase: 'Cleanup', schema: PUSHER_SCHEMA },
       ),
     (r) => (r.unmet && r.unmet.length ? `unmet: ${r.unmet.join('; ')}` : !r.done ? 'the operation did not complete' : ''),
@@ -895,7 +986,9 @@ const report = [
   `Open unknowns: ${unknowns.length ? unknowns.join('; ') : 'none reported this run (see the document)'}.`,
   prototypeDeleted
     ? `The prototype worktree${prototypeBranch ? ` and branch ${prototypeBranch}` : ''} were deleted; nothing was pushed or merged.`
-    : 'No prototype branch existed, so none was deleted; nothing was pushed or merged.',
+    : prototypeGap
+      ? `${prototypeGap}; nothing was pushed or merged.`
+      : 'No prototype branch existed, so none was deleted; nothing was pushed or merged.',
 ].join('\n')
 
 return {

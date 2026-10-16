@@ -42,7 +42,7 @@ When a workflow can't proceed — a gate runs out of failures, a decision is ope
 A rerun is a new run with fresh budgets:
 
 - **In the same session**, rerun with the same args plus `answers` for each need, and pass `resumeFromRunId`. Steps before the one that raised the need replay from the cache.
-- **Across sessions, or after the story or repository changed**, rerun without resume. Each run starts by asking `scout-checkpoint` for its durable checkpoints — the branch and worktree, the committed spec, ledger lines, the PR, a draft, a findings document, a filed card, or a reproduction directory — and skips every step a current checkpoint proves complete.
+- **Across sessions, or after the story or repository changed**, rerun without resume. Each run starts by asking `scout-checkpoint` for its durable checkpoints — the branch and worktree, the committed spec, ledger lines, the PR, a draft, a findings document, a filed card, or a reproduction directory — and skips every step a current checkpoint proves complete. A checkpoint value counts only in its expected shape, never as prose, and a draft, reproduction, or spike is named from its idea text plus a short hash of the whole text, so two ideas that open alike never share a file. A deliver workflow that finds no PR to review stops instead of reporting a review.
 
 ## Ledger
 
@@ -54,7 +54,7 @@ Once the PR opens, `publish` fires the review the forge declaration names (unles
 
 ## Project authority
 
-Project authority lives in [`docs/BOARD.md`](docs/BOARD.md), [`docs/FORGE.md`](docs/FORGE.md), and `library/_meta/librarian.md` in the target project. Invoking a deliver workflow or `review-pr` authorizes the story branch and worktree, attributable commits, a push once the gates pass, opening or updating the task's PR, and the declared review trigger, re-fired after each verified push. `reproduce-bug` authorizes filing one `Bug` card. `deliver-spike` authorizes creating, and then deleting, its own unpushed prototype branch and worktree; its findings document stays uncommitted. `shape` files or updates the story card only when its args set `file: true`. No workflow merges or releases. Every workflow and skill assumes the project is bootstrapped; rerun `bootstrap` to verify and fix the setup.
+Project authority lives in [`docs/BOARD.md`](docs/BOARD.md), [`docs/FORGE.md`](docs/FORGE.md), and `library/_meta/librarian.md` in the target project. Invoking a deliver workflow or `review-pr` authorizes the story branch and worktree, attributable commits, a push once the gates pass, opening or updating the task's PR, and the declared review trigger, re-fired after each verified push. `reproduce-bug` authorizes filing one `Bug` card. `deliver-spike` authorizes creating, and then deleting, its own unpushed prototype branch and worktree, named by the "Spike prototypes" line of `docs/FORGE.md`; when that line is missing or says "none", it builds no prototype and names the gap among its open unknowns. Its findings document stays uncommitted. `shape` files or updates the story card only when its args set `file: true`. No workflow merges or releases. Every workflow and skill assumes the project is bootstrapped; rerun `bootstrap` to verify and fix the setup.
 
 ## Install
 

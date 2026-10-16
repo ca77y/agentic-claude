@@ -142,6 +142,88 @@ function fact(result, key) {
   return hit ? String(hit.excerpt || hit.location || "").trim() : "";
 }
 
+// A scout's "no value": empty, or prose that opens with none, absent, missing, n/a, or not found,
+// as in "MISSING (test -f found no file)". A token that merely starts with the word, such as
+// none.txt or missing/x, is a value. With whole, only a reply that is nothing but that word (and
+// an optional parenthetical) is none, so a sentence like "Missing config files produce an error"
+// is a value.
+function absent(v, whole) {
+  const t = String(v == null ? "" : v).trim();
+  if (!t) return true;
+  const word = "(?:none|absent|missing|n\\/a|not found)";
+  const re = whole
+    ? new RegExp(`^${word}\\s*(?:\\([^)]*\\))?[.:]?$`, "i")
+    : new RegExp(`^${word}(?![\\w/-]|\\.\\w)`, "i");
+  return re.test(t);
+}
+
+// A checkpoint value counts only in its expected shape, never as prose. Kinds: path (absolute),
+// rel (relative path), sha, branch, ref (a PR URL, number, or path), rev (<path>@<hex>), id.
+// Returns the value, or '' when it is absent or has another shape. A value followed by a
+// parenthetical remark, or by a full stop, is the value.
+const SHAPES = {
+  path: /^\/[\w@.+\- /]+$/,
+  rel: /^[\w@.+/-]+$/,
+  sha: /^[0-9a-f]{7,64}$/i,
+  branch: /^\w[\w./-]*$/,
+  ref: /^(?:https?:\/\/\S+|(?:PR ?)?#?\d+|[\w@.+/#-]+(?: ?\d+)?)$/i,
+  rev: /^[\w@.+/-]+@[0-9a-f]{7,64}$/i,
+  id: /^[A-Za-z0-9][^\s()<>]{0,199}$/,
+};
+function shaped(kind, v) {
+  const re = SHAPES[kind];
+  const t = String(v == null ? "" : v)
+    .split("\n")[0]
+    .trim();
+  if (!re || absent(t)) return "";
+  if (re.test(t)) return t;
+  const m = /^(\S+)\s+[(\[]/.exec(t);
+  const tok = (m ? m[1] : t).replace(/[.,;:]+$/, "");
+  return tok && re.test(tok) ? tok : "";
+}
+
+// Whether the revision a validator reports judging is the one its brief named. A label such as
+// <sha>+<digest>, <sha>#2, or <shaA>&<shaB> must match whole: every hex component of 7 or more
+// characters matches (a short sha matches its full form) and the marks between them ("+", "#2",
+// "&") appear too. A brief naming no revision accepts any.
+function sameRev(briefed, evaluated) {
+  const b = String(briefed || "")
+    .trim()
+    .toLowerCase();
+  const e = String(evaluated || "")
+    .trim()
+    .toLowerCase();
+  if (!b || e.includes(b)) return true;
+  const HEX = /(?<![0-9a-z])[0-9a-f]{7,64}(?![0-9a-z])/g;
+  const bh = b.match(HEX) || [];
+  if (!bh.length) return false;
+  const eh = e.match(HEX) || [];
+  if (!bh.every((x) => eh.some((y) => x.startsWith(y) || y.startsWith(x))))
+    return false;
+  return b
+    .split(HEX)
+    .map((p) => p.trim())
+    .filter((p) => p && !/[a-z]{3}/.test(p))
+    .every((p) => e.includes(p));
+}
+
+// A short deterministic hash of text.
+function hashOf(text) {
+  let h = 5381;
+  for (const ch of String(text)) h = ((h * 33) ^ ch.codePointAt(0)) >>> 0;
+  return h.toString(36).padStart(6, "0");
+}
+// A file slug for free text: its first six words plus a hash of all of it, so two ideas that open
+// alike never share a file.
+function slugged(text, fallback) {
+  const norm = String(text || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+  const words = norm.split(" ").filter(Boolean).slice(0, 6).join("-");
+  return norm ? `${words}-${hashOf(norm)}` : fallback || "item";
+}
+
 // kind: 'story' | 'decision' | 'prerequisite' | 'validation' | 'input'
 function blocked(workflow, step, needs, extra) {
   return { status: "blocked", workflow, step, needs, ...(extra || {}) };
@@ -212,18 +294,8 @@ function slugify(text) {
     .replace(/^-+|-+$/g, '')
 }
 
-function words(text) {
-  return (String(text).toLowerCase().match(/[a-z0-9]+/g) || []).slice(0, 6).join('-')
-}
-
-function none(v) {
-  return !v || /^(none|absent|n\/a|not found|missing)\b/i.test(v)
-}
-
 // A card identifier or URL is one token; prose such as "no card found" is not an identifier.
-function idOf(v) {
-  return !none(v) && /^[A-Za-z0-9][\w.:#\/-]*$/.test(v) ? v : ''
-}
+const idOf = (v) => shaped('id', v)
 
 // The answer to a need this run raised, for the step that raised it; '' when none was given.
 function answerFor(id) {
@@ -351,7 +423,7 @@ Report: ${report}`,
 ])
 
 const cardId = idOf(fact(cardR, 'card-id'))
-const slug = slugify(cardId) || words(report) || 'report'
+const slug = slugify(cardId) || slugged(report, 'report')
 const reproRel = `.tmp/repro/${slug}`
 const reproDir = projectRoot ? `${projectRoot}/${reproRel}` : reproRel
 // The draft lives beside the reproduction directory, never in it, so it can't change the reproduction's digest.

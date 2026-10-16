@@ -27,7 +27,8 @@ The brief carries the project root, the keys to report, and what identifies the 
 - `findings-doc`: the document whose first line under its title is `Spike: <slug>`.
 - `repro-dir`: the reproduction directory and whether it holds a reproduction.
 - `bug-card`: the existing `Bug` card for the report, as the brief describes it.
-- `prototype-branch`: the spike's local prototype branch.
+- `spike-binding`: the "Spike prototypes" binding in `docs/FORGE.md`, quoted; absent when the declaration has none.
+- `prototype-branch`: the spike's local prototype branch, named by that binding for the slug the brief gives.
 
 ## Doing it well
 

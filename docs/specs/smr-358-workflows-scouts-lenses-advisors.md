@@ -14,7 +14,7 @@ In scope (from the card): the six workflows; the scout, lens, and advisor famili
 
 Out of scope (from the card): the library agents and skills (`library-*`, `ask`, `lint`, `research`), except that `library-clerk` takes the new contract text; `bootstrap`; version bumps.
 
-Also out of scope (design choice): the target-project `docs/BOARD.md` and `docs/FORGE.md` formats and the bootstrap templates. This repo's own `docs/` entries stay as they are, except as noted under [Repository files](#repository-files-outside-plugins).
+Also out of scope (design choice): the target-project `docs/BOARD.md` and `docs/FORGE.md` formats and the bootstrap templates, except the forge template's `Spike prototypes` line (see the `deliver-spike` section). This repo's own `docs/` entries stay as they are, except as noted under [Repository files](#repository-files-outside-plugins).
 
 ## Approach
 
@@ -142,6 +142,13 @@ Workflows can't import files, so (design choice) every workflow script except `r
 
 - A shared schema sub-workflow: `workflow()` nests one level only, and `review-pr` already runs as a child.
 - Return formats in agent bodies: the card forbids them.
+
+The block also holds the one set of helpers every workflow uses to read scout answers and name files, so no workflow keeps a local copy (design choice, from review round 2 of PR #35, where four copies of the "none" check and three revision matchers drifted apart):
+
+- `absent(v, whole?)`: true for an empty value, or prose that opens with `none`, `absent`, `missing`, `n/a`, or `not found` (as in `MISSING (test -f found no file)`). A path-like token that merely starts with the word, such as `none.txt`, is a value. With `whole`, only a reply that is nothing but that word and an optional parenthetical counts, so a criterion such as "Missing config files produce a clear error" is a value.
+- `shaped(kind, v)`: a checkpoint value in its expected shape, else `''`. Kinds: `path` (absolute), `rel`, `sha`, `branch`, `ref` (a PR URL, number, or path), `rev` (`<path>@<hex>`), and `id`. A value followed by a parenthetical remark or a full stop is the value; prose is never one.
+- `sameRev(briefed, evaluated)`: whether a validator judged the revision its brief named. The whole label must match: every hex component of 7 or more characters (a short sha matches its full form) and the marks between them (`+`, `#n`, `&`). The HEAD prefix alone does not match a `<sha>+<digest>` label. A brief naming no revision accepts any.
+- `hashOf(text)` and `slugged(text, fallback)`: a file slug from free text is its first six words plus a hash of the whole normalized text, so two ideas that open alike never share a draft, reproduction, spec, or spike.
 
 Scouts, lenses, and advisors are dispatched only through the block's helpers, which fix the agent type's family prefix and the schema. A check forbids a direct `agentType: 'slopify:scout-…'`, `'slopify:lens-…'`, or `'slopify:advisor-…'` anywhere in the workflows. Helper calls name the full agent (`scout('scout-code', …)`), so the agent-existence check can find them.
 
@@ -273,6 +280,88 @@ function fact(result, key) {
   return hit ? String(hit.excerpt || hit.location || "").trim() : "";
 }
 
+// A scout's "no value": empty, or prose that opens with none, absent, missing, n/a, or not found,
+// as in "MISSING (test -f found no file)". A token that merely starts with the word, such as
+// none.txt or missing/x, is a value. With whole, only a reply that is nothing but that word (and
+// an optional parenthetical) is none, so a sentence like "Missing config files produce an error"
+// is a value.
+function absent(v, whole) {
+  const t = String(v == null ? "" : v).trim();
+  if (!t) return true;
+  const word = "(?:none|absent|missing|n\\/a|not found)";
+  const re = whole
+    ? new RegExp(`^${word}\\s*(?:\\([^)]*\\))?[.:]?$`, "i")
+    : new RegExp(`^${word}(?![\\w/-]|\\.\\w)`, "i");
+  return re.test(t);
+}
+
+// A checkpoint value counts only in its expected shape, never as prose. Kinds: path (absolute),
+// rel (relative path), sha, branch, ref (a PR URL, number, or path), rev (<path>@<hex>), id.
+// Returns the value, or '' when it is absent or has another shape. A value followed by a
+// parenthetical remark, or by a full stop, is the value.
+const SHAPES = {
+  path: /^\/[\w@.+\- /]+$/,
+  rel: /^[\w@.+/-]+$/,
+  sha: /^[0-9a-f]{7,64}$/i,
+  branch: /^\w[\w./-]*$/,
+  ref: /^(?:https?:\/\/\S+|(?:PR ?)?#?\d+|[\w@.+/#-]+(?: ?\d+)?)$/i,
+  rev: /^[\w@.+/-]+@[0-9a-f]{7,64}$/i,
+  id: /^[A-Za-z0-9][^\s()<>]{0,199}$/,
+};
+function shaped(kind, v) {
+  const re = SHAPES[kind];
+  const t = String(v == null ? "" : v)
+    .split("\n")[0]
+    .trim();
+  if (!re || absent(t)) return "";
+  if (re.test(t)) return t;
+  const m = /^(\S+)\s+[(\[]/.exec(t);
+  const tok = (m ? m[1] : t).replace(/[.,;:]+$/, "");
+  return tok && re.test(tok) ? tok : "";
+}
+
+// Whether the revision a validator reports judging is the one its brief named. A label such as
+// <sha>+<digest>, <sha>#2, or <shaA>&<shaB> must match whole: every hex component of 7 or more
+// characters matches (a short sha matches its full form) and the marks between them ("+", "#2",
+// "&") appear too. A brief naming no revision accepts any.
+function sameRev(briefed, evaluated) {
+  const b = String(briefed || "")
+    .trim()
+    .toLowerCase();
+  const e = String(evaluated || "")
+    .trim()
+    .toLowerCase();
+  if (!b || e.includes(b)) return true;
+  const HEX = /(?<![0-9a-z])[0-9a-f]{7,64}(?![0-9a-z])/g;
+  const bh = b.match(HEX) || [];
+  if (!bh.length) return false;
+  const eh = e.match(HEX) || [];
+  if (!bh.every((x) => eh.some((y) => x.startsWith(y) || y.startsWith(x))))
+    return false;
+  return b
+    .split(HEX)
+    .map((p) => p.trim())
+    .filter((p) => p && !/[a-z]{3}/.test(p))
+    .every((p) => e.includes(p));
+}
+
+// A short deterministic hash of text.
+function hashOf(text) {
+  let h = 5381;
+  for (const ch of String(text)) h = ((h * 33) ^ ch.codePointAt(0)) >>> 0;
+  return h.toString(36).padStart(6, "0");
+}
+// A file slug for free text: its first six words plus a hash of all of it, so two ideas that open
+// alike never share a file.
+function slugged(text, fallback) {
+  const norm = String(text || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+  const words = norm.split(" ").filter(Boolean).slice(0, 6).join("-");
+  return norm ? `${words}-${hashOf(norm)}` : fallback || "item";
+}
+
 // kind: 'story' | 'decision' | 'prerequisite' | 'validation' | 'input'
 function blocked(workflow, step, needs, extra) {
   return { status: "blocked", workflow, step, needs, ...(extra || {}) };
@@ -339,7 +428,7 @@ Reruns skip completed steps in two ways:
 
 The workflow tells `scout-checkpoint` which keys to report. The scout returns each key that exists as an evidence item, with `source` set to the key and `excerpt` set to its value.
 
-- `worktree`, `branch`, `head`, `dirty`: the story or prototype worktree, from `docs/FORGE.md`'s naming. `dirty` lists the paths with uncommitted changes, ignoring `.tmp/`, or is `none`. Design choice: `scout-checkpoint` is dispatched after `scout-card` returns, never alongside it. `scout-card` returns the card identifier and the board's branch name, which are what `docs/FORGE.md`'s naming derives from. Without a card, the workflow passes a slug from the primary field (lowercased words joined by `-`, first six words).
+- `worktree`, `branch`, `head`, `dirty`: the story or prototype worktree, from `docs/FORGE.md`'s naming. `dirty` lists the paths with uncommitted changes, ignoring `.tmp/`, or is `none`. Design choice: `scout-checkpoint` is dispatched after `scout-card` returns, never alongside it. `scout-card` returns the card identifier and the board's branch name, which are what `docs/FORGE.md`'s naming derives from. Without a card, the workflow passes a slug from the primary field (lowercased words joined by `-`, first six words, then a short hash of the whole text).
 - `ledger`: the ledger's absolute path.
 - `ledger-story`, `done-spec`, `done-implement`, `done-publish`, `review-fired`, `review-ended`: the values on the matching ledger lines ([Ledger](#ledger)). `review-fired` and `review-ended` are the highest round numbers after the last `done publish` line.
 - `spec`: the current spec path and its `git hash-object`.
@@ -459,18 +548,18 @@ Design choice: the bugfix spec gate is `lens-scope` alone, to keep the spec as s
 
 #### `deliver-spike` — `workflows/deliver-spike.js`
 
-Args: `{ question, projectRoot?, answers? }`. The primary field is `question`. No advisors, and no ledger. The findings document is written in the main checkout, uncommitted: `docs/FORGE.md` keeps work on the default checkout uncommitted unless the user asks, and the spike merges nothing. The prototype lives on its own branch and worktree, named per `docs/FORGE.md`, and is never pushed or merged. `whenToUse` says that open-ended outside research ("what is the best X") belongs to `/slopify:research`.
+Args: `{ question, projectRoot?, answers? }`. The primary field is `question`. No advisors, and no ledger. The findings document is written in the main checkout, uncommitted: `docs/FORGE.md` keeps work on the default checkout uncommitted unless the user asks, and the spike merges nothing. The prototype lives on its own branch and worktree, named only by the `Spike prototypes` line of `docs/FORGE.md` (the bootstrap forge template carries it: the local branch and worktree patterns in terms of the spike's slug, and permission to delete a never-pushed prototype), and is never pushed or merged. The workflow invents no names: when the declaration has no such line, no prototype is built, the findings say which claims went unmeasured, and the missing naming is listed among the open unknowns. `whenToUse` says that open-ended outside research ("what is the best X") belongs to `/slopify:research`.
 
-| Step        | Dispatches                                                                                                                                                                                                                                                              | Skip when                                          |
-| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
-| `locate`    | `scout-checkpoint` (keys `findings-doc` — a doc whose first line under its title is `Spike: <slug>` — `prototype-branch`, `worktree`). No `scout-card` is dispatched, because a spike has no card.                                                                      | never                                              |
-| `codebase`  | `library-reader` ‖ `scout-feasibility` ‖ `scout-code`                                                                                                                                                                                                                   | `findings-doc` exists                              |
-| `outside`   | After `library-reader` has returned: `scout-upstream-docs` ‖ `scout-known-issues` ‖ `scout-prior-art`, each told what the library already supports, so they look only for what is missing                                                                               | `findings-doc` exists                              |
-| `plan`      | `writer` (`PLAN_SCHEMA`) lists the claims, the evidence status of each, and the measurements needed                                                                                                                                                                     | `findings-doc` exists                              |
-| `prototype` | When any claim needs a measurement: `pusher` creates the prototype branch and worktree. Then `coder` builds the throwaway prototype there and runs each measurement (`measurements`).                                                                                   | no measurement is needed, or `findings-doc` exists |
-| `findings`  | `writer` writes the document entry where it best fits the project's docs: `Spike: <slug>`, the question, findings, measurements, and open unknowns. It makes no recommendation. Every claim cites a `path:line`, library evidence, an outside source, or a measurement. | `findings-doc` exists                              |
-| `validate`  | `lens-evidence` ‖ `lens-question` ‖ `lens-neutrality` on the document revision ‖ `qa` (when a prototype exists): the prototype measures what the document's measurement claims say. Writer and coder fixes follow; the prototype's fixes are re-measured.               | never                                              |
-| `cleanup`   | `pusher` removes the prototype worktree and deletes its local branch                                                                                                                                                                                                    | `prototype-branch` is absent                       |
+| Step        | Dispatches                                                                                                                                                                                                                                                                                       | Skip when                                                                            |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
+| `locate`    | `scout-checkpoint` (keys `spike-binding` — the `Spike prototypes` line of `docs/FORGE.md`, absent when there is none — `findings-doc` — a doc whose first line under its title is `Spike: <slug>` — `prototype-branch`, `worktree`). No `scout-card` is dispatched, because a spike has no card. | never                                                                                |
+| `codebase`  | `library-reader` ‖ `scout-feasibility` ‖ `scout-code`                                                                                                                                                                                                                                            | `findings-doc` exists                                                                |
+| `outside`   | After `library-reader` has returned: `scout-upstream-docs` ‖ `scout-known-issues` ‖ `scout-prior-art`, each told what the library already supports, so they look only for what is missing                                                                                                        | `findings-doc` exists                                                                |
+| `plan`      | `writer` (`PLAN_SCHEMA`) lists the claims, the evidence status of each, and the measurements needed                                                                                                                                                                                              | `findings-doc` exists                                                                |
+| `prototype` | When any claim needs a measurement and `docs/FORGE.md` has a `Spike prototypes` line: `pusher` creates the prototype branch and worktree. Then `coder` builds the throwaway prototype there and runs each measurement (`measurements`).                                                          | no measurement is needed, `docs/FORGE.md` has no such line, or `findings-doc` exists |
+| `findings`  | `writer` writes the document entry where it best fits the project's docs: `Spike: <slug>`, the question, findings, measurements, and open unknowns. It makes no recommendation. Every claim cites a `path:line`, library evidence, an outside source, or a measurement.                          | `findings-doc` exists                                                                |
+| `validate`  | `lens-evidence` ‖ `lens-question` ‖ `lens-neutrality` on the document revision ‖ `qa` (when a prototype exists): the prototype measures what the document's measurement claims say. Writer and coder fixes follow; the prototype's fixes are re-measured.                                        | never                                                                                |
+| `cleanup`   | `pusher` removes the prototype worktree and deletes its local branch                                                                                                                                                                                                                             | `prototype-branch` is absent                                                         |
 
 Result: `{ document: <path>, revision, verdicts, measurements, unknowns, prototypeDeleted: boolean }`.
 
@@ -680,7 +769,7 @@ In `review-pr-smoke`, the last line under Pull request is replaced by:
 - "Review trigger: opening the PR requested review 1; re-fire review `n` by creating `.forge/reviews/smoke-<n>.requested`."
 - "Review status: review `n` has finished when `.forge/reviews/smoke-<n>.md` exists, and its findings are that file's list items. Poll every 10 seconds; a review not finished within 2 minutes of its trigger has timed out."
 
-In `deliver-spike-smoke`, Restrictions adds: "Deleting the spike's own unpushed prototype branch and worktree is allowed."
+In `deliver-spike-smoke`, Workspace adds "Spike prototypes: the local branch `spike/<slug>` and the worktree `.worktrees/spike-<slug>`, from the spike's slug; the prototype is never pushed, and deleting a never-pushed prototype is allowed.", and Restrictions adds: "Deleting the spike's own unpushed prototype branch and worktree is allowed."
 
 Stub `docs/BOARD.md` (cases with a board):
 
@@ -747,7 +836,7 @@ Per case:
 | `shape-smoke`          | Stub board and "No forge"; `mkdir -p docs/specs`, so the spec location exists and is empty                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | `/slopify:shape Let users of calc.py multiply two numbers.`                                                     | `workflow-fired` (Workflow, `slopify:shape`); `draft-written`: `file_exists` `.tmp/shape/*.md`; `llm` on `last_message`: it reports the story path, the four what-and-why advisors' judgements, a passing `lens-criteria` verdict, observable acceptance criteria, and that no spec was written                                                                                                                                                                                       |
 | `deliver-story-smoke`  | Stub board with `.board/STORY-1.md` (`Status: Todo`, `Label: Feature`): "Add `mul(a, b)` to `calc.py`", criteria "`mul(3, 4)` returns 12" and "a unit test covers `mul`"; stub forge with branch `feat/smoke`; `add` already correct                                                                                                                                                                                                                                                                                                                         | `/slopify:deliver-story STORY-1`                                                                                | `workflow-fired`; `spec-written`: `file_exists` `.worktrees/smoke/docs/specs/story-1-*.md`; `code`: `regex` `.worktrees/smoke/calc.py` `def mul`; `pushed`: `file_exists` `.forge/remote.git/refs/heads/feat/smoke`; `pr-opened`: `file_exists` `.forge/prs/smoke.md`; `card-in-review`: `regex` `.board/STORY-1.md` `^Status: In Review$` (`flags: m`); `llm`: it reports the four how advisors, `lens-scope` and `lens-consistency` passing before coding, `qa` passing, and the PR |
 | `deliver-bugfix-smoke` | "No board"; stub forge with branch `fix/smoke`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | `/slopify:deliver-bugfix \`add\` in \`calc.py\` subtracts instead of adding. Fix it so it returns the sum.`     | `workflow-fired`; `fixed`: `regex` `.worktrees/smoke/calc.py` `return a \+ b`; `main-untouched`: `regex` `calc.py` `return a - b`; `pushed`: `file_exists` `.forge/remote.git/refs/heads/fix/smoke`; `pr-opened`: `file_exists` `.forge/prs/smoke.md`; `llm`: it reports that a regression test failed before the fix and passed after it (`lens-regression`), that `qa` passed, and the PR                                                                                           |
-| `deliver-spike-smoke`  | "No board"; stub forge with branch `spike/smoke` plus the deletion permission; a library resolved from the bundled resources as in `research-smoke`, provider "local files under `sources/`; no internet"                                                                                                                                                                                                                                                                                                                                                    | `/slopify:deliver-spike Can add in calc.py sum one million pairs in under one second in this project's Python?` | `workflow-fired`; `main-untouched`: `regex` `calc.py` `return a - b`; `llm`: it names the findings document's path, reports a measurement from a prototype that a fresh `qa` confirmed, open unknowns, no recommendation, `library-reader` consulted before outside scouts, and the prototype branch deleted                                                                                                                                                                          |
+| `deliver-spike-smoke`  | "No board"; stub forge with story branch `story/smoke`, the `Spike prototypes` line, and the deletion permission; a library resolved from the bundled resources as in `research-smoke`, provider "local files under `sources/`; no internet"                                                                                                                                                                                                                                                                                                                 | `/slopify:deliver-spike Can add in calc.py sum one million pairs in under one second in this project's Python?` | `workflow-fired`; `main-untouched`: `regex` `calc.py` `return a - b`; `llm`: it names the findings document's path, reports a measurement from a prototype that a fresh `qa` confirmed, open unknowns, no recommendation, `library-reader` consulted before outside scouts, and the prototype branch deleted                                                                                                                                                                          |
 | `reproduce-bug-smoke`  | Stub board, no cards; `test_calc.py` without a failing case                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | `/slopify:reproduce-bug add(2, 2) in calc.py returns 0 instead of 4.`                                           | `workflow-fired`; `filed`: `file_exists` `.board/BUG-1.md`; `regex` graders on `.board/BUG-1.md`: `^Label: Bug$`, `^## Evidence`, `^## Steps to reproduce`, `^## Expected`, `^## Observed` (each `flags: m`); `main-untouched`: `regex` `calc.py` `return a - b`                                                                                                                                                                                                                      |
 | `review-pr-smoke`      | Stub forge with branch `fix/smoke` and the review lines. On `fix/smoke`: `calc.py` gets `div(a, b)` returning `a // b` with the docstring "Return a divided by b as a float". The branch is pushed with `git push -q -u origin fix/smoke`, `.worktrees/smoke` is created with `git worktree add .worktrees/smoke fix/smoke`, `.forge/prs/smoke.md` exists, and `.forge/reviews/smoke-1.md` lists two findings: "`div` floors the result; its docstring promises true division" (a defect) and "Rename `add` to `plus` for consistency" (outside the change). | `/slopify:review-pr .forge/prs/smoke.md`                                                                        | `workflow-fired` (`slopify:review-pr`); `fixed`: `regex` `.worktrees/smoke/calc.py` `return a / b`; `refired`: `file_exists` `.forge/reviews/smoke-2.requested`; `llm`: round 1 fixed the `div` defect after a fresh `qa` passed, reported the rename as a non-issue with a reason, and the loop ended when review 2 came back `timed-out`                                                                                                                                            |
 

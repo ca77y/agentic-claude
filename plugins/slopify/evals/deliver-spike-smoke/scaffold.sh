@@ -48,12 +48,13 @@ Configuration does not authorize execution; the user's request does.
 
 ## Workspace
 
-- Branch name: `spike/smoke`. Story worktree: `.worktrees/smoke`, created with `git worktree add .worktrees/smoke -b spike/smoke main`, or `git worktree add .worktrees/smoke spike/smoke` when the branch exists.
+- Branch name: `story/smoke`. Story worktree: `.worktrees/smoke`, created with `git worktree add .worktrees/smoke -b story/smoke main`, or `git worktree add .worktrees/smoke story/smoke` when the branch exists.
+- Spike prototypes: the local branch `spike/<slug>` and the worktree `.worktrees/spike-<slug>`, from the spike's slug; the prototype is never pushed, and deleting a never-pushed prototype is allowed.
 - Temp folder: `.tmp/` at the root of each checkout, ignored.
 
 ## Commits and push
 
-- Commit convention: Conventional Commits. Push with `git -C <worktree> push -u origin spike/smoke` once the gates pass, and `git -C <worktree> push` after each verified repair.
+- Commit convention: Conventional Commits. Push with `git -C <worktree> push -u origin story/smoke` once the gates pass, and `git -C <worktree> push` after each verified repair.
 
 ## Pull request
 
