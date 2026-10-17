@@ -13,7 +13,7 @@ The brief gives the lines that record the step it completes. Append them in the 
 <time> done board-start <card id>
 <time> done board-pr <pr reference>
 <time> done publish <pr reference> commit <sha>
-<time> review <n> fired <trigger time>
+<time> review <n> fired <trigger time> [head <sha>]
 <time> review <n> ended <finished|failed|timed-out>: <defects fixed, non-issues, unverified, or none>
 ```
 
@@ -21,4 +21,4 @@ The brief gives the lines that record the step it completes. Append them in the 
 - `done spec`: the spec hash is `git hash-object` of the committed spec; `test <path>` names the regression test committed with it.
 - `done board-start` and `done board-pr`: written as soon as the card's delivery-start operation, or the board operations for when the PR opens, are done, so a rerun retries only the board operation that is missing. `done board-pr` comes before `done publish`, which waits for the review trigger.
 - `done implement … pushed`: written when a review round's push carries the commit.
-- `review <n> fired`: the trigger time the forge operation reported.
+- `review <n> fired`: the trigger time the forge operation reported, and `head <sha>`, the pushed head that review judges. A pushed head beyond it on a rerun means a fix was pushed and the steps after the push did not finish.

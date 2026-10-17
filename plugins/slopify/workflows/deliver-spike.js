@@ -185,9 +185,10 @@ function absent(v, whole) {
 // A checkpoint value counts only in its expected shape, never as prose. Kinds: path (absolute),
 // rel (relative path), sha, branch, ref (a PR URL, number, or path), rev (<path>@<hex>), id.
 // Returns the value, or '' when it is absent or has another shape. A value followed by a
-// parenthetical remark, or by a full stop, is the value.
+// parenthetical remark, or by a full stop, is the value. A path may hold spaces, but a space followed by
+// a lowercase word is trailing prose: the path is then its first token.
 const SHAPES = {
-  path: /^\/[\w@.+\- /]+$/,
+  path: /^\/(?!.* [a-z])[\w@.+\- /]+$/,
   rel: /^[\w@.+/-]+$/,
   sha: /^[0-9a-f]{7,64}$/i,
   branch: /^\w[\w./-]*$/,
@@ -203,7 +204,8 @@ function shaped(kind, v) {
   if (!re || absent(t)) return "";
   if (re.test(t)) return t;
   const m = /^(\S+)\s+[(\[]/.exec(t);
-  const tok = (m ? m[1] : t).replace(/[.,;:]+$/, "");
+  const first = m ? m[1] : kind === "path" ? t.split(/\s+/)[0] : t;
+  const tok = first.replace(/[.,;:]+$/, "");
   return tok && re.test(tok) ? tok : "";
 }
 
@@ -334,10 +336,12 @@ async function settleDecisions(prefix, answers, run) {
 function rerunText(workflow, needs) {
   const cmd = `/slopify:${workflow}`;
   const list = needs || [];
-  const decisions = list.some((n) => n.kind === "decision");
+  const answerable = list.some(
+    (n) => n.kind === "decision" || n.kind === "input",
+  );
   return list.length && list.every((n) => n.kind === "decision")
     ? `Invoke ${cmd} again with the same args and add answers.<id> for each decision. In this session, pass resumeFromRunId to reuse the steps already completed.`
-    : `Resolve what each need names, then invoke ${cmd} again with the same args${decisions ? " and answers.<id> for each decision" : ""}, without resumeFromRunId, so every step reads the repository afresh.`;
+    : `Resolve what each need names, then invoke ${cmd} again with the same args${answerable ? " and answers.<id> for each decision or input need" : ""}, without resumeFromRunId, so every step reads the repository afresh.`;
 }
 // kind: 'story' | 'decision' | 'prerequisite' | 'validation' | 'input'
 function blocked(workflow, step, needs, extra) {

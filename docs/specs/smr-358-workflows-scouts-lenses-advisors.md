@@ -146,11 +146,11 @@ Workflows can't import files, so (design choice) every workflow script except `r
 The block also holds the one set of helpers every workflow uses to read scout answers and name files, so no workflow keeps a local copy (design choice, from review round 2 of PR #35, where four copies of the "none" check and three revision matchers drifted apart):
 
 - `absent(v, whole?)`: true for an empty value, or prose that opens with `none`, `absent`, `missing`, `n/a`, or `not found` (as in `MISSING (test -f found no file)`). A path-like token that merely starts with the word, such as `none.txt`, is a value. With `whole`, only a reply that is nothing but that word and an optional parenthetical counts, so a criterion such as "Missing config files produce a clear error" is a value.
-- `shaped(kind, v)`: a checkpoint value in its expected shape, else `''`. Kinds: `path` (absolute), `rel`, `sha`, `branch`, `ref` (a PR URL, number, or path), `rev` (`<path>@<hex>`), and `id`. A value followed by a parenthetical remark or a full stop is the value; prose is never one.
+- `shaped(kind, v)`: a checkpoint value in its expected shape, else `''`. Kinds: `path` (absolute; it may hold spaces, but a space followed by a lowercase word is trailing prose and the path is then its first token), `rel`, `sha`, `branch`, `ref` (a PR URL, number, or path), `rev` (`<path>@<hex>`), and `id`. A value followed by a parenthetical remark or a full stop is the value; prose is never one.
 - `sameRev(briefed, evaluated)`: whether a validator judged the revision its brief named. The whole label must match: every hex component of 7 or more characters (a short sha matches its full form) and the marks between them (`+`, `#n`, `&`). The HEAD prefix alone does not match a `<sha>+<digest>` label. A brief naming no revision accepts any.
 - `parseSpec(v)`: a path and its git hash-object, written `<path>@<hash>` or `<path> <hash>`, else null.
 - `decisionsOf(prefix, questions)`, `settleDecisions(prefix, answers, run)`, and `settledText(settled)`: open-decision ids come from the question text (`<prefix>-<first four words>-<hash>`), so an answer stays with its question whatever else a producer asks, and the prefix names the producer that raised it. A producer that raises questions the user already answered is dispatched again with each answer beside its question; answers to that prefix that no question matched go back once as well, so a reworded question is covered. Only the producer whose prefix matches is given an answer. `deliver-spike`, `deliver-story`, `deliver-bugfix`, `reproduce-bug`, and `review-pr` raise their producers' decisions this way (`shape` keeps its ids in the draft's markers, where the question is).
-- `rerunText(workflow, needs)`, used by `blocked`: the `rerun` text suggests `resumeFromRunId` only when every need is a `decision`; any other need (a missing binding, a failing gate, a story to reshape) needs a fresh rerun without resume.
+- `rerunText(workflow, needs)`, used by `blocked`: the `rerun` text suggests `resumeFromRunId` only when every need is a `decision`; any other need (a missing binding, a failing gate, a story to reshape) needs a fresh rerun without resume. When a need is a `decision` or an `input` need (such as `reproduce-bug`'s request for more detail), the text also says to add `answers.<id>` for it.
 - `hashOf(text)` and `slugged(text, fallback)`: a file slug from free text is its first six words plus a hash of the whole normalized text, so two ideas that open alike never share a draft, reproduction, spec, or spike.
 
 `deliver-story.js` and `deliver-bugfix.js` also carry a second checked block, `// BEGIN slopify deliver helpers` … `// END slopify deliver helpers`, byte for byte (the `CLAUDE.md` checks compare it). It holds what the two scripts share outside their steps: the constants and run state (`WHERE`, `AUTH`, `state`, `done`, `skip`, `stop`, `fail`, `exhausted`), the path and list helpers, the validator helpers (`passed`, `usable`, `blockingOf`, `judge`, `record`), the pusher helpers (`pushBrief`, `pushOk`, `opRef`, `pushStop`, `call*`), `decisionNeed`, the ledger parsers (`parseDoneSpec`, `parseDoneImplement`, `parseDonePublish`, `parseDoneBoard`), `makeReport`, and `recoverPlan`. A script sets `WORKFLOW`, `MAX_FAILURES`, `PLAN_PHASE`, and `failures` before the block. Step-specific code (locate, workspace, spec, implement or fix, validate, publish, review) stays in each script.
@@ -303,9 +303,10 @@ function absent(v, whole) {
 // A checkpoint value counts only in its expected shape, never as prose. Kinds: path (absolute),
 // rel (relative path), sha, branch, ref (a PR URL, number, or path), rev (<path>@<hex>), id.
 // Returns the value, or '' when it is absent or has another shape. A value followed by a
-// parenthetical remark, or by a full stop, is the value.
+// parenthetical remark, or by a full stop, is the value. A path may hold spaces, but a space followed by
+// a lowercase word is trailing prose: the path is then its first token.
 const SHAPES = {
-  path: /^\/[\w@.+\- /]+$/,
+  path: /^\/(?!.* [a-z])[\w@.+\- /]+$/,
   rel: /^[\w@.+/-]+$/,
   sha: /^[0-9a-f]{7,64}$/i,
   branch: /^\w[\w./-]*$/,
@@ -321,7 +322,8 @@ function shaped(kind, v) {
   if (!re || absent(t)) return "";
   if (re.test(t)) return t;
   const m = /^(\S+)\s+[(\[]/.exec(t);
-  const tok = (m ? m[1] : t).replace(/[.,;:]+$/, "");
+  const first = m ? m[1] : kind === "path" ? t.split(/\s+/)[0] : t;
+  const tok = first.replace(/[.,;:]+$/, "");
   return tok && re.test(tok) ? tok : "";
 }
 
@@ -452,10 +454,12 @@ async function settleDecisions(prefix, answers, run) {
 function rerunText(workflow, needs) {
   const cmd = `/slopify:${workflow}`;
   const list = needs || [];
-  const decisions = list.some((n) => n.kind === "decision");
+  const answerable = list.some(
+    (n) => n.kind === "decision" || n.kind === "input",
+  );
   return list.length && list.every((n) => n.kind === "decision")
     ? `Invoke ${cmd} again with the same args and add answers.<id> for each decision. In this session, pass resumeFromRunId to reuse the steps already completed.`
-    : `Resolve what each need names, then invoke ${cmd} again with the same args${decisions ? " and answers.<id> for each decision" : ""}, without resumeFromRunId, so every step reads the repository afresh.`;
+    : `Resolve what each need names, then invoke ${cmd} again with the same args${answerable ? " and answers.<id> for each decision or input need" : ""}, without resumeFromRunId, so every step reads the repository afresh.`;
 }
 // kind: 'story' | 'decision' | 'prerequisite' | 'validation' | 'input'
 function blocked(workflow, step, needs, extra) {
@@ -532,6 +536,7 @@ The workflow tells `scout-checkpoint` which keys to report. The scout returns ea
 
 - `worktree`, `branch`, `head`, `dirty`: the story or prototype worktree, from `docs/FORGE.md`'s naming. `dirty` lists the paths with uncommitted changes, ignoring `.tmp/`, or is `none`. Design choice: `scout-checkpoint` is dispatched after `scout-card` returns, never alongside it. `scout-card` returns the card identifier and the board's branch name, which are what `docs/FORGE.md`'s naming derives from. Without a card, the workflow passes a slug from the primary field (lowercased words joined by `-`, first six words, then a short hash of the whole text).
 - `ledger`: the ledger's absolute path.
+- `fired-head` (`review-pr`): the sha after `head` on the last `review <n> fired` line, the head that review judges.
 - `done-board-start`, `done-board-pr`: the last `done board-start` and `done board-pr` lines.
 - `pushed-head` and `unpushed` (`review-pr`): the head commit of the PR's branch as the remote has it, and how many local commits the pushed head lacks, or `none`.
 - `ledger-story`, `done-spec`, `done-implement`, `done-publish`, `review-fired`, `review-ended`: the values on the matching ledger lines ([Ledger](#ledger)). `review-fired` and `review-ended` are the highest round numbers after the last `done publish` line.
@@ -550,7 +555,7 @@ The workflow tells `scout-checkpoint` which keys to report. The scout returns ea
 <time> done board-start <card id>
 <time> done board-pr <pr reference>
 <time> done publish <pr reference> commit <sha>
-<time> review <n> fired <trigger time>
+<time> review <n> fired <trigger time> [head <sha>]
 <time> review <n> ended <finished|failed|timed-out>: <defects fixed, non-issues, unverified, or none>
 ```
 
@@ -570,7 +575,7 @@ So a revised spec re-runs `implement`, `validate`, and `publish` (which updates 
 - Round `n`'s push dispatch writes `review <n> ended …` and `review <n+1> fired …`.
 - A round that ends the loop without a push (clean, `failed`, or `timed-out`) writes no line, because no `pusher` dispatch exists just to write the ledger.
 
-Resume rule: take the highest `review <n> fired` after the last `done publish`. When the worktree also holds commits the PR's pushed head lacks (`unpushed`), the round's fix was committed but never pushed: `review-pr` resumes at `push` for that round, without sorting review `n` again, and judges findings against the pushed head, never an unpushed local commit.
+Resume rule: take the highest `review <n> fired` after the last `done publish`. When the worktree also holds commits the PR's pushed head lacks (`unpushed`), the round's fix was committed but never pushed: `review-pr` resumes at `push` for that round, without sorting review `n` again, and judges findings against the pushed head, never an unpushed local commit. The same holds when the pushed head is beyond the `head` on the last `review <n> fired` line: the fix was pushed, and the steps after the push (pull request update, re-fire, ledger lines) are finished without sorting review `n` again. The resume dispatch also writes a `done spec` line when the committed spec's hash differs from the ledger's last one, so a later deliver rerun finds it current.
 
 - Resume at round `n` by waiting for review `n`. A review that already finished comes back from the first `watcher` dispatch at once. Its findings are sorted again by new `lens-finding` dispatches; re-sorting is idempotent.
 - When `n` is 4, it is the final review after round 3. It is waited for and sorted for the report, and nothing is fixed.
@@ -689,7 +694,7 @@ Result: `{ card, issue: <draft path>, reproduction: <dir>, verdicts }`.
 
 #### `review-pr` — `workflows/review-pr.js`
 
-Args: `{ pr, worktree?, spec?, story?, findings?, projectRoot?, answers? }`. The primary field is `pr`. As a child of `deliver-story` or `deliver-bugfix`, it receives `pr`, `worktree`, `spec`, and `story` from the parent, through `workflow('slopify:review-pr', args)`, one level deep. It calls no `workflow()` itself. `MAX_ROUNDS = 3`.
+Args: `{ pr, worktree?, spec?, story?, test?, findings?, exclude?, projectRoot?, answers? }`. The primary field is `pr`. As a child of `deliver-story` or `deliver-bugfix`, it receives `pr`, `worktree`, `spec`, `story`, and `exclude` from the parent, through `workflow('slopify:review-pr', args)`, one level deep. `exclude` lists the dirty paths the parent left out of its own commit (outside its assigned paths, reported in its `limits`); the review loop never stages or briefs them. A defect is routed by the kind of file: Markdown and prose text files (and the spec) go to the documentation writer, while code, and build or dependency files such as `requirements*.txt` and `CMakeLists.txt`, go to the coder. It calls no `workflow()` itself. `MAX_ROUNDS = 3`.
 
 1. `locate`: acceptance source. When `spec` and `story` are both absent and `scout-card` finds no card for the PR, the acceptance source for every `qa` and `lens-finding` brief is the PR's description (read by `scout-checkpoint` as key `pr`, its excerpt holding the description) plus the round's findings classified `fail`. `qa` judges that the fixes resolve those findings without regressing the PR's described behavior. Then `scout-checkpoint` (keys `worktree branch head dirty ledger review-fired review-ended spec pr`), briefed with the PR. Then `scout-card` (the PR's card, for the acceptance source), unless `story` was given. Here the checkpoint comes first, because the PR is what identifies the card. With no worktree, `pusher` recovers it per `docs/FORGE.md`. The starting point follows the [resume rule](#ledger): round `review-fired`, or round 1 when there is no `review … fired` line. When `review-fired` is 4, only the final review remains.
 2. For each round `r` from the starting round to `MAX_ROUNDS`:

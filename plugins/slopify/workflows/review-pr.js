@@ -3,7 +3,7 @@ export const meta = {
   description:
     'Wait for a pull request review, sort its findings, fix the real defects, and push each round only after a fresh qa passes, for at most three rounds or until a review is clean',
   whenToUse:
-    'Run only when the user invokes /slopify:review-pr or asks for the slopify review-pr workflow; deliver-story and deliver-bugfix also run it as their last step. Args: {pr, worktree?, spec?, story?, test?, findings?, projectRoot?, answers?}, or the pull request as a plain string. pr names the pull request, worktree is its story worktree, spec and story are the acceptance source when known, test is the regression test path that belongs with the spec on the ledger, findings are review findings to use in round 1 instead of waiting, projectRoot defaults to the session project directory, and answers maps a blocked need id to the answer.',
+    'Run only when the user invokes /slopify:review-pr or asks for the slopify review-pr workflow; deliver-story and deliver-bugfix also run it as their last step. Args: {pr, worktree?, spec?, story?, test?, findings?, projectRoot?, answers?}, or the pull request as a plain string. pr names the pull request, worktree is its story worktree, spec and story are the acceptance source when known, test is the regression test path that belongs with the spec on the ledger, findings are review findings to use in round 1 instead of waiting, projectRoot defaults to the session project directory, answers maps a blocked need id to the answer, and exclude lists dirty paths the caller left out of its own commit, which this workflow never stages.',
   phases: [
     { title: 'Locate', detail: 'scout-checkpoint reports the PR, worktree, and ledger state; scout-card reads the PR card; pusher recovers a missing worktree' },
     { title: 'Wait', detail: 'watcher waits for review n, one dispatch at a time' },
@@ -159,9 +159,10 @@ function absent(v, whole) {
 // A checkpoint value counts only in its expected shape, never as prose. Kinds: path (absolute),
 // rel (relative path), sha, branch, ref (a PR URL, number, or path), rev (<path>@<hex>), id.
 // Returns the value, or '' when it is absent or has another shape. A value followed by a
-// parenthetical remark, or by a full stop, is the value.
+// parenthetical remark, or by a full stop, is the value. A path may hold spaces, but a space followed by
+// a lowercase word is trailing prose: the path is then its first token.
 const SHAPES = {
-  path: /^\/[\w@.+\- /]+$/,
+  path: /^\/(?!.* [a-z])[\w@.+\- /]+$/,
   rel: /^[\w@.+/-]+$/,
   sha: /^[0-9a-f]{7,64}$/i,
   branch: /^\w[\w./-]*$/,
@@ -177,7 +178,8 @@ function shaped(kind, v) {
   if (!re || absent(t)) return "";
   if (re.test(t)) return t;
   const m = /^(\S+)\s+[(\[]/.exec(t);
-  const tok = (m ? m[1] : t).replace(/[.,;:]+$/, "");
+  const first = m ? m[1] : kind === "path" ? t.split(/\s+/)[0] : t;
+  const tok = first.replace(/[.,;:]+$/, "");
   return tok && re.test(tok) ? tok : "";
 }
 
@@ -308,10 +310,12 @@ async function settleDecisions(prefix, answers, run) {
 function rerunText(workflow, needs) {
   const cmd = `/slopify:${workflow}`;
   const list = needs || [];
-  const decisions = list.some((n) => n.kind === "decision");
+  const answerable = list.some(
+    (n) => n.kind === "decision" || n.kind === "input",
+  );
   return list.length && list.every((n) => n.kind === "decision")
     ? `Invoke ${cmd} again with the same args and add answers.<id> for each decision. In this session, pass resumeFromRunId to reuse the steps already completed.`
-    : `Resolve what each need names, then invoke ${cmd} again with the same args${decisions ? " and answers.<id> for each decision" : ""}, without resumeFromRunId, so every step reads the repository afresh.`;
+    : `Resolve what each need names, then invoke ${cmd} again with the same args${answerable ? " and answers.<id> for each decision or input need" : ""}, without resumeFromRunId, so every step reads the repository afresh.`;
 }
 // kind: 'story' | 'decision' | 'prerequisite' | 'validation' | 'input'
 function blocked(workflow, step, needs, extra) {
@@ -350,6 +354,8 @@ const pr = str(input.pr);
 const projectRoot = str(input.projectRoot);
 const storyText = str(input.story);
 const testPath = str(Array.isArray(input.test) ? input.test[0] : input.test);
+// Dirty paths the caller deliberately left uncommitted (outside its assigned paths): never staged, never briefed.
+const excluded = (Array.isArray(input.exclude) ? input.exclude : []).map(str).filter(Boolean);
 const answers = input.answers && typeof input.answers === 'object' ? input.answers : {};
 
 if (!pr) {
@@ -482,7 +488,7 @@ let dirtyPaths = [];
 
 const list = (items) => (items && items.length ? items.map((x) => `- ${x}`).join('\n') : '- none');
 // Each checkpoint key's expected shape (see shaped in the shared block); a key without one is text.
-const KINDS = { worktree: 'path', ledger: 'path', head: 'sha', 'pushed-head': 'sha', base: 'sha', 'story-revision': 'sha', branch: 'branch' };
+const KINDS = { worktree: 'path', ledger: 'path', head: 'sha', 'pushed-head': 'sha', 'fired-head': 'sha', base: 'sha', 'story-revision': 'sha', branch: 'branch' };
 // A checkpoint item's value, or '' when it says there is none or lacks the expected shape. A shaped item
 // followed by a remark is the item. A text value is none only for a bare none reply.
 function val(res, key) {
@@ -534,7 +540,8 @@ function parseDirty(v) {
   return t
     .split(/[\n,]+/)
     .map((x) => x.trim())
-    .filter((x) => x && !absent(x) && !/[\s()]/.test(x) && !isTmp(x));
+    .filter((x) => x && !absent(x) && !/[\s()]/.test(x) && !isTmp(x))
+    .filter((x) => !excluded.some((e) => samePath(x, e)));
 }
 
 function samePath(a, b) {
@@ -546,12 +553,14 @@ function samePath(a, b) {
 // Markdown and text documents and the spec go to the writer; everything else goes to the coder. The kind of
 // file decides, not its directory: code under docs/ or doc/ (docs/conf.py, pkg/doc/render.go) is code.
 const isSpec = (loc) => !!specPath && samePath(String(loc || '').replace(/:\d+(-\d+)?$/, ''), specPath);
+// A .txt file is prose unless it is a build or dependency file (requirements*.txt, constraints*.txt, CMakeLists.txt).
+const BUILD_TXT = /(^|\/)(cmakelists|[\w.-]*requirements[\w.-]*|[\w.-]*constraints[\w.-]*|dependencies|packages|manifest|robots|sources|version)\.txt$/i;
 const isDoc = (loc) => {
   const p = String(loc || '').replace(/:\d+(-\d+)?$/, '');
-  return isSpec(p) || /\.(md|mdx|rst|txt|adoc)$/i.test(p) || /(^|\/)readme$/i.test(p);
+  return isSpec(p) || /\.(md|mdx|rst|adoc)$/i.test(p) || (/\.txt$/i.test(p) && !BUILD_TXT.test(p)) || /(^|\/)readme$/i.test(p);
 };
 
-const CHECKPOINT_KEYS = 'worktree branch head base pushed-head unpushed dirty ledger review-fired review-ended spec pr';
+const CHECKPOINT_KEYS = 'worktree branch head base pushed-head unpushed dirty ledger review-fired fired-head review-ended spec pr';
 
 // A validator verdict counts only when it passes, carries no blocking finding, and names the revision
 // the brief gave it in evaluated (see sameRev in the shared block). A brief with no revision to name
@@ -577,7 +586,7 @@ Report where the review loop on this pull request stands from its durable checkp
 - worktree, branch, head, dirty: the story worktree for the pull request's head branch, named as docs/FORGE.md names it. head is its HEAD sha. dirty lists the paths with uncommitted changes, ignoring .tmp/, or is none.
 - base: the pull request's base commit, the merge base of the head branch and the target branch docs/FORGE.md declares.
 - pushed-head: the head commit sha of the pull request's branch as the remote has it, not the worktree's HEAD. unpushed: how many commits the worktree's HEAD holds that the pushed head lacks, or none.
-- ledger: the absolute path of the worktree's .tmp/ledger.md, only when it exists. review-fired and review-ended: the highest review round numbers on its review lines after the last done publish line.
+- ledger: the absolute path of the worktree's .tmp/ledger.md, only when it exists. review-fired and review-ended: the highest review round numbers on its review lines after the last done publish line. fired-head: the sha after "head" on the last review fired line, when it has one.
 - spec: the current spec path and its git hash-object, written <absolute path>@<git hash-object>, when the story has a spec.
 - pr: the pull request's description, read through docs/FORGE.md's read binding when it declares one; leave the key out when it declares none.
 
@@ -656,6 +665,10 @@ if (!specPath) specPath = val(cp, 'spec');
 // (a fix whose push failed, or an interrupted round) is not part of it, whatever the worktree's HEAD says.
 const pushedHead = val(cp, 'pushed-head');
 const unpushed = parseInt(String(fact(cp, 'unpushed')).trim(), 10) > 0;
+// The `review <n> fired` line names the head that review judges. A pushed head beyond it means a fix was
+// pushed after that review fired, and the steps after the push (PR update, re-fire, ledger) may not have run.
+const firedHead = val(cp, 'fired-head');
+const pushedAhead = !!firedHead && !!pushedHead && !sameRev(firedHead, pushedHead) && !sameRev(pushedHead, firedHead);
 head = pushedHead || val(cp, 'head');
 baseCommit = val(cp, 'base');
 dirtyPaths = parseDirty(fact(cp, 'dirty'));
@@ -1079,7 +1092,7 @@ function pushBrief(r, st, summary) {
   lines.push(
     `only if the ledger already holds a done spec line: <time> done implement commit <sha of the implementation commit> spec <git hash-object of ${specPath || 'the spec'}> pushed`,
     `<time> review ${r} ended finished: ${summary}`,
-    `<time> review ${r + 1} fired <the trigger time>`,
+    `<time> review ${r + 1} fired <the trigger time> head <sha of the pushed head>`,
   );
   steps.push(`Append these ledger lines in this order, stamping the time yourself:\n${list(lines)}`);
   return `${WHERE}
@@ -1091,20 +1104,23 @@ ${steps.map((x, i) => `${i + 1}. ${x}`).join('\n')}
 Return the implementation commit sha as the reference of an operation named "commit", the spec commit (if any) as "commit-spec", and record every other operation. Put anything docs/BOARD.md or docs/FORGE.md does not bind in unmet.`;
 }
 
-// A round whose fix was committed but never pushed (the push failed, or the run stopped first): push it,
-// without judging it again; a fresh qa passed it before the commit, and the commit is all that is left.
-function resumePushBrief(r) {
+// A round whose fix was committed but not fully published (the push failed, or a step after it did, or the run
+// stopped first): finish the steps that remain, without judging the round again; a fresh qa passed the fix
+// before the commit. pushDone: the branch is already pushed, so only the steps after the push remain.
+function resumePushBrief(r, pushDone) {
   const lines = [
+    `only if the last done spec line's spec hash differs from the git hash-object of ${specPath || 'the spec'}: <time> done spec ${specPath || '<the spec path>'}@<its git hash-object> commit <sha of the commit that holds that spec> story <the story revision on the ledger's last done spec line>` +
+      (testPath ? ` test ${testPath}` : ' and, when that last done spec line ends with test <path>, the same test <path>'),
     `only if the ledger already holds a done spec line: <time> done implement commit <sha of HEAD> spec <git hash-object of ${specPath || 'the spec'}> pushed`,
-    `<time> review ${r} ended finished: pushed the fix an interrupted run left committed`,
-    `<time> review ${r + 1} fired <the trigger time>`,
+    `<time> review ${r} ended finished: finished the publishing an interrupted run left undone`,
+    `<time> review ${r + 1} fired <the trigger time> head <sha of the pushed head>`,
   ];
   return `${WHERE}
 ${AUTH}
 
-The worktree ${worktree}${branch ? ` on branch ${branch}` : ''} holds commits for review round ${r} of pull request ${pr} that were never pushed: an earlier run committed a verified fix and stopped before the push finished. Commit nothing and stage nothing. In this order:
-1. Push the branch as docs/FORGE.md declares for a verified repair, then update the pull request as its repair binding declares, saying the fix of round ${r} was committed by an interrupted run.
-2. Re-fire the review trigger as docs/FORGE.md declares.
+The worktree ${worktree}${branch ? ` on branch ${branch}` : ''} holds a verified fix for review round ${r} of pull request ${pr} that an earlier run did not finish publishing. Commit nothing and stage nothing. Do each step below that the forge does not already show done, in this order:
+1. ${pushDone ? 'The branch is already pushed; do not push it again.' : 'Push the branch as docs/FORGE.md declares for a verified repair.'} Then update the pull request as its repair binding declares, saying the fix of round ${r} was finished by a resumed run.
+2. Re-fire the review trigger as docs/FORGE.md declares, unless review ${r + 1} was already fired for the pushed head.
 3. Append these ledger lines in this order, stamping the time yourself:
 ${list(lines)}
 
@@ -1156,15 +1172,15 @@ function endedBy(res, round) {
 for (let r = startRound; r <= MAX_ROUNDS && !ended; r++) {
   // A fix committed in this round and never pushed: resume at Push. Review r has already been judged
   // and fixed; waiting for it again would sort its findings against a HEAD that holds the fix.
-  if (unpushed && r === startRound && fired >= 1) {
+  if ((unpushed || pushedAhead) && r === startRound && fired >= 1) {
     phase('Push');
-    const resumed = await agent(resumePushBrief(r), { agentType: 'slopify:pusher', label: `push round ${r} (resumed)`, phase: 'Push', schema: PUSHER_SCHEMA });
+    const resumed = await agent(resumePushBrief(r, !unpushed), { agentType: 'slopify:pusher', label: `push round ${r} (resumed)`, phase: 'Push', schema: PUSHER_SCHEMA });
     if (!resumed || !resumed.done) {
       return stop(`push-r${r}`, [
         need(`r${r}-push`, 'prerequisite', 'A pushed fix for the pull request; the worktree holds commits the forge lacks.', resumed ? (resumed.unmet.join('; ') || 'pusher reported the push not done') : 'pusher did not return'),
       ]);
     }
-    rounds.push(roundRecord(r, null, 'fixed', { note: `pushed the fix an interrupted run had committed`, pushed: fixCommit(resumed), ...(resumed.unmet.length ? { unmet: resumed.unmet } : {}) }));
+    rounds.push(roundRecord(r, null, 'fixed', { note: unpushed ? `pushed the fix an interrupted run had committed` : `finished the steps after the push of a fix that an interrupted run had pushed`, pushed: fixCommit(resumed), ...(resumed.unmet.length ? { unmet: resumed.unmet } : {}) }));
     completed.push(`round-${r}`);
     await refreshHead(r, resumed);
     continue;

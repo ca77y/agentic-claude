@@ -194,9 +194,10 @@ function absent(v, whole) {
 // A checkpoint value counts only in its expected shape, never as prose. Kinds: path (absolute),
 // rel (relative path), sha, branch, ref (a PR URL, number, or path), rev (<path>@<hex>), id.
 // Returns the value, or '' when it is absent or has another shape. A value followed by a
-// parenthetical remark, or by a full stop, is the value.
+// parenthetical remark, or by a full stop, is the value. A path may hold spaces, but a space followed by
+// a lowercase word is trailing prose: the path is then its first token.
 const SHAPES = {
-  path: /^\/[\w@.+\- /]+$/,
+  path: /^\/(?!.* [a-z])[\w@.+\- /]+$/,
   rel: /^[\w@.+/-]+$/,
   sha: /^[0-9a-f]{7,64}$/i,
   branch: /^\w[\w./-]*$/,
@@ -212,7 +213,8 @@ function shaped(kind, v) {
   if (!re || absent(t)) return "";
   if (re.test(t)) return t;
   const m = /^(\S+)\s+[(\[]/.exec(t);
-  const tok = (m ? m[1] : t).replace(/[.,;:]+$/, "");
+  const first = m ? m[1] : kind === "path" ? t.split(/\s+/)[0] : t;
+  const tok = first.replace(/[.,;:]+$/, "");
   return tok && re.test(tok) ? tok : "";
 }
 
@@ -343,10 +345,12 @@ async function settleDecisions(prefix, answers, run) {
 function rerunText(workflow, needs) {
   const cmd = `/slopify:${workflow}`;
   const list = needs || [];
-  const decisions = list.some((n) => n.kind === "decision");
+  const answerable = list.some(
+    (n) => n.kind === "decision" || n.kind === "input",
+  );
   return list.length && list.every((n) => n.kind === "decision")
     ? `Invoke ${cmd} again with the same args and add answers.<id> for each decision. In this session, pass resumeFromRunId to reuse the steps already completed.`
-    : `Resolve what each need names, then invoke ${cmd} again with the same args${decisions ? " and answers.<id> for each decision" : ""}, without resumeFromRunId, so every step reads the repository afresh.`;
+    : `Resolve what each need names, then invoke ${cmd} again with the same args${answerable ? " and answers.<id> for each decision or input need" : ""}, without resumeFromRunId, so every step reads the repository afresh.`;
 }
 // kind: 'story' | 'decision' | 'prerequisite' | 'validation' | 'input'
 function blocked(workflow, step, needs, extra) {
@@ -603,7 +607,7 @@ const slugOf = (s) =>
     .join("-");
 const clean = (v) => (absent(v) ? "" : String(v).trim());
 const val = (res, key) => clean(fact(res, key));
-const isRel = (p) => shaped("rel", p) === p;
+const isRel = (p) => !!p && shaped("rel", p) === p;
 const splitList = (v) =>
   absent(v)
     ? []
@@ -1028,6 +1032,11 @@ const specCurrent =
   sameHash(doneSpec.hash, state.specHash) &&
   !!ledgerStory &&
   sameHash(ledgerStory, storyRevision);
+// An earlier run's fix can sit uncommitted in the worktree after the spec stopped being current (a spec
+// revised by a gate that ran out, or a changed card). The regression test is on the ledger: reuse it instead
+// of reproducing a bug the fix already fixed, and carry the earlier edit into the fix and its commit.
+const fixInPlace = !specCurrent && ledgerTests.length > 0 && cpDirty.some((p) => !ledgerTests.some((t) => within(p, t)));
+const carryDirty = specCurrent || fixInPlace;
 const implCurrent = specCurrent && !!doneImpl && sameHash(doneImpl.spec, state.specHash);
 const publishCurrent =
   implCurrent && !!donePub && (doneImpl.pushed || (doneImpl.n < donePub.n));
@@ -1084,10 +1093,11 @@ let gathered = "";
 let repro = { tests: [], files: [], revision: "", observed: "", steps: [] }; // the committed or just-passed regression test
 let specCommit = doneSpec ? doneSpec.commit : "";
 const fixTouched = new Set(); // paths the fix coder reported changing, for the commit
+const outsideDirty = []; // dirty paths outside the assigned paths: reported, not committed, and kept from the review loop
 const fixTests = new Set(); // tests the fix coder added for a finding; they join the fix's commit scope
 const touched = new Set();
 
-if (specCurrent) {
+if (specCurrent || fixInPlace) {
   repro.tests = ledgerTests.map((t) => rel(t)).filter(Boolean);
   repro.files = repro.tests;
 }
@@ -1271,7 +1281,9 @@ if (specCurrent) {
   gathered = [show("Code", sCode), show("Tests", sTests), show("History", sHistory)].join("\n");
   done("gather");
 
-  const noRepro = await reproduce([]);
+  let noRepro = null;
+  if (fixInPlace) skip("reproduce");
+  else noRepro = await reproduce([]);
   if (noRepro) return noRepro;
   gathered += `\nReproduction: ${repro.steps.join("; ") || "(see the test)"}\nObserved: ${repro.observed}`;
 
@@ -1292,7 +1304,7 @@ function fixPaths() {
 async function fix(findings, judged) {
   while (true) {
     phase(judged ? "Validate" : "Fix");
-    const dirtyNow = unique([...(specCurrent ? cpDirty : []), ...fixTouched]).filter((p) => !isSpec(p));
+    const dirtyNow = unique([...(carryDirty ? cpDirty : []), ...fixTouched]).filter((p) => !isSpec(p));
     const r = await callCoder(
       `${WHERE}
 Work in the worktree ${state.worktree}; address every file by absolute path under it. ${NO_WRITES}
@@ -1418,11 +1430,14 @@ if (implCurrent) {
   done("validate");
   // The validators judged the whole worktree: commit every dirty path within the fix's assigned paths,
   // from the checkpoint's dirty list and the coder's reports, and report the rest.
-  const dirtyAll = unique([...(specCurrent ? cpDirty : []), ...fixTouched]).filter((p) => p && !/^\.tmp(\/|$)/.test(p) && !isSpec(p));
+  const dirtyAll = unique([...(carryDirty ? cpDirty : []), ...fixTouched]).filter((p) => p && !/^\.tmp(\/|$)/.test(p) && !isSpec(p));
   const scopes = [...fixPaths(), ...fixTests];
   const commitPaths = dirtyAll.filter((p) => scopes.some((s) => within(p, s)));
   const outside = dirtyAll.filter((p) => !commitPaths.includes(p));
-  if (outside.length) limits.push(`Uncommitted paths outside the assigned paths, not committed: ${outside.join(", ")}`);
+  if (outside.length) {
+    limits.push(`Uncommitted paths outside the assigned paths, not committed: ${outside.join(", ")}`);
+    outsideDirty.push(...outside);
+  }
   const c = await callPusher(
     pushBrief(
       `Commit exactly these paths as they stand, staged by explicit path, with the commit convention docs/FORGE.md declares. Do not push. Commit nothing else, even if the worktree holds other uncommitted changes. If every path is already committed, make no commit and record the current HEAD sha in the ledger line.\nPaths:\n${list(commitPaths)}`,
@@ -1460,7 +1475,7 @@ if (publishCurrent) {
       [
         ...(cardId && (needBoardPr || !state.pr) ? [`done board-pr <the PR reference> (write this line as soon as the board operations are done, before the review trigger)`] : []),
         `done publish <the PR reference> commit <HEAD sha>`,
-        `review 1 fired <trigger time; the PR's creation time when opening it fires the review> (write this line only if a review was requested)`,
+        `review 1 fired <trigger time; the PR's creation time when opening it fires the review> head <HEAD sha> (write this line only if a review was requested)`,
       ],
     ),
     "publish the PR",
@@ -1494,6 +1509,9 @@ try {
     test: repro.tests.join(","),
     projectRoot: projectRoot || undefined,
     answers,
+    // Dirty paths this run left out of its own commit; the review loop never stages them.
+    // (the checkpoint's dirty paths that no producer of this run touched are left over, not the PR's work)
+    exclude: unique([...outsideDirty, ...cpDirty.filter((p) => !touched.has(p) && !fixTouched.has(p))]),
   });
 } catch (e) {
   return stop("review", [

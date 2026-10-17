@@ -203,9 +203,10 @@ function absent(v, whole) {
 // A checkpoint value counts only in its expected shape, never as prose. Kinds: path (absolute),
 // rel (relative path), sha, branch, ref (a PR URL, number, or path), rev (<path>@<hex>), id.
 // Returns the value, or '' when it is absent or has another shape. A value followed by a
-// parenthetical remark, or by a full stop, is the value.
+// parenthetical remark, or by a full stop, is the value. A path may hold spaces, but a space followed by
+// a lowercase word is trailing prose: the path is then its first token.
 const SHAPES = {
-  path: /^\/[\w@.+\- /]+$/,
+  path: /^\/(?!.* [a-z])[\w@.+\- /]+$/,
   rel: /^[\w@.+/-]+$/,
   sha: /^[0-9a-f]{7,64}$/i,
   branch: /^\w[\w./-]*$/,
@@ -221,7 +222,8 @@ function shaped(kind, v) {
   if (!re || absent(t)) return "";
   if (re.test(t)) return t;
   const m = /^(\S+)\s+[(\[]/.exec(t);
-  const tok = (m ? m[1] : t).replace(/[.,;:]+$/, "");
+  const first = m ? m[1] : kind === "path" ? t.split(/\s+/)[0] : t;
+  const tok = first.replace(/[.,;:]+$/, "");
   return tok && re.test(tok) ? tok : "";
 }
 
@@ -352,10 +354,12 @@ async function settleDecisions(prefix, answers, run) {
 function rerunText(workflow, needs) {
   const cmd = `/slopify:${workflow}`;
   const list = needs || [];
-  const decisions = list.some((n) => n.kind === "decision");
+  const answerable = list.some(
+    (n) => n.kind === "decision" || n.kind === "input",
+  );
   return list.length && list.every((n) => n.kind === "decision")
     ? `Invoke ${cmd} again with the same args and add answers.<id> for each decision. In this session, pass resumeFromRunId to reuse the steps already completed.`
-    : `Resolve what each need names, then invoke ${cmd} again with the same args${decisions ? " and answers.<id> for each decision" : ""}, without resumeFromRunId, so every step reads the repository afresh.`;
+    : `Resolve what each need names, then invoke ${cmd} again with the same args${answerable ? " and answers.<id> for each decision or input need" : ""}, without resumeFromRunId, so every step reads the repository afresh.`;
 }
 // kind: 'story' | 'decision' | 'prerequisite' | 'validation' | 'input'
 function blocked(workflow, step, needs, extra) {
@@ -657,7 +661,7 @@ const slugOf = (s) =>
     .join("-");
 const clean = (v) => (absent(v) ? "" : String(v).trim());
 const val = (res, key) => clean(fact(res, key));
-const isRel = (p) => shaped("rel", p) === p;
+const isRel = (p) => !!p && shaped("rel", p) === p;
 const splitList = (v) =>
   absent(v)
     ? []
@@ -1362,6 +1366,7 @@ ${gathered}`;
 
 const touched = new Set(); // every path a producer reported changing, for the commit
 const startDirty = cpDirty;
+const outsideDirty = []; // dirty paths outside the assigned paths: reported, not committed, and kept from the review loop
 const fixScopes = []; // paths a fix job was assigned beyond the tasks' own, validated with the rest
 let candidate = "";
 let docsJobs = [];
@@ -1387,6 +1392,29 @@ ${
 ${dirtyIn.length ? `\n${DIRTY_SENTENCE}\nPaths:\n${list(dirtyIn)}\n` : ""}${fnd.length ? `\nFix these findings, reported by an independent validator of candidate ${ctx.judged}, and change only what they require:\n${list(fnd.map(findingText))}\n` : ""}`;
 }
 
+// The documentation writer raises its own decisions (prefix "docs"), apart from the spec writer's. The
+// result carries the ones the user has not answered as unanswered.
+async function callDocs(prompt, label, phaseTitle) {
+  const { res, open } = await settleDecisions("docs", answers, (settled) =>
+    callWriter(prompt + settledText(settled), label, phaseTitle, WRITER_SCHEMA),
+  );
+  if (res) res.unanswered = open;
+  return res;
+}
+
+// A documentation writer's story blockers or unanswered decisions stop the run; a coder has neither.
+function writerStop(step, ran) {
+  for (const x of ran) {
+    if (x.kind !== "writer") continue;
+    const r = x.result;
+    if (r.storyBlockers && r.storyBlockers.length)
+      return stop(step, r.storyBlockers.map((b, i) => need(step, i + 1, "story", b, "reported by the documentation writer")));
+    if (r.unanswered && r.unanswered.length)
+      return stop(step, r.unanswered.map((d) => decisionNeed(d, "the documentation writer")));
+  }
+  return null;
+}
+
 // Coders run first, then writers, so documentation is written against code that exists. Within
 // a stage, producers with disjoint paths run together; otherwise one after another.
 async function runJobs(jobs, ctx) {
@@ -1397,9 +1425,7 @@ async function runJobs(jobs, ctx) {
     if (!part.length) continue;
     const call = (j) => {
       const prompt = jobPrompt(j, part, ctx);
-      return kind === "writer"
-        ? callWriter(prompt, `docs ${j.id}`, ctx.phase, WRITER_SCHEMA)
-        : callCoder(prompt, `code ${j.id}`, ctx.phase);
+      return kind === "writer" ? callDocs(prompt, `docs ${j.id}`, ctx.phase) : callCoder(prompt, `code ${j.id}`, ctx.phase);
     };
     const disjoint = !part.some((a, i) => part.some((b, k) => k > i && overlaps(a.paths, b.paths)));
     let res;
@@ -1443,8 +1469,10 @@ function commitSet(scopes) {
   const all = every.filter((p) => !within(p, state.specPath));
   const inScope = all.filter((p) => scopes.some((s) => within(p, s)));
   const outside = all.filter((p) => !inScope.includes(p));
-  if (outside.length)
+  if (outside.length) {
     limits.push(`Uncommitted paths outside the assigned paths, not committed: ${outside.join(", ")}`);
+    outsideDirty.push(...outside);
+  }
   return inScope;
 }
 
@@ -1464,6 +1492,8 @@ async function implement() {
     const failed = [];
     todo.forEach((j, i) => (res[i] ? ran.push({ kind: j.kind, id: j.id, result: res[i] }) : failed.push(j)));
     noteWork(res.filter(Boolean));
+    const blockedByWriter = writerStop("implement", ran);
+    if (blockedByWriter) return { stop: blockedByWriter };
     if (failed.length) {
       if (fail("implementation", `producers ${failed.map((j) => j.id).join(", ")}`, "the producer did not return"))
         return { stop: exhausted("implement", "implementation") };
@@ -1485,46 +1515,57 @@ async function validate(first) {
   let findings = null;
   let prior = [];
   let fixRound = 0;
+  let retry = null; // the fix jobs still to run, with those already done
   while (true) {
     if (findings) {
       // A finding located in the spec is a spec problem: it goes back through the spec gate, and no
       // coder is given the spec to edit.
-      const specItems = findings.filter((f) => within(pathOf(f.location), state.specPath));
+      const specItems = retry ? [] : findings.filter((f) => within(pathOf(f.location), state.specPath));
       if (specItems.length) return { specFindings: specItems };
       phase("Validate");
-      const byJob = {};
-      const other = [];
-      const looksLikePath = (p) => /^[\w@.+/-]+$/.test(p) && /[./]/.test(p);
-      for (const f of findings) {
-        const p = pathOf(f.location);
-        const j = looksLikePath(p) ? jobs.find((x) => x.paths.some((s) => within(p, s))) : null;
-        if (j) (byJob[j.id] = byJob[j.id] || []).push(f);
-        else other.push(f);
-      }
-      const fixJobs = jobs.filter((j) => byJob[j.id] && byJob[j.id].length);
-      if (other.length) {
-        const extra = other.map((f) => pathOf(f.location)).filter(looksLikePath);
-        fixJobs.push({
-          id: "fix",
-          kind: "coder",
-          summary: "Fix findings that fall outside the task paths",
-          paths: unique([...jobs.filter((j) => j.kind === "coder").flatMap((j) => j.paths), ...extra]),
-        });
-        byJob.fix = other;
+      let fixJobs;
+      let byJob = {};
+      let ran = [];
+      if (retry) {
+        // Only the fix jobs that returned nothing run again; the ones that fixed their findings stay done.
+        ({ fixJobs, byJob, ran } = retry);
+      } else {
+        const other = [];
+        const looksLikePath = (p) => /^[\w@.+/-]+$/.test(p) && /[./]/.test(p);
+        for (const f of findings) {
+          const p = pathOf(f.location);
+          const j = looksLikePath(p) ? jobs.find((x) => x.paths.some((s) => within(p, s))) : null;
+          if (j) (byJob[j.id] = byJob[j.id] || []).push(f);
+          else other.push(f);
+        }
+        fixJobs = jobs.filter((j) => byJob[j.id] && byJob[j.id].length);
+        if (other.length) {
+          const extra = other.map((f) => pathOf(f.location)).filter(looksLikePath);
+          fixJobs.push({
+            id: "fix",
+            kind: "coder",
+            summary: "Fix findings that fall outside the task paths",
+            paths: unique([...jobs.filter((j) => j.kind === "coder").flatMap((j) => j.paths), ...extra]),
+          });
+          byJob.fix = other;
+        }
       }
       for (const j of fixJobs) fixScopes.push(...j.paths);
       const res = await runJobs(fixJobs, { dirty: [], findings: byJob, judged: cand, phase: "Validate" });
-      const ran = [];
       const failed = [];
       fixJobs.forEach((j, i) => (res[i] ? ran.push({ kind: j.kind, id: j.id, result: res[i] }) : failed.push(j)));
       noteWork(res.filter(Boolean));
       const mismatch = ran.map((x) => x.result.specMismatch).filter((m) => m && m.trim());
       if (mismatch.length) return { mismatch: mismatch.join("; ") };
+      const blockedByWriter = writerStop("validate", ran);
+      if (blockedByWriter) return { stop: blockedByWriter };
       if (failed.length) {
         if (fail("implementation", `fix for ${failed.map((j) => j.id).join(", ")}`, "the producer did not return"))
           return { stop: exhausted("validate", "implementation") };
-        continue; // the findings stay pending; try the fix again
+        retry = { fixJobs: failed, byJob, ran }; // the findings stay pending; try only the failed fixes again
+        continue;
       }
+      retry = null;
       // A fix that leaves the label unchanged still produced new work: make the label new.
       const next = candidateAfter(ran, cand);
       cand = next && next === cand ? `${next}#${++fixRound}` : next;
@@ -1646,7 +1687,7 @@ if (publishCurrent) {
       [
         ...(cardId && (needBoardPr || !state.pr) ? [`done board-pr <the PR reference> (write this line as soon as the board operations are done, before the review trigger)`] : []),
         `done publish <the PR reference> commit <HEAD sha>`,
-        `review 1 fired <trigger time; the PR's creation time when opening it fires the review> (write this line only if a review was requested)`,
+        `review 1 fired <trigger time; the PR's creation time when opening it fires the review> head <HEAD sha> (write this line only if a review was requested)`,
       ],
     ),
     "publish the PR",
@@ -1679,6 +1720,8 @@ try {
     story,
     projectRoot: projectRoot || undefined,
     answers,
+    // Dirty paths this run left out of its own commit; the review loop never stages them.
+    exclude: unique([...outsideDirty, ...(implCurrent ? cpDirty : [])]),
   });
 } catch (e) {
   return stop("review", [
