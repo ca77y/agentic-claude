@@ -9,7 +9,7 @@
     {
       "name": "slopify",
       "source": "./plugins/slopify",
-      "description": "Shape proposals, deliver verified authorized changes through a PR, and research with provenance into a project library you can ask and lint, with fresh QA, auditor, and clerk validation."
+      "description": "Shape stories, run deliver workflows for verified authorized changes through a PR, and research with provenance into a project library you can ask and lint, with fresh QA, lens, and clerk validation."
     }
   ]
 }
