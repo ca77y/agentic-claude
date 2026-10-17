@@ -223,9 +223,106 @@ function slugged(text, fallback) {
   return norm ? `${words}-${hashOf(norm)}` : fallback || "item";
 }
 
+const HASH = "[0-9a-f]{7,64}";
+// A path and its git hash-object, written "<path>@<hash>" or "<path> <hash>"; null for anything else.
+function parseSpec(v) {
+  const m = new RegExp(`^(\\S+?)(?:@|\\s+)(${HASH})\\s*$`).exec(
+    String(v || "").trim(),
+  );
+  return m ? { path: m[1], hash: m[2] } : null;
+}
+
+// An open decision's id comes from its question, so an answer stays with its question whatever else
+// a producer asks. The prefix names the producer that raised it.
+function decisionsOf(prefix, questions) {
+  const out = [];
+  for (const q of Array.isArray(questions) ? questions : []) {
+    const question = String(q).trim();
+    const norm = question
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim();
+    const id = `${prefix}-${norm.split(" ").slice(0, 4).join("-") || "question"}-${hashOf(norm)}`;
+    if (question && !out.some((d) => d.id === id)) out.push({ id, question });
+  }
+  return out;
+}
+function answerOf(answers, id) {
+  const a = answers ? answers[id] : undefined;
+  return a === undefined || a === null ? "" : String(a).trim();
+}
+// The settled questions as a brief paragraph: each answer beside its question, for the producer
+// that raised it and no other.
+function settledText(settled) {
+  return settled.length
+    ? `\n\nThe user has settled these earlier questions; apply each answer and do not ask them again:\n${settled.map((d) => `- Question: ${d.question}\n  Answer: ${d.answer}`).join("\n")}`
+    : "";
+}
+// Run a producer (run(settled) returns its result, with openDecisions, or null) until it raises
+// no question the user has not answered. A question the user answered is put back to the next
+// dispatch with its answer. Answers to this prefix that no question matched (a rerun in a new
+// session can word a question differently) go back once as well. Returns the last result and the
+// questions still open; the result's own openDecisions are not to be read after this.
+async function settleDecisions(prefix, answers, run) {
+  const settled = [];
+  let carriedTried = false;
+  for (let round = 0; ; round++) {
+    const res = await run(settled);
+    if (!res || (res.storyBlockers && res.storyBlockers.length))
+      return { res, open: [] };
+    const decisions = decisionsOf(prefix, res.openDecisions);
+    const open = decisions.filter((d) => !answerOf(answers, d.id));
+    if (open.length) {
+      const carried = Object.keys(answers).filter(
+        (k) =>
+          k.startsWith(`${prefix}-`) &&
+          answerOf(answers, k) &&
+          !decisions.some((d) => d.id === k) &&
+          !settled.some((x) => x.id === k),
+      );
+      if (!carried.length || carriedTried || round >= 2) return { res, open };
+      carriedTried = true;
+      settled.push(
+        ...carried.map((k) => ({
+          id: k,
+          question: `an earlier question whose id was ${k}; its words ran: ${k
+            .replace(`${prefix}-`, "")
+            .replace(/-[a-z0-9]{6,7}$/, "")
+            .replace(/-/g, " ")}`,
+          answer: answerOf(answers, k),
+        })),
+      );
+      continue;
+    }
+    const fresh = decisions.filter((d) => !settled.some((x) => x.id === d.id));
+    if (!fresh.length || round >= 2) return { res, open: [] };
+    settled.push(
+      ...fresh.map((d) => ({ ...d, answer: answerOf(answers, d.id) })),
+    );
+  }
+}
+
+// How to continue after a block. Resume replays the cached results of unchanged steps, so it
+// helps only when every need is a decision; a missing binding or a failing gate needs a fresh
+// rerun that reads the repository again.
+function rerunText(workflow, needs) {
+  const cmd = `/slopify:${workflow}`;
+  const list = needs || [];
+  const decisions = list.some((n) => n.kind === "decision");
+  return list.length && list.every((n) => n.kind === "decision")
+    ? `Invoke ${cmd} again with the same args and add answers.<id> for each decision. In this session, pass resumeFromRunId to reuse the steps already completed.`
+    : `Resolve what each need names, then invoke ${cmd} again with the same args${decisions ? " and answers.<id> for each decision" : ""}, without resumeFromRunId, so every step reads the repository afresh.`;
+}
 // kind: 'story' | 'decision' | 'prerequisite' | 'validation' | 'input'
 function blocked(workflow, step, needs, extra) {
-  return { status: "blocked", workflow, step, needs, ...(extra || {}) };
+  return {
+    status: "blocked",
+    workflow,
+    step,
+    needs,
+    rerun: rerunText(workflow, needs),
+    ...(extra || {}),
+  };
 }
 // END slopify family schemas
 
@@ -276,8 +373,7 @@ const MAX_ROUNDS = 3;
 const MAX_FAILURES = 3;
 const WATCH_MINUTES = 9;
 const FINAL_ROUND = MAX_ROUNDS + 1;
-const RERUN =
-  'Invoke /slopify:review-pr again with the same args; add answers.<id> for each decision. In this session, pass resumeFromRunId to reuse completed steps.';
+const NO_LIMIT_DISPATCHES = 12; // when the forge declares no review time limit
 
 const WHERE = projectRoot
   ? `The project is at ${projectRoot}; address files by absolute path under it.`
@@ -386,7 +482,7 @@ let dirtyPaths = [];
 
 const list = (items) => (items && items.length ? items.map((x) => `- ${x}`).join('\n') : '- none');
 // Each checkpoint key's expected shape (see shaped in the shared block); a key without one is text.
-const KINDS = { worktree: 'path', ledger: 'path', head: 'sha', base: 'sha', 'story-revision': 'sha', branch: 'branch' };
+const KINDS = { worktree: 'path', ledger: 'path', head: 'sha', 'pushed-head': 'sha', base: 'sha', 'story-revision': 'sha', branch: 'branch' };
 // A checkpoint item's value, or '' when it says there is none or lacks the expected shape. A shaped item
 // followed by a remark is the item. A text value is none only for a bare none reply.
 function val(res, key) {
@@ -395,10 +491,12 @@ function val(res, key) {
   const kind = KINDS[key];
   return kind ? shaped(kind, v) : absent(v, true) ? '' : v;
 }
-// The spec's path from "<path>@<hash>" or a bare path, in the story worktree or relative to it.
+// The spec's path from "<path>@<hash>", "<path> <hash>", or a bare path, in the story worktree or relative to it.
 function specOf(v) {
-  const r = shaped('rev', v);
-  return r ? r.replace(/@[0-9a-f]{7,64}$/i, '') : shaped('path', v) || shaped('rel', v);
+  const s = parseSpec(String(v || '').split('\n')[0].replace(/\s*\([^)]*\)\s*$/, ''));
+  if (s) return shaped('path', s.path) || shaped('rel', s.path);
+  const bare = shaped('path', v);
+  return /\s/.test(bare) ? '' : bare || shaped('rel', v);
 }
 // The highest round on 'review <n> fired|ended' text, else a bare number; never a digit run from a timestamp.
 function reviewRound(v) {
@@ -425,13 +523,7 @@ function checkpointOf() {
 }
 
 function stop(step, needs) {
-  return blocked('review-pr', step, needs, { completed, checkpoint: checkpointOf(), attempts, rerun: RERUN });
-}
-
-// Answers apply only to the step that raised their id: a decision id starts with its step prefix.
-function answersFor(prefix) {
-  const keys = Object.keys(answers).filter((k) => k.startsWith(prefix));
-  return keys.length ? `\nAnswers the user gave to earlier open decisions:\n${keys.map((k) => `- ${k}: ${answers[k]}`).join('\n')}` : '';
+  return blocked('review-pr', step, needs, { completed, checkpoint: checkpointOf(), attempts });
 }
 
 const isTmp = (p) => /(^|\/)\.tmp(\/|$)/.test(String(p || ''));
@@ -459,7 +551,7 @@ const isDoc = (loc) => {
   return isSpec(p) || /\.(md|mdx|rst|txt|adoc)$/i.test(p) || /(^|\/)readme$/i.test(p);
 };
 
-const CHECKPOINT_KEYS = 'worktree branch head base dirty ledger review-fired review-ended spec pr';
+const CHECKPOINT_KEYS = 'worktree branch head base pushed-head unpushed dirty ledger review-fired review-ended spec pr';
 
 // A validator verdict counts only when it passes, carries no blocking finding, and names the revision
 // the brief gave it in evaluated (see sameRev in the shared block). A brief with no revision to name
@@ -484,8 +576,9 @@ ${READ_ONLY}
 Report where the review loop on this pull request stands from its durable checkpoints. Return each of these keys that exists as one evidence item whose source is the key and whose excerpt is its value; leave out a key that does not exist: ${keys}.
 - worktree, branch, head, dirty: the story worktree for the pull request's head branch, named as docs/FORGE.md names it. head is its HEAD sha. dirty lists the paths with uncommitted changes, ignoring .tmp/, or is none.
 - base: the pull request's base commit, the merge base of the head branch and the target branch docs/FORGE.md declares.
+- pushed-head: the head commit sha of the pull request's branch as the remote has it, not the worktree's HEAD. unpushed: how many commits the worktree's HEAD holds that the pushed head lacks, or none.
 - ledger: the absolute path of the worktree's .tmp/ledger.md, only when it exists. review-fired and review-ended: the highest review round numbers on its review lines after the last done publish line.
-- spec: the current spec path and its git hash-object, on one line, when the story has a spec.
+- spec: the current spec path and its git hash-object, written <absolute path>@<git hash-object>, when the story has a spec.
 - pr: the pull request's description, read through docs/FORGE.md's read binding when it declares one; leave the key out when it declares none.
 
 Pull request: ${pr}${worktree ? `\nWorktree: ${worktree}` : ''}${note ? `\n${note}` : ''}`;
@@ -559,7 +652,11 @@ Branch: ${val(cp, 'branch') || 'the pull request head branch'}`,
 }
 
 if (!specPath) specPath = val(cp, 'spec');
-head = val(cp, 'head');
+// Findings are judged against the pull request as the forge has it. A local commit that was never pushed
+// (a fix whose push failed, or an interrupted round) is not part of it, whatever the worktree's HEAD says.
+const pushedHead = val(cp, 'pushed-head');
+const unpushed = parseInt(String(fact(cp, 'unpushed')).trim(), 10) > 0;
+head = pushedHead || val(cp, 'head');
 baseCommit = val(cp, 'base');
 dirtyPaths = parseDirty(fact(cp, 'dirty'));
 const branch = val(cp, 'branch');
@@ -623,9 +720,19 @@ Worktree: ${worktree}`,
     const w = res.waitingFor === 'start' ? 'start' : 'finish';
     lastWaiting = w;
     counts[w] += 1;
-    if (counts[w] >= Math.ceil((Number(res.limitMinutes) || 0) / WATCH_MINUTES) + 1) {
-      log(`Review ${r} did not ${w} within its declared limit; treating it as timed-out`);
-      return { review: { ...res, outcome: 'timed-out' } };
+    // A declared limit bounds the dispatches; an undeclared (or zero) one means no limit, so a generous
+    // fixed cap bounds them instead of ending the review at once.
+    const limit = Number(res.limitMinutes) || 0;
+    const cap = limit > 0 ? Math.ceil(limit / WATCH_MINUTES) + 1 : NO_LIMIT_DISPATCHES;
+    if (counts[w] >= cap) {
+      log(`Review ${r} did not ${w} within ${limit > 0 ? 'its declared limit' : 'the fixed cap'}; treating it as timed-out`);
+      return {
+        review: {
+          ...res,
+          outcome: 'timed-out',
+          ...(limit > 0 ? {} : { note: `docs/FORGE.md declares no time limit for the review, so the wait was capped at ${NO_LIMIT_DISPATCHES} dispatches of ${WATCH_MINUTES} minutes (about ${NO_LIMIT_DISPATCHES * WATCH_MINUTES} minutes).` }),
+        },
+      };
     }
   }
 }
@@ -713,15 +820,17 @@ async function reviseSpec(r, items, mismatch, st) {
   let gateFindings = [];
   while (true) {
     phase('Fix');
-    const w = await agent(
+    const { res: w, open } = await settleDecisions(`r${r}-spec`, answers, (settled) =>
+      agent(
       `${WHERE}
 ${NO_FORGE_WRITES}
 
 Revise the spec at ${specPath} (attempt ${specFailures + 1} in round ${r}) so that it covers the review defects below. Change only the spec. Clarify without changing meaning, and keep the original wording of a criterion beside any clarification. ${ASSUMPTIONS} The story is the acceptance source and is never changed: if a defect would change the story's goal, scope, or a criterion's meaning, return it in storyBlockers instead of revising. Return the spec path in produced and its git hash-object as revision.
 
 ${acceptance([])}
-${items.length ? `\nReview defects the spec must cover:\n${workBrief(items)}` : ''}${mismatch ? `\nThe coder reports the spec cannot be followed as written:\n${mismatch}` : ''}${gateFindings.length ? `\nA fresh lens rejected the previous revision for:\n${list(gateFindings)}` : ''}${answersFor(`r${r}-decision-`)}`,
+${items.length ? `\nReview defects the spec must cover:\n${workBrief(items)}` : ''}${mismatch ? `\nThe coder reports the spec cannot be followed as written:\n${mismatch}` : ''}${gateFindings.length ? `\nA fresh lens rejected the previous revision for:\n${list(gateFindings)}` : ''}${settledText(settled)}`,
       { agentType: 'slopify:writer', label: `revise spec round ${r}`, phase: 'Fix', schema: WRITER_SCHEMA },
+      ),
     );
     if (!w) {
       specFailures += 1;
@@ -732,8 +841,8 @@ ${items.length ? `\nReview defects the spec must cover:\n${workBrief(items)}` : 
     if (w.storyBlockers.length) {
       return { stop: stop(`fix-r${r}`, w.storyBlockers.map((b, i) => need(`r${r}-story-${i + 1}`, 'story', b, 'raised by the writer while revising the spec'))) };
     }
-    if (w.openDecisions.length) {
-      return { stop: stop(`fix-r${r}`, w.openDecisions.map((d, i) => need(`r${r}-decision-${i + 1}`, 'decision', d, 'raised by the writer while revising the spec'))) };
+    if (open.length) {
+      return { stop: stop(`fix-r${r}`, open.map((d) => need(d.id, 'decision', d.question, 'raised by the writer while revising the spec'))) };
     }
     const gateBrief = `${WHERE}
 
@@ -777,9 +886,12 @@ ${workBrief(items)}${dirtyBrief(dirty)}`,
   );
 }
 
-function docWriterCall(r, items, st) {
+// The documentation writer raises its own decisions (prefix r<n>-docs), apart from the spec writer's.
+// The result carries them as open, the questions the user has not answered.
+async function docWriterCall(r, items, st) {
   const dirty = carriedPaths(st).filter((p) => isDoc(p) && !isSpec(p));
-  return agent(
+  const { res, open } = await settleDecisions(`r${r}-docs`, answers, (settled) =>
+    agent(
     `${WHERE}
 ${NO_FORGE_WRITES}
 
@@ -788,13 +900,19 @@ Fix these documentation defects found in review ${r} of pull request ${pr} (atte
 ${acceptance([])}
 
 Defects:
-${workBrief(items)}${dirtyBrief(dirty)}${answersFor(`r${r}-decision-`)}`,
+${workBrief(items)}${dirtyBrief(dirty)}${settledText(settled)}`,
     { agentType: 'slopify:writer', label: `fix docs round ${r}`, phase: 'Fix', schema: WRITER_SCHEMA },
+    ),
   );
+  if (res) res.open = open;
+  return res;
 }
 
-// One production pass: the spec first when it must change, then code and documentation together.
+// One production pass: the spec first when it must change, then code and documentation together. A producer
+// that failed is run again alone; one that already returned a good result is not run twice.
 async function produce(r, st) {
+  let codeOk = false;
+  let docsOk = false;
   while (true) {
     st.pass += 1;
     const items = [...st.base, ...st.feedback];
@@ -814,8 +932,10 @@ async function produce(r, st) {
     }
 
     phase('Fix');
-    const ranCoder = codeItems.length > 0;
-    const ranDocs = docItems.length > 0;
+    const wantCoder = codeItems.length > 0;
+    const wantDocs = docItems.length > 0;
+    const ranCoder = wantCoder && !codeOk;
+    const ranDocs = wantDocs && !docsOk;
     const res = await parallel([
       () => (ranCoder ? coderCall(r, codeItems, st) : Promise.resolve(null)),
       () => (ranDocs ? docWriterCall(r, docItems, st) : Promise.resolve(null)),
@@ -826,6 +946,7 @@ async function produce(r, st) {
     if (c) {
       for (const p of [...c.changed, ...c.tests]) st.stage.add(p);
       st.coder = c;
+      if (!(c.specMismatch && c.specMismatch.trim())) codeOk = true;
     }
     if (w) {
       for (const p of w.produced) if (!isSpec(p)) st.stage.add(p);
@@ -840,7 +961,8 @@ async function produce(r, st) {
         continue;
       }
       if (w.storyBlockers.length) return { stop: stop(`fix-r${r}`, w.storyBlockers.map((b, i) => need(`r${r}-story-${i + 1}`, 'story', b, 'raised by the writer while fixing documentation'))) };
-      if (w.openDecisions.length) return { stop: stop(`fix-r${r}`, w.openDecisions.map((d, i) => need(`r${r}-decision-${i + 1}`, 'decision', d, 'raised by the writer while fixing documentation'))) };
+      if (w.open.length) return { stop: stop(`fix-r${r}`, w.open.map((d) => need(d.id, 'decision', d.question, 'raised by the writer while fixing documentation'))) };
+      docsOk = true;
     }
     if (ranCoder) {
       // A spec mismatch goes back through the spec gate and spends the spec budget, then the coder runs again.
@@ -863,8 +985,9 @@ async function produce(r, st) {
         if (fixFailures >= MAX_FAILURES) return { stop: stop(`fix-r${r}`, [need(`r${r}-fix`, 'validation', 'A code fix; the coder did not return.', 'coder returned nothing')]) };
         continue;
       }
+      codeOk = true;
     }
-    st.label = (ranCoder && st.coder ? st.coder.revision : ranDocs && st.writer ? st.writer.revision : st.label) || st.specRevision || '';
+    st.label = (wantCoder && st.coder ? st.coder.revision : wantDocs && st.writer ? st.writer.revision : st.label) || st.specRevision || '';
     return { ok: true };
   }
 }
@@ -968,6 +1091,26 @@ ${steps.map((x, i) => `${i + 1}. ${x}`).join('\n')}
 Return the implementation commit sha as the reference of an operation named "commit", the spec commit (if any) as "commit-spec", and record every other operation. Put anything docs/BOARD.md or docs/FORGE.md does not bind in unmet.`;
 }
 
+// A round whose fix was committed but never pushed (the push failed, or the run stopped first): push it,
+// without judging it again; a fresh qa passed it before the commit, and the commit is all that is left.
+function resumePushBrief(r) {
+  const lines = [
+    `only if the ledger already holds a done spec line: <time> done implement commit <sha of HEAD> spec <git hash-object of ${specPath || 'the spec'}> pushed`,
+    `<time> review ${r} ended finished: pushed the fix an interrupted run left committed`,
+    `<time> review ${r + 1} fired <the trigger time>`,
+  ];
+  return `${WHERE}
+${AUTH}
+
+The worktree ${worktree}${branch ? ` on branch ${branch}` : ''} holds commits for review round ${r} of pull request ${pr} that were never pushed: an earlier run committed a verified fix and stopped before the push finished. Commit nothing and stage nothing. In this order:
+1. Push the branch as docs/FORGE.md declares for a verified repair, then update the pull request as its repair binding declares, saying the fix of round ${r} was committed by an interrupted run.
+2. Re-fire the review trigger as docs/FORGE.md declares.
+3. Append these ledger lines in this order, stamping the time yourself:
+${list(lines)}
+
+Return the worktree's HEAD sha as the reference of an operation named "commit", and record every other operation. Put anything docs/BOARD.md or docs/FORGE.md does not bind in unmet.`;
+}
+
 // The fix commit among the operations a push reported. The spec is committed first, alone, so the fix
 // commit is the commit operation the brief names `commit`, else the last commit that is not the spec's.
 function fixCommit(pushed) {
@@ -1007,10 +1150,25 @@ function roundRecord(round, sorted, verdict, extra) {
 }
 
 function endedBy(res, round) {
-  return { outcome: res.outcome, round, reference: res.reference || '' };
+  return { outcome: res.outcome, round, reference: res.reference || '', ...(res.note ? { note: res.note } : {}) };
 }
 
 for (let r = startRound; r <= MAX_ROUNDS && !ended; r++) {
+  // A fix committed in this round and never pushed: resume at Push. Review r has already been judged
+  // and fixed; waiting for it again would sort its findings against a HEAD that holds the fix.
+  if (unpushed && r === startRound && fired >= 1) {
+    phase('Push');
+    const resumed = await agent(resumePushBrief(r), { agentType: 'slopify:pusher', label: `push round ${r} (resumed)`, phase: 'Push', schema: PUSHER_SCHEMA });
+    if (!resumed || !resumed.done) {
+      return stop(`push-r${r}`, [
+        need(`r${r}-push`, 'prerequisite', 'A pushed fix for the pull request; the worktree holds commits the forge lacks.', resumed ? (resumed.unmet.join('; ') || 'pusher reported the push not done') : 'pusher did not return'),
+      ]);
+    }
+    rounds.push(roundRecord(r, null, 'fixed', { note: `pushed the fix an interrupted run had committed`, pushed: fixCommit(resumed), ...(resumed.unmet.length ? { unmet: resumed.unmet } : {}) }));
+    completed.push(`round-${r}`);
+    await refreshHead(r, resumed);
+    continue;
+  }
   // Wait
   let findings;
   let reviewRef = '';
@@ -1135,6 +1293,7 @@ function buildReport() {
     if (rd.nonIssues.length) bits.push(`non-issues ${rd.nonIssues.length} (${rd.nonIssues.map((x) => `${x.finding} -- ${x.reason}`).join('; ')})`);
     if (rd.unverified.length) bits.push(`unverified ${rd.unverified.length} (${rd.unverified.map((x) => `${x.finding} -- missing: ${x.missing}`).join('; ')})`);
     if (rd.validations && rd.validations.length) bits.push(`qa: ${rd.validations.join(' | ')}`);
+    if (rd.note) bits.push(rd.note);
     lines.push(bits.join('; '));
   }
   const o = review ? review.outcome : 'none';
@@ -1148,7 +1307,7 @@ function buildReport() {
         ? `Ended: no defects at round ${at}, but some findings are unverified.`
         : o === 'defects-remain'
           ? `Ended: ${MAX_ROUNDS} rounds done; review ${at} still has ${unfixed.length} unfixed defect(s).`
-          : `Ended: review ${at} ${o}.`,
+          : `Ended: review ${at} ${o}.${review && review.note ? ` ${review.note}` : ''}`,
   );
   return lines.join('\n');
 }

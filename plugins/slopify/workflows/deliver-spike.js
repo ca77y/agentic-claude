@@ -249,16 +249,111 @@ function slugged(text, fallback) {
   return norm ? `${words}-${hashOf(norm)}` : fallback || "item";
 }
 
+const HASH = "[0-9a-f]{7,64}";
+// A path and its git hash-object, written "<path>@<hash>" or "<path> <hash>"; null for anything else.
+function parseSpec(v) {
+  const m = new RegExp(`^(\\S+?)(?:@|\\s+)(${HASH})\\s*$`).exec(
+    String(v || "").trim(),
+  );
+  return m ? { path: m[1], hash: m[2] } : null;
+}
+
+// An open decision's id comes from its question, so an answer stays with its question whatever else
+// a producer asks. The prefix names the producer that raised it.
+function decisionsOf(prefix, questions) {
+  const out = [];
+  for (const q of Array.isArray(questions) ? questions : []) {
+    const question = String(q).trim();
+    const norm = question
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim();
+    const id = `${prefix}-${norm.split(" ").slice(0, 4).join("-") || "question"}-${hashOf(norm)}`;
+    if (question && !out.some((d) => d.id === id)) out.push({ id, question });
+  }
+  return out;
+}
+function answerOf(answers, id) {
+  const a = answers ? answers[id] : undefined;
+  return a === undefined || a === null ? "" : String(a).trim();
+}
+// The settled questions as a brief paragraph: each answer beside its question, for the producer
+// that raised it and no other.
+function settledText(settled) {
+  return settled.length
+    ? `\n\nThe user has settled these earlier questions; apply each answer and do not ask them again:\n${settled.map((d) => `- Question: ${d.question}\n  Answer: ${d.answer}`).join("\n")}`
+    : "";
+}
+// Run a producer (run(settled) returns its result, with openDecisions, or null) until it raises
+// no question the user has not answered. A question the user answered is put back to the next
+// dispatch with its answer. Answers to this prefix that no question matched (a rerun in a new
+// session can word a question differently) go back once as well. Returns the last result and the
+// questions still open; the result's own openDecisions are not to be read after this.
+async function settleDecisions(prefix, answers, run) {
+  const settled = [];
+  let carriedTried = false;
+  for (let round = 0; ; round++) {
+    const res = await run(settled);
+    if (!res || (res.storyBlockers && res.storyBlockers.length))
+      return { res, open: [] };
+    const decisions = decisionsOf(prefix, res.openDecisions);
+    const open = decisions.filter((d) => !answerOf(answers, d.id));
+    if (open.length) {
+      const carried = Object.keys(answers).filter(
+        (k) =>
+          k.startsWith(`${prefix}-`) &&
+          answerOf(answers, k) &&
+          !decisions.some((d) => d.id === k) &&
+          !settled.some((x) => x.id === k),
+      );
+      if (!carried.length || carriedTried || round >= 2) return { res, open };
+      carriedTried = true;
+      settled.push(
+        ...carried.map((k) => ({
+          id: k,
+          question: `an earlier question whose id was ${k}; its words ran: ${k
+            .replace(`${prefix}-`, "")
+            .replace(/-[a-z0-9]{6,7}$/, "")
+            .replace(/-/g, " ")}`,
+          answer: answerOf(answers, k),
+        })),
+      );
+      continue;
+    }
+    const fresh = decisions.filter((d) => !settled.some((x) => x.id === d.id));
+    if (!fresh.length || round >= 2) return { res, open: [] };
+    settled.push(
+      ...fresh.map((d) => ({ ...d, answer: answerOf(answers, d.id) })),
+    );
+  }
+}
+
+// How to continue after a block. Resume replays the cached results of unchanged steps, so it
+// helps only when every need is a decision; a missing binding or a failing gate needs a fresh
+// rerun that reads the repository again.
+function rerunText(workflow, needs) {
+  const cmd = `/slopify:${workflow}`;
+  const list = needs || [];
+  const decisions = list.some((n) => n.kind === "decision");
+  return list.length && list.every((n) => n.kind === "decision")
+    ? `Invoke ${cmd} again with the same args and add answers.<id> for each decision. In this session, pass resumeFromRunId to reuse the steps already completed.`
+    : `Resolve what each need names, then invoke ${cmd} again with the same args${decisions ? " and answers.<id> for each decision" : ""}, without resumeFromRunId, so every step reads the repository afresh.`;
+}
 // kind: 'story' | 'decision' | 'prerequisite' | 'validation' | 'input'
 function blocked(workflow, step, needs, extra) {
-  return { status: "blocked", workflow, step, needs, ...(extra || {}) };
+  return {
+    status: "blocked",
+    workflow,
+    step,
+    needs,
+    rerun: rerunText(workflow, needs),
+    ...(extra || {}),
+  };
 }
 // END slopify family schemas
 
 const WORKFLOW = 'deliver-spike'
 const MAX_FAILURES = 3
-const RERUN =
-  'Invoke /slopify:deliver-spike again with the same args; add answers.<id> for each decision. In this session, pass resumeFromRunId to reuse completed steps.'
 
 const WHERE = projectRoot
   ? `The project is at ${projectRoot}; address files by absolute path under it.`
@@ -383,32 +478,11 @@ function need(id, kind, what, evidence) {
 
 // A blocked result: the step that could not proceed, what it needs, and what a rerun finds.
 function stop(step, needs) {
-  return blocked(WORKFLOW, step, needs, { completed, checkpoint, attempts, rerun: RERUN })
+  return blocked(WORKFLOW, step, needs, { completed, checkpoint, attempts })
 }
 
 function list(items) {
   return items && items.length ? items.map((x) => `- ${x}`).join('\n') : '- none'
-}
-
-// A stable id for an open decision: a short slug plus a hash of the normalized question text.
-function decisionId(text) {
-  const norm = String(text).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
-  return `plan-${norm.split(' ').slice(0, 4).join('-') || 'question'}-${hashOf(norm)}`
-}
-
-function decisionsOf(questions) {
-  const out = []
-  for (const q of Array.isArray(questions) ? questions : []) {
-    const question = String(q).trim()
-    const id = decisionId(question)
-    if (question && !out.some((d) => d.id === id)) out.push({ id, question })
-  }
-  return out
-}
-
-function answerOf(id) {
-  const a = answers[id]
-  return a === undefined || a === null ? '' : String(a).trim()
 }
 
 function tokens(text) {
@@ -512,7 +586,10 @@ if (!cp) {
 completed.push('locate')
 
 const bindingFact = fact(cp, 'spike-binding')
-binding = absent(bindingFact) ? '' : bindingFact
+// The quoted line is "Spike prototypes: none" when the project wants no prototypes. A binding names a branch
+// pattern in terms of <slug>; anything else is no binding, and no names are invented.
+const bindingBody = bindingFact.replace(/^[\s>*-]*spike prototypes\s*[:\u2014-]?\s*/i, '')
+binding = !absent(bindingBody) && /<slug>/i.test(bindingBody) ? bindingFact : ''
 const docFact = fact(cp, 'findings-doc')
 const docParts = absent(docFact) ? [] : tokens(docFact)
 const doc = { path: shaped('path', docParts[0]), revision: shaped('sha', docParts[1]) }
@@ -622,24 +699,20 @@ ${show('scout-code', code)}`
   // Open decisions get ids derived from their text, so an answer stays with its question
   // whatever else the writer asks. The first plan call never carries answers (so a resumed run
   // replays it); each answer then goes back with its question text.
-  const settled = [] // { id, question, answer }
-  let carriedTried = false
-  let planned = null
   let plan = null
-  for (let round = 0; ; round++) {
-  planned = await attempt(
-    'plan',
-    settled.length ? 'writer claim plan with answers' : 'writer claim plan',
-    (last) =>
+  let planFailure = ''
+  const sd = await settleDecisions('plan', answers, async (settled) => {
+    const planned = await attempt(
+      'plan',
+      settled.length ? 'writer claim plan with answers' : 'writer claim plan',
+      (last) =>
       agent(
         `${WHERE}
 ${NO_OPS}
 Write no files: return the plan.
 ${retryNote(last)}
 List the claims the answer to this spike's question rests on. For each, give a short stable id (c1, c2, ...), the claim, its evidence status from the evidence below (supported, contested, or unknown), and whether it needs a measurement from a throwaway prototype. A claim needs a measurement only when the evidence leaves it contested or unknown and a prototype could settle it; then say what to measure and how. Leave measurement empty otherwise. Settle measurement details yourself (environment, interpreter or tool versions, method, scope, what is included in a timing) and record each as a labelled assumption: put it in the claim's measurement text as "Assumption: ...", so the findings document can state it too. Raise a question in openDecisions only when the spike's question itself is ambiguous in a way no reasonable assumption resolves; never for how to measure. Otherwise leave openDecisions empty.${
-          settled.length
-            ? `\n\nThe user has settled these earlier questions; apply each answer and do not ask them again:\n${settled.map((d) => `- Question: ${d.question}\n  Answer: ${d.answer}`).join('\n')}`
-            : ''
+          settledText(settled)
         }
 
 Question: ${question}
@@ -655,44 +728,20 @@ ${evidenceText}`,
       const bad = r.claims.find((c) => c.needsMeasurement && !String(c.measurement || '').trim())
       return bad ? `claim ${bad.id} needs a measurement but names none` : ''
     },
-  )
-  if (!planned.res) {
-    return stop('plan', [need('plan-1', 'validation', 'A claim plan the writer can produce for this question.', planned.last)])
-  }
-  plan = planned.res
-  const decisions = decisionsOf(plan.openDecisions)
-  const open = decisions.filter((d) => !answerOf(d.id))
-  if (open.length) {
-    // A rerun in a new session can word a question differently, which gives it a new id. Before
-    // blocking, give the writer the answers it was not asked about again, once, so an answer that
-    // already covers a reworded question settles it.
-    const carried = Object.keys(answers).filter(
-      (k) => k.startsWith('plan-') && answerOf(k) && !decisions.some((d) => d.id === k) && !settled.some((x) => x.id === k),
     )
-    if (carried.length && !carriedTried && round + 1 < MAX_FAILURES) {
-      carriedTried = true
-      settled.push(
-        ...carried.map((k) => ({
-          id: k,
-          question: `an earlier question whose id was ${k}; its words ran: ${k.replace(/^plan-/, '').replace(/-[a-z0-9]{6,7}$/, '').replace(/-/g, ' ')}`,
-          answer: answerOf(k),
-        })),
-      )
-      continue
-    }
+    planFailure = planned.last
+    return planned.res
+  })
+  if (!sd.res) {
+    return stop('plan', [need('plan-1', 'validation', 'A claim plan the writer can produce for this question.', planFailure)])
+  }
+  if (sd.open.length) {
     return stop(
       'plan',
-      open.map((d) => need(d.id, 'decision', d.question, 'raised by the claim plan')),
+      sd.open.map((d) => need(d.id, 'decision', d.question, 'raised by the claim plan')),
     )
   }
-  const fresh = decisions.filter((d) => !settled.some((x) => x.id === d.id))
-  if (!fresh.length) break
-  settled.push(...fresh.map((d) => ({ ...d, answer: answerOf(d.id) })))
-  if (round + 1 >= MAX_FAILURES) {
-    log('The plan still re-asked answered questions after three rounds; proceeding on the last plan')
-    break
-  }
-  }
+  plan = sd.res
   completed.push('plan')
 
   // ---- Prototype ------------------------------------------------------------
@@ -981,11 +1030,11 @@ const protoVerdict = verdicts.find((v) => v.verdict === 'qa')
 const report = [
   `Spike done. Findings document: ${doc.path} (revision ${doc.revision || 'unnamed'}); it makes no recommendation.`,
   `Lens verdicts: ${verdicts.filter((v) => v.verdict !== 'qa').map(verdictLine).join('; ')}.`,
-  protoVerdict ? `Prototype confirmed by a fresh qa: ${verdictLine(protoVerdict)}.` : 'No prototype was needed, so no qa ran.',
+  protoVerdict ? `The measurements come from a throwaway prototype and were independently confirmed by a fresh qa: ${verdictLine(protoVerdict)}.` : 'No prototype was needed, so no qa ran.',
   `Measurements: ${measurements.length ? measurements.map((m) => `${m.claim} = ${m.value} (${m.command})`).join('; ') : 'none this run (see the document)'}.`,
   `Open unknowns: ${unknowns.length ? unknowns.join('; ') : 'none reported this run (see the document)'}.`,
   prototypeDeleted
-    ? `The prototype worktree${prototypeBranch ? ` and branch ${prototypeBranch}` : ''} were deleted; nothing was pushed or merged.`
+    ? `The prototype worktree${prototypeBranch ? ` and branch ${prototypeBranch}` : ''} were deleted without merging anything; nothing was pushed.`
     : prototypeGap
       ? `${prototypeGap}; nothing was pushed or merged.`
       : 'No prototype branch existed, so none was deleted; nothing was pushed or merged.',

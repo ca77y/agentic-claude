@@ -223,9 +223,106 @@ function slugged(text, fallback) {
   return norm ? `${words}-${hashOf(norm)}` : fallback || "item";
 }
 
+const HASH = "[0-9a-f]{7,64}";
+// A path and its git hash-object, written "<path>@<hash>" or "<path> <hash>"; null for anything else.
+function parseSpec(v) {
+  const m = new RegExp(`^(\\S+?)(?:@|\\s+)(${HASH})\\s*$`).exec(
+    String(v || "").trim(),
+  );
+  return m ? { path: m[1], hash: m[2] } : null;
+}
+
+// An open decision's id comes from its question, so an answer stays with its question whatever else
+// a producer asks. The prefix names the producer that raised it.
+function decisionsOf(prefix, questions) {
+  const out = [];
+  for (const q of Array.isArray(questions) ? questions : []) {
+    const question = String(q).trim();
+    const norm = question
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim();
+    const id = `${prefix}-${norm.split(" ").slice(0, 4).join("-") || "question"}-${hashOf(norm)}`;
+    if (question && !out.some((d) => d.id === id)) out.push({ id, question });
+  }
+  return out;
+}
+function answerOf(answers, id) {
+  const a = answers ? answers[id] : undefined;
+  return a === undefined || a === null ? "" : String(a).trim();
+}
+// The settled questions as a brief paragraph: each answer beside its question, for the producer
+// that raised it and no other.
+function settledText(settled) {
+  return settled.length
+    ? `\n\nThe user has settled these earlier questions; apply each answer and do not ask them again:\n${settled.map((d) => `- Question: ${d.question}\n  Answer: ${d.answer}`).join("\n")}`
+    : "";
+}
+// Run a producer (run(settled) returns its result, with openDecisions, or null) until it raises
+// no question the user has not answered. A question the user answered is put back to the next
+// dispatch with its answer. Answers to this prefix that no question matched (a rerun in a new
+// session can word a question differently) go back once as well. Returns the last result and the
+// questions still open; the result's own openDecisions are not to be read after this.
+async function settleDecisions(prefix, answers, run) {
+  const settled = [];
+  let carriedTried = false;
+  for (let round = 0; ; round++) {
+    const res = await run(settled);
+    if (!res || (res.storyBlockers && res.storyBlockers.length))
+      return { res, open: [] };
+    const decisions = decisionsOf(prefix, res.openDecisions);
+    const open = decisions.filter((d) => !answerOf(answers, d.id));
+    if (open.length) {
+      const carried = Object.keys(answers).filter(
+        (k) =>
+          k.startsWith(`${prefix}-`) &&
+          answerOf(answers, k) &&
+          !decisions.some((d) => d.id === k) &&
+          !settled.some((x) => x.id === k),
+      );
+      if (!carried.length || carriedTried || round >= 2) return { res, open };
+      carriedTried = true;
+      settled.push(
+        ...carried.map((k) => ({
+          id: k,
+          question: `an earlier question whose id was ${k}; its words ran: ${k
+            .replace(`${prefix}-`, "")
+            .replace(/-[a-z0-9]{6,7}$/, "")
+            .replace(/-/g, " ")}`,
+          answer: answerOf(answers, k),
+        })),
+      );
+      continue;
+    }
+    const fresh = decisions.filter((d) => !settled.some((x) => x.id === d.id));
+    if (!fresh.length || round >= 2) return { res, open: [] };
+    settled.push(
+      ...fresh.map((d) => ({ ...d, answer: answerOf(answers, d.id) })),
+    );
+  }
+}
+
+// How to continue after a block. Resume replays the cached results of unchanged steps, so it
+// helps only when every need is a decision; a missing binding or a failing gate needs a fresh
+// rerun that reads the repository again.
+function rerunText(workflow, needs) {
+  const cmd = `/slopify:${workflow}`;
+  const list = needs || [];
+  const decisions = list.some((n) => n.kind === "decision");
+  return list.length && list.every((n) => n.kind === "decision")
+    ? `Invoke ${cmd} again with the same args and add answers.<id> for each decision. In this session, pass resumeFromRunId to reuse the steps already completed.`
+    : `Resolve what each need names, then invoke ${cmd} again with the same args${decisions ? " and answers.<id> for each decision" : ""}, without resumeFromRunId, so every step reads the repository afresh.`;
+}
 // kind: 'story' | 'decision' | 'prerequisite' | 'validation' | 'input'
 function blocked(workflow, step, needs, extra) {
-  return { status: "blocked", workflow, step, needs, ...(extra || {}) };
+  return {
+    status: "blocked",
+    workflow,
+    step,
+    needs,
+    rerun: rerunText(workflow, needs),
+    ...(extra || {}),
+  };
 }
 // END slopify family schemas
 
@@ -258,8 +355,6 @@ if (!idea) {
 
 const NAME = 'shape'
 const MAX_FAILURES = 3
-const RERUN =
-  'Invoke /slopify:shape again with the same args; add answers.<id> for each decision. In this session, pass resumeFromRunId to reuse completed steps.'
 const WHERE = projectRoot
   ? `The project is at ${projectRoot}; address files by absolute path under it.`
   : 'The project is the session project directory; address files by absolute path.'
@@ -273,7 +368,7 @@ const attempts = []
 const checkpoint = {}
 
 function stop(step, needs) {
-  return blocked(NAME, step, needs, { completed: [...completed], checkpoint: { ...checkpoint }, attempts, rerun: RERUN })
+  return blocked(NAME, step, needs, { completed: [...completed], checkpoint: { ...checkpoint }, attempts })
 }
 
 function done(step) {
@@ -375,7 +470,7 @@ function problems(name, v, revision) {
   const out = []
   if (v.verdict !== 'pass') out.push(`${name} ${v.verdict}\n${findingsText(v)}\nLimits: ${v.limits}`)
   else if ((v.findings || []).some(f => f.blocking)) out.push(`${name} passed with blocking findings\n${findingsText(v)}`)
-  else if (!String(v.evaluated || '').includes(revision.slice(0, 7))) {
+  else if (!sameRev(revision, v.evaluated)) {
     out.push(`${name} judged "${v.evaluated}", not revision ${revision}`)
   }
   return out
@@ -384,17 +479,18 @@ function problems(name, v, revision) {
 // ---- Locate ----------------------------------------------------------------
 
 phase('Locate')
-const [cardR, relatedR] = await parallel([
-  () =>
-    scout('scout-card',
-      `${WHERE}
+const readCard = (retry) =>
+  scout('scout-card',
+    `${WHERE}
 ${READ_ONLY}
 
 Read the one card this idea starts from, if any. Card named in the args: ${cardArg || 'none'}. If none is named there, read the card the idea itself names by identifier or URL; if it names none, or the project has no board, report that. Return the card's identifier as the evidence item card-id (omit the item when there is no card). The story revision is not needed for this run.
 
 Idea: ${idea}`,
-      { label: 'read card', phase: 'Locate' },
-    ),
+    { label: retry ? 'read card (again)' : 'read card', phase: 'Locate' },
+  )
+let [cardR, relatedR] = await parallel([
+  () => readCard(false),
   () =>
     scout('scout-related-cards',
       `${WHERE}
@@ -407,7 +503,10 @@ Idea: ${idea}`,
     ),
 ])
 
-const cardId = idOf(fact(cardR, 'card-id'))
+// A scout that returns nothing is not a board with no card: ask once more. The card the args name
+// is the card, whatever the scout reports; the File step must update it, never create another.
+if (!cardR && cardArg) cardR = await readCard(true)
+const cardId = idOf(fact(cardR, 'card-id')) || idOf(cardArg)
 const slug = slugify(cardId) || slugged(idea, 'idea')
 const draftRel = `.tmp/shape/${slug}.md`
 const draftPath = projectRoot ? `${projectRoot}/${draftRel}` : draftRel
@@ -740,11 +839,21 @@ else if (wantFile) {
 
 Authorization: the user invoked the shape workflow with file: true, which authorizes exactly this: file the story below as a card, through the project's board declaration (docs/BOARD.md), then append the filed marker to the draft. Perform no other operation: no commit, branch, worktree, push, pull request, review trigger, merge, or message, and no change to any other card. Work exactly as the board declaration binds it; report an operation that is not bound, or a project with no board, in unmet, and improvise nothing.
 
-File the story at ${draftPath}, revision ${draftRev}, exactly as written; change no word of it. ${cardLine} Then append the line <!-- filed <card id> --> to the end of the draft. Return the card operation first in operations, with the card id as its reference. When there is no board, perform nothing and return the draft path in unmet.`,
+File the story at ${draftPath}, revision ${draftRev}, exactly as written; change no word of it. Add one trailing line to the card body, <!-- shape-draft ${slug} -->, which is not part of the story and lets a rerun find this card. ${cardId ? '' : `Before creating, search the board for a card whose body holds that line; if one exists, it is this story's card: update it instead of creating another. `}${cardLine}
+
+The moment the card operation succeeds, and before anything else that can fail (a read-back, a label, a status), append the line <!-- filed <card id> --> to the end of the draft. Return the card operation first in operations, with the card id as its reference. When there is no board, perform nothing and return the draft path in unmet.`,
       { agentType: 'slopify:pusher', label: pusherFailures ? `file story card (attempt ${pusherFailures + 1})` : 'file story card', phase: 'File', schema: PUSHER_SCHEMA },
     )
     if (p && p.unmet && p.unmet.length) {
       attempts.push({ gate: 'file', approach: 'pusher card filing', failed: p.unmet.join('; ') })
+      // The card operation can succeed and a later step fail: name the cause that is true.
+      const made = (p.operations || []).find(o => o.reference && o.reference !== draftPath)
+      if (made) {
+        checkpoint.filed = made.reference
+        return stop('file', [
+          { id: 'file-1', kind: 'prerequisite', what: `The "filed" marker appended to ${draftPath}: card ${made.reference} was filed, but a step after it failed`, evidence: p.unmet.join('; ') },
+        ])
+      }
       return stop('file', [
         { id: 'file-1', kind: 'prerequisite', what: 'A board declaration that binds creating or updating a story card', evidence: p.unmet.join('; ') },
       ])

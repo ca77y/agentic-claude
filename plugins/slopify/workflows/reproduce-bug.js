@@ -224,9 +224,106 @@ function slugged(text, fallback) {
   return norm ? `${words}-${hashOf(norm)}` : fallback || "item";
 }
 
+const HASH = "[0-9a-f]{7,64}";
+// A path and its git hash-object, written "<path>@<hash>" or "<path> <hash>"; null for anything else.
+function parseSpec(v) {
+  const m = new RegExp(`^(\\S+?)(?:@|\\s+)(${HASH})\\s*$`).exec(
+    String(v || "").trim(),
+  );
+  return m ? { path: m[1], hash: m[2] } : null;
+}
+
+// An open decision's id comes from its question, so an answer stays with its question whatever else
+// a producer asks. The prefix names the producer that raised it.
+function decisionsOf(prefix, questions) {
+  const out = [];
+  for (const q of Array.isArray(questions) ? questions : []) {
+    const question = String(q).trim();
+    const norm = question
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim();
+    const id = `${prefix}-${norm.split(" ").slice(0, 4).join("-") || "question"}-${hashOf(norm)}`;
+    if (question && !out.some((d) => d.id === id)) out.push({ id, question });
+  }
+  return out;
+}
+function answerOf(answers, id) {
+  const a = answers ? answers[id] : undefined;
+  return a === undefined || a === null ? "" : String(a).trim();
+}
+// The settled questions as a brief paragraph: each answer beside its question, for the producer
+// that raised it and no other.
+function settledText(settled) {
+  return settled.length
+    ? `\n\nThe user has settled these earlier questions; apply each answer and do not ask them again:\n${settled.map((d) => `- Question: ${d.question}\n  Answer: ${d.answer}`).join("\n")}`
+    : "";
+}
+// Run a producer (run(settled) returns its result, with openDecisions, or null) until it raises
+// no question the user has not answered. A question the user answered is put back to the next
+// dispatch with its answer. Answers to this prefix that no question matched (a rerun in a new
+// session can word a question differently) go back once as well. Returns the last result and the
+// questions still open; the result's own openDecisions are not to be read after this.
+async function settleDecisions(prefix, answers, run) {
+  const settled = [];
+  let carriedTried = false;
+  for (let round = 0; ; round++) {
+    const res = await run(settled);
+    if (!res || (res.storyBlockers && res.storyBlockers.length))
+      return { res, open: [] };
+    const decisions = decisionsOf(prefix, res.openDecisions);
+    const open = decisions.filter((d) => !answerOf(answers, d.id));
+    if (open.length) {
+      const carried = Object.keys(answers).filter(
+        (k) =>
+          k.startsWith(`${prefix}-`) &&
+          answerOf(answers, k) &&
+          !decisions.some((d) => d.id === k) &&
+          !settled.some((x) => x.id === k),
+      );
+      if (!carried.length || carriedTried || round >= 2) return { res, open };
+      carriedTried = true;
+      settled.push(
+        ...carried.map((k) => ({
+          id: k,
+          question: `an earlier question whose id was ${k}; its words ran: ${k
+            .replace(`${prefix}-`, "")
+            .replace(/-[a-z0-9]{6,7}$/, "")
+            .replace(/-/g, " ")}`,
+          answer: answerOf(answers, k),
+        })),
+      );
+      continue;
+    }
+    const fresh = decisions.filter((d) => !settled.some((x) => x.id === d.id));
+    if (!fresh.length || round >= 2) return { res, open: [] };
+    settled.push(
+      ...fresh.map((d) => ({ ...d, answer: answerOf(answers, d.id) })),
+    );
+  }
+}
+
+// How to continue after a block. Resume replays the cached results of unchanged steps, so it
+// helps only when every need is a decision; a missing binding or a failing gate needs a fresh
+// rerun that reads the repository again.
+function rerunText(workflow, needs) {
+  const cmd = `/slopify:${workflow}`;
+  const list = needs || [];
+  const decisions = list.some((n) => n.kind === "decision");
+  return list.length && list.every((n) => n.kind === "decision")
+    ? `Invoke ${cmd} again with the same args and add answers.<id> for each decision. In this session, pass resumeFromRunId to reuse the steps already completed.`
+    : `Resolve what each need names, then invoke ${cmd} again with the same args${decisions ? " and answers.<id> for each decision" : ""}, without resumeFromRunId, so every step reads the repository afresh.`;
+}
 // kind: 'story' | 'decision' | 'prerequisite' | 'validation' | 'input'
 function blocked(workflow, step, needs, extra) {
-  return { status: "blocked", workflow, step, needs, ...(extra || {}) };
+  return {
+    status: "blocked",
+    workflow,
+    step,
+    needs,
+    rerun: rerunText(workflow, needs),
+    ...(extra || {}),
+  };
 }
 // END slopify family schemas
 
@@ -257,8 +354,6 @@ if (!report) {
 
 const NAME = 'reproduce-bug'
 const MAX_FAILURES = 3
-const RERUN =
-  'Invoke /slopify:reproduce-bug again with the same args; add answers.<id> for each decision. In this session, pass resumeFromRunId to reuse completed steps.'
 const WHERE = projectRoot
   ? `The project is at ${projectRoot}; address files by absolute path under it.`
   : 'The project is the session project directory; address files by absolute path.'
@@ -275,7 +370,7 @@ const checkpoint = {}
 const verdicts = []
 
 function stop(step, needs) {
-  return blocked(NAME, step, needs, { completed: [...completed], checkpoint: { ...checkpoint }, attempts, rerun: RERUN })
+  return blocked(NAME, step, needs, { completed: [...completed], checkpoint: { ...checkpoint }, attempts })
 }
 
 function done(step) {
@@ -386,7 +481,7 @@ function problems(name, v, revision) {
   const out = []
   if (v.verdict !== 'pass') out.push(`${name} ${v.verdict}\n${findingsText(v)}\nLimits: ${v.limits}`)
   else if ((v.findings || []).some(f => f.blocking)) out.push(`${name} passed with blocking findings\n${findingsText(v)}`)
-  else if (!String(v.evaluated || '').includes(revision.slice(0, 7))) {
+  else if (!sameRev(revision, v.evaluated)) {
     out.push(`${name} judged "${v.evaluated}", not revision ${revision}`)
   }
   return out
@@ -534,7 +629,7 @@ async function buildRepro(why, answer) {
 ${PRODUCER_BOUNDS}
 
 ${why}
-${answer ? `\nThe user's answer to what this step needed earlier: ${answer}\n` : ''}
+${answer ? `\nThe user's answer to "More detail to reproduce the report", which an earlier attempt needed: ${answer}\n` : ''}
 Your only writable path is the reproduction directory ${reproDir} (create it if needed): change no production code, no existing test, and nothing outside it. Write and run a reproduction script or test there that shows the reported failure. Record its steps and its observed output in a notes file in that directory, so a later run can read them. Return in steps the steps that reproduce the failure, in observed what the reproduction showed, and in revision the directory's digest, computed as: ${REPRO_REVISION} (with <dir> the reproduction directory). Return measurements as an empty array. If the failure does not reproduce, say so in open and leave steps empty.
 
 Report: ${report}
@@ -620,37 +715,32 @@ function draftOk(w) {
   return !!w && Array.isArray(w.produced) && w.produced.length > 0 && w.produced.every(p => String(p).endsWith(issueRel)) && str(w.revision) !== ''
 }
 
-const given = Object.keys(answers)
-  .filter(id => /^(issue|report)-/.test(id) && String(answers[id]).trim() !== '')
-  .map(id => `- ${id}: ${answers[id]}`)
-  .join('\n')
-
 phase('Report')
 let issueRev = ''
 let reportFailures = 0
-const reportPrompt = (why) => `Address files by absolute path.
+const reportPrompt = (why, settled) => `Address files by absolute path.
 ${PRODUCER_BOUNDS}
 
 ${why} The issue is at ${issuePath}; write only that file. Use the card shape the project's board declaration gives for a bug: evidence, steps to reproduce, expected outcome, and observed outcome, each consistent with the reproduction in ${reproDir}, which you may read; refer to the reproduction by its directory and steps, and pin no digest or revision of it in the issue. Decide anything that does not change what the bug is (formats, wording, references) yourself, and record it in the issue as a labelled assumption (a line starting "Assumption:"). The expected outcome may rest on the report and the code's evident contract (a function's name, docs, and tests); when it does, say so in the issue. Put a question in openDecisions only when the expected behavior is genuinely ambiguous. Return in revision the git hash-object digest of the issue, in produced its absolute path. Return tasks and docs as empty arrays.
 
 Report: ${report}
-${given ? `\nAnswers to earlier questions:\n${given}\n` : ''}
 Reproduction steps: ${reproSteps.length ? reproSteps.join(' | ') : 'see the notes file in the reproduction directory'}
 Reproduction observed: ${reproObserved || 'see the notes file in the reproduction directory'}
 
 Evidence:
-${evidenceText}`
+${evidenceText}${settledText(settled)}`
 
 async function writeIssue(why, label) {
   while (true) {
-    const w = await agent(reportPrompt(why), { agentType: 'slopify:writer', label, phase: 'Report', schema: WRITER_SCHEMA })
-    const open = w ? (w.openDecisions || []).map(s => String(s).trim()).filter(Boolean) : []
+    const { res: w, open } = await settleDecisions('issue', answers, (settled) =>
+      agent(reportPrompt(why, settled), { agentType: 'slopify:writer', label, phase: 'Report', schema: WRITER_SCHEMA }),
+    )
     const blockers = w ? (w.storyBlockers || []).map(s => String(s).trim()).filter(Boolean) : []
     if (open.length || blockers.length) {
       // Reported before the draft check: a writer that blocks writes no draft, and retrying would hide why.
       if (draftOk(w)) checkpoint.issue = issuePath
       return stop('report', [
-        ...open.map((q, i) => ({ id: `issue-${i + 1}`, kind: 'decision', what: q, evidence: 'reported by the writer while drafting the issue' })),
+        ...open.map(d => ({ id: d.id, kind: 'decision', what: d.question, evidence: 'reported by the writer while drafting the issue' })),
         ...blockers.map((b, i) => ({ id: `issue-blocker-${i + 1}`, kind: 'input', what: b, evidence: 'reported by the writer while drafting the issue' })),
       ])
     }

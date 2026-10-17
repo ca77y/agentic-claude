@@ -267,9 +267,106 @@ function slugged(text, fallback) {
   return norm ? `${words}-${hashOf(norm)}` : fallback || "item";
 }
 
+const HASH = "[0-9a-f]{7,64}";
+// A path and its git hash-object, written "<path>@<hash>" or "<path> <hash>"; null for anything else.
+function parseSpec(v) {
+  const m = new RegExp(`^(\\S+?)(?:@|\\s+)(${HASH})\\s*$`).exec(
+    String(v || "").trim(),
+  );
+  return m ? { path: m[1], hash: m[2] } : null;
+}
+
+// An open decision's id comes from its question, so an answer stays with its question whatever else
+// a producer asks. The prefix names the producer that raised it.
+function decisionsOf(prefix, questions) {
+  const out = [];
+  for (const q of Array.isArray(questions) ? questions : []) {
+    const question = String(q).trim();
+    const norm = question
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim();
+    const id = `${prefix}-${norm.split(" ").slice(0, 4).join("-") || "question"}-${hashOf(norm)}`;
+    if (question && !out.some((d) => d.id === id)) out.push({ id, question });
+  }
+  return out;
+}
+function answerOf(answers, id) {
+  const a = answers ? answers[id] : undefined;
+  return a === undefined || a === null ? "" : String(a).trim();
+}
+// The settled questions as a brief paragraph: each answer beside its question, for the producer
+// that raised it and no other.
+function settledText(settled) {
+  return settled.length
+    ? `\n\nThe user has settled these earlier questions; apply each answer and do not ask them again:\n${settled.map((d) => `- Question: ${d.question}\n  Answer: ${d.answer}`).join("\n")}`
+    : "";
+}
+// Run a producer (run(settled) returns its result, with openDecisions, or null) until it raises
+// no question the user has not answered. A question the user answered is put back to the next
+// dispatch with its answer. Answers to this prefix that no question matched (a rerun in a new
+// session can word a question differently) go back once as well. Returns the last result and the
+// questions still open; the result's own openDecisions are not to be read after this.
+async function settleDecisions(prefix, answers, run) {
+  const settled = [];
+  let carriedTried = false;
+  for (let round = 0; ; round++) {
+    const res = await run(settled);
+    if (!res || (res.storyBlockers && res.storyBlockers.length))
+      return { res, open: [] };
+    const decisions = decisionsOf(prefix, res.openDecisions);
+    const open = decisions.filter((d) => !answerOf(answers, d.id));
+    if (open.length) {
+      const carried = Object.keys(answers).filter(
+        (k) =>
+          k.startsWith(`${prefix}-`) &&
+          answerOf(answers, k) &&
+          !decisions.some((d) => d.id === k) &&
+          !settled.some((x) => x.id === k),
+      );
+      if (!carried.length || carriedTried || round >= 2) return { res, open };
+      carriedTried = true;
+      settled.push(
+        ...carried.map((k) => ({
+          id: k,
+          question: `an earlier question whose id was ${k}; its words ran: ${k
+            .replace(`${prefix}-`, "")
+            .replace(/-[a-z0-9]{6,7}$/, "")
+            .replace(/-/g, " ")}`,
+          answer: answerOf(answers, k),
+        })),
+      );
+      continue;
+    }
+    const fresh = decisions.filter((d) => !settled.some((x) => x.id === d.id));
+    if (!fresh.length || round >= 2) return { res, open: [] };
+    settled.push(
+      ...fresh.map((d) => ({ ...d, answer: answerOf(answers, d.id) })),
+    );
+  }
+}
+
+// How to continue after a block. Resume replays the cached results of unchanged steps, so it
+// helps only when every need is a decision; a missing binding or a failing gate needs a fresh
+// rerun that reads the repository again.
+function rerunText(workflow, needs) {
+  const cmd = `/slopify:${workflow}`;
+  const list = needs || [];
+  const decisions = list.some((n) => n.kind === "decision");
+  return list.length && list.every((n) => n.kind === "decision")
+    ? `Invoke ${cmd} again with the same args and add answers.<id> for each decision. In this session, pass resumeFromRunId to reuse the steps already completed.`
+    : `Resolve what each need names, then invoke ${cmd} again with the same args${decisions ? " and answers.<id> for each decision" : ""}, without resumeFromRunId, so every step reads the repository afresh.`;
+}
 // kind: 'story' | 'decision' | 'prerequisite' | 'validation' | 'input'
 function blocked(workflow, step, needs, extra) {
-  return { status: "blocked", workflow, step, needs, ...(extra || {}) };
+  return {
+    status: "blocked",
+    workflow,
+    step,
+    needs,
+    rerun: rerunText(workflow, needs),
+    ...(extra || {}),
+  };
 }
 // END slopify family schemas
 
@@ -469,8 +566,10 @@ if (!storyArg) {
 
 const WORKFLOW = "deliver-story";
 const MAX_FAILURES = 3;
-const RERUN =
-  "Invoke /slopify:deliver-story again with the same args; add answers.<id> for each decision. In this session, pass resumeFromRunId to reuse completed steps.";
+const PLAN_PHASE = "Implement"; // the phase recoverPlan reports under
+const failures = { spec: 0, implementation: 0 };
+
+// BEGIN slopify deliver helpers
 const WHERE = projectRoot
   ? `The project is at ${projectRoot}; address files by absolute path under it.`
   : "The project is the session project directory; address files by absolute path.";
@@ -484,14 +583,13 @@ const DECIDE =
 const candidateNote = (cand) =>
   `The candidate is the worktree's current state: HEAD plus its uncommitted changes. "${cand}" is an identifier for that state, not a git object, so do not resolve it with git. Report it back unchanged in evaluated.`;
 const AUTH =
-  "Authorization, from the user's invocation of /slopify:deliver-story: the story branch and worktree, attributable commits, a push once the gates have passed, opening or updating this task's PR, and the declared review trigger. It does not authorize merging, releases, any other message, rewriting docs/BOARD.md or docs/FORGE.md, or changing a card's content. Work exactly as docs/BOARD.md and docs/FORGE.md declare; an operation that is not bound is unmet, never improvised. Stage explicit paths only.";
+  `Authorization, from the user's invocation of /slopify:${WORKFLOW}: the story branch and worktree, attributable commits, a push once the gates have passed, opening or updating this task's PR, and the declared review trigger. It does not authorize merging, releases, any other message, rewriting docs/BOARD.md or docs/FORGE.md, or changing a card's content. Work exactly as docs/BOARD.md and docs/FORGE.md declare; an operation that is not bound is unmet, never improvised. Stage explicit paths only.`;
 
 const completed = [];
 const skipped = [];
 const attempts = [];
 const verification = [];
 const limits = [];
-const failures = { spec: 0, implementation: 0 };
 const state = {
   worktree: "",
   branch: "",
@@ -524,7 +622,6 @@ function stop(step, needs) {
     completed: [...completed],
     checkpoint,
     attempts,
-    rerun: RERUN,
   });
 }
 // Count a failure against a gate; true when the gate's budget is spent.
@@ -734,12 +831,12 @@ function callWriter(prompt, label, phaseTitle, schema) {
     schema,
   });
 }
-function callCoder(prompt, label, phaseTitle) {
+function callCoder(prompt, label, phaseTitle, schema) {
   return agent(prompt, {
     agentType: "slopify:coder",
     label,
     phase: phaseTitle,
-    schema: CODER_SCHEMA,
+    schema: schema || CODER_SCHEMA,
   });
 }
 function callQa(prompt, label, phaseTitle) {
@@ -758,22 +855,13 @@ function callPusher(prompt, label, phaseTitle) {
     schema: PUSHER_SCHEMA,
   });
 }
-function callReader(prompt, label, phaseTitle) {
-  return agent(prompt, {
-    agentType: "slopify:library-reader",
-    label,
-    phase: phaseTitle,
-    schema: CONTEXT_SCHEMA,
-  });
-}
-
-// Answers belong to the step that raised the id, and only that step's prompt carries them.
-function answersFor(step) {
-  const mine = Object.entries(answers).filter(([id]) => id.startsWith(`${step}-`));
-  return mine.length
-    ? `\nThe user has answered decisions an earlier run of this step raised; treat each as settled and do not raise it again:\n${mine.map(([id, a]) => `- ${id}: ${a}`).join("\n")}\n`
-    : "";
-}
+// A need for an open decision a producer raised; its id comes from the question (see decisionsOf).
+const decisionNeed = (d, who) => ({
+  id: d.id,
+  kind: "decision",
+  what: d.question,
+  evidence: `raised by ${who}`,
+});
 
 // ---- Checkpoint parsing -----------------------------------------------------
 
@@ -782,7 +870,6 @@ function ledgerLine(v) {
   const m = /^(\d+)\|([\s\S]*)$/.exec(String(v || "").trim());
   return m ? { n: Number(m[1]), text: m[2].trim() } : { n: NaN, text: String(v || "").trim() };
 }
-const HASH = "[0-9a-f]{7,64}";
 function parseDoneSpec(v) {
   if (!v) return null;
   const l = ledgerLine(v);
@@ -806,9 +893,12 @@ function parseDonePublish(v) {
   const l = ledgerLine(v);
   return /done publish\s+\S/.test(l.text) ? { n: l.n } : null;
 }
-function parseSpec(v) {
-  const m = new RegExp(`^(\\S+?)(?:@|\\s+)(${HASH})\\s*$`).exec(String(v || "").trim());
-  return m ? { path: m[1], hash: m[2] } : null;
+// "done board-start <card>" and "done board-pr <PR reference>": a board operation that followed its forge step.
+function parseDoneBoard(v, kind) {
+  if (!v) return null;
+  const l = ledgerLine(v);
+  const m = new RegExp(`done board-${kind}\\s+(\\S+)`).exec(l.text);
+  return m ? { n: l.n, ref: m[1] } : null;
 }
 
 // A short account of what passed, for the session to relay.
@@ -845,7 +935,7 @@ async function recoverPlan() {
   const r = await scout("scout-docs",
     `${WHERE}
 Read the spec at ${state.specPath} and report only its task list and the documentation it says to update; quote the spec, claim nothing of your own. Report one evidence item per task: source "task:<id>", location the spec path, excerpt a JSON object {"summary": "...", "paths": ["..."]} with the task's paths relative to the worktree root. Report one evidence item with source "docs" and excerpt a JSON array of the documentation paths to update (an empty array when none). Quote the spec; make no changes.`,
-    { label: "read spec tasks", phase: "Implement" },
+    { label: "read spec tasks", phase: PLAN_PHASE },
   );
   const tasks = [];
   let docs = [];
@@ -866,6 +956,16 @@ Read the spec at ${state.specPath} and report only its task list and the documen
     }
   }
   return tasks.length ? { tasks, docs } : null;
+}
+// END slopify deliver helpers
+
+function callReader(prompt, label, phaseTitle) {
+  return agent(prompt, {
+    agentType: "slopify:library-reader",
+    label,
+    phase: phaseTitle,
+    schema: CONTEXT_SCHEMA,
+  });
 }
 
 // ---- Locate -----------------------------------------------------------------
@@ -941,7 +1041,7 @@ Report where this run stands. It is the delivery of ${cardId ? `card ${cardId}` 
 Report these keys, each as an evidence item with source set to the key; leave out a key that does not exist:
 - worktree, branch, head, dirty (comma-separated paths relative to the worktree root, or none), ledger
 - ledger-story: the story revision on the last done spec line
-- done-spec, done-implement, done-publish: the last such ledger line, with its leading timestamp removed and the ledger line number put in front as "<line number>|"
+- done-spec, done-implement, done-publish, done-board-start, done-board-pr: the last ledger line of that name ("done board-start" and "done board-pr" lines name the card or the PR), with its leading timestamp removed and the ledger line number put in front as "<line number>|"
 - review-fired, review-ended
 - spec: "<absolute path>@<git hash-object>" of the spec at the path above
 - pr: the PR reference on the first line, then its description`,
@@ -979,6 +1079,9 @@ let specRevision = state.specHash;
 const doneSpec = parseDoneSpec(val(cpRes, "done-spec"));
 const doneImpl = parseDoneImplement(val(cpRes, "done-implement"));
 const donePub = parseDonePublish(val(cpRes, "done-publish"));
+// A board operation counts once its ledger line exists; with no card there is none to do.
+const boardStartDone = !cardId || !!parseDoneBoard(val(cpRes, "done-board-start"), "start");
+const boardPrDone = !cardId || !!parseDoneBoard(val(cpRes, "done-board-pr"), "pr");
 const ledgerStory = shaped("sha", val(cpRes, "ledger-story")) || (doneSpec ? doneSpec.story : "");
 
 // The currency chain: each link depends on the one before it.
@@ -996,13 +1099,14 @@ done("locate");
 // ---- Workspace --------------------------------------------------------------
 
 phase("Workspace");
+let boardStartRecorded = false; // the create dispatch below records the board operation in the same dispatch
 if (state.worktree) {
   skip("workspace");
 } else {
   const r = await callPusher(
     pushBrief(
-      `Create or recover the story worktree and branch that docs/FORGE.md declares for ${cardId ? `card ${cardId}` : `the story "${slug}"`}${boardBranch ? ` (the board gives the branch name ${boardBranch})` : ""}. ${cardId ? "Then perform the delivery-start operation docs/BOARD.md declares for the card (for example its status transition), only as bound." : "There is no card, so perform no board operation."} Change no card content.`,
-      [],
+      `Create or recover the story worktree and branch that docs/FORGE.md declares for ${cardId ? `card ${cardId}` : `the story "${slug}"`}${boardBranch ? ` (the board gives the branch name ${boardBranch})` : ""}. ${cardId ? "Then perform the delivery-start operation docs/BOARD.md declares for the card (for example its status transition), only as bound." : "There is no card, so perform no board operation."} Change no card content. Append the board-start line only once the delivery-start operation is done.`,
+      cardId ? [`done board-start ${cardId}`] : [],
       "<worktree>/.tmp/ledger.md at the root of the worktree you create or recover",
     ),
     "create the worktree",
@@ -1017,7 +1121,22 @@ if (state.worktree) {
   }
   state.worktree = wt.replace(/\/+$/, "");
   state.branch = opRef(r, "branch") || state.branch;
+  boardStartRecorded = !!cardId;
   done("workspace");
+}
+// The delivery-start board operation follows the worktree; a rerun that finds the worktree but no
+// ledger line for the operation does it now, since it may have failed after the worktree was made.
+if (!boardStartDone && !boardStartRecorded) {
+  const b = await callPusher(
+    pushBrief(
+      `Perform the delivery-start operation docs/BOARD.md declares for card ${cardId} (for example its status transition), only as bound and only if the card does not already show it. Do nothing else, and change no card content.`,
+      [`done board-start ${cardId}`],
+    ),
+    "start the card",
+    "Workspace",
+  );
+  if (!pushOk(b)) return pushStop("workspace", b);
+  done("board-start");
 }
 if (!state.ledger) state.ledger = `${state.worktree}/.tmp/ledger.md`;
 if (!state.specPath) state.specPath = `${state.worktree}/${specRel}`;
@@ -1037,18 +1156,21 @@ const ADVISORS = [
 
 // Write or revise the spec, then have fresh lenses judge that exact revision, then commit it.
 async function specGate(findings) {
-  let pending = findings || [];
+  // carry: the findings the next draft must resolve (the lenses' or the caller's). pending adds
+  // what went wrong with the last attempt, and never replaces carry.
+  let carry = findings || [];
+  let pending = carry;
   while (true) {
     phase("Spec");
     const exists = state.specExists;
-    const w = await callWriter(
+    const { res: w, open } = await settleDecisions("spec", answers, (settled) =>
+      callWriter(
       `${WHERE}
 Work in the story worktree ${state.worktree}; address every file by absolute path. ${exists ? `Revise the spec at ${state.specPath} against the story below.` : `Write the spec at ${state.specPath}.`} Write only that one file. ${NO_WRITES}
 
 The spec holds: the problem and intended outcome, scope, and exclusions; the story verbatim as the acceptance source; the approach, with each advisor's view recorded as adopted or rejected and the reason; observable acceptance criteria, one behavior each, and how each is verified; and the tasks it breaks into. Return the tasks (id, summary, and paths each task may write, relative to the worktree root, files or directories, no globs, disjoint between tasks, and including the test files the task adds) and the documentation files to update as docs.
 
 Story authority: you may clarify an ambiguous criterion in the spec without changing its meaning, keeping the original wording beside the clarification. A criterion that is wrong, or a story that cannot be built as stated, is a story blocker: report it in storyBlockers and change nothing about the goal, scope, or criteria. ${DECIDE}
-${answersFor("spec")}
 ${STORY_BLOCK}
 
 Approach:
@@ -1059,10 +1181,11 @@ ${adviceText}
 
 Evidence:
 ${gathered || "(see the existing spec)"}
-${pending.length ? `\nResolve these findings:\n${list(pending)}` : ""}`,
+${pending.length ? `\nResolve these findings:\n${list(pending)}` : ""}${settledText(settled)}`,
       exists ? "revise the spec" : "write the spec",
       "Spec",
       WRITER_SCHEMA,
+      ),
     );
     let problem = "";
     if (!w) problem = "the writer did not return";
@@ -1071,18 +1194,15 @@ ${pending.length ? `\nResolve these findings:\n${list(pending)}` : ""}`,
         "spec",
         w.storyBlockers.map((b, i) => need("spec", i + 1, "story", b, "reported by the spec writer")),
       );
-    } else if (w.openDecisions && w.openDecisions.length) {
-      return stop(
-        "spec",
-        w.openDecisions.map((d, i) => need("spec", i + 1, "decision", d, "reported by the spec writer")),
-      );
+    } else if (open.length) {
+      return stop("spec", open.map((d) => decisionNeed(d, "the spec writer")));
     } else if (!w.revision) problem = "the writer returned no spec revision";
     else if (!(w.produced || []).some((p) => rel(p) === rel(state.specPath)))
       problem = `the writer did not write the spec at ${state.specPath}`;
     else if (!w.tasks || !w.tasks.length || w.tasks.some((t) => !t.paths || !t.paths.length))
       problem = "the spec needs at least one task, and every task needs paths";
     if (problem) {
-      pending = [problem];
+      pending = [...carry, problem];
       if (fail("spec", "spec draft", problem)) return exhausted("spec", "spec");
       continue;
     }
@@ -1096,7 +1216,7 @@ ${pending.length ? `\nResolve these findings:\n${list(pending)}` : ""}`,
 The story worktree is ${state.worktree}. ${what}
 Spec: ${state.specPath}, revision ${specRevision}. Set evaluated to exactly that revision.
 
-${STORY_BLOCK}${pending.length ? `\n\nEarlier findings to recheck:\n${list(pending)}` : ""}`;
+${STORY_BLOCK}${carry.length ? `\n\nEarlier findings to recheck:\n${list(carry)}` : ""}`;
     const j = await judge(
       [
         { name: "lens-scope", call: () => lens("lens-scope", brief("Judge whether the spec covers the story's criteria, with no added or dropped scope."), { label: "scope", phase: "Spec gate" }) },
@@ -1110,8 +1230,9 @@ ${STORY_BLOCK}${pending.length ? `\n\nEarlier findings to recheck:\n${list(pendi
     record("lens-scope", ls, specRevision);
     record("lens-consistency", lc, specRevision);
     if (!(passed(ls) && passed(lc))) {
-      pending = [...blockingOf("lens-scope", ls), ...blockingOf("lens-consistency", lc)].map(findingText);
-      if (fail("spec", `spec revision ${specRevision}`, pending.join("; "))) return exhausted("spec-gate", "spec");
+      carry = [...blockingOf("lens-scope", ls), ...blockingOf("lens-consistency", lc)].map(findingText);
+      pending = carry;
+      if (fail("spec", `spec revision ${specRevision}`, carry.join("; "))) return exhausted("spec-gate", "spec");
       continue;
     }
 
@@ -1163,22 +1284,27 @@ if (specCurrent) {
   // Approach
   phase("Approach");
   let approach = null;
+  let approachOpen = [];
   while (!approach) {
-    const a = await callWriter(
+    const { res: a, open } = await settleDecisions("approach", answers, (settled) =>
+      callWriter(
       `${WHERE}
 Work in the story worktree ${state.worktree}. Outline the approach for this story from the story and the evidence. Write no files; return the outline. ${NO_WRITES} Never change the story's goal, scope, or criteria. ${DECIDE}
 
 Return: approach (concretely how to build it); alternatives (considered, and why not); dependencies (each outside library or service the approach relies on, one per entry, empty when none); openDecisions (only what the user must decide, empty when none); storyBlockers (why the story is unbuildable or contradictory as stated, empty when none).
-${answersFor("approach")}
 ${STORY_BLOCK}
 
 Evidence:
-${gathered}`,
+${gathered}${settledText(settled)}`,
       "outline the approach",
       "Approach",
       APPROACH_SCHEMA,
+      ),
     );
-    if (a) approach = a;
+    if (a) {
+      approach = a;
+      approachOpen = open;
+    }
     else if (fail("spec", "approach outline", "the writer did not return")) return exhausted("approach", "spec");
   }
   if (approach.storyBlockers && approach.storyBlockers.length) {
@@ -1187,11 +1313,8 @@ ${gathered}`,
       approach.storyBlockers.map((b, i) => need("approach", i + 1, "story", b, "reported by the approach writer")),
     );
   }
-  if (approach.openDecisions && approach.openDecisions.length) {
-    return stop(
-      "approach",
-      approach.openDecisions.map((d, i) => need("approach", i + 1, "decision", d, "reported by the approach writer")),
-    );
+  if (approachOpen.length) {
+    return stop("approach", approachOpen.map((d) => decisionNeed(d, "the approach writer")));
   }
   const deps = approach.dependencies || [];
   const outside = await parallel(
@@ -1313,7 +1436,11 @@ function candidateAfter(ran, prev) {
 // paths and the paths a fix job was assigned, from the checkpoint's dirty list and what the producers
 // reported. The rest is reported.
 function commitSet(scopes) {
-  const all = unique([...startDirty, ...touched]).filter((p) => p && !/^\.tmp(\/|$)/.test(p) && !within(p, state.specPath));
+  const every = unique([...startDirty, ...touched]).filter((p) => p && !/^\.tmp(\/|$)/.test(p));
+  const specChanged = every.filter((p) => within(p, state.specPath));
+  if (specChanged.length)
+    limits.push(`The spec has changes made after its gate that are not committed: ${specChanged.join(", ")}`);
+  const all = every.filter((p) => !within(p, state.specPath));
   const inScope = all.filter((p) => scopes.some((s) => within(p, s)));
   const outside = all.filter((p) => !inScope.includes(p));
   if (outside.length)
@@ -1360,6 +1487,10 @@ async function validate(first) {
   let fixRound = 0;
   while (true) {
     if (findings) {
+      // A finding located in the spec is a spec problem: it goes back through the spec gate, and no
+      // coder is given the spec to edit.
+      const specItems = findings.filter((f) => within(pathOf(f.location), state.specPath));
+      if (specItems.length) return { specFindings: specItems };
       phase("Validate");
       const byJob = {};
       const other = [];
@@ -1463,10 +1594,13 @@ if (implCurrent) {
     let next = impl;
     if (impl.ok) next = await validate(impl);
     if (next.stop) return next.stop;
-    if (next.mismatch) {
+    if (next.mismatch || next.specFindings) {
       // The work goes back to the spec, with the spec budget.
-      if (fail("spec", "implementation against the spec", next.mismatch)) return exhausted("spec", "spec");
-      const stopped = await specGate([`The implementation reports the spec cannot be implemented as written: ${next.mismatch}`]);
+      const why = next.mismatch
+        ? `The implementation reports the spec cannot be implemented as written: ${next.mismatch}`
+        : `A validator found problems in the spec itself:\n${list(next.specFindings.map(findingText))}`;
+      if (fail("spec", "implementation against the spec", next.mismatch || why)) return exhausted("spec", "spec");
+      const stopped = await specGate([why]);
       if (stopped) return stopped;
       continue;
     }
@@ -1489,13 +1623,28 @@ if (implCurrent) {
 // ---- Publish ----------------------------------------------------------------
 
 phase("Publish");
+const needBoardPr = !!cardId && !boardPrDone;
 if (publishCurrent) {
   skip("publish");
+  // The PR is published; its board operations (attach, status) may have failed after it opened.
+  if (needBoardPr && state.pr) {
+    const b = await callPusher(
+      pushBrief(
+        `Perform the board operations docs/BOARD.md declares for when the PR opens (for example attaching ${state.pr} to card ${cardId} and a status transition), only as bound and only where the card does not already show them. Do nothing else, and change no card content.`,
+        [`done board-pr ${state.pr}`],
+      ),
+      "update the card for the PR",
+      "Publish",
+    );
+    if (!pushOk(b)) return pushStop("publish", b);
+    done("board-pr");
+  }
 } else {
   const r = await callPusher(
     pushBrief(
-      `Push the story branch ${state.branch || ""} as docs/FORGE.md declares. ${state.pr ? `A PR exists (${state.pr}); update it as docs/FORGE.md declares and perform no board operation.` : "Open the PR as docs/FORGE.md declares, then perform the board operations docs/BOARD.md declares for when the PR opens (for example attaching it and a status transition)."} The PR describes the story, links the spec at ${state.specPath}, and lists this verification:\n${list(verification.map((v) => `${v.agent}: ${v.verdict} on ${v.evaluated}`))}\nThen fire the review trigger docs/FORGE.md declares, unless opening the PR fires it; if none is declared, fire none and do not report that as unmet. Change no card content.`,
+      `Push the story branch ${state.branch || ""} as docs/FORGE.md declares. ${state.pr ? `A PR exists (${state.pr}); update it as docs/FORGE.md declares${needBoardPr ? ", then perform the board operations docs/BOARD.md declares for when the PR opens (for example attaching it and a status transition), only where the card does not already show them" : " and perform no board operation"}.` : "Open the PR as docs/FORGE.md declares, then perform the board operations docs/BOARD.md declares for when the PR opens (for example attaching it and a status transition)."} The PR describes the story, links the spec at ${state.specPath}, and lists this verification:\n${list(verification.map((v) => `${v.agent}: ${v.verdict} on ${v.evaluated}`))}\nThen fire the review trigger docs/FORGE.md declares, unless opening the PR fires it; if none is declared, fire none and do not report that as unmet. Change no card content.`,
       [
+        ...(cardId && (needBoardPr || !state.pr) ? [`done board-pr <the PR reference> (write this line as soon as the board operations are done, before the review trigger)`] : []),
         `done publish <the PR reference> commit <HEAD sha>`,
         `review 1 fired <trigger time; the PR's creation time when opening it fires the review> (write this line only if a review was requested)`,
       ],

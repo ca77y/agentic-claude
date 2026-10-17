@@ -148,7 +148,12 @@ The block also holds the one set of helpers every workflow uses to read scout an
 - `absent(v, whole?)`: true for an empty value, or prose that opens with `none`, `absent`, `missing`, `n/a`, or `not found` (as in `MISSING (test -f found no file)`). A path-like token that merely starts with the word, such as `none.txt`, is a value. With `whole`, only a reply that is nothing but that word and an optional parenthetical counts, so a criterion such as "Missing config files produce a clear error" is a value.
 - `shaped(kind, v)`: a checkpoint value in its expected shape, else `''`. Kinds: `path` (absolute), `rel`, `sha`, `branch`, `ref` (a PR URL, number, or path), `rev` (`<path>@<hex>`), and `id`. A value followed by a parenthetical remark or a full stop is the value; prose is never one.
 - `sameRev(briefed, evaluated)`: whether a validator judged the revision its brief named. The whole label must match: every hex component of 7 or more characters (a short sha matches its full form) and the marks between them (`+`, `#n`, `&`). The HEAD prefix alone does not match a `<sha>+<digest>` label. A brief naming no revision accepts any.
+- `parseSpec(v)`: a path and its git hash-object, written `<path>@<hash>` or `<path> <hash>`, else null.
+- `decisionsOf(prefix, questions)`, `settleDecisions(prefix, answers, run)`, and `settledText(settled)`: open-decision ids come from the question text (`<prefix>-<first four words>-<hash>`), so an answer stays with its question whatever else a producer asks, and the prefix names the producer that raised it. A producer that raises questions the user already answered is dispatched again with each answer beside its question; answers to that prefix that no question matched go back once as well, so a reworded question is covered. Only the producer whose prefix matches is given an answer. `deliver-spike`, `deliver-story`, `deliver-bugfix`, `reproduce-bug`, and `review-pr` raise their producers' decisions this way (`shape` keeps its ids in the draft's markers, where the question is).
+- `rerunText(workflow, needs)`, used by `blocked`: the `rerun` text suggests `resumeFromRunId` only when every need is a `decision`; any other need (a missing binding, a failing gate, a story to reshape) needs a fresh rerun without resume.
 - `hashOf(text)` and `slugged(text, fallback)`: a file slug from free text is its first six words plus a hash of the whole normalized text, so two ideas that open alike never share a draft, reproduction, spec, or spike.
+
+`deliver-story.js` and `deliver-bugfix.js` also carry a second checked block, `// BEGIN slopify deliver helpers` … `// END slopify deliver helpers`, byte for byte (the `CLAUDE.md` checks compare it). It holds what the two scripts share outside their steps: the constants and run state (`WHERE`, `AUTH`, `state`, `done`, `skip`, `stop`, `fail`, `exhausted`), the path and list helpers, the validator helpers (`passed`, `usable`, `blockingOf`, `judge`, `record`), the pusher helpers (`pushBrief`, `pushOk`, `opRef`, `pushStop`, `call*`), `decisionNeed`, the ledger parsers (`parseDoneSpec`, `parseDoneImplement`, `parseDonePublish`, `parseDoneBoard`), `makeReport`, and `recoverPlan`. A script sets `WORKFLOW`, `MAX_FAILURES`, `PLAN_PHASE`, and `failures` before the block. Step-specific code (locate, workspace, spec, implement or fix, validate, publish, review) stays in each script.
 
 Scouts, lenses, and advisors are dispatched only through the block's helpers, which fix the agent type's family prefix and the schema. A check forbids a direct `agentType: 'slopify:scout-…'`, `'slopify:lens-…'`, or `'slopify:advisor-…'` anywhere in the workflows. Helper calls name the full agent (`scout('scout-code', …)`), so the agent-existence check can find them.
 
@@ -362,9 +367,106 @@ function slugged(text, fallback) {
   return norm ? `${words}-${hashOf(norm)}` : fallback || "item";
 }
 
+const HASH = "[0-9a-f]{7,64}";
+// A path and its git hash-object, written "<path>@<hash>" or "<path> <hash>"; null for anything else.
+function parseSpec(v) {
+  const m = new RegExp(`^(\\S+?)(?:@|\\s+)(${HASH})\\s*$`).exec(
+    String(v || "").trim(),
+  );
+  return m ? { path: m[1], hash: m[2] } : null;
+}
+
+// An open decision's id comes from its question, so an answer stays with its question whatever else
+// a producer asks. The prefix names the producer that raised it.
+function decisionsOf(prefix, questions) {
+  const out = [];
+  for (const q of Array.isArray(questions) ? questions : []) {
+    const question = String(q).trim();
+    const norm = question
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim();
+    const id = `${prefix}-${norm.split(" ").slice(0, 4).join("-") || "question"}-${hashOf(norm)}`;
+    if (question && !out.some((d) => d.id === id)) out.push({ id, question });
+  }
+  return out;
+}
+function answerOf(answers, id) {
+  const a = answers ? answers[id] : undefined;
+  return a === undefined || a === null ? "" : String(a).trim();
+}
+// The settled questions as a brief paragraph: each answer beside its question, for the producer
+// that raised it and no other.
+function settledText(settled) {
+  return settled.length
+    ? `\n\nThe user has settled these earlier questions; apply each answer and do not ask them again:\n${settled.map((d) => `- Question: ${d.question}\n  Answer: ${d.answer}`).join("\n")}`
+    : "";
+}
+// Run a producer (run(settled) returns its result, with openDecisions, or null) until it raises
+// no question the user has not answered. A question the user answered is put back to the next
+// dispatch with its answer. Answers to this prefix that no question matched (a rerun in a new
+// session can word a question differently) go back once as well. Returns the last result and the
+// questions still open; the result's own openDecisions are not to be read after this.
+async function settleDecisions(prefix, answers, run) {
+  const settled = [];
+  let carriedTried = false;
+  for (let round = 0; ; round++) {
+    const res = await run(settled);
+    if (!res || (res.storyBlockers && res.storyBlockers.length))
+      return { res, open: [] };
+    const decisions = decisionsOf(prefix, res.openDecisions);
+    const open = decisions.filter((d) => !answerOf(answers, d.id));
+    if (open.length) {
+      const carried = Object.keys(answers).filter(
+        (k) =>
+          k.startsWith(`${prefix}-`) &&
+          answerOf(answers, k) &&
+          !decisions.some((d) => d.id === k) &&
+          !settled.some((x) => x.id === k),
+      );
+      if (!carried.length || carriedTried || round >= 2) return { res, open };
+      carriedTried = true;
+      settled.push(
+        ...carried.map((k) => ({
+          id: k,
+          question: `an earlier question whose id was ${k}; its words ran: ${k
+            .replace(`${prefix}-`, "")
+            .replace(/-[a-z0-9]{6,7}$/, "")
+            .replace(/-/g, " ")}`,
+          answer: answerOf(answers, k),
+        })),
+      );
+      continue;
+    }
+    const fresh = decisions.filter((d) => !settled.some((x) => x.id === d.id));
+    if (!fresh.length || round >= 2) return { res, open: [] };
+    settled.push(
+      ...fresh.map((d) => ({ ...d, answer: answerOf(answers, d.id) })),
+    );
+  }
+}
+
+// How to continue after a block. Resume replays the cached results of unchanged steps, so it
+// helps only when every need is a decision; a missing binding or a failing gate needs a fresh
+// rerun that reads the repository again.
+function rerunText(workflow, needs) {
+  const cmd = `/slopify:${workflow}`;
+  const list = needs || [];
+  const decisions = list.some((n) => n.kind === "decision");
+  return list.length && list.every((n) => n.kind === "decision")
+    ? `Invoke ${cmd} again with the same args and add answers.<id> for each decision. In this session, pass resumeFromRunId to reuse the steps already completed.`
+    : `Resolve what each need names, then invoke ${cmd} again with the same args${decisions ? " and answers.<id> for each decision" : ""}, without resumeFromRunId, so every step reads the repository afresh.`;
+}
 // kind: 'story' | 'decision' | 'prerequisite' | 'validation' | 'input'
 function blocked(workflow, step, needs, extra) {
-  return { status: "blocked", workflow, step, needs, ...(extra || {}) };
+  return {
+    status: "blocked",
+    workflow,
+    step,
+    needs,
+    rerun: rerunText(workflow, needs),
+    ...(extra || {}),
+  };
 }
 // END slopify family schemas
 ```
@@ -384,7 +486,7 @@ These are local to each script, because only some scripts use each one. They are
   - `timed-out`: a declared time limit, measured from the trigger or start time the review status shows, has passed. This holds whatever word the declaration uses for that case.
   - `failed`: the review ran and did not complete.
 
-  A script with no clock bounds the wait by counting dispatches. For each phase (`start`, then `finish`), it re-dispatches `watcher` while the outcome is `pending`, up to `ceil(limitMinutes / 9) + 1` dispatches. When that count is reached, it treats the review as `timed-out`.
+  A script with no clock bounds the wait by counting dispatches. For each phase (`start`, then `finish`), it re-dispatches `watcher` while the outcome is `pending`, up to `ceil(limitMinutes / 9) + 1` dispatches. When that count is reached, it treats the review as `timed-out`. An undeclared or zero `limitMinutes` means no limit: a fixed cap of 12 dispatches bounds the phase instead, and the report says the wait was capped because no limit is declared.
 
 ### Common workflow conventions
 
@@ -415,13 +517,13 @@ These are local to each script, because only some scripts use each one. They are
   completed: ['locate', 'workspace', 'gather', 'approach', 'advise'],
   checkpoint: { worktree, branch, spec, ledger, pr, draft },   // whichever exist, as absolute paths or references
   attempts: [{ gate, approach, failed }],
-  rerun: 'Invoke /slopify:<name> again with the same args; add answers.<id> for each decision. In this session, pass resumeFromRunId to reuse completed steps.'
+  rerun: 'Invoke /slopify:<name> again with the same args and add answers.<id> for each decision. In this session, pass resumeFromRunId to reuse the steps already completed.'   // when every need is a decision; otherwise: resolve the needs and rerun without resumeFromRunId
 }
 ```
 
 Reruns skip completed steps in two ways:
 
-- **In the same session, through workflow resume.** Rerun with the same args plus `answers`, passing `resumeFromRunId`. A step's prompt includes `answers[id]` only at the step that raised `id`. Every earlier `agent()` call is therefore unchanged and replays from the cache. Resume applies when nothing the earlier steps read has changed: after an interruption, or when the fix is an answer.
+- **In the same session, through workflow resume.** Rerun with the same args plus `answers`, passing `resumeFromRunId`. A decision id comes from the question text and starts with its producer's prefix; the producer's prompt carries `answers[id]` beside its question, and no other step's prompt does. Every earlier `agent()` call is therefore unchanged and replays from the cache. Resume applies when nothing the earlier steps read has changed: after an interruption, or when the fix is an answer. The `rerun` text therefore offers it only when every need is a `decision`; a prerequisite such as a missing binding, or a failing gate, needs a fresh rerun, because resume would replay the cached checkpoint and block the same way.
 - **Across sessions, or after the story or repository changed, through durable checkpoints.** Rerun without resume. The first step is always a `scout-checkpoint` dispatch, so the run skips every step its checkpoint proves complete and still current. A changed story revision invalidates the spec checkpoint: the writer revises the spec from the new story, and it passes the spec gate again.
 
 #### Checkpoint vocabulary
@@ -430,8 +532,10 @@ The workflow tells `scout-checkpoint` which keys to report. The scout returns ea
 
 - `worktree`, `branch`, `head`, `dirty`: the story or prototype worktree, from `docs/FORGE.md`'s naming. `dirty` lists the paths with uncommitted changes, ignoring `.tmp/`, or is `none`. Design choice: `scout-checkpoint` is dispatched after `scout-card` returns, never alongside it. `scout-card` returns the card identifier and the board's branch name, which are what `docs/FORGE.md`'s naming derives from. Without a card, the workflow passes a slug from the primary field (lowercased words joined by `-`, first six words, then a short hash of the whole text).
 - `ledger`: the ledger's absolute path.
+- `done-board-start`, `done-board-pr`: the last `done board-start` and `done board-pr` lines.
+- `pushed-head` and `unpushed` (`review-pr`): the head commit of the PR's branch as the remote has it, and how many local commits the pushed head lacks, or `none`.
 - `ledger-story`, `done-spec`, `done-implement`, `done-publish`, `review-fired`, `review-ended`: the values on the matching ledger lines ([Ledger](#ledger)). `review-fired` and `review-ended` are the highest round numbers after the last `done publish` line.
-- `spec`: the current spec path and its `git hash-object`.
+- `spec`: the current spec path and its `git hash-object`, written `<absolute path>@<hash>`; the parsers also accept a space.
 - `pr`: the open PR for the branch, read through `docs/FORGE.md`'s read binding.
 - `draft`, `draft-open`, `draft-filed`, `findings-doc`, `repro-dir`, `bug-card`, `prototype-branch`: the per-workflow artifacts named below.
 
@@ -443,6 +547,8 @@ The workflow tells `scout-checkpoint` which keys to report. The scout returns ea
 <time> run <n>: <workflow> <primary arg> | worktree <path> | branch <name>
 <time> done spec <path>@<spec hash> commit <sha> story <story revision> [test <path>]
 <time> done implement commit <sha> spec <spec hash> [pushed]
+<time> done board-start <card id>
+<time> done board-pr <pr reference>
 <time> done publish <pr reference> commit <sha>
 <time> review <n> fired <trigger time>
 <time> review <n> ended <finished|failed|timed-out>: <defects fixed, non-issues, unverified, or none>
@@ -454,6 +560,8 @@ The workflow tells `scout-checkpoint` which keys to report. The scout returns ea
 - `done implement` is current when `done spec` is current and its `spec` hash equals that same current hash.
 - `done publish` is current when `done implement` is current and the last `done implement` line either precedes the last `done publish` line or is marked `pushed`. A review round's push writes `pushed`.
 
+`done board-start` and `done board-pr` record the card's delivery-start operation and the board operations for when the PR opens, in the dispatch that does them (`done board-pr` before `done publish`). A rerun that finds the worktree, or the PR, but no such line performs only the missing board operation, since it may have failed after its forge step.
+
 So a revised spec re-runs `implement`, `validate`, and `publish` (which updates the existing PR instead of opening one). A changed story re-runs everything from `spec`.
 
 **Review rounds.** Round `n` handles review `n`. Rounds are numbered from the last `done publish` line, and `publish` fires review 1. Lines are written as follows:
@@ -462,7 +570,7 @@ So a revised spec re-runs `implement`, `validate`, and `publish` (which updates 
 - Round `n`'s push dispatch writes `review <n> ended …` and `review <n+1> fired …`.
 - A round that ends the loop without a push (clean, `failed`, or `timed-out`) writes no line, because no `pusher` dispatch exists just to write the ledger.
 
-Resume rule: take the highest `review <n> fired` after the last `done publish`.
+Resume rule: take the highest `review <n> fired` after the last `done publish`. When the worktree also holds commits the PR's pushed head lacks (`unpushed`), the round's fix was committed but never pushed: `review-pr` resumes at `push` for that round, without sorting review `n` again, and judges findings against the pushed head, never an unpushed local commit.
 
 - Resume at round `n` by waiting for review `n`. A review that already finished comes back from the first `watcher` dispatch at once. Its findings are sorted again by new `lens-finding` dispatches; re-sorting is idempotent.
 - When `n` is 4, it is the final review after round 3. It is waited for and sorted for the report, and nothing is fixed.
@@ -496,14 +604,14 @@ Draft markers (design choice):
 - `pusher`, after filing, appends `<!-- filed <card id> -->` to the draft.
 - `scout-checkpoint` reports `draft` (path and hash), `draft-open` (the open-decision ids still marked, comma-separated, or `none`), and `draft-filed` (the card id, or absent). It finds them with `grep -oE '<!-- (open-decision [a-z0-9-]+|filed [^ ]+)' <draft>`.
 
-| Step       | Dispatches                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | Skip when                                                                                              |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `locate`   | `scout-card` (the `card`, or the card the idea names, if any) ‖ `scout-related-cards`; then `scout-checkpoint` (keys `draft draft-open draft-filed`, with the slug from the card identifier, or else from the idea)                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | never                                                                                                  |
-| `gather`   | `library-reader` ‖ `scout-docs` ‖ `scout-code` (where the product already does or touches this)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | `draft` exists                                                                                         |
-| `advise`   | `advisor-value` ‖ `advisor-scope` ‖ `advisor-alternatives` ‖ `advisor-fit`, each with the idea and all scout and library evidence                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | `draft` exists                                                                                         |
-| `draft`    | `writer` (`WRITER_SCHEMA`) writes the story at the draft path, and only there, in the card shape `docs/BOARD.md` declares: problem and outcome, scope and exclusions, observable acceptance criteria, dependencies, evidence. It synthesizes the advisors' views and states what it adopted and why. It writes no spec and no approach. When `draft` exists with `draft-open` not `none` and `answers` holds those ids, it is instead dispatched to resolve them: it applies each answer in the draft, removes that marker, and reports anything still open. When `answers` lacks an open id, no writer runs, and the workflow returns `blocked(kind: 'decision')` naming the still-marked ids. | `draft` exists and `draft-open` is `none` (a draft with marked open decisions is not a completed step) |
-| `validate` | `lens-criteria` ‖ `lens-solution-free` on the draft revision                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | never (a verdict covers only its revision)                                                             |
-| `file`     | `pusher`, through `docs/BOARD.md`: when the idea came from an existing card (`scout-card` found one), it updates that card; otherwise it creates one. Either way, it appends the `filed` marker to the draft. With no board, `pusher` returns the draft as `unmet`, and the workflow returns `blocked(kind: 'prerequisite')`, as `reproduce-bug` does.                                                                                                                                                                                                                                                                                                                                          | `file` is not `true`, or `draft-filed` exists (a card was already filed from this draft)               |
+| Step       | Dispatches                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | Skip when                                                                                              |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `locate`   | `scout-card` (the `card`, or the card the idea names, if any) ‖ `scout-related-cards`; then `scout-checkpoint` (keys `draft draft-open draft-filed`, with the slug from the card identifier, or else from the idea)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | never                                                                                                  |
+| `gather`   | `library-reader` ‖ `scout-docs` ‖ `scout-code` (where the product already does or touches this)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | `draft` exists                                                                                         |
+| `advise`   | `advisor-value` ‖ `advisor-scope` ‖ `advisor-alternatives` ‖ `advisor-fit`, each with the idea and all scout and library evidence                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | `draft` exists                                                                                         |
+| `draft`    | `writer` (`WRITER_SCHEMA`) writes the story at the draft path, and only there, in the card shape `docs/BOARD.md` declares: problem and outcome, scope and exclusions, observable acceptance criteria, dependencies, evidence. It synthesizes the advisors' views and states what it adopted and why. It writes no spec and no approach. When `draft` exists with `draft-open` not `none` and `answers` holds those ids, it is instead dispatched to resolve them: it applies each answer in the draft, removes that marker, and reports anything still open. When `answers` lacks an open id, no writer runs, and the workflow returns `blocked(kind: 'decision')` naming the still-marked ids.                                                             | `draft` exists and `draft-open` is `none` (a draft with marked open decisions is not a completed step) |
+| `validate` | `lens-criteria` ‖ `lens-solution-free` on the draft revision                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | never (a verdict covers only its revision)                                                             |
+| `file`     | `pusher`, through `docs/BOARD.md`: when the idea came from an existing card (`scout-card` found one, or the `card` arg names one; a `scout-card` that returns nothing is asked once more), it updates that card; otherwise it creates one, after searching the board for a card whose body ends with the draft's `<!-- shape-draft <slug> -->` line, so a rerun never files twice. Either way, it appends the `filed` marker to the draft the moment the card operation succeeds, before any step that can fail; when only a later step fails, the blocked need names the written card, not the board declaration. With no board, `pusher` returns the draft as `unmet`, and the workflow returns `blocked(kind: 'prerequisite')`, as `reproduce-bug` does. | `file` is not `true`, or `draft-filed` exists (a card was already filed from this draft)               |
 
 After `draft`, marked open decisions that `answers` doesn't settle give `blocked(kind: 'decision')`, and `validate` and `file` don't run. Result: `{ story: <draft path>, revision, verdicts, advisors: [{ name, judgement, conditions }], filed: <card id or null> }`.
 
@@ -514,15 +622,15 @@ Args: `{ story, projectRoot?, answers? }`. The primary field is `story`: a card 
 | Step        | Dispatches                                                                                                                                                                                                                                                                                                                                                                                                                                          | Skip when                                                                                                          |
 | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
 | `locate`    | `scout-card`. A story with no acceptance criteria gives `blocked(kind: 'story')`. Then `scout-checkpoint` (keys `worktree branch head dirty ledger ledger-story done-spec done-implement done-publish review-fired review-ended spec pr`), briefed with the card identifier and branch name `scout-card` returned.                                                                                                                                  | never                                                                                                              |
-| `workspace` | `pusher`: create or recover the story worktree per `docs/FORGE.md`; perform the card's delivery-start operation per `docs/BOARD.md`; ledger `run` line                                                                                                                                                                                                                                                                                              | `worktree` exists (the `run` line then rides on the next `pusher` dispatch)                                        |
+| `workspace` | `pusher`: create or recover the story worktree per `docs/FORGE.md`; perform the card's delivery-start operation per `docs/BOARD.md`; ledger `run` and `done board-start` lines; a rerun with the worktree but no `done board-start` performs only the delivery-start operation                                                                                                                                                                      | `worktree` exists (the `run` line then rides on the next `pusher` dispatch)                                        |
 | `gather`    | `scout-code` ‖ `scout-tests` ‖ `scout-docs` ‖ `scout-history` ‖ `library-reader`                                                                                                                                                                                                                                                                                                                                                                    | `done spec` is current                                                                                             |
 | `approach`  | `writer` (`APPROACH_SCHEMA`) outlines the approach from the story and evidence. Then `scout-upstream-docs` ‖ `scout-known-issues`, one pair per `dependencies` entry (none when empty).                                                                                                                                                                                                                                                             | `done spec` is current                                                                                             |
 | `advise`    | `advisor-architecture` ‖ `advisor-performance` ‖ `advisor-risk` ‖ `advisor-security` on the approach and all evidence                                                                                                                                                                                                                                                                                                                               | `done spec` is current                                                                                             |
 | `spec`      | `writer` (`WRITER_SCHEMA`) writes the spec: the story verbatim as the acceptance source, the approach, each advisor's view as adopted or rejected with its reason, how each criterion is verified, and `tasks` with disjoint `paths` plus the `docs` to update. When a spec exists but isn't current, the writer revises it against the new story. `storyBlockers` give `blocked(kind: 'story')`; `openDecisions` give `blocked(kind: 'decision')`. | `done spec` is current                                                                                             |
 | `spec-gate` | `lens-scope` ‖ `lens-consistency` on the spec revision. Both must pass. Then `pusher` commits the spec, with ledger `done spec`.                                                                                                                                                                                                                                                                                                                    | `done spec` is current                                                                                             |
 | `implement` | One `coder` per `tasks` entry, ‖ when their paths are disjoint (otherwise in sequence), ‖ `writer` for `docs`. When `dirty` lists paths, each producer is told that uncommitted work from an interrupted run exists in its paths, and to continue from it rather than start over. A coder's `specMismatch` sends the work back to `spec` with the spec budget.                                                                                      | `done implement` is current. Never skipped only because the worktree is dirty: a producer that never ran must run. |
-| `validate`  | `qa` (`LENS_SCHEMA`) on the candidate revision, the spec revision, and the changed paths ‖ `lens-docs` when `docs` is non-empty. Then `pusher` commits the implementation, with ledger `done implement`.                                                                                                                                                                                                                                            | `done implement` is current                                                                                        |
-| `publish`   | `pusher`: push; open the PR per `docs/FORGE.md`, or update it when one exists; perform the board's "PR opens" operations on first opening; fire the review trigger unless opening fires it; ledger `done publish` and `review 1 fired`                                                                                                                                                                                                              | `done publish` is current                                                                                          |
+| `validate`  | `qa` (`LENS_SCHEMA`) on the candidate revision, the spec revision, and the changed paths ‖ `lens-docs` when `docs` is non-empty. A finding located in the spec goes back through `spec-gate`, never to a coder. Then `pusher` commits the implementation, with ledger `done implement`.                                                                                                                                                             | `done implement` is current                                                                                        |
+| `publish`   | `pusher`: push; open the PR per `docs/FORGE.md`, or update it when one exists; perform the board's "PR opens" operations on first opening; fire the review trigger unless opening fires it; ledger `done board-pr` (before the trigger), `done publish`, and `review 1 fired`                                                                                                                                                                       | `done publish` is current                                                                                          |
 | `review`    | `workflow('slopify:review-pr', { pr, worktree, spec, story, projectRoot, answers })`                                                                                                                                                                                                                                                                                                                                                                | never                                                                                                              |
 
 Result: `{ pr, spec, verification: [qa and lens verdicts], review: <review-pr result> }`. If `review-pr` returns `blocked`, `deliver-story` returns that result unchanged, adding `completed` for its own steps.
