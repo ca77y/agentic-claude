@@ -34,6 +34,9 @@ jobs:
 
       - name: Run Claude Code Review
         uses: anthropics/claude-code-action@v1
+        env:
+          # The review fans out to subagents that can outlast a headless session's 10-minute wait for background work.
+          CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS: "0"
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           additional_permissions: |
