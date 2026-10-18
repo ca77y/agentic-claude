@@ -158,17 +158,17 @@ function absent(v, whole) {
 }
 
 // A checkpoint value counts only in its expected shape, never as prose. Kinds: path (absolute),
-// rel (relative path), sha, branch, ref (a PR URL, number, or path), rev (<path>@<hex>), id.
+// rel (relative path, never absolute), sha, branch, ref (a PR URL, number, or path), rev (<path>@<hex>), id.
 // Returns the value, or '' when it is absent or has another shape. A value followed by a
 // parenthetical remark, or by a full stop, is the value. A path may hold spaces.
 const SHAPES = {
   path: /^\/[\w@.+\- /]+$/,
-  rel: /^[\w@.+/-]+$/,
+  rel: /^[\w@.+-][\w@.+/-]*$/,
   sha: /^[0-9a-f]{7,64}$/i,
   branch: /^\w[\w./-]*$/,
   ref: /^(?:https?:\/\/\S+|(?:PR ?)?#?\d+|[\w@.+/#-]+(?: ?\d+)?)$/i,
   rev: /^[\w@.+/-]+@[0-9a-f]{7,64}$/i,
-  id: /^[A-Za-z0-9][^\s()<>]{0,199}$/,
+  id: /^#?[A-Za-z0-9][^\s()<>]{0,199}$/,
 };
 function shaped(kind, v) {
   const re = SHAPES[kind];
@@ -225,11 +225,13 @@ function slugged(text, fallback) {
 
 const HASH = "[0-9a-f]{7,64}";
 // A path and its git hash-object, written "<path>@<hash>" or "<path> <hash>"; null for anything else.
+// The path may hold spaces: it is all the text before the last hash.
 function parseSpec(v) {
-  const m = new RegExp(`^(\\S+?)(?:@|\\s+)(${HASH})\\s*$`).exec(
+  const m = new RegExp(`^(.+)(?:@|\\s)(${HASH})\\s*$`).exec(
     String(v || "").trim(),
   );
-  return m ? { path: m[1], hash: m[2] } : null;
+  const path = m ? m[1].trim() : "";
+  return path && !/[\n()]/.test(path) ? { path, hash: m[2] } : null;
 }
 
 // An open decision's id comes from its question, so an answer stays with its question whatever else
@@ -261,7 +263,8 @@ function settledText(settled) {
 // Run a producer (run(settled) returns its result, with openDecisions, or null) until it raises
 // no question the user has not answered. A question the user answered is put back to the next
 // dispatch with its answer. Answers to this prefix that no question matched (a rerun in a new
-// session can word a question differently) go back once as well. Returns the last result and the
+// session can word a question differently) go back once as well; answers to its blockers are not
+// decisions and stay out. Returns the last result and the
 // questions still open; the result's own openDecisions are not to be read after this.
 async function settleDecisions(prefix, answers, run) {
   const settled = [];
@@ -276,6 +279,7 @@ async function settleDecisions(prefix, answers, run) {
       const carried = Object.keys(answers).filter(
         (k) =>
           k.startsWith(`${prefix}-`) &&
+          !k.startsWith(`${prefix}-blocker-`) &&
           answerOf(answers, k) &&
           !decisions.some((d) => d.id === k) &&
           !settled.some((x) => x.id === k),
@@ -748,8 +752,15 @@ Reproduction observed: ${reproObserved || 'see the notes file in the reproductio
 Evidence:
 ${evidenceText}${settledText(settled)}`
 
-// A blocker the user has answered goes back to the writer with its answer, not to the user.
-const settledBlockers = []
+// Every blocker the user has answered goes back to the writer with its answer, from its first dispatch
+// (a fresh writer words a blocker differently); a blocker it raises again with its answer given counts as answered.
+const settledBlockers = Object.keys(answers)
+  .filter(k => k.startsWith('issue-blocker-') && answerOf(answers, k))
+  .map(k => ({
+    id: k,
+    question: `an earlier blocker whose id was ${k}; its words ran: ${k.replace('issue-blocker-', '').replace(/-[a-z0-9]{6,7}$/, '').replace(/-/g, ' ')}`,
+    answer: answerOf(answers, k),
+  }))
 async function writeIssue(why, label) {
   while (true) {
     const { res: w, open } = await settleDecisions('issue', answers, (settled) =>
@@ -757,17 +768,17 @@ async function writeIssue(why, label) {
     )
     const blockers = decisionsOf('issue-blocker', w ? w.storyBlockers : [])
     const unanswered = blockers.filter(d => !answerOf(answers, d.id))
-    const fresh = blockers.filter(d => answerOf(answers, d.id) && !settledBlockers.some(x => x.id === d.id))
+    const fresh = blockers.filter(d => !settledBlockers.some(x => x.id === d.id))
     if (!open.length && !unanswered.length && fresh.length) {
       settledBlockers.push(...fresh.map(d => ({ ...d, answer: answerOf(answers, d.id) })))
       continue
     }
-    if (open.length || blockers.length) {
+    if (open.length || unanswered.length) {
       // Reported before the draft check: a writer that blocks writes no draft, and retrying would hide why.
       if (draftOk(w)) checkpoint.issue = issuePath
       return stop('report', [
         ...open.map(d => ({ id: d.id, kind: 'decision', what: d.question, evidence: 'reported by the writer while drafting the issue' })),
-        ...(unanswered.length ? unanswered : blockers).map(d => ({ id: d.id, kind: 'input', what: d.question, evidence: 'reported by the writer while drafting the issue' })),
+        ...unanswered.map(d => ({ id: d.id, kind: 'input', what: d.question, evidence: 'reported by the writer while drafting the issue' })),
       ])
     }
     if (draftOk(w)) {

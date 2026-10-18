@@ -192,17 +192,17 @@ function absent(v, whole) {
 }
 
 // A checkpoint value counts only in its expected shape, never as prose. Kinds: path (absolute),
-// rel (relative path), sha, branch, ref (a PR URL, number, or path), rev (<path>@<hex>), id.
+// rel (relative path, never absolute), sha, branch, ref (a PR URL, number, or path), rev (<path>@<hex>), id.
 // Returns the value, or '' when it is absent or has another shape. A value followed by a
 // parenthetical remark, or by a full stop, is the value. A path may hold spaces.
 const SHAPES = {
   path: /^\/[\w@.+\- /]+$/,
-  rel: /^[\w@.+/-]+$/,
+  rel: /^[\w@.+-][\w@.+/-]*$/,
   sha: /^[0-9a-f]{7,64}$/i,
   branch: /^\w[\w./-]*$/,
   ref: /^(?:https?:\/\/\S+|(?:PR ?)?#?\d+|[\w@.+/#-]+(?: ?\d+)?)$/i,
   rev: /^[\w@.+/-]+@[0-9a-f]{7,64}$/i,
-  id: /^[A-Za-z0-9][^\s()<>]{0,199}$/,
+  id: /^#?[A-Za-z0-9][^\s()<>]{0,199}$/,
 };
 function shaped(kind, v) {
   const re = SHAPES[kind];
@@ -259,11 +259,13 @@ function slugged(text, fallback) {
 
 const HASH = "[0-9a-f]{7,64}";
 // A path and its git hash-object, written "<path>@<hash>" or "<path> <hash>"; null for anything else.
+// The path may hold spaces: it is all the text before the last hash.
 function parseSpec(v) {
-  const m = new RegExp(`^(\\S+?)(?:@|\\s+)(${HASH})\\s*$`).exec(
+  const m = new RegExp(`^(.+)(?:@|\\s)(${HASH})\\s*$`).exec(
     String(v || "").trim(),
   );
-  return m ? { path: m[1], hash: m[2] } : null;
+  const path = m ? m[1].trim() : "";
+  return path && !/[\n()]/.test(path) ? { path, hash: m[2] } : null;
 }
 
 // An open decision's id comes from its question, so an answer stays with its question whatever else
@@ -295,7 +297,8 @@ function settledText(settled) {
 // Run a producer (run(settled) returns its result, with openDecisions, or null) until it raises
 // no question the user has not answered. A question the user answered is put back to the next
 // dispatch with its answer. Answers to this prefix that no question matched (a rerun in a new
-// session can word a question differently) go back once as well. Returns the last result and the
+// session can word a question differently) go back once as well; answers to its blockers are not
+// decisions and stay out. Returns the last result and the
 // questions still open; the result's own openDecisions are not to be read after this.
 async function settleDecisions(prefix, answers, run) {
   const settled = [];
@@ -310,6 +313,7 @@ async function settleDecisions(prefix, answers, run) {
       const carried = Object.keys(answers).filter(
         (k) =>
           k.startsWith(`${prefix}-`) &&
+          !k.startsWith(`${prefix}-blocker-`) &&
           answerOf(answers, k) &&
           !decisions.some((d) => d.id === k) &&
           !settled.some((x) => x.id === k),
@@ -843,7 +847,8 @@ function parseDoneImplement(v) {
 function parseDonePublish(v) {
   if (!v) return null;
   const l = ledgerLine(v);
-  return /done publish\s+\S/.test(l.text) ? { n: l.n } : null;
+  const m = /done publish(?:\s+(?!commit\b)(.*?))?(?:\s+commit\b.*)?$/.exec(l.text);
+  return m ? { n: l.n, pr: shaped("ref", (m[1] || "").trim()) } : null;
 }
 // "done board-start <card>" and "done board-pr <PR reference>": a board operation that followed its forge step.
 function parseDoneBoard(v, kind) {
@@ -964,7 +969,7 @@ const titleSlug = (storySource === "card" ? story.split("\n")[0].replace(/^#+\s*
   .replace(/-+$/, "");
 const specRel =
   [shaped("rel", val(cardRes, "spec-path"))].filter((p) => /\.md$/.test(p))[0] ||
-  `docs/specs/${[cardId.toLowerCase().replace(/[^a-z0-9]+/g, "-"), titleSlug].filter(Boolean).join("-") || slug}.md`;
+  `docs/specs/${[cardId.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, ""), titleSlug].filter(Boolean).join("-") || slug}.md`;
 const STORY_BLOCK = `The bug report, verbatim, is the acceptance source (story revision ${storyRevision}):
 <<<BUG
 ${story}
@@ -995,7 +1000,10 @@ if (cpWorktree.startsWith("/")) state.worktree = cpWorktree.replace(/\/+$/, "");
 state.branch = shaped("branch", val(cpRes, "branch")) || boardBranch;
 state.ledger = shaped("path", val(cpRes, "ledger"));
 state.pr = shaped("ref", val(cpRes, "pr"));
-const cpDirty = splitList(fact(cpRes, "dirty")).filter((p) => isRel(p) && !/^\.tmp(\/|$)/.test(p));
+// Only the story worktree's dirty paths count: before it exists a scout can only see the main checkout's.
+const cpDirty = state.worktree
+  ? splitList(fact(cpRes, "dirty")).filter((p) => isRel(p) && !/^\.tmp(\/|$)/.test(p))
+  : [];
 // Only the story worktree's copy of the spec counts. Before the worktree exists a scout can only
 // report the main checkout's copy, and a path outside the worktree is another file.
 const cpSpecRaw = parseSpec(val(cpRes, "spec"));
@@ -1016,6 +1024,8 @@ let specRevision = state.specHash;
 const doneSpec = parseDoneSpec(val(cpRes, "done-spec"));
 const doneImpl = parseDoneImplement(val(cpRes, "done-implement"));
 const donePub = parseDonePublish(val(cpRes, "done-publish"));
+// The checkpoint reads the PR through the forge; when it cannot, the ledger's publish line names it.
+if (!state.pr && donePub) state.pr = donePub.pr;
 // A board operation counts once its ledger line exists; with no card there is none to do.
 const boardStartDone = !cardId || !!parseDoneBoard(val(cpRes, "done-board-start"), "start");
 const boardPrDone = !cardId || !!parseDoneBoard(val(cpRes, "done-board-pr"), "pr");

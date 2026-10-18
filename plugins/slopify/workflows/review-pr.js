@@ -157,17 +157,17 @@ function absent(v, whole) {
 }
 
 // A checkpoint value counts only in its expected shape, never as prose. Kinds: path (absolute),
-// rel (relative path), sha, branch, ref (a PR URL, number, or path), rev (<path>@<hex>), id.
+// rel (relative path, never absolute), sha, branch, ref (a PR URL, number, or path), rev (<path>@<hex>), id.
 // Returns the value, or '' when it is absent or has another shape. A value followed by a
 // parenthetical remark, or by a full stop, is the value. A path may hold spaces.
 const SHAPES = {
   path: /^\/[\w@.+\- /]+$/,
-  rel: /^[\w@.+/-]+$/,
+  rel: /^[\w@.+-][\w@.+/-]*$/,
   sha: /^[0-9a-f]{7,64}$/i,
   branch: /^\w[\w./-]*$/,
   ref: /^(?:https?:\/\/\S+|(?:PR ?)?#?\d+|[\w@.+/#-]+(?: ?\d+)?)$/i,
   rev: /^[\w@.+/-]+@[0-9a-f]{7,64}$/i,
-  id: /^[A-Za-z0-9][^\s()<>]{0,199}$/,
+  id: /^#?[A-Za-z0-9][^\s()<>]{0,199}$/,
 };
 function shaped(kind, v) {
   const re = SHAPES[kind];
@@ -224,11 +224,13 @@ function slugged(text, fallback) {
 
 const HASH = "[0-9a-f]{7,64}";
 // A path and its git hash-object, written "<path>@<hash>" or "<path> <hash>"; null for anything else.
+// The path may hold spaces: it is all the text before the last hash.
 function parseSpec(v) {
-  const m = new RegExp(`^(\\S+?)(?:@|\\s+)(${HASH})\\s*$`).exec(
+  const m = new RegExp(`^(.+)(?:@|\\s)(${HASH})\\s*$`).exec(
     String(v || "").trim(),
   );
-  return m ? { path: m[1], hash: m[2] } : null;
+  const path = m ? m[1].trim() : "";
+  return path && !/[\n()]/.test(path) ? { path, hash: m[2] } : null;
 }
 
 // An open decision's id comes from its question, so an answer stays with its question whatever else
@@ -260,7 +262,8 @@ function settledText(settled) {
 // Run a producer (run(settled) returns its result, with openDecisions, or null) until it raises
 // no question the user has not answered. A question the user answered is put back to the next
 // dispatch with its answer. Answers to this prefix that no question matched (a rerun in a new
-// session can word a question differently) go back once as well. Returns the last result and the
+// session can word a question differently) go back once as well; answers to its blockers are not
+// decisions and stay out. Returns the last result and the
 // questions still open; the result's own openDecisions are not to be read after this.
 async function settleDecisions(prefix, answers, run) {
   const settled = [];
@@ -275,6 +278,7 @@ async function settleDecisions(prefix, answers, run) {
       const carried = Object.keys(answers).filter(
         (k) =>
           k.startsWith(`${prefix}-`) &&
+          !k.startsWith(`${prefix}-blocker-`) &&
           answerOf(answers, k) &&
           !decisions.some((d) => d.id === k) &&
           !settled.some((x) => x.id === k),
@@ -357,6 +361,7 @@ const projectRoot = str(input.projectRoot);
 const storyText = str(input.story);
 const testPath = str(Array.isArray(input.test) ? input.test[0] : input.test);
 // Dirty paths the caller deliberately left uncommitted (outside its assigned paths): never staged, never briefed.
+// The ledger's exclude line adds to them once the checkpoint is read.
 const excluded = (Array.isArray(input.exclude) ? input.exclude : []).map(str).filter(Boolean);
 const answers = input.answers && typeof input.answers === 'object' ? input.answers : {};
 
@@ -503,8 +508,7 @@ function val(res, key) {
 function specOf(v) {
   const s = parseSpec(String(v || '').split('\n')[0].replace(/\s*\([^)]*\)\s*$/, ''));
   if (s) return shaped('path', s.path) || shaped('rel', s.path);
-  const bare = shaped('path', v);
-  return /\s/.test(bare) ? '' : bare || shaped('rel', v);
+  return shaped('path', v) || shaped('rel', v);
 }
 // The highest round on 'review <n> fired|ended' text, else a bare number; never a digit run from a timestamp.
 function reviewRound(v) {
@@ -542,7 +546,7 @@ function parseDirty(v) {
   return t
     .split(/[\n,]+/)
     .map((x) => x.trim())
-    .filter((x) => x && !absent(x) && !/[\s()]/.test(x) && !isTmp(x))
+    .filter((x) => x && !absent(x) && !/[()]/.test(x) && !isTmp(x))
     .filter((x) => !excluded.some((e) => samePath(x, e)));
 }
 
@@ -573,7 +577,7 @@ const isDoc = (loc) => {
   return isSpec(p) || /\.(md|mdx|rst|adoc)$/i.test(p) || (/\.txt$/i.test(p) && !BUILD_TXT.test(p)) || /(^|\/)readme$/i.test(p);
 };
 
-const CHECKPOINT_KEYS = 'worktree branch head base pushed-head unpushed dirty ledger review-fired fired-head fired-ancestor review-ended spec pr';
+const CHECKPOINT_KEYS = 'worktree branch head base pushed-head unpushed dirty ledger review-fired fired-head fired-ancestor review-ended ledger-exclude spec pr';
 
 // A validator verdict counts only when it passes, carries no blocking finding, and names the revision
 // the brief gave it in evaluated (see sameRev in the shared block). A brief with no revision to name
@@ -615,6 +619,7 @@ Report where the review loop on this pull request stands from its durable checkp
 - base: the pull request's base commit, the merge base of the head branch and the target branch docs/FORGE.md declares.
 - pushed-head: the head commit sha of the pull request's branch as the remote has it, not the worktree's HEAD. unpushed: how many commits the worktree's HEAD holds that the pushed head lacks, or none.
 - ledger: the absolute path of the worktree's .tmp/ledger.md, only when it exists. review-fired and review-ended: the highest review round numbers on its review lines after the last done publish line. fired-head: the sha after "head" on the last review fired line, when it has one. fired-ancestor: yes when fired-head is an ancestor of the worktree's HEAD (git merge-base --is-ancestor), otherwise no; leave it out when there is no fired-head.
+- ledger-exclude: the paths after the word "exclude" on the last ledger line whose text, after its leading timestamp, starts with that word, comma-separated, or none
 - spec: the current spec path and its git hash-object, written <absolute path>@<git hash-object>, when the story has a spec.
 - pr: the pull request's description, read through docs/FORGE.md's read binding when it declares one; leave the key out when it declares none.
 
@@ -703,10 +708,14 @@ const pushedAhead =
   !!pushedHead &&
   !sameRev(firedHead, pushedHead) &&
   !sameRev(pushedHead, firedHead) &&
+  !!val(cp, 'head') &&
   sameRev(val(cp, 'head'), pushedHead) &&
   /^yes/i.test(val(cp, 'fired-ancestor'));
 head = pushedHead || val(cp, 'head');
 baseCommit = val(cp, 'base');
+for (const p of String(val(cp, 'ledger-exclude')).split(/[\n,]+/).map((x) => x.trim())) {
+  if (p && !absent(p) && !isTmp(p) && !excluded.some((e) => samePath(p, e))) excluded.push(p);
+}
 dirtyPaths = parseDirty(fact(cp, 'dirty'));
 const branch = val(cp, 'branch');
 const prDescription = val(cp, 'pr');
@@ -1008,16 +1017,21 @@ async function produce(r, st) {
       st.docsChanged = st.docsChanged || w.produced.some((p) => !isSpec(p));
       st.writer = w;
     }
+    // A writer that returned nothing is run again, but only after the coder's spec mismatch below is handled.
+    let docsFailed = false;
     if (ranDocs) {
       if (!w) {
         fixFailures += 1;
         attempts.push({ gate: 'fix', approach: `documentation fix in round ${r}`, failed: 'the writer did not return' });
         if (fixFailures >= MAX_FAILURES) return { stop: stop(`fix-r${r}`, [need(`r${r}-fix`, 'validation', 'A documentation fix; the writer did not return.', 'writer returned nothing')]) };
-        continue;
+        docsFailed = true;
+      } else if (w.storyBlockers.length) {
+        return { stop: stop(`fix-r${r}`, w.storyBlockers.map((b, i) => need(`r${r}-story-${i + 1}`, 'story', b, 'raised by the writer while fixing documentation'))) };
+      } else if (w.open.length) {
+        return { stop: stop(`fix-r${r}`, w.open.map((d) => need(d.id, 'decision', d.question, 'raised by the writer while fixing documentation'))) };
+      } else {
+        docsOk = true;
       }
-      if (w.storyBlockers.length) return { stop: stop(`fix-r${r}`, w.storyBlockers.map((b, i) => need(`r${r}-story-${i + 1}`, 'story', b, 'raised by the writer while fixing documentation'))) };
-      if (w.open.length) return { stop: stop(`fix-r${r}`, w.open.map((d) => need(d.id, 'decision', d.question, 'raised by the writer while fixing documentation'))) };
-      docsOk = true;
     }
     if (ranCoder) {
       // A spec mismatch goes back through the spec gate and spends the spec budget, then the coder runs again.
@@ -1042,6 +1056,7 @@ async function produce(r, st) {
       }
       codeOk = true;
     }
+    if (docsFailed) continue;
     st.label = (wantCoder && st.coder ? st.coder.revision : wantDocs && st.writer ? st.writer.revision : st.label) || st.specRevision || '';
     return { ok: true };
   }
@@ -1214,8 +1229,10 @@ function endedBy(res, round) {
 
 for (let r = startRound; r <= MAX_ROUNDS && !ended; r++) {
   // A fix committed in this round and never pushed: resume at Push. Review r has already been judged
-  // and fixed; waiting for it again would sort its findings against a HEAD that holds the fix.
-  if ((unpushed || pushedAhead) && r === startRound && fired >= 1) {
+  // and fixed; waiting for it again would sort its findings against a HEAD that holds the fix. A worktree
+  // with uncommitted changes outside the excluded paths holds a fix that was never committed: the round is
+  // unfinished and takes the normal path, which carries that work.
+  if ((unpushed || pushedAhead) && r === startRound && fired >= 1 && !dirtyPaths.length) {
     phase('Push');
     const resumed = await agent(resumePushBrief(r, !unpushed), { agentType: 'slopify:pusher', label: `push round ${r} (resumed)`, phase: 'Push', schema: PUSHER_SCHEMA });
     if (!resumed || !resumed.done) {
