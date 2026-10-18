@@ -45,7 +45,7 @@ const SCOUT_SCHEMA = {
           excerpt: {
             type: "string",
             description:
-              "The supporting passage or output, quoted; for a checkpoint key, its value alone on the first line, with any remark on a later line",
+              "The supporting passage or output, quoted; for a checkpoint key, its value",
           },
         },
       },
@@ -160,17 +160,25 @@ function absent(v, whole) {
 // A checkpoint value counts only in its expected shape, never as prose. Kinds: path (absolute),
 // rel (relative path, never absolute), sha, branch, ref (a PR URL, number, or path), rev (<path>@<hex>), id.
 // Returns the value, or '' when it is absent or has another shape. A value followed by a
-// parenthetical remark, or by a full stop, is the value. A path may hold any character but a newline: a
-// scout puts a value alone on its first line, since no shape tells a spaced directory from prose.
+// parenthetical remark, or by a full stop, is the value. A path may hold any character but a newline.
 const SHAPES = {
   path: /^\/(?:[^\n]*[^\s.,;:])?$/,
-  rel: /^[\w@.+-][\w@.+/-]*$/,
+  rel: /^[\w@.+\[\]-][\w@.+()\[\]/-]*$/,
   sha: /^[0-9a-f]{7,64}$/i,
   branch: /^\w[\w./-]*$/,
   ref: /^(?:https?:\/\/\S+|(?:PR ?)?#?\d+|[\w@.+/#-]+(?: ?\d+)?)$/i,
   rev: /^[\w@.+/-]+@[0-9a-f]{7,64}$/i,
   id: /^#?[A-Za-z0-9][^\s()<>]{0,199}$/,
 };
+function unremark(kind, t) {
+  const remark = kind === "path" ? /\s+[(\[][^)\]]*[)\]]$/ : /\s+[(\[].*$/;
+  let prev;
+  do {
+    prev = t;
+    t = t.replace(remark, "").replace(/[.,;:]+$/, "");
+  } while (t !== prev);
+  return t;
+}
 function shaped(kind, v) {
   const re = SHAPES[kind];
   const t = String(v == null ? "" : v)
@@ -179,8 +187,7 @@ function shaped(kind, v) {
   if (!re || absent(t)) return "";
   // A trailing remark is stripped first. In a path only a parenthetical that ends the value is a remark:
   // one with more path after it belongs to a directory name.
-  const remark = kind === "path" ? /\s+[(\[][^)\]]*[)\]]$/ : /\s+[(\[].*$/;
-  const tok = t.replace(remark, "").replace(/[.,;:]+$/, "");
+  const tok = unremark(kind, t);
   if (tok && re.test(tok)) return tok;
   return re.test(t) ? t : "";
 }
@@ -228,11 +235,12 @@ function slugged(text, fallback) {
 }
 
 const HASH = "[0-9a-f]{7,64}";
-// A path and its git hash-object, written "<path>@<hash>" or "<path> <hash>"; null for anything else.
+// A path and its git hash-object, written "<path>@<hash>" or "<path> <hash>", on the first line and
+// with any trailing remark dropped; null for anything else.
 // The path is all the text before the last hash, and must have the path or rel shape.
 function parseSpec(v) {
-  const m = new RegExp(`^(.+)(?:@|\\s)(${HASH})\\s*$`).exec(
-    String(v || "").trim(),
+  const m = new RegExp(`^(.+)(?:@|\\s)(${HASH})$`).exec(
+    unremark("path", String(v || "").split("\n")[0].trim()),
   );
   const path = m ? m[1].trim() : "";
   return path && (shaped("path", path) === path || shaped("rel", path) === path) ? { path, hash: m[2] } : null;
@@ -375,7 +383,7 @@ const READ_ONLY = 'Report only: change nothing, and perform no board or forge op
 const PRODUCER_BOUNDS =
   'Do not commit, push, or perform any board or forge operation; another agent does that.'
 // How a reproduction directory's revision is computed (the coder's own form).
-const REPRO_REVISION = 'find <dir> -type f | sort | xargs git hash-object | git hash-object --stdin'
+const REPRO_REVISION = 'find <dir> -type f -print0 | sort -z | xargs -0 git hash-object | git hash-object --stdin'
 
 const completed = []
 const skipped = []
@@ -767,10 +775,12 @@ const settledBlockers = Object.keys(answers)
   }))
 async function writeIssue(why, label) {
   while (true) {
-    const { res: w, open } = await settleDecisions('issue', answers, (settled) =>
+    const { res: w, open: settledOpen } = await settleDecisions('issue', answers, (settled) =>
       agent(reportPrompt(why, [...settled, ...settledBlockers]), { agentType: 'slopify:writer', label, phase: 'Report', schema: WRITER_SCHEMA }),
     )
     const blockers = decisionsOf('issue-blocker', w ? w.storyBlockers : [])
+    // settleDecisions reports no decisions alongside blockers, so a blocking writer's questions are read here.
+    const open = blockers.length ? decisionsOf('issue', w.openDecisions).filter(d => !answerOf(answers, d.id)) : settledOpen
     const unanswered = blockers.filter(d => !answerOf(answers, d.id))
     if (!open.length && !unanswered.length && blockers.length && !draftOk(w)) {
       return stop('report', blockers.map(d => ({ id: d.id, kind: 'input', what: d.question, evidence: `raised again after the writer was given the answer "${answerOf(answers, d.id)}"; give an answer that resolves it` })))

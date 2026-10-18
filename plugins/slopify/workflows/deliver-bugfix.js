@@ -79,7 +79,7 @@ const SCOUT_SCHEMA = {
           excerpt: {
             type: "string",
             description:
-              "The supporting passage or output, quoted; for a checkpoint key, its value alone on the first line, with any remark on a later line",
+              "The supporting passage or output, quoted; for a checkpoint key, its value",
           },
         },
       },
@@ -194,17 +194,25 @@ function absent(v, whole) {
 // A checkpoint value counts only in its expected shape, never as prose. Kinds: path (absolute),
 // rel (relative path, never absolute), sha, branch, ref (a PR URL, number, or path), rev (<path>@<hex>), id.
 // Returns the value, or '' when it is absent or has another shape. A value followed by a
-// parenthetical remark, or by a full stop, is the value. A path may hold any character but a newline: a
-// scout puts a value alone on its first line, since no shape tells a spaced directory from prose.
+// parenthetical remark, or by a full stop, is the value. A path may hold any character but a newline.
 const SHAPES = {
   path: /^\/(?:[^\n]*[^\s.,;:])?$/,
-  rel: /^[\w@.+-][\w@.+/-]*$/,
+  rel: /^[\w@.+\[\]-][\w@.+()\[\]/-]*$/,
   sha: /^[0-9a-f]{7,64}$/i,
   branch: /^\w[\w./-]*$/,
   ref: /^(?:https?:\/\/\S+|(?:PR ?)?#?\d+|[\w@.+/#-]+(?: ?\d+)?)$/i,
   rev: /^[\w@.+/-]+@[0-9a-f]{7,64}$/i,
   id: /^#?[A-Za-z0-9][^\s()<>]{0,199}$/,
 };
+function unremark(kind, t) {
+  const remark = kind === "path" ? /\s+[(\[][^)\]]*[)\]]$/ : /\s+[(\[].*$/;
+  let prev;
+  do {
+    prev = t;
+    t = t.replace(remark, "").replace(/[.,;:]+$/, "");
+  } while (t !== prev);
+  return t;
+}
 function shaped(kind, v) {
   const re = SHAPES[kind];
   const t = String(v == null ? "" : v)
@@ -213,8 +221,7 @@ function shaped(kind, v) {
   if (!re || absent(t)) return "";
   // A trailing remark is stripped first. In a path only a parenthetical that ends the value is a remark:
   // one with more path after it belongs to a directory name.
-  const remark = kind === "path" ? /\s+[(\[][^)\]]*[)\]]$/ : /\s+[(\[].*$/;
-  const tok = t.replace(remark, "").replace(/[.,;:]+$/, "");
+  const tok = unremark(kind, t);
   if (tok && re.test(tok)) return tok;
   return re.test(t) ? t : "";
 }
@@ -262,11 +269,12 @@ function slugged(text, fallback) {
 }
 
 const HASH = "[0-9a-f]{7,64}";
-// A path and its git hash-object, written "<path>@<hash>" or "<path> <hash>"; null for anything else.
+// A path and its git hash-object, written "<path>@<hash>" or "<path> <hash>", on the first line and
+// with any trailing remark dropped; null for anything else.
 // The path is all the text before the last hash, and must have the path or rel shape.
 function parseSpec(v) {
-  const m = new RegExp(`^(.+)(?:@|\\s)(${HASH})\\s*$`).exec(
-    String(v || "").trim(),
+  const m = new RegExp(`^(.+)(?:@|\\s)(${HASH})$`).exec(
+    unremark("path", String(v || "").split("\n")[0].trim()),
   );
   const path = m ? m[1].trim() : "";
   return path && (shaped("path", path) === path || shaped("rel", path) === path) ? { path, hash: m[2] } : null;
@@ -530,9 +538,11 @@ const PLAN_PHASE = "Fix"; // the phase recoverPlan reports under
 const failures = { reproduce: 0, spec: 0, implementation: 0 };
 
 // BEGIN slopify deliver helpers
-// A dirty entry as a bare path: a git status code is dropped, and a rename keeps its new path.
+// A dirty entry as bare paths: a git status code and a trailing remark are dropped, and a rename keeps both paths.
 function dirtyEntry(x) {
-  return String(x || "").trim().replace(/^[ MADRCUT?!]{1,2}\s+/, "").replace(/^.* -> /, "");
+  const t = String(x || "").trim().replace(/^[ MADRCUT?!]{1,2}\s+/, "").replace(/\s+\([^)]*\)$/, "");
+  const m = /^(.*) -> (.*)$/.exec(t);
+  return m ? [m[1], m[2]] : [t];
 }
 const WHERE = projectRoot
   ? `The project is at ${projectRoot}; address files by absolute path under it.`
@@ -1010,7 +1020,7 @@ state.ledger = shaped("path", val(cpRes, "ledger"));
 state.pr = shaped("ref", val(cpRes, "pr"));
 // Only the story worktree's dirty paths count: before it exists a scout can only see the main checkout's.
 const cpDirty = state.worktree
-  ? splitList(fact(cpRes, "dirty")).map(dirtyEntry).map(rel).filter((p) => isRel(p) && !/^\.tmp(\/|$)/.test(p))
+  ? splitList(fact(cpRes, "dirty")).flatMap(dirtyEntry).map(rel).filter((p) => isRel(p) && !/^\.tmp(\/|$)/.test(p))
   : [];
 // Only the story worktree's copy of the spec counts. Before the worktree exists a scout can only
 // report the main checkout's copy, and a path outside the worktree is another file.

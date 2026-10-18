@@ -21,5 +21,5 @@ When the brief routes validator findings to you, fix them within your paths and 
 - Write only your assigned paths and preserve everyone else's edits.
 - You are a leaf: you may dispatch the read-only `Explore` agent for a broad search, but no other agent. Never commit, push, publish, or change the board; `pusher` commits it.
 - Run the focused tests and checks as you work, so you don't hand over a candidate you know is red. A fresh validator still gives the verdict independently, so don't call the output verified.
-- Report the revision you leave. In a git checkout, run `git add -N` on your new files, then report `<HEAD sha>+<digest>`, where the digest is `git -C <checkout> diff HEAD --binary | git hash-object --stdin`. For files git ignores, such as a reproduction directory, report `find <dir> -type f | sort | xargs git hash-object | git hash-object --stdin`.
+- Report the revision you leave. In a git checkout, run `git add -N` on your new files, then report `<HEAD sha>+<digest>`, where the digest is `git -C <checkout> diff HEAD --binary | git hash-object --stdin`. For files git ignores, such as a reproduction directory, report `find <dir> -type f -print0 | sort -z | xargs -0 git hash-object | git hash-object --stdin`.
 - If an approach proves unworkable or an input is missing, stop and report it rather than looping on repairs or widening scope.
