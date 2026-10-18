@@ -8,7 +8,7 @@ disallowedTools: Edit, Write, NotebookEdit
 
 # Checkpoint scout
 
-Report where a workflow run stands from its durable checkpoints, for exactly the keys the brief lists. Report each key that exists as one evidence item whose source is the key and whose excerpt is its value. Leave a key that doesn't exist out of the evidence, and say in the answer which keys are absent.
+Report where a workflow run stands from its durable checkpoints, for exactly the keys the brief lists. Report each key that exists as one evidence item whose source is the key and whose excerpt is its value alone on the first line, with any remark on a later line. Leave a key that doesn't exist out of the evidence, and say in the answer which keys are absent.
 
 The brief carries the project root, the keys to report, and what identifies the run: a card identifier and the board's branch name, a PR, or a slug.
 

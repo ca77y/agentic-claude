@@ -45,7 +45,7 @@ const SCOUT_SCHEMA = {
           excerpt: {
             type: "string",
             description:
-              "The supporting passage or output, quoted; for a checkpoint key, its value",
+              "The supporting passage or output, quoted; for a checkpoint key, its value alone on the first line, with any remark on a later line",
           },
         },
       },
@@ -160,10 +160,10 @@ function absent(v, whole) {
 // A checkpoint value counts only in its expected shape, never as prose. Kinds: path (absolute),
 // rel (relative path, never absolute), sha, branch, ref (a PR URL, number, or path), rev (<path>@<hex>), id.
 // Returns the value, or '' when it is absent or has another shape. A value followed by a
-// parenthetical remark, or by a full stop, is the value. A path may hold spaces in its directories, never
-// in its last name, so trailing prose is never part of a path.
+// parenthetical remark, or by a full stop, is the value. A path may hold any character but a newline: a
+// scout puts a value alone on its first line, since no shape tells a spaced directory from prose.
 const SHAPES = {
-  path: /^\/(?:[^\n\/()]+\/)*(?:[^\s\/()]*[^\s\/().,;:])?$/,
+  path: /^\/(?:[^\n]*[^\s.,;:])?$/,
   rel: /^[\w@.+-][\w@.+/-]*$/,
   sha: /^[0-9a-f]{7,64}$/i,
   branch: /^\w[\w./-]*$/,
@@ -177,9 +177,12 @@ function shaped(kind, v) {
     .split("\n")[0]
     .trim();
   if (!re || absent(t)) return "";
-  if (re.test(t)) return t;
-  const tok = t.replace(/\s+[(\[].*$/, "").replace(/[.,;:]+$/, "");
-  return tok && re.test(tok) ? tok : "";
+  // A trailing remark is stripped first. In a path only a parenthetical that ends the value is a remark:
+  // one with more path after it belongs to a directory name.
+  const remark = kind === "path" ? /\s+[(\[][^)\]]*[)\]]$/ : /\s+[(\[].*$/;
+  const tok = t.replace(remark, "").replace(/[.,;:]+$/, "");
+  if (tok && re.test(tok)) return tok;
+  return re.test(t) ? t : "";
 }
 
 // Whether the revision a validator reports judging is the one its brief named. A label such as
@@ -754,7 +757,7 @@ Evidence:
 ${evidenceText}${settledText(settled)}`
 
 // Every blocker the user has answered goes back to the writer with its answer, from its first dispatch
-// (a fresh writer words a blocker differently); a blocker it raises again with its answer given counts as answered.
+// (a fresh writer words a blocker differently); one it raises again with no draft stops the run with the answer it got.
 const settledBlockers = Object.keys(answers)
   .filter(k => k.startsWith('issue-blocker-') && answerOf(answers, k))
   .map(k => ({
@@ -769,11 +772,6 @@ async function writeIssue(why, label) {
     )
     const blockers = decisionsOf('issue-blocker', w ? w.storyBlockers : [])
     const unanswered = blockers.filter(d => !answerOf(answers, d.id))
-    const fresh = blockers.filter(d => !settledBlockers.some(x => x.id === d.id))
-    if (!open.length && !unanswered.length && fresh.length) {
-      settledBlockers.push(...fresh.map(d => ({ ...d, answer: answerOf(answers, d.id) })))
-      continue
-    }
     if (!open.length && !unanswered.length && blockers.length && !draftOk(w)) {
       return stop('report', blockers.map(d => ({ id: d.id, kind: 'input', what: d.question, evidence: `raised again after the writer was given the answer "${answerOf(answers, d.id)}"; give an answer that resolves it` })))
     }

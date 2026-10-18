@@ -70,7 +70,7 @@ const SCOUT_SCHEMA = {
           excerpt: {
             type: "string",
             description:
-              "The supporting passage or output, quoted; for a checkpoint key, its value",
+              "The supporting passage or output, quoted; for a checkpoint key, its value alone on the first line, with any remark on a later line",
           },
         },
       },
@@ -185,10 +185,10 @@ function absent(v, whole) {
 // A checkpoint value counts only in its expected shape, never as prose. Kinds: path (absolute),
 // rel (relative path, never absolute), sha, branch, ref (a PR URL, number, or path), rev (<path>@<hex>), id.
 // Returns the value, or '' when it is absent or has another shape. A value followed by a
-// parenthetical remark, or by a full stop, is the value. A path may hold spaces in its directories, never
-// in its last name, so trailing prose is never part of a path.
+// parenthetical remark, or by a full stop, is the value. A path may hold any character but a newline: a
+// scout puts a value alone on its first line, since no shape tells a spaced directory from prose.
 const SHAPES = {
-  path: /^\/(?:[^\n\/()]+\/)*(?:[^\s\/()]*[^\s\/().,;:])?$/,
+  path: /^\/(?:[^\n]*[^\s.,;:])?$/,
   rel: /^[\w@.+-][\w@.+/-]*$/,
   sha: /^[0-9a-f]{7,64}$/i,
   branch: /^\w[\w./-]*$/,
@@ -202,9 +202,12 @@ function shaped(kind, v) {
     .split("\n")[0]
     .trim();
   if (!re || absent(t)) return "";
-  if (re.test(t)) return t;
-  const tok = t.replace(/\s+[(\[].*$/, "").replace(/[.,;:]+$/, "");
-  return tok && re.test(tok) ? tok : "";
+  // A trailing remark is stripped first. In a path only a parenthetical that ends the value is a remark:
+  // one with more path after it belongs to a directory name.
+  const remark = kind === "path" ? /\s+[(\[][^)\]]*[)\]]$/ : /\s+[(\[].*$/;
+  const tok = t.replace(remark, "").replace(/[.,;:]+$/, "");
+  if (tok && re.test(tok)) return tok;
+  return re.test(t) ? t : "";
 }
 
 // Whether the revision a validator reports judging is the one its brief named. A label such as

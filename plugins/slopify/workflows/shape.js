@@ -44,7 +44,7 @@ const SCOUT_SCHEMA = {
           excerpt: {
             type: "string",
             description:
-              "The supporting passage or output, quoted; for a checkpoint key, its value",
+              "The supporting passage or output, quoted; for a checkpoint key, its value alone on the first line, with any remark on a later line",
           },
         },
       },
@@ -159,10 +159,10 @@ function absent(v, whole) {
 // A checkpoint value counts only in its expected shape, never as prose. Kinds: path (absolute),
 // rel (relative path, never absolute), sha, branch, ref (a PR URL, number, or path), rev (<path>@<hex>), id.
 // Returns the value, or '' when it is absent or has another shape. A value followed by a
-// parenthetical remark, or by a full stop, is the value. A path may hold spaces in its directories, never
-// in its last name, so trailing prose is never part of a path.
+// parenthetical remark, or by a full stop, is the value. A path may hold any character but a newline: a
+// scout puts a value alone on its first line, since no shape tells a spaced directory from prose.
 const SHAPES = {
-  path: /^\/(?:[^\n\/()]+\/)*(?:[^\s\/()]*[^\s\/().,;:])?$/,
+  path: /^\/(?:[^\n]*[^\s.,;:])?$/,
   rel: /^[\w@.+-][\w@.+/-]*$/,
   sha: /^[0-9a-f]{7,64}$/i,
   branch: /^\w[\w./-]*$/,
@@ -176,9 +176,12 @@ function shaped(kind, v) {
     .split("\n")[0]
     .trim();
   if (!re || absent(t)) return "";
-  if (re.test(t)) return t;
-  const tok = t.replace(/\s+[(\[].*$/, "").replace(/[.,;:]+$/, "");
-  return tok && re.test(tok) ? tok : "";
+  // A trailing remark is stripped first. In a path only a parenthetical that ends the value is a remark:
+  // one with more path after it belongs to a directory name.
+  const remark = kind === "path" ? /\s+[(\[][^)\]]*[)\]]$/ : /\s+[(\[].*$/;
+  const tok = t.replace(remark, "").replace(/[.,;:]+$/, "");
+  if (tok && re.test(tok)) return tok;
+  return re.test(t) ? t : "";
 }
 
 // Whether the revision a validator reports judging is the one its brief named. A label such as
@@ -677,7 +680,7 @@ function decisionNeeds(ids) {
 // A writer that reports a story blocker, or open decisions that answers doesn't settle while it
 // wrote no draft, stops the run at once: retrying could never show the user the reason. Every blocker
 // the user has answered goes back to the writer with its answer, from its first dispatch (a fresh writer
-// words a blocker differently), and a blocker it raises again with its answer given counts as answered.
+// words a blocker differently); one it raises again with no draft stops the run with the answer it got.
 const settledBlockers = Object.keys(answers)
   .filter(k => k.startsWith('draft-blocker-') && answerOf(answers, k))
   .map(k => ({
@@ -695,22 +698,13 @@ function earlyStop(w, step) {
       open.map(d => ({ id: d.id, kind: 'input', what: d.question, evidence: 'reported by the writer while working on the story' })),
     )
   }
-  const fresh = blockers.filter(d => !settledBlockers.some(x => x.id === d.id))
-  if (fresh.length) {
-    settledBlockers.push(...fresh.map(d => ({ ...d, answer: answerOf(answers, d.id) })))
-    return { retry: true }
-  }
-  if (blockers.length && !draftOk(w)) {
-    return stop(
-      step,
-      blockers.map(d => ({ id: d.id, kind: 'input', what: d.question, evidence: `raised again after the writer was given the answer "${answerOf(answers, d.id)}"; give an answer that resolves it` })),
-    )
-  }
-  if (!draftOk(w)) {
-    const unanswered = (w.openDecisions || []).map(x => String(x).trim()).filter(id => id && !hasAnswer(id))
-    if (unanswered.length) return stop(step, decisionNeeds(unanswered))
-  }
-  return null
+  if (draftOk(w)) return null
+  const unanswered = (w.openDecisions || []).map(x => String(x).trim()).filter(id => id && !hasAnswer(id))
+  const needs = [
+    ...blockers.map(d => ({ id: d.id, kind: 'input', what: d.question, evidence: `raised again after the writer was given the answer "${answerOf(answers, d.id)}"; give an answer that resolves it` })),
+    ...(unanswered.length ? decisionNeeds(unanswered) : []),
+  ]
+  return needs.length ? stop(step, needs) : null
 }
 
 // Marked open decisions that answers doesn't settle block the run; settled ones go to a writer
@@ -740,7 +734,6 @@ ${given}${settledText(settledBlockers)}`,
       { agentType: 'slopify:writer', label: `resolve ${openIds.join(' ')}`, phase: 'Draft', schema: WRITER_SCHEMA },
     )
     const earlyResolve = earlyStop(w, 'draft')
-    if (earlyResolve && earlyResolve.retry) continue
     if (earlyResolve) return earlyResolve
     if (!draftOk(w)) {
       attempts.push({ gate: 'draft', approach: `resolve ${openIds.join(', ')}`, failed: 'the writer did not return a draft revision at the draft path' })
@@ -771,7 +764,6 @@ ${evidenceText}${settledText(settledBlockers)}`,
       { agentType: 'slopify:writer', label: draftFailures ? `draft story (attempt ${draftFailures + 1})` : 'draft story', phase: 'Draft', schema: WRITER_SCHEMA },
     )
     const early = earlyStop(w, 'draft')
-    if (early && early.retry) continue
     if (early) return early
     if (draftOk(w)) {
       draftRev = str(w.revision)
@@ -856,7 +848,6 @@ ${bad.join('\n\n')}${settledText(settledBlockers)}`,
       { agentType: 'slopify:writer', label: `revise story (round ${round})`, phase: 'Validate', schema: WRITER_SCHEMA },
     )
     const earlyRevise = earlyStop(w, 'validate')
-    if (earlyRevise && earlyRevise.retry) continue
     if (earlyRevise) return earlyRevise
     if (draftOk(w)) {
       draftRev = str(w.revision)
