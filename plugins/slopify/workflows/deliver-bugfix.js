@@ -194,9 +194,10 @@ function absent(v, whole) {
 // A checkpoint value counts only in its expected shape, never as prose. Kinds: path (absolute),
 // rel (relative path, never absolute), sha, branch, ref (a PR URL, number, or path), rev (<path>@<hex>), id.
 // Returns the value, or '' when it is absent or has another shape. A value followed by a
-// parenthetical remark, or by a full stop, is the value. A path may hold spaces.
+// parenthetical remark, or by a full stop, is the value. A path may hold spaces in its directories, never
+// in its last name, so trailing prose is never part of a path.
 const SHAPES = {
-  path: /^\/[\w@.+\- /]+$/,
+  path: /^\/(?:[^\n\/()]+\/)*(?:[^\s\/()]*[^\s\/().,;:])?$/,
   rel: /^[\w@.+-][\w@.+/-]*$/,
   sha: /^[0-9a-f]{7,64}$/i,
   branch: /^\w[\w./-]*$/,
@@ -259,13 +260,13 @@ function slugged(text, fallback) {
 
 const HASH = "[0-9a-f]{7,64}";
 // A path and its git hash-object, written "<path>@<hash>" or "<path> <hash>"; null for anything else.
-// The path may hold spaces: it is all the text before the last hash.
+// The path is all the text before the last hash, and must have the path or rel shape.
 function parseSpec(v) {
   const m = new RegExp(`^(.+)(?:@|\\s)(${HASH})\\s*$`).exec(
     String(v || "").trim(),
   );
   const path = m ? m[1].trim() : "";
-  return path && !/[\n()]/.test(path) ? { path, hash: m[2] } : null;
+  return path && (shaped("path", path) === path || shaped("rel", path) === path) ? { path, hash: m[2] } : null;
 }
 
 // An open decision's id comes from its question, so an answer stays with its question whatever else
@@ -1002,7 +1003,7 @@ state.ledger = shaped("path", val(cpRes, "ledger"));
 state.pr = shaped("ref", val(cpRes, "pr"));
 // Only the story worktree's dirty paths count: before it exists a scout can only see the main checkout's.
 const cpDirty = state.worktree
-  ? splitList(fact(cpRes, "dirty")).filter((p) => isRel(p) && !/^\.tmp(\/|$)/.test(p))
+  ? splitList(fact(cpRes, "dirty")).map(rel).filter((p) => isRel(p) && !/^\.tmp(\/|$)/.test(p))
   : [];
 // Only the story worktree's copy of the spec counts. Before the worktree exists a scout can only
 // report the main checkout's copy, and a path outside the worktree is another file.
@@ -1036,7 +1037,7 @@ const ledgerStory = shaped("sha", val(cpRes, "ledger-story")) || (doneSpec ? don
 // A done spec line written after a spec revision may omit the test; an earlier line then knows it.
 const ledgerTests = (doneSpec && doneSpec.test ? doneSpec.test : val(cpRes, "ledger-test"))
   .split(",")
-  .map((t) => t.trim())
+  .map((t) => rel(t.trim()))
   .filter(isRel);
 // Once the PR is published, a rerun goes straight to the review: a spec or report revised since then
 // belongs to the review loop, not to a redo of the steps before the publish.
@@ -1116,7 +1117,7 @@ let specCommit = doneSpec ? doneSpec.commit : "";
 const fixTouched = new Set(); // paths the fix coder reported changing, for the commit
 // Dirty paths this run found outside its assigned paths: reported, not committed, kept from the review loop,
 // and recorded on the ledger. A rerun that skips the commit reads them back from the ledger.
-const outsideDirty = splitList(val(cpRes, "ledger-exclude")).filter((p) => isRel(p) && !/^\.tmp(\/|$)/.test(p));
+const outsideDirty = splitList(val(cpRes, "ledger-exclude")).map(rel).filter((p) => isRel(p) && !/^\.tmp(\/|$)/.test(p));
 const fixTests = new Set(); // tests the fix coder added for a finding; they join the fix's commit scope
 const touched = new Set();
 

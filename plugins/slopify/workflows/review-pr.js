@@ -159,9 +159,10 @@ function absent(v, whole) {
 // A checkpoint value counts only in its expected shape, never as prose. Kinds: path (absolute),
 // rel (relative path, never absolute), sha, branch, ref (a PR URL, number, or path), rev (<path>@<hex>), id.
 // Returns the value, or '' when it is absent or has another shape. A value followed by a
-// parenthetical remark, or by a full stop, is the value. A path may hold spaces.
+// parenthetical remark, or by a full stop, is the value. A path may hold spaces in its directories, never
+// in its last name, so trailing prose is never part of a path.
 const SHAPES = {
-  path: /^\/[\w@.+\- /]+$/,
+  path: /^\/(?:[^\n\/()]+\/)*(?:[^\s\/()]*[^\s\/().,;:])?$/,
   rel: /^[\w@.+-][\w@.+/-]*$/,
   sha: /^[0-9a-f]{7,64}$/i,
   branch: /^\w[\w./-]*$/,
@@ -224,13 +225,13 @@ function slugged(text, fallback) {
 
 const HASH = "[0-9a-f]{7,64}";
 // A path and its git hash-object, written "<path>@<hash>" or "<path> <hash>"; null for anything else.
-// The path may hold spaces: it is all the text before the last hash.
+// The path is all the text before the last hash, and must have the path or rel shape.
 function parseSpec(v) {
   const m = new RegExp(`^(.+)(?:@|\\s)(${HASH})\\s*$`).exec(
     String(v || "").trim(),
   );
   const path = m ? m[1].trim() : "";
-  return path && !/[\n()]/.test(path) ? { path, hash: m[2] } : null;
+  return path && (shaped("path", path) === path || shaped("rel", path) === path) ? { path, hash: m[2] } : null;
 }
 
 // An open decision's id comes from its question, so an answer stays with its question whatever else
@@ -545,7 +546,7 @@ function parseDirty(v) {
   if (absent(t)) return [];
   return t
     .split(/[\n,]+/)
-    .map((x) => x.trim())
+    .map((x) => x.trim().replace(/^[ MADRCU?!]{1,2}\s+/, ''))
     .filter((x) => x && !absent(x) && !/[()]/.test(x) && !isTmp(x))
     .filter((x) => !excluded.some((e) => samePath(x, e)));
 }
@@ -1230,9 +1231,10 @@ function endedBy(res, round) {
 for (let r = startRound; r <= MAX_ROUNDS && !ended; r++) {
   // A fix committed in this round and never pushed: resume at Push. Review r has already been judged
   // and fixed; waiting for it again would sort its findings against a HEAD that holds the fix. A worktree
-  // with uncommitted changes outside the excluded paths holds a fix that was never committed: the round is
-  // unfinished and takes the normal path, which carries that work.
-  if ((unpushed || pushedAhead) && r === startRound && fired >= 1 && !dirtyPaths.length) {
+  // with unpushed commits and uncommitted changes outside the excluded paths holds a fix that was never
+  // committed: the round is unfinished and takes the normal path, which carries that work. A pushed fix was
+  // pushed only after all its commits, so stray files never hold back its resume.
+  if ((pushedAhead || (unpushed && !dirtyPaths.length)) && r === startRound && fired >= 1) {
     phase('Push');
     const resumed = await agent(resumePushBrief(r, !unpushed), { agentType: 'slopify:pusher', label: `push round ${r} (resumed)`, phase: 'Push', schema: PUSHER_SCHEMA });
     if (!resumed || !resumed.done) {
