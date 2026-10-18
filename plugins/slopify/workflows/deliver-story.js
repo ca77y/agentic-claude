@@ -203,10 +203,9 @@ function absent(v, whole) {
 // A checkpoint value counts only in its expected shape, never as prose. Kinds: path (absolute),
 // rel (relative path), sha, branch, ref (a PR URL, number, or path), rev (<path>@<hex>), id.
 // Returns the value, or '' when it is absent or has another shape. A value followed by a
-// parenthetical remark, or by a full stop, is the value. A path may hold spaces, but a space followed by
-// a lowercase word is trailing prose: the path is then its first token.
+// parenthetical remark, or by a full stop, is the value. A path may hold spaces.
 const SHAPES = {
-  path: /^\/(?!.* [a-z])[\w@.+\- /]+$/,
+  path: /^\/[\w@.+\- /]+$/,
   rel: /^[\w@.+/-]+$/,
   sha: /^[0-9a-f]{7,64}$/i,
   branch: /^\w[\w./-]*$/,
@@ -221,9 +220,7 @@ function shaped(kind, v) {
     .trim();
   if (!re || absent(t)) return "";
   if (re.test(t)) return t;
-  const m = /^(\S+)\s+[(\[]/.exec(t);
-  const first = m ? m[1] : kind === "path" ? t.split(/\s+/)[0] : t;
-  const tok = first.replace(/[.,;:]+$/, "");
+  const tok = t.replace(/\s+[(\[].*$/, "").replace(/[.,;:]+$/, "");
   return tok && re.test(tok) ? tok : "";
 }
 
@@ -350,16 +347,21 @@ async function settleDecisions(prefix, answers, run) {
 
 // How to continue after a block. Resume replays the cached results of unchanged steps, so it
 // helps only when every need is a decision; a missing binding or a failing gate needs a fresh
-// rerun that reads the repository again.
+// rerun that reads the repository again. An input need that names an arg (`arg`) is answered in that
+// arg, not under answers.
 function rerunText(workflow, needs) {
   const cmd = `/slopify:${workflow}`;
   const list = needs || [];
+  const viaArg = list.filter((n) => n.arg);
   const answerable = list.some(
-    (n) => n.kind === "decision" || n.kind === "input",
+    (n) => !n.arg && (n.kind === "decision" || n.kind === "input"),
   );
+  const argText = viaArg.length
+    ? ` Give ${viaArg.map((n) => `${n.id} in args.${n.arg}`).join(" and ")}, not in answers.`
+    : "";
   return list.length && list.every((n) => n.kind === "decision")
     ? `Invoke ${cmd} again with the same args and add answers.<id> for each decision. In this session, pass resumeFromRunId to reuse the steps already completed.`
-    : `Resolve what each need names, then invoke ${cmd} again with the same args${answerable ? " and answers.<id> for each decision or input need" : ""}, without resumeFromRunId, so every step reads the repository afresh.`;
+    : `Resolve what each need names, then invoke ${cmd} again with the same args${answerable ? " and answers.<id> for each decision or input need" : ""}, without resumeFromRunId, so every step reads the repository afresh.${argText}`;
 }
 // kind: 'story' | 'decision' | 'prerequisite' | 'validation' | 'input'
 function blocked(workflow, step, needs, extra) {
@@ -1006,7 +1008,7 @@ const story = storySource === "text" ? storyArg : fact(cardRes, "story");
 const storyRevision = shaped("sha", fact(cardRes, "story-revision"));
 if (!story || storySource === "none") {
   return stop("locate", [
-    need("locate", 1, "input", "A story the board can read, or the story text.", (cardRes.gaps || []).join("; ") || cardRes.answer),
+    { ...need("locate", 1, "input", "A story the board can read, or the story text (pass it as args.story).", (cardRes.gaps || []).join("; ") || cardRes.answer), arg: "story" },
   ]);
 }
 if (!storyRevision) {
@@ -1047,6 +1049,7 @@ Report these keys, each as an evidence item with source set to the key; leave ou
 - ledger-story: the story revision on the last done spec line
 - done-spec, done-implement, done-publish, done-board-start, done-board-pr: the last ledger line of that name ("done board-start" and "done board-pr" lines name the card or the PR), with its leading timestamp removed and the ledger line number put in front as "<line number>|"
 - review-fired, review-ended
+- ledger-exclude: the paths after the word "exclude" on the last ledger line whose text, after its leading timestamp, starts with that word, comma-separated, or none
 - spec: "<absolute path>@<git hash-object>" of the spec at the path above
 - pr: the PR reference on the first line, then its description`,
   { label: "read checkpoints", phase: "Locate" },
@@ -1089,15 +1092,19 @@ const boardPrDone = !cardId || !!parseDoneBoard(val(cpRes, "done-board-pr"), "pr
 const ledgerStory = shaped("sha", val(cpRes, "ledger-story")) || (doneSpec ? doneSpec.story : "");
 
 // The currency chain: each link depends on the one before it.
+// Once the PR is published, a rerun goes straight to the review: a spec or story revised since then
+// belongs to the review loop, not to a redo of the steps before the publish.
+const published = !!donePub && !!state.pr && !!state.worktree;
 const specCurrent =
-  !!doneSpec &&
-  state.specExists &&
-  sameHash(doneSpec.hash, state.specHash) &&
-  !!ledgerStory &&
-  sameHash(ledgerStory, storyRevision);
-const implCurrent = specCurrent && !!doneImpl && sameHash(doneImpl.spec, state.specHash);
+  published ||
+  (!!doneSpec &&
+    state.specExists &&
+    sameHash(doneSpec.hash, state.specHash) &&
+    !!ledgerStory &&
+    sameHash(ledgerStory, storyRevision));
+const implCurrent = published || (specCurrent && !!doneImpl && sameHash(doneImpl.spec, state.specHash));
 const publishCurrent =
-  implCurrent && !!donePub && (doneImpl.pushed || (doneImpl.n < donePub.n));
+  published || (implCurrent && !!donePub && (doneImpl.pushed || (doneImpl.n < donePub.n)));
 done("locate");
 
 // ---- Workspace --------------------------------------------------------------
@@ -1366,7 +1373,9 @@ ${gathered}`;
 
 const touched = new Set(); // every path a producer reported changing, for the commit
 const startDirty = cpDirty;
-const outsideDirty = []; // dirty paths outside the assigned paths: reported, not committed, and kept from the review loop
+// Dirty paths this run found outside its assigned paths: reported, not committed, kept from the review loop,
+// and recorded on the ledger. A rerun that skips the commit reads them back from the ledger.
+const outsideDirty = splitList(val(cpRes, "ledger-exclude")).filter((p) => isRel(p) && !/^\.tmp(\/|$)/.test(p));
 const fixScopes = []; // paths a fix job was assigned beyond the tasks' own, validated with the rest
 let candidate = "";
 let docsJobs = [];
@@ -1469,10 +1478,8 @@ function commitSet(scopes) {
   const all = every.filter((p) => !within(p, state.specPath));
   const inScope = all.filter((p) => scopes.some((s) => within(p, s)));
   const outside = all.filter((p) => !inScope.includes(p));
-  if (outside.length) {
-    limits.push(`Uncommitted paths outside the assigned paths, not committed: ${outside.join(", ")}`);
-    outsideDirty.push(...outside);
-  }
+  if (outside.length) limits.push(`Uncommitted paths outside the assigned paths, not committed: ${outside.join(", ")}`);
+  outsideDirty.splice(0, outsideDirty.length, ...outside);
   return inScope;
 }
 
@@ -1653,7 +1660,10 @@ if (implCurrent) {
   const c = await callPusher(
     pushBrief(
       `Commit exactly these paths as they stand, staged by explicit path, with the commit convention docs/FORGE.md declares. Do not push. Commit nothing else, even if the worktree holds other uncommitted changes. If every path is already committed, make no commit and record the current HEAD sha in the ledger line.\nPaths:\n${list(commitPaths)}`,
-      [`done implement commit <the new commit's sha> spec ${state.specHash}`],
+      [
+        `exclude ${outsideDirty.join(", ") || "none"}`,
+        `done implement commit <the new commit's sha> spec ${state.specHash}`,
+      ],
     ),
     "commit the implementation",
     "Validate",
@@ -1721,7 +1731,7 @@ try {
     projectRoot: projectRoot || undefined,
     answers,
     // Dirty paths this run left out of its own commit; the review loop never stages them.
-    exclude: unique([...outsideDirty, ...(implCurrent ? cpDirty : [])]),
+    exclude: unique(outsideDirty),
   });
 } catch (e) {
   return stop("review", [
@@ -1734,8 +1744,9 @@ if (!review) {
   ]);
 }
 if (review.status === "blocked") {
+  // The block is this workflow's own: its name and rerun text, with review-pr's needs and completed steps.
   return {
-    ...review,
+    ...stop("review", review.needs || []),
     completed: [...completed, ...(review.completed || []).map((s) => `review-pr:${s}`)],
   };
 }

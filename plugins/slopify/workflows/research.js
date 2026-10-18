@@ -200,6 +200,17 @@ function blocked(gate, needs) {
   }
 }
 
+// A clerk that returns no verdict is dispatched again under its own bound: that is not a failure of the
+// gate it judges and sends no producer to revise. Null when the bound is spent.
+async function clerkVerdict(prompt, opts) {
+  for (let i = 1; i <= MAX_FAILURES; i++) {
+    const v = await agent(prompt, opts)
+    if (v) return v
+    attempts.push({ gate: 'validator', approach: opts.label, failed: 'the clerk did not return a verdict' })
+  }
+  return null
+}
+
 // POSIX (/x), drive-letter (C:\x, C:/x), and UNC (\\host\x) paths are absolute.
 const ABSOLUTE = /^(?:\/|[A-Za-z]:[\\/]|\\\\)/
 
@@ -393,7 +404,7 @@ ${findings && findings.length ? `\nFindings to resolve:\n${list(findings)}` : ''
         if (specFailures >= MAX_FAILURES) return false
         continue
       }
-      const verdict = await agent(
+      const verdict = await clerkVerdict(
         `${WHERE}
 
 Judge the research spec at ${spec.path}, revision ${spec.revision}, for research-spec readiness: the question's fit, the authorized scope, evidence standards that allow a supported uncertain answer, planned artifacts, convention fit (library/_meta/librarian.md), and verifiable acceptance. Judge that exact revision, including its planned raw notes (below): one note per canonical source and the conventional paths. Set specIssue.material to true only if the spec itself must change (its question, scope, evidence standards, or planned artifacts); minor notes are not material.
@@ -408,15 +419,16 @@ ${pairsText()}
 ${FIXED_PATHS}`,
         { agentType: 'slopify:library-clerk', label: 'judge spec', phase: 'Spec', schema: VERDICT_SCHEMA },
       )
-      if (verdict && verdict.verdict === 'pass') {
+      if (!verdict) return false
+      if (verdict.verdict === 'pass') {
         return true
       }
       specFailures += 1
-      findings = verdict ? verdict.findings : ['The clerk did not return a verdict.']
+      findings = verdict.findings
       attempts.push({
         gate: 'spec',
         approach: `spec revision ${spec.revision}`,
-        failed: verdict ? `${verdict.verdict}: ${verdict.findings.join('; ')}` : 'the clerk did not return',
+        failed: `${verdict.verdict}: ${verdict.findings.join('; ')}`,
       })
       why = 'A fresh library-clerk did not pass it; resolve its findings.'
     }
@@ -717,7 +729,7 @@ ${JSON.stringify(
 
   // Validate: a fresh clerk, after integration.
   phase('Validate')
-  verdict = await agent(
+  verdict = await clerkVerdict(
     `${WHERE}
 
 Validate the persisted research: the changed paths, the draft answer, the raw evidence, the spec revision, and the affected links and metadata. Check that scope against the library conventions (library/_meta/librarian.md) and the cited sources, not the whole library. Set specIssue.material to true only if the spec itself must change (its question, scope, evidence standards, or planned artifacts); minor notes are not material.
@@ -738,7 +750,8 @@ ${persisted.answer}`,
     { agentType: 'slopify:library-clerk', label: 'validate research', phase: 'Validate', schema: VERDICT_SCHEMA },
   )
 
-  if (verdict && verdict.verdict === 'pass') {
+  if (!verdict) return blocked('Persist', ['A verdict from a fresh library-clerk on the persisted research; see attempts.'])
+  if (verdict.verdict === 'pass') {
     const artifacts = {
       spec: spec.path,
       rawNotes: currentRaw,
@@ -764,17 +777,17 @@ ${persisted.answer}`,
   }
 
   persistFailures += 1
-  const findings = verdict ? verdict.findings : ['The clerk did not return a verdict.']
+  const findings = verdict.findings
   attempts.push({
     gate: 'persist',
-    approach: `integration validated as ${verdict ? verdict.verdict : 'no verdict'}`,
+    approach: `integration validated as ${verdict.verdict}`,
     failed: findings.join('; '),
   })
   if (persistFailures >= MAX_FAILURES) {
     return blocked('Persist', ['Persisted research a fresh library-clerk will pass; see the findings in attempts.'])
   }
 
-  if (verdict && materialIssue(verdict.specIssue)) {
+  if (materialIssue(verdict.specIssue)) {
     // The spec itself must change: revise, re-pass the gate, then redo the affected work.
     specFailures += 1
     attempts.push({ gate: 'spec', approach: 'spec revision forced by validation', failed: verdict.specIssue.change })

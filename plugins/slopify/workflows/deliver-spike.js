@@ -185,10 +185,9 @@ function absent(v, whole) {
 // A checkpoint value counts only in its expected shape, never as prose. Kinds: path (absolute),
 // rel (relative path), sha, branch, ref (a PR URL, number, or path), rev (<path>@<hex>), id.
 // Returns the value, or '' when it is absent or has another shape. A value followed by a
-// parenthetical remark, or by a full stop, is the value. A path may hold spaces, but a space followed by
-// a lowercase word is trailing prose: the path is then its first token.
+// parenthetical remark, or by a full stop, is the value. A path may hold spaces.
 const SHAPES = {
-  path: /^\/(?!.* [a-z])[\w@.+\- /]+$/,
+  path: /^\/[\w@.+\- /]+$/,
   rel: /^[\w@.+/-]+$/,
   sha: /^[0-9a-f]{7,64}$/i,
   branch: /^\w[\w./-]*$/,
@@ -203,9 +202,7 @@ function shaped(kind, v) {
     .trim();
   if (!re || absent(t)) return "";
   if (re.test(t)) return t;
-  const m = /^(\S+)\s+[(\[]/.exec(t);
-  const first = m ? m[1] : kind === "path" ? t.split(/\s+/)[0] : t;
-  const tok = first.replace(/[.,;:]+$/, "");
+  const tok = t.replace(/\s+[(\[].*$/, "").replace(/[.,;:]+$/, "");
   return tok && re.test(tok) ? tok : "";
 }
 
@@ -332,16 +329,21 @@ async function settleDecisions(prefix, answers, run) {
 
 // How to continue after a block. Resume replays the cached results of unchanged steps, so it
 // helps only when every need is a decision; a missing binding or a failing gate needs a fresh
-// rerun that reads the repository again.
+// rerun that reads the repository again. An input need that names an arg (`arg`) is answered in that
+// arg, not under answers.
 function rerunText(workflow, needs) {
   const cmd = `/slopify:${workflow}`;
   const list = needs || [];
+  const viaArg = list.filter((n) => n.arg);
   const answerable = list.some(
-    (n) => n.kind === "decision" || n.kind === "input",
+    (n) => !n.arg && (n.kind === "decision" || n.kind === "input"),
   );
+  const argText = viaArg.length
+    ? ` Give ${viaArg.map((n) => `${n.id} in args.${n.arg}`).join(" and ")}, not in answers.`
+    : "";
   return list.length && list.every((n) => n.kind === "decision")
     ? `Invoke ${cmd} again with the same args and add answers.<id> for each decision. In this session, pass resumeFromRunId to reuse the steps already completed.`
-    : `Resolve what each need names, then invoke ${cmd} again with the same args${answerable ? " and answers.<id> for each decision or input need" : ""}, without resumeFromRunId, so every step reads the repository afresh.`;
+    : `Resolve what each need names, then invoke ${cmd} again with the same args${answerable ? " and answers.<id> for each decision or input need" : ""}, without resumeFromRunId, so every step reads the repository afresh.${argText}`;
 }
 // kind: 'story' | 'decision' | 'prerequisite' | 'validation' | 'input'
 function blocked(workflow, step, needs, extra) {
@@ -489,10 +491,6 @@ function list(items) {
   return items && items.length ? items.map((x) => `- ${x}`).join('\n') : '- none'
 }
 
-function tokens(text) {
-  return String(text || '').split(/\s+/).filter(Boolean)
-}
-
 function opRef(result, op) {
   const hit = result && result.operations ? result.operations.find((o) => o.op === op) : null
   return hit ? String(hit.reference || '').trim() : ''
@@ -522,6 +520,11 @@ function covers(measurements, id) {
 // A verdict passes only when it says pass and nothing blocking remains.
 function passed(r) {
   return !!r && r.verdict === 'pass' && !(r.findings || []).some((f) => f.blocking)
+}
+
+// Whether a verdict is on the revision it was briefed with (or names what it judged, when none was briefed).
+function onRevision(r, revision) {
+  return !!r && (revision ? sameRev(revision, r.evaluated) : !!String(r.evaluated || '').trim())
 }
 
 // A verdict counts only for the revision it judged. When the brief could not name a revision
@@ -595,8 +598,10 @@ const bindingFact = fact(cp, 'spike-binding')
 const bindingBody = bindingFact.replace(/^[\s>*-]*spike prototypes\s*[:\u2014-]?\s*/i, '')
 binding = !absent(bindingBody) && /<slug>/i.test(bindingBody) ? bindingFact : ''
 const docFact = fact(cp, 'findings-doc')
-const docParts = absent(docFact) ? [] : tokens(docFact)
-const doc = { path: shaped('path', docParts[0]), revision: shaped('sha', docParts[1]) }
+const docSpec = parseSpec(docFact)
+const doc = docSpec
+  ? { path: shaped('path', docSpec.path), revision: shaped('sha', docSpec.hash) }
+  : { path: shaped('path', docFact), revision: '' }
 let prototypeBranch = shaped('branch', fact(cp, 'prototype-branch'))
 let prototypeWorktree = shaped('path', fact(cp, 'worktree'))
 if (doc.path) checkpoint.findingsDoc = doc.path
@@ -891,14 +896,18 @@ Revision judged: ${doc.revision || 'the document as it is now (report its git ha
 ${DOC_REVISION}${
     measurements.length ? `\n\nMeasurements the prototype reported:\n${showMeasurements(measurements)}` : ''
   }`
-  const [evidenceV, questionV, neutralityV, protoV] = await parallel([
-    () => lens('lens-evidence', docBrief('Judge whether every claim in the findings document cites a reachable source or measurement.'), { label: 'evidence', phase: 'Validate' }),
-    () => lens('lens-question', docBrief('Judge whether the findings answer the spike\'s question and name what remains unknown.'), { label: 'question', phase: 'Validate' }),
-    () => lens('lens-neutrality', docBrief('Judge whether the findings make no recommendation.'), { label: 'neutrality', phase: 'Validate' }),
-    () =>
-      hasPrototype
-        ? agent(
-            `${WHERE}
+  const judged = [
+    { name: 'lens-evidence', doc: true, call: () => lens('lens-evidence', docBrief('Judge whether every claim in the findings document cites a reachable source or measurement.'), { label: 'evidence', phase: 'Validate' }) },
+    { name: 'lens-question', doc: true, call: () => lens('lens-question', docBrief('Judge whether the findings answer the spike\'s question and name what remains unknown.'), { label: 'question', phase: 'Validate' }) },
+    { name: 'lens-neutrality', doc: true, call: () => lens('lens-neutrality', docBrief('Judge whether the findings make no recommendation.'), { label: 'neutrality', phase: 'Validate' }) },
+  ]
+  if (hasPrototype) {
+    judged.push({
+      name: 'qa',
+      doc: false,
+      call: () =>
+        agent(
+          `${WHERE}
 
 Judge whether the throwaway prototype measures what the findings document says. The acceptance source is the document's measurement claims, and each measurement's claim, value, and command. For each, re-run the command in a temporary copy of the prototype worktree and check that the prototype exercises what the claim says (not a stub), and that the document's stated value agrees with what you observe, allowing for ordinary run-to-run variance. Change nothing in the worktree or the document.
 
@@ -913,19 +922,26 @@ ${DOC_REVISION}
 
 Measurements the prototype reported:
 ${showMeasurements(measurements)}`,
-            { agentType: 'slopify:qa', label: 'confirm prototype', phase: 'Validate', schema: LENS_SCHEMA },
-          )
-        : Promise.resolve(null),
-  ])
+          { agentType: 'slopify:qa', label: 'confirm prototype', phase: 'Validate', schema: LENS_SCHEMA },
+        ),
+    })
+  }
 
-  const judged = [
-    { name: 'lens-evidence', r: evidenceV, doc: true },
-    { name: 'lens-question', r: questionV, doc: true },
-    { name: 'lens-neutrality', r: neutralityV, doc: true },
-  ]
-  if (hasPrototype) judged.push({ name: 'qa', r: protoV, doc: false })
-
+  // A validator with no verdict, or a verdict on another revision, is dispatched again under its own
+  // bound; that is not a failure of this gate and does not send a producer to fix.
   for (const j of judged) j.revision = j.doc ? doc.revision : protoRevision
+  let todo = judged
+  for (let n = 0; n < MAX_FAILURES && todo.length; n++) {
+    if (n > 0) attempts.push({ gate: 'validator', approach: `re-run ${todo.map((j) => j.name).join(', ')}`, failed: 'no verdict, or a verdict on another revision' })
+    const res = await parallel(todo.map((j) => j.call))
+    todo.forEach((j, i) => (j.r = res[i]))
+    todo = judged.filter((j) => !onRevision(j.r, j.revision))
+  }
+  if (todo.length) {
+    return stop('validate', [
+      need('validate-2', 'validation', `A verdict on the briefed revision from ${todo.map((j) => j.name).join(', ')}.`, 'three dispatches returned no verdict or a verdict on another revision'),
+    ])
+  }
   const failing = judged.filter((j) => !passedOn(j.r, j.revision))
   verdicts = judged.map((j) => ({
     verdict: j.name,

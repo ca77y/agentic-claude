@@ -3,7 +3,7 @@ export const meta = {
   description:
     'Wait for a pull request review, sort its findings, fix the real defects, and push each round only after a fresh qa passes, for at most three rounds or until a review is clean',
   whenToUse:
-    'Run only when the user invokes /slopify:review-pr or asks for the slopify review-pr workflow; deliver-story and deliver-bugfix also run it as their last step. Args: {pr, worktree?, spec?, story?, test?, findings?, projectRoot?, answers?}, or the pull request as a plain string. pr names the pull request, worktree is its story worktree, spec and story are the acceptance source when known, test is the regression test path that belongs with the spec on the ledger, findings are review findings to use in round 1 instead of waiting, projectRoot defaults to the session project directory, answers maps a blocked need id to the answer, and exclude lists dirty paths the caller left out of its own commit, which this workflow never stages.',
+    'Run only when the user invokes /slopify:review-pr or asks for the slopify review-pr workflow; deliver-story and deliver-bugfix also run it as their last step. Args: {pr, worktree?, spec?, story?, test?, findings?, exclude?, projectRoot?, answers?}, or the pull request as a plain string. pr names the pull request, worktree is its story worktree, spec and story are the acceptance source when known, test is the regression test path that belongs with the spec on the ledger, findings are review findings to use in round 1 instead of waiting, projectRoot defaults to the session project directory, answers maps a blocked need id to the answer, and exclude lists the dirty paths the caller identified as outside its scope, which this workflow never stages; a producer that changes one leaves it unstaged and the result names it in leftForUser.',
   phases: [
     { title: 'Locate', detail: 'scout-checkpoint reports the PR, worktree, and ledger state; scout-card reads the PR card; pusher recovers a missing worktree' },
     { title: 'Wait', detail: 'watcher waits for review n, one dispatch at a time' },
@@ -159,10 +159,9 @@ function absent(v, whole) {
 // A checkpoint value counts only in its expected shape, never as prose. Kinds: path (absolute),
 // rel (relative path), sha, branch, ref (a PR URL, number, or path), rev (<path>@<hex>), id.
 // Returns the value, or '' when it is absent or has another shape. A value followed by a
-// parenthetical remark, or by a full stop, is the value. A path may hold spaces, but a space followed by
-// a lowercase word is trailing prose: the path is then its first token.
+// parenthetical remark, or by a full stop, is the value. A path may hold spaces.
 const SHAPES = {
-  path: /^\/(?!.* [a-z])[\w@.+\- /]+$/,
+  path: /^\/[\w@.+\- /]+$/,
   rel: /^[\w@.+/-]+$/,
   sha: /^[0-9a-f]{7,64}$/i,
   branch: /^\w[\w./-]*$/,
@@ -177,9 +176,7 @@ function shaped(kind, v) {
     .trim();
   if (!re || absent(t)) return "";
   if (re.test(t)) return t;
-  const m = /^(\S+)\s+[(\[]/.exec(t);
-  const first = m ? m[1] : kind === "path" ? t.split(/\s+/)[0] : t;
-  const tok = first.replace(/[.,;:]+$/, "");
+  const tok = t.replace(/\s+[(\[].*$/, "").replace(/[.,;:]+$/, "");
   return tok && re.test(tok) ? tok : "";
 }
 
@@ -306,16 +303,21 @@ async function settleDecisions(prefix, answers, run) {
 
 // How to continue after a block. Resume replays the cached results of unchanged steps, so it
 // helps only when every need is a decision; a missing binding or a failing gate needs a fresh
-// rerun that reads the repository again.
+// rerun that reads the repository again. An input need that names an arg (`arg`) is answered in that
+// arg, not under answers.
 function rerunText(workflow, needs) {
   const cmd = `/slopify:${workflow}`;
   const list = needs || [];
+  const viaArg = list.filter((n) => n.arg);
   const answerable = list.some(
-    (n) => n.kind === "decision" || n.kind === "input",
+    (n) => !n.arg && (n.kind === "decision" || n.kind === "input"),
   );
+  const argText = viaArg.length
+    ? ` Give ${viaArg.map((n) => `${n.id} in args.${n.arg}`).join(" and ")}, not in answers.`
+    : "";
   return list.length && list.every((n) => n.kind === "decision")
     ? `Invoke ${cmd} again with the same args and add answers.<id> for each decision. In this session, pass resumeFromRunId to reuse the steps already completed.`
-    : `Resolve what each need names, then invoke ${cmd} again with the same args${answerable ? " and answers.<id> for each decision or input need" : ""}, without resumeFromRunId, so every step reads the repository afresh.`;
+    : `Resolve what each need names, then invoke ${cmd} again with the same args${answerable ? " and answers.<id> for each decision or input need" : ""}, without resumeFromRunId, so every step reads the repository afresh.${argText}`;
 }
 // kind: 'story' | 'decision' | 'prerequisite' | 'validation' | 'input'
 function blocked(workflow, step, needs, extra) {
@@ -544,10 +546,21 @@ function parseDirty(v) {
     .filter((x) => !excluded.some((e) => samePath(x, e)));
 }
 
+// Worktree-relative form of a path, for comparing the same file spelled two ways.
+function relPath(p) {
+  const t = String(p || '').trim();
+  return worktree && t.startsWith(worktree + '/') ? t.slice(worktree.length + 1) : t.replace(/^\.\//, '');
+}
+
+// Whether two spellings name one file: equal worktree-relative forms, or a relative spelling that ends one
+// absolute spelling. Two relative paths match only when equal, so docs/README.md is not README.md.
 function samePath(a, b) {
-  const x = String(a || '').trim().replace(/^\.\//, '');
-  const y = String(b || '').trim().replace(/^\.\//, '');
-  return !!x && !!y && (x === y || x.endsWith('/' + y) || y.endsWith('/' + x));
+  const x = relPath(a);
+  const y = relPath(b);
+  if (!x || !y) return false;
+  if (x === y) return true;
+  const xAbs = x.startsWith('/');
+  return xAbs !== y.startsWith('/') && (xAbs ? x.endsWith('/' + y) : y.endsWith('/' + x));
 }
 
 // Markdown and text documents and the spec go to the writer; everything else goes to the coder. The kind of
@@ -560,13 +573,28 @@ const isDoc = (loc) => {
   return isSpec(p) || /\.(md|mdx|rst|adoc)$/i.test(p) || (/\.txt$/i.test(p) && !BUILD_TXT.test(p)) || /(^|\/)readme$/i.test(p);
 };
 
-const CHECKPOINT_KEYS = 'worktree branch head base pushed-head unpushed dirty ledger review-fired fired-head review-ended spec pr';
+const CHECKPOINT_KEYS = 'worktree branch head base pushed-head unpushed dirty ledger review-fired fired-head fired-ancestor review-ended spec pr';
 
 // A validator verdict counts only when it passes, carries no blocking finding, and names the revision
 // the brief gave it in evaluated (see sameRev in the shared block). A brief with no revision to name
 // accepts any evaluated.
 const named = (v, rev) => sameRev(rev, v.evaluated);
 const passes = (v, rev) => !!v && v.verdict === 'pass' && !v.findings.some((f) => f.blocking) && named(v, rev);
+// Dispatch validators, and dispatch again any with no verdict or a verdict on another revision, under that
+// bound alone: such a verdict is not a failure of the gate and sends no producer to fix. A slot still
+// without a verdict on the revision after the bound is returned as it is, for the caller to stop on.
+async function judgeAll(jobs, rev) {
+  const out = new Array(jobs.length).fill(null);
+  for (let n = 0; n < MAX_FAILURES; n++) {
+    const todo = jobs.map((_, i) => i).filter((i) => !(out[i] && named(out[i], rev)));
+    if (!todo.length) break;
+    if (n > 0) attempts.push({ gate: 'validator', approach: `re-run ${todo.length} validator(s) on ${rev}`, failed: 'no verdict, or a verdict on another revision' });
+    const res = await parallel(todo.map((i) => jobs[i]));
+    todo.forEach((i, k) => (out[i] = res[k]));
+  }
+  return out;
+}
+const unjudged = (verdicts, rev) => verdicts.some((v) => !v || !named(v, rev));
 function problems(v, rev) {
   if (!v) return ['no verdict returned'];
   const out = v.findings.filter((f) => v.verdict !== 'pass' || f.blocking).map((f) => `${f.location}: ${f.problem}`);
@@ -586,7 +614,7 @@ Report where the review loop on this pull request stands from its durable checkp
 - worktree, branch, head, dirty: the story worktree for the pull request's head branch, named as docs/FORGE.md names it. head is its HEAD sha. dirty lists the paths with uncommitted changes, ignoring .tmp/, or is none.
 - base: the pull request's base commit, the merge base of the head branch and the target branch docs/FORGE.md declares.
 - pushed-head: the head commit sha of the pull request's branch as the remote has it, not the worktree's HEAD. unpushed: how many commits the worktree's HEAD holds that the pushed head lacks, or none.
-- ledger: the absolute path of the worktree's .tmp/ledger.md, only when it exists. review-fired and review-ended: the highest review round numbers on its review lines after the last done publish line. fired-head: the sha after "head" on the last review fired line, when it has one.
+- ledger: the absolute path of the worktree's .tmp/ledger.md, only when it exists. review-fired and review-ended: the highest review round numbers on its review lines after the last done publish line. fired-head: the sha after "head" on the last review fired line, when it has one. fired-ancestor: yes when fired-head is an ancestor of the worktree's HEAD (git merge-base --is-ancestor), otherwise no; leave it out when there is no fired-head.
 - spec: the current spec path and its git hash-object, written <absolute path>@<git hash-object>, when the story has a spec.
 - pr: the pull request's description, read through docs/FORGE.md's read binding when it declares one; leave the key out when it declares none.
 
@@ -665,10 +693,18 @@ if (!specPath) specPath = val(cp, 'spec');
 // (a fix whose push failed, or an interrupted round) is not part of it, whatever the worktree's HEAD says.
 const pushedHead = val(cp, 'pushed-head');
 const unpushed = parseInt(String(fact(cp, 'unpushed')).trim(), 10) > 0;
-// The `review <n> fired` line names the head that review judges. A pushed head beyond it means a fix was
-// pushed after that review fired, and the steps after the push (PR update, re-fire, ledger) may not have run.
+// The `review <n> fired` line names the head that review judges. A pushed head beyond it, which is also the
+// worktree's HEAD and descends from the fired head, is this workflow's own fix pushed after that review fired,
+// and the steps after the push (PR update, re-fire, ledger) may not have run. A pushed head that is not the
+// worktree's (someone else's push or rebase) is not: its review is waited for and sorted as usual.
 const firedHead = val(cp, 'fired-head');
-const pushedAhead = !!firedHead && !!pushedHead && !sameRev(firedHead, pushedHead) && !sameRev(pushedHead, firedHead);
+const pushedAhead =
+  !!firedHead &&
+  !!pushedHead &&
+  !sameRev(firedHead, pushedHead) &&
+  !sameRev(pushedHead, firedHead) &&
+  sameRev(val(cp, 'head'), pushedHead) &&
+  /^yes/i.test(val(cp, 'fired-ancestor'));
 head = pushedHead || val(cp, 'head');
 baseCommit = val(cp, 'base');
 dirtyPaths = parseDirty(fact(cp, 'dirty'));
@@ -798,20 +834,20 @@ ${f.text}`,
 
 // ---- Fix -------------------------------------------------------------------
 
-// Worktree-relative form of a path, for comparing the same file spelled two ways.
-const relPath = (p) => {
-  const t = String(p || '').trim();
-  return worktree && t.startsWith(worktree + '/') ? t.slice(worktree.length + 1) : t.replace(/^\.\//, '');
-};
-
 // Everything the round commits: the producers' reported paths plus every path that was dirty when the round
 // began (validators judged the whole worktree), without .tmp/ and without the spec, which is committed alone.
+// An excluded path a producer changed is never staged: it is left for the user and named in the result.
+const leftForUser = new Set();
 function stagedPaths(st) {
   const out = [];
   const seen = new Set();
   for (const p of [...st.stage, ...st.dirtyAll]) {
     if (!p || isTmp(p) || isSpec(p) || seen.has(relPath(p))) continue;
     seen.add(relPath(p));
+    if (excluded.some((e) => samePath(p, e))) {
+      leftForUser.add(relPath(p));
+      continue;
+    }
     out.push(p);
   }
   return out;
@@ -865,10 +901,16 @@ ${acceptance([])}
 
 Review defects the revision was written to cover:
 ${workBrief(items)}${mismatch ? `\nThe coder's reason for the revision:\n${mismatch}` : ''}`;
-    const gate = await parallel([
-      () => lens('lens-scope', gateBrief, { label: `lens-scope round ${r}`, phase: 'Fix' }),
-      () => lens('lens-consistency', gateBrief, { label: `lens-consistency round ${r}`, phase: 'Fix' }),
-    ]);
+    const gate = await judgeAll(
+      [
+        () => lens('lens-scope', gateBrief, { label: `lens-scope round ${r}`, phase: 'Fix' }),
+        () => lens('lens-consistency', gateBrief, { label: `lens-consistency round ${r}`, phase: 'Fix' }),
+      ],
+      w.revision,
+    );
+    if (unjudged(gate, w.revision)) {
+      return { stop: stop(`spec-r${r}`, [need(`r${r}-spec-verdict`, 'validation', `A verdict on spec revision ${w.revision} from lens-scope and lens-consistency.`, 'three dispatches returned no verdict or a verdict on another revision')]) };
+    }
     if (gate.every((g) => passes(g, w.revision))) {
       st.specRevised = true;
       st.specRevision = w.revision;
@@ -1050,21 +1092,22 @@ Run the tests and checks that apply. Judge that each defect is resolved, that no
 Judge that the documentation claims in the changed paths are true against the code.`, { label: `lens-docs round ${r} #${st.validations}`, phase: 'Validate' }),
     );
   }
-  const verdicts = await parallel(jobs);
+  const verdicts = await judgeAll(jobs, cand.label);
+  if (unjudged(verdicts, cand.label)) {
+    return { stop: stop(`validate-r${r}`, [need(`r${r}-validate-verdict`, 'validation', `A verdict on ${cand.label} from qa${st.docsChanged ? ' and lens-docs' : ''}.`, 'three dispatches returned no verdict or a verdict on another revision')]) };
+  }
   const pass = verdicts.every((v) => passes(v, cand.label));
   const feedback = [];
-  let procedural = true; // only a missing verdict or a wrong revision failed: judge again without producing again
   verdicts.forEach((v, i) => {
     if (passes(v, cand.label)) return;
     const src = i === 0 ? 'qa' : 'lens-docs';
-    const blockers = v ? v.findings.filter((f) => f.blocking) : [];
-    if (blockers.length || (v && v.verdict !== 'pass')) procedural = false;
+    const blockers = v.findings.filter((f) => f.blocking);
     if (blockers.length) blockers.forEach((f, k) => feedback.push({ id: `${src}-${st.validations}-${k + 1}`, location: f.location, text: f.problem, why: '' }));
-    else if (v) feedback.push({ id: `${src}-${st.validations}`, location: '', text: problems(v, cand.label).join('; '), why: '' });
+    else feedback.push({ id: `${src}-${st.validations}`, location: '', text: problems(v, cand.label).join('; '), why: '' });
   });
-  const summary = `validation ${st.validations}: ${verdicts.map((v, i) => `${i === 0 ? 'qa' : 'lens-docs'} ${!v ? 'no verdict' : passes(v, cand.label) ? 'pass' : v.verdict === 'pass' ? 'pass not accepted' : v.verdict}`).join(', ')}`;
+  const summary = `validation ${st.validations}: ${verdicts.map((v, i) => `${i === 0 ? 'qa' : 'lens-docs'} ${passes(v, cand.label) ? 'pass' : v.verdict === 'pass' ? 'pass not accepted' : v.verdict}`).join(', ')}`;
   st.validationLog.push(summary);
-  return { pass, feedback, verdicts, procedural, label: cand.label };
+  return { pass, feedback, verdicts, label: cand.label };
 }
 
 // ---- Push ------------------------------------------------------------------
@@ -1230,16 +1273,14 @@ for (let r = startRound; r <= MAX_ROUNDS && !ended; r++) {
     validations: 0,
     pass: 0,
     label: '',
-    skipProduce: false,
     validationLog: [],
   };
   while (true) {
-    if (!st.skipProduce) {
-      const made = await produce(r, st);
-      if (made.stop) return made.stop;
-    }
+    const made = await produce(r, st);
+    if (made.stop) return made.stop;
     st.validations += 1;
     const v = await validate(r, st, sorted.defects);
+    if (v.stop) return v.stop;
     if (v.pass) break;
     validateFailures += 1;
     attempts.push({
@@ -1250,8 +1291,7 @@ for (let r = startRound; r <= MAX_ROUNDS && !ended; r++) {
     if (validateFailures >= MAX_FAILURES) {
       return stop(`validate-r${r}`, [need(`r${r}-validate`, 'validation', 'Fixes a fresh qa will pass.', attempts[attempts.length - 1].failed)]);
     }
-    st.skipProduce = v.procedural;
-    if (!v.procedural) st.feedback = v.feedback;
+    st.feedback = v.feedback;
   }
 
   // Push: reachable only after a fresh qa passed this round's fixes
@@ -1325,6 +1365,7 @@ function buildReport() {
           ? `Ended: ${MAX_ROUNDS} rounds done; review ${at} still has ${unfixed.length} unfixed defect(s).`
           : `Ended: review ${at} ${o}.${review && review.note ? ` ${review.note}` : ''}`,
   );
+  if (leftForUser.size) lines.push(`Left for the user, not staged (excluded by the caller, but changed by a producer): ${[...leftForUser].join(', ')}.`);
   return lines.join('\n');
 }
 
@@ -1337,5 +1378,6 @@ return {
   rounds,
   review,
   unfixed,
+  ...(leftForUser.size ? { leftForUser: [...leftForUser] } : {}),
   report: buildReport(),
 };

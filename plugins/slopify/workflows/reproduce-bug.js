@@ -160,10 +160,9 @@ function absent(v, whole) {
 // A checkpoint value counts only in its expected shape, never as prose. Kinds: path (absolute),
 // rel (relative path), sha, branch, ref (a PR URL, number, or path), rev (<path>@<hex>), id.
 // Returns the value, or '' when it is absent or has another shape. A value followed by a
-// parenthetical remark, or by a full stop, is the value. A path may hold spaces, but a space followed by
-// a lowercase word is trailing prose: the path is then its first token.
+// parenthetical remark, or by a full stop, is the value. A path may hold spaces.
 const SHAPES = {
-  path: /^\/(?!.* [a-z])[\w@.+\- /]+$/,
+  path: /^\/[\w@.+\- /]+$/,
   rel: /^[\w@.+/-]+$/,
   sha: /^[0-9a-f]{7,64}$/i,
   branch: /^\w[\w./-]*$/,
@@ -178,9 +177,7 @@ function shaped(kind, v) {
     .trim();
   if (!re || absent(t)) return "";
   if (re.test(t)) return t;
-  const m = /^(\S+)\s+[(\[]/.exec(t);
-  const first = m ? m[1] : kind === "path" ? t.split(/\s+/)[0] : t;
-  const tok = first.replace(/[.,;:]+$/, "");
+  const tok = t.replace(/\s+[(\[].*$/, "").replace(/[.,;:]+$/, "");
   return tok && re.test(tok) ? tok : "";
 }
 
@@ -307,16 +304,21 @@ async function settleDecisions(prefix, answers, run) {
 
 // How to continue after a block. Resume replays the cached results of unchanged steps, so it
 // helps only when every need is a decision; a missing binding or a failing gate needs a fresh
-// rerun that reads the repository again.
+// rerun that reads the repository again. An input need that names an arg (`arg`) is answered in that
+// arg, not under answers.
 function rerunText(workflow, needs) {
   const cmd = `/slopify:${workflow}`;
   const list = needs || [];
+  const viaArg = list.filter((n) => n.arg);
   const answerable = list.some(
-    (n) => n.kind === "decision" || n.kind === "input",
+    (n) => !n.arg && (n.kind === "decision" || n.kind === "input"),
   );
+  const argText = viaArg.length
+    ? ` Give ${viaArg.map((n) => `${n.id} in args.${n.arg}`).join(" and ")}, not in answers.`
+    : "";
   return list.length && list.every((n) => n.kind === "decision")
     ? `Invoke ${cmd} again with the same args and add answers.<id> for each decision. In this session, pass resumeFromRunId to reuse the steps already completed.`
-    : `Resolve what each need names, then invoke ${cmd} again with the same args${answerable ? " and answers.<id> for each decision or input need" : ""}, without resumeFromRunId, so every step reads the repository afresh.`;
+    : `Resolve what each need names, then invoke ${cmd} again with the same args${answerable ? " and answers.<id> for each decision or input need" : ""}, without resumeFromRunId, so every step reads the repository afresh.${argText}`;
 }
 // kind: 'story' | 'decision' | 'prerequisite' | 'validation' | 'input'
 function blocked(workflow, step, needs, extra) {
@@ -479,16 +481,22 @@ function findingsText(v) {
   return list.length ? list.join('\n') : '- none'
 }
 
-// What keeps a lens verdict from counting as a pass; an empty array is a pass.
-function problems(name, v, revision) {
-  if (!v) return [`${name} did not return a verdict`]
-  const out = []
-  if (v.verdict !== 'pass') out.push(`${name} ${v.verdict}\n${findingsText(v)}\nLimits: ${v.limits}`)
-  else if ((v.findings || []).some(f => f.blocking)) out.push(`${name} passed with blocking findings\n${findingsText(v)}`)
-  else if (!sameRev(revision, v.evaluated)) {
-    out.push(`${name} judged "${v.evaluated}", not revision ${revision}`)
+// A lens that returns no verdict, or one on another revision, is dispatched again under its own bound:
+// that is not a failure of the validate gate and does not send a producer to fix. Null when the bound is spent.
+async function lensOn(name, brief, revision, opts) {
+  for (let i = 1; i <= MAX_FAILURES; i++) {
+    const v = await lens(name, brief, opts)
+    if (v && sameRev(revision, v.evaluated)) return v
+    attempts.push({ gate: 'validator', approach: `${name} on revision ${revision}`, failed: v ? `judged "${v.evaluated}", not the briefed revision` : 'the lens did not return a verdict' })
   }
-  return out
+  return null
+}
+
+// What keeps a lens verdict, already on the briefed revision, from counting as a pass; an empty array is a pass.
+function problems(name, v) {
+  if (v.verdict !== 'pass') return [`${name} ${v.verdict}\n${findingsText(v)}\nLimits: ${v.limits}`]
+  if ((v.findings || []).some(f => f.blocking)) return [`${name} passed with blocking findings\n${findingsText(v)}`]
+  return []
 }
 
 function record(lensName, v) {
@@ -557,8 +565,8 @@ const bugCard = idOf(fact(cp, 'bug-card')) || idOf(fact(relatedR, 'bug-card'))
 // A reproduction is held only when the checkpoint reports "<dir>@<digest>" for this run's directory;
 // a missing-directory note, an empty value, or any other prose means there is none.
 const reproValue = fact(cp, 'repro-dir')
-const reproMatch = reproValue.match(/^(\S+?)\/?@([0-9a-f]{7,64})$/i)
-const reproHeld = !!reproMatch && reproMatch[1].endsWith(reproRel)
+const reproMatch = parseSpec(reproValue)
+const reproHeld = !!reproMatch && reproMatch.path.replace(/\/+$/, '').endsWith(reproRel)
 if (bugCard) checkpoint.bugCard = bugCard
 if (reproHeld) checkpoint.reproduction = reproDir
 
@@ -618,7 +626,7 @@ done('gather')
 
 // ---- Reproduce and validate the reproduction -------------------------------
 
-let reproRev = reproHeld ? reproMatch[2] : ''
+let reproRev = reproHeld ? reproMatch.hash : ''
 let reproSteps = []
 let reproObserved = ''
 let lastFindings = []
@@ -673,15 +681,21 @@ phase('Validate reproduction')
 let reproVerdict = null
 let validateReproFailures = 0
 while (true) {
-  reproVerdict = await lens('lens-repro',
+  reproVerdict = await lensOn('lens-repro',
     `${WHERE}
 
 Judge the reproduction in ${reproDir}, revision ${reproRev} (${REPRO_REVISION}). Run it at least three times. The report it must show: ${report}
 
 ${reproSteps.length ? `The steps to run: ${reproSteps.join(' | ')}` : 'The directory holds the steps in its notes file.'}${answerFor('validate-repro-1') ? `\n\nContext the user gave after an earlier attempt: ${answerFor('validate-repro-1')}` : ''}`,
+    reproRev,
     { label: `repro (revision ${reproRev.slice(0, 7)})`, phase: 'Validate reproduction' },
   )
-  const bad = problems('lens-repro', reproVerdict, reproRev)
+  if (!reproVerdict) {
+    return stop('validate-repro', [
+      { id: 'validate-repro-2', kind: 'validation', what: `A verdict on reproduction revision ${reproRev} from lens-repro`, evidence: 'three dispatches returned no verdict or a verdict on another revision' },
+    ])
+  }
+  const bad = problems('lens-repro', reproVerdict)
   if (!bad.length) break
   validateReproFailures += 1
   attempts.push({ gate: 'validate-repro', approach: `reproduction revision ${reproRev}`, failed: bad.join('; ') })
@@ -734,18 +748,26 @@ Reproduction observed: ${reproObserved || 'see the notes file in the reproductio
 Evidence:
 ${evidenceText}${settledText(settled)}`
 
+// A blocker the user has answered goes back to the writer with its answer, not to the user.
+const settledBlockers = []
 async function writeIssue(why, label) {
   while (true) {
     const { res: w, open } = await settleDecisions('issue', answers, (settled) =>
-      agent(reportPrompt(why, settled), { agentType: 'slopify:writer', label, phase: 'Report', schema: WRITER_SCHEMA }),
+      agent(reportPrompt(why, [...settled, ...settledBlockers]), { agentType: 'slopify:writer', label, phase: 'Report', schema: WRITER_SCHEMA }),
     )
-    const blockers = w ? (w.storyBlockers || []).map(s => String(s).trim()).filter(Boolean) : []
+    const blockers = decisionsOf('issue-blocker', w ? w.storyBlockers : [])
+    const unanswered = blockers.filter(d => !answerOf(answers, d.id))
+    const fresh = blockers.filter(d => answerOf(answers, d.id) && !settledBlockers.some(x => x.id === d.id))
+    if (!open.length && !unanswered.length && fresh.length) {
+      settledBlockers.push(...fresh.map(d => ({ ...d, answer: answerOf(answers, d.id) })))
+      continue
+    }
     if (open.length || blockers.length) {
       // Reported before the draft check: a writer that blocks writes no draft, and retrying would hide why.
       if (draftOk(w)) checkpoint.issue = issuePath
       return stop('report', [
         ...open.map(d => ({ id: d.id, kind: 'decision', what: d.question, evidence: 'reported by the writer while drafting the issue' })),
-        ...blockers.map((b, i) => ({ id: `issue-blocker-${i + 1}`, kind: 'input', what: b, evidence: 'reported by the writer while drafting the issue' })),
+        ...(unanswered.length ? unanswered : blockers).map(d => ({ id: d.id, kind: 'input', what: d.question, evidence: 'reported by the writer while drafting the issue' })),
       ])
     }
     if (draftOk(w)) {
@@ -771,15 +793,21 @@ phase('Validate report')
 let reportVerdict = null
 let validateReportFailures = 0
 while (true) {
-  reportVerdict = await lens('lens-bug-report',
+  reportVerdict = await lensOn('lens-bug-report',
     `${WHERE}
 
 Judge the bug report draft at ${issuePath}, revision ${issueRev}, against the reproduction in ${reproDir}, which lens-repro already validated: do not recompute its digest or re-judge the reproduction itself. Name the draft revision as evaluated.
 
 Original report: ${report}`,
+    issueRev,
     { label: `bug-report (revision ${issueRev.slice(0, 7)})`, phase: 'Validate report' },
   )
-  const bad = problems('lens-bug-report', reportVerdict, issueRev)
+  if (!reportVerdict) {
+    return stop('validate-report', [
+      { id: 'validate-report-2', kind: 'validation', what: `A verdict on bug report revision ${issueRev} from lens-bug-report`, evidence: 'three dispatches returned no verdict or a verdict on another revision' },
+    ])
+  }
+  const bad = problems('lens-bug-report', reportVerdict)
   if (!bad.length) break
   validateReportFailures += 1
   attempts.push({ gate: 'validate-report', approach: `issue revision ${issueRev}`, failed: bad.join('; ') })

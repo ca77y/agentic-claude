@@ -20,6 +20,8 @@ The brief carries the project root, the keys to report, and what identifies the 
 - `ledger-test`: the test paths on the last `done spec` line that names a `test`.
 - `done-spec`, `done-implement`, `done-publish`, `done-board-start`, `done-board-pr`: the last matching `done spec`, `done implement`, `done publish`, `done board-start`, or `done board-pr` line, as `<n>|<line>`, where `<n>` is its line number in the ledger. Remove the leading timestamp when the brief asks.
 - `fired-head`: the sha after `head` on the last `review <n> fired` line, when it has one.
+- `fired-ancestor`: `yes` when `fired-head` is an ancestor of the worktree's `HEAD`, otherwise `no`; absent when there is no `fired-head`.
+- `ledger-exclude`: the paths after the word `exclude` on the last ledger line that starts with it, comma-separated, or `none`.
 - `review-fired`, `review-ended`: the highest round numbers on `review <n> fired` and `review <n> ended` lines after the last `done publish` line.
 - `spec`: the current spec path and its `git hash-object`, written `<absolute path>@<hash>`.
 - `pr`: the open PR for the branch, read through the read binding in `docs/FORGE.md`, with its description.

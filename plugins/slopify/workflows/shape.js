@@ -159,10 +159,9 @@ function absent(v, whole) {
 // A checkpoint value counts only in its expected shape, never as prose. Kinds: path (absolute),
 // rel (relative path), sha, branch, ref (a PR URL, number, or path), rev (<path>@<hex>), id.
 // Returns the value, or '' when it is absent or has another shape. A value followed by a
-// parenthetical remark, or by a full stop, is the value. A path may hold spaces, but a space followed by
-// a lowercase word is trailing prose: the path is then its first token.
+// parenthetical remark, or by a full stop, is the value. A path may hold spaces.
 const SHAPES = {
-  path: /^\/(?!.* [a-z])[\w@.+\- /]+$/,
+  path: /^\/[\w@.+\- /]+$/,
   rel: /^[\w@.+/-]+$/,
   sha: /^[0-9a-f]{7,64}$/i,
   branch: /^\w[\w./-]*$/,
@@ -177,9 +176,7 @@ function shaped(kind, v) {
     .trim();
   if (!re || absent(t)) return "";
   if (re.test(t)) return t;
-  const m = /^(\S+)\s+[(\[]/.exec(t);
-  const first = m ? m[1] : kind === "path" ? t.split(/\s+/)[0] : t;
-  const tok = first.replace(/[.,;:]+$/, "");
+  const tok = t.replace(/\s+[(\[].*$/, "").replace(/[.,;:]+$/, "");
   return tok && re.test(tok) ? tok : "";
 }
 
@@ -306,16 +303,21 @@ async function settleDecisions(prefix, answers, run) {
 
 // How to continue after a block. Resume replays the cached results of unchanged steps, so it
 // helps only when every need is a decision; a missing binding or a failing gate needs a fresh
-// rerun that reads the repository again.
+// rerun that reads the repository again. An input need that names an arg (`arg`) is answered in that
+// arg, not under answers.
 function rerunText(workflow, needs) {
   const cmd = `/slopify:${workflow}`;
   const list = needs || [];
+  const viaArg = list.filter((n) => n.arg);
   const answerable = list.some(
-    (n) => n.kind === "decision" || n.kind === "input",
+    (n) => !n.arg && (n.kind === "decision" || n.kind === "input"),
   );
+  const argText = viaArg.length
+    ? ` Give ${viaArg.map((n) => `${n.id} in args.${n.arg}`).join(" and ")}, not in answers.`
+    : "";
   return list.length && list.every((n) => n.kind === "decision")
     ? `Invoke ${cmd} again with the same args and add answers.<id> for each decision. In this session, pass resumeFromRunId to reuse the steps already completed.`
-    : `Resolve what each need names, then invoke ${cmd} again with the same args${answerable ? " and answers.<id> for each decision or input need" : ""}, without resumeFromRunId, so every step reads the repository afresh.`;
+    : `Resolve what each need names, then invoke ${cmd} again with the same args${answerable ? " and answers.<id> for each decision or input need" : ""}, without resumeFromRunId, so every step reads the repository afresh.${argText}`;
 }
 // kind: 'story' | 'decision' | 'prerequisite' | 'validation' | 'input'
 function blocked(workflow, step, needs, extra) {
@@ -468,16 +470,22 @@ function findingsText(v) {
   return list.length ? list.join('\n') : '- none'
 }
 
-// What keeps a lens verdict from counting as a pass; an empty array is a pass.
-function problems(name, v, revision) {
-  if (!v) return [`${name} did not return a verdict`]
-  const out = []
-  if (v.verdict !== 'pass') out.push(`${name} ${v.verdict}\n${findingsText(v)}\nLimits: ${v.limits}`)
-  else if ((v.findings || []).some(f => f.blocking)) out.push(`${name} passed with blocking findings\n${findingsText(v)}`)
-  else if (!sameRev(revision, v.evaluated)) {
-    out.push(`${name} judged "${v.evaluated}", not revision ${revision}`)
+// A lens that returns no verdict, or one on another revision, is dispatched again under its own bound:
+// that is not a failure of the validate gate and does not send the writer to revise. Null when the bound is spent.
+async function lensOn(name, brief, revision, opts) {
+  for (let i = 1; i <= MAX_FAILURES; i++) {
+    const v = await lens(name, brief, opts)
+    if (v && sameRev(revision, v.evaluated)) return v
+    attempts.push({ gate: 'validator', approach: `${name} on revision ${revision}`, failed: v ? `judged "${v.evaluated}", not the briefed revision` : 'the lens did not return a verdict' })
   }
-  return out
+  return null
+}
+
+// What keeps a lens verdict, already on the briefed revision, from counting as a pass; an empty array is a pass.
+function problems(name, v) {
+  if (v.verdict !== 'pass') return [`${name} ${v.verdict}\n${findingsText(v)}\nLimits: ${v.limits}`]
+  if ((v.findings || []).some(f => f.blocking)) return [`${name} passed with blocking findings\n${findingsText(v)}`]
+  return []
 }
 
 // ---- Locate ----------------------------------------------------------------
@@ -488,13 +496,13 @@ const readCard = (retry) =>
     `${WHERE}
 ${READ_ONLY}
 
-Read the one card this idea starts from, if any. Card named in the args: ${cardArg || 'none'}. If none is named there, read the card the idea itself names by identifier or URL; if it names none, or the project has no board, report that. Return the card's identifier as the evidence item card-id (omit the item when there is no card). The story revision is not needed for this run.
+Read the one card this idea starts from: ${cardArg}. If the project has no board or the card does not exist, report that. The story revision is not needed for this run.
 
 Idea: ${idea}`,
     { label: retry ? 'read card (again)' : 'read card', phase: 'Locate' },
   )
 let [cardR, relatedR] = await parallel([
-  () => readCard(false),
+  () => (cardArg ? readCard(false) : Promise.resolve(null)),
   () =>
     scout('scout-related-cards',
       `${WHERE}
@@ -508,9 +516,10 @@ Idea: ${idea}`,
 ])
 
 // A scout that returns nothing is not a board with no card: ask once more. The card the args name
-// is the card, whatever the scout reports; the File step must update it, never create another.
+// is the only card to update, whatever the scout reports or the idea mentions; with none named, the
+// File step files a new card.
 if (!cardR && cardArg) cardR = await readCard(true)
-const cardId = idOf(fact(cardR, 'card-id')) || idOf(cardArg)
+const cardId = idOf(cardArg)
 const slug = slugify(cardId) || slugged(idea, 'idea')
 const draftRel = `.tmp/shape/${slug}.md`
 const draftPath = projectRoot ? `${projectRoot}/${draftRel}` : draftRel
@@ -543,8 +552,8 @@ done('locate')
 // A draft exists only when the checkpoint reports "<path>@<digest>" for this run's draft path;
 // a missing-file note, an empty value, or any other prose means there is no draft.
 const draftValue = fact(cp, 'draft')
-const draftMatch = draftValue.match(/^(\S+)@([0-9a-f]{7,64})$/i)
-const draftExists = !!draftMatch && draftMatch[1].endsWith(draftRel)
+const draftMatch = parseSpec(draftValue)
+const draftExists = !!draftMatch && draftMatch.path.endsWith(draftRel)
 // draft-open's value is its excerpt alone: an empty excerpt means no marker, never the location.
 const openItem = (cp.evidence || []).find(e => e.source === 'draft-open')
 const openValue = openItem ? String(openItem.excerpt || '').trim() : ''
@@ -554,7 +563,7 @@ const draftFiled = draftExists ? idOf(filedValue) : ''
 if (draftExists) checkpoint.draft = draftPath
 if (draftFiled) checkpoint.filed = draftFiled
 
-let draftRev = draftExists ? draftMatch[2] : ''
+let draftRev = draftExists ? draftMatch.hash : ''
 let openIds = openFromCheckpoint
 const advisorViews = []
 
@@ -597,7 +606,7 @@ Idea: ${idea}`,
         { label: 'code', phase: 'Gather' },
       ),
   ])
-  evidenceText = [show('Card', cardR), show('Related cards', relatedR), showLibrary(libR), show('Docs', docsR), show('Code', codeR)].join('\n\n')
+  evidenceText = [cardArg ? show('Card', cardR) : '### Card\nNo card was named: this idea starts a new card.', show('Related cards', relatedR), showLibrary(libR), show('Docs', docsR), show('Code', codeR)].join('\n\n')
   done('gather')
 
   phase('Advise')
@@ -661,14 +670,22 @@ function decisionNeeds(ids) {
 }
 
 // A writer that reports a story blocker, or open decisions that answers doesn't settle while it
-// wrote no draft, stops the run at once: retrying could never show the user the reason.
+// wrote no draft, stops the run at once: retrying could never show the user the reason. A blocker
+// the user has answered goes back to the writer with its answer ({ retry: true }), not to the user.
+const settledBlockers = []
 function earlyStop(w, step) {
   if (!w) return null
-  const blockers = (w.storyBlockers || []).map(b => String(b).trim()).filter(Boolean)
+  const blockers = decisionsOf('draft-blocker', w.storyBlockers)
   if (blockers.length) {
+    const open = blockers.filter(d => !answerOf(answers, d.id))
+    const fresh = blockers.filter(d => answerOf(answers, d.id) && !settledBlockers.some(x => x.id === d.id))
+    if (!open.length && fresh.length) {
+      settledBlockers.push(...fresh.map(d => ({ ...d, answer: answerOf(answers, d.id) })))
+      return { retry: true }
+    }
     return stop(
       step,
-      blockers.map((b, i) => ({ id: `draft-${i + 1}`, kind: 'input', what: b, evidence: 'reported by the writer while working on the story' })),
+      (open.length ? open : blockers).map(d => ({ id: d.id, kind: 'input', what: d.question, evidence: 'reported by the writer while working on the story' })),
     )
   }
   if (!draftOk(w)) {
@@ -701,10 +718,11 @@ ${PRODUCER_BOUNDS}
 Resolve the open decisions in the story draft at ${draftPath}, and write only that file. Apply each answer below in the draft, remove that decision's marker line, and report in openDecisions the ids that are still marked. Return in revision the git hash-object digest of the draft, and in produced its absolute path. Return tasks and docs as empty arrays.
 
 Answers:
-${given}`,
+${given}${settledText(settledBlockers)}`,
       { agentType: 'slopify:writer', label: `resolve ${openIds.join(' ')}`, phase: 'Draft', schema: WRITER_SCHEMA },
     )
     const earlyResolve = earlyStop(w, 'draft')
+    if (earlyResolve && earlyResolve.retry) continue
     if (earlyResolve) return earlyResolve
     if (!draftOk(w)) {
       attempts.push({ gate: 'draft', approach: `resolve ${openIds.join(', ')}`, failed: 'the writer did not return a draft revision at the draft path' })
@@ -731,10 +749,11 @@ Decide anything that does not change the story's outcome (naming, types, edge ca
 Idea: ${idea}
 
 Evidence:
-${evidenceText}`,
+${evidenceText}${settledText(settledBlockers)}`,
       { agentType: 'slopify:writer', label: draftFailures ? `draft story (attempt ${draftFailures + 1})` : 'draft story', phase: 'Draft', schema: WRITER_SCHEMA },
     )
     const early = earlyStop(w, 'draft')
+    if (early && early.retry) continue
     if (early) return early
     if (draftOk(w)) {
       draftRev = str(w.revision)
@@ -772,25 +791,32 @@ while (true) {
   round += 1
   const [crit, free] = await parallel([
     () =>
-      lens('lens-criteria',
+      lensOn('lens-criteria',
         `${WHERE}
 
 Judge the story draft at ${draftPath}, revision ${draftRev}. Judge that exact revision only, and name it as evaluated.`,
+        draftRev,
         { label: `criteria (round ${round})`, phase: 'Validate' },
       ),
     () =>
-      lens('lens-solution-free',
+      lensOn('lens-solution-free',
         `${WHERE}
 
 Judge the story draft at ${draftPath}, revision ${draftRev}. Judge that exact revision only, and name it as evaluated.`,
+        draftRev,
         { label: `solution-free (round ${round})`, phase: 'Validate' },
       ),
   ])
+  if (!crit || !free) {
+    return stop('validate', [
+      { id: 'validate-1', kind: 'validation', what: `A verdict on revision ${draftRev} from ${[!crit && 'lens-criteria', !free && 'lens-solution-free'].filter(Boolean).join(' and ')}`, evidence: 'three dispatches returned no verdict or a verdict on another revision' },
+    ])
+  }
   verdicts = [
     { lens: 'lens-criteria', result: crit },
     { lens: 'lens-solution-free', result: free },
   ]
-  const bad = [...problems('lens-criteria', crit, draftRev), ...problems('lens-solution-free', free, draftRev)]
+  const bad = [...problems('lens-criteria', crit), ...problems('lens-solution-free', free)]
   if (!bad.length) break
   validateFailures += 1
   attempts.push({ gate: 'validate', approach: `story draft revision ${draftRev}`, failed: bad.join('; ') })
@@ -808,10 +834,11 @@ ${PRODUCER_BOUNDS}
 Revise the story draft at ${draftPath} (revision ${draftRev}) to resolve the findings below, and write only that file. Keep the problem, outcome, and scope the story already states; state no implementation. Keep any open-decision marker you do not settle, and decide anything that does not change the story's outcome yourself as a labelled assumption. Return in revision the git hash-object digest of the revised draft, in produced its absolute path, and in openDecisions the ids still marked. Return tasks and docs as empty arrays.
 
 Findings:
-${bad.join('\n\n')}`,
+${bad.join('\n\n')}${settledText(settledBlockers)}`,
       { agentType: 'slopify:writer', label: `revise story (round ${round})`, phase: 'Validate', schema: WRITER_SCHEMA },
     )
     const earlyRevise = earlyStop(w, 'validate')
+    if (earlyRevise && earlyRevise.retry) continue
     if (earlyRevise) return earlyRevise
     if (draftOk(w)) {
       draftRev = str(w.revision)

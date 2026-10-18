@@ -129,7 +129,7 @@ An advisor judges only from the evidence in its brief, plus reading the reposito
 ```markdown
 ## Report-only contract
 
-Judge only work you did not produce or judge before, and only the revision the brief names; otherwise say so and stop. Change nothing: no edits, commits, board or forge actions, and no agent other than `Explore`; run any probe in a temporary copy. Report a check that could not run as unverified, naming the missing prerequisite. Pass only when every required check ran and nothing blocking remains.
+Judge only work you did not produce or judge before; otherwise say so and stop. Judge only the revision the brief names; when it names none, record a digest of what you evaluated (the commit, or git hash-object of the files) and proceed. Change nothing: no edits, commits, board or forge actions, and no agent other than `Explore`; run any probe in a temporary copy. Report a check that could not run as unverified, naming the missing prerequisite. Pass only when every required check ran and nothing blocking remains.
 ```
 
 Design choice: `auditor` carries the same contract, because it stays a report-only validator for `bootstrap`. The card's list (`qa`, `library-clerk`, `lens-*`) is the minimum.
