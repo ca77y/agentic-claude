@@ -22,7 +22,7 @@ Judge only work you did not produce or judge before; otherwise say so and stop. 
 
 ## Return
 
-```
+```text
 Verdict: pass | fail | unverified
 Evaluated: <candidate revision or digest>; spec <path@revision or none>
 Checks:

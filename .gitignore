@@ -16,3 +16,6 @@ __pycache__/
 
 # Plugin eval reports
 plugins/*/evals/results/
+
+# Development tooling
+node_modules/

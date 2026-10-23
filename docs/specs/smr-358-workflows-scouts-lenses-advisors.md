@@ -167,8 +167,7 @@ const SCOUT_SCHEMA = {
   properties: {
     answer: {
       type: "string",
-      description:
-        "The answer to the one question asked, as far as the evidence goes",
+      description: "The answer to the one question asked, as far as the evidence goes",
     },
     evidence: {
       type: "array",
@@ -178,8 +177,7 @@ const SCOUT_SCHEMA = {
         properties: {
           source: {
             type: "string",
-            description:
-              "What it is: a file, command, URL, card, or the checkpoint key the brief names",
+            description: "What it is: a file, command, URL, card, or the checkpoint key the brief names",
           },
           location: {
             type: "string",
@@ -187,16 +185,14 @@ const SCOUT_SCHEMA = {
           },
           excerpt: {
             type: "string",
-            description:
-              "The supporting passage or output, quoted; for a checkpoint key, its value",
+            description: "The supporting passage or output, quoted; for a checkpoint key, its value",
           },
         },
       },
     },
     gaps: {
       ...STRINGS,
-      description:
-        "What could not be found or read, and why; a search that could not run is not an absence",
+      description: "What could not be found or read, and why; a search that could not run is not an absence",
     },
   },
 };
@@ -224,8 +220,7 @@ const LENS_SCHEMA = {
     },
     limits: {
       type: "string",
-      description:
-        'Checks that could not run and the missing prerequisite, or "none"',
+      description: 'Checks that could not run and the missing prerequisite, or "none"',
     },
   },
 };
@@ -261,27 +256,20 @@ const ADVISOR_SCHEMA = {
 };
 
 function familyAgent(prefix, schema, name, prompt, opts) {
-  if (!name.startsWith(prefix))
-    throw new Error(`${name} is not a ${prefix}* agent`);
+  if (!name.startsWith(prefix)) throw new Error(`${name} is not a ${prefix}* agent`);
   return agent(prompt, {
     ...(opts || {}),
     agentType: `slopify:${name}`,
     schema,
   });
 }
-const scout = (name, prompt, opts) =>
-  familyAgent("scout-", SCOUT_SCHEMA, name, prompt, opts);
-const lens = (name, prompt, opts) =>
-  familyAgent("lens-", LENS_SCHEMA, name, prompt, opts);
-const advise = (name, prompt, opts) =>
-  familyAgent("advisor-", ADVISOR_SCHEMA, name, prompt, opts);
+const scout = (name, prompt, opts) => familyAgent("scout-", SCOUT_SCHEMA, name, prompt, opts);
+const lens = (name, prompt, opts) => familyAgent("lens-", LENS_SCHEMA, name, prompt, opts);
+const advise = (name, prompt, opts) => familyAgent("advisor-", ADVISOR_SCHEMA, name, prompt, opts);
 
 // A checkpoint value from scout-checkpoint's evidence, by key; '' when absent.
 function fact(result, key) {
-  const hit =
-    result && result.evidence
-      ? result.evidence.find((e) => e.source === key)
-      : null;
+  const hit = result && result.evidence ? result.evidence.find((e) => e.source === key) : null;
   return hit ? String(hit.excerpt || hit.location || "").trim() : "";
 }
 
@@ -343,8 +331,7 @@ function sameRev(briefed, evaluated) {
   const bh = b.match(HEX) || [];
   if (!bh.length) return false;
   const eh = e.match(HEX) || [];
-  if (!bh.every((x) => eh.some((y) => x.startsWith(y) || y.startsWith(x))))
-    return false;
+  if (!bh.every((x) => eh.some((y) => x.startsWith(y) || y.startsWith(x)))) return false;
   return b
     .split(HEX)
     .map((p) => p.trim())
@@ -372,9 +359,7 @@ function slugged(text, fallback) {
 const HASH = "[0-9a-f]{7,64}";
 // A path and its git hash-object, written "<path>@<hash>" or "<path> <hash>"; null for anything else.
 function parseSpec(v) {
-  const m = new RegExp(`^(\\S+?)(?:@|\\s+)(${HASH})\\s*$`).exec(
-    String(v || "").trim(),
-  );
+  const m = new RegExp(`^(\\S+?)(?:@|\\s+)(${HASH})\\s*$`).exec(String(v || "").trim());
   return m ? { path: m[1], hash: m[2] } : null;
 }
 
@@ -414,8 +399,7 @@ async function settleDecisions(prefix, answers, run) {
   let carriedTried = false;
   for (let round = 0; ; round++) {
     const res = await run(settled);
-    if (!res || (res.storyBlockers && res.storyBlockers.length))
-      return { res, open: [] };
+    if (!res || (res.storyBlockers && res.storyBlockers.length)) return { res, open: [] };
     const decisions = decisionsOf(prefix, res.openDecisions);
     const open = decisions.filter((d) => !answerOf(answers, d.id));
     if (open.length) {
@@ -442,9 +426,7 @@ async function settleDecisions(prefix, answers, run) {
     }
     const fresh = decisions.filter((d) => !settled.some((x) => x.id === d.id));
     if (!fresh.length || round >= 2) return { res, open: [] };
-    settled.push(
-      ...fresh.map((d) => ({ ...d, answer: answerOf(answers, d.id) })),
-    );
+    settled.push(...fresh.map((d) => ({ ...d, answer: answerOf(answers, d.id) })));
   }
 }
 
@@ -454,9 +436,7 @@ async function settleDecisions(prefix, answers, run) {
 function rerunText(workflow, needs) {
   const cmd = `/slopify:${workflow}`;
   const list = needs || [];
-  const answerable = list.some(
-    (n) => n.kind === "decision" || n.kind === "input",
-  );
+  const answerable = list.some((n) => n.kind === "decision" || n.kind === "input");
   return list.length && list.every((n) => n.kind === "decision")
     ? `Invoke ${cmd} again with the same args and add answers.<id> for each decision. In this session, pass resumeFromRunId to reuse the steps already completed.`
     : `Resolve what each need names, then invoke ${cmd} again with the same args${answerable ? " and answers.<id> for each decision or input need" : ""}, without resumeFromRunId, so every step reads the repository afresh.`;
@@ -548,7 +528,7 @@ The workflow tells `scout-checkpoint` which keys to report. The scout returns ea
 
 `plugins/slopify/skills/deliver/references/ledger.md` moves to `plugins/slopify/references/pusher-ledger.md`. It is reworded for `pusher` as its only writer. The file stays `.tmp/ledger.md` at the story worktree root, it stays append-only, and `pusher` stamps the time. Lines:
 
-```
+```text
 <time> run <n>: <workflow> <primary arg> | worktree <path> | branch <name>
 <time> done spec <path>@<spec hash> commit <sha> story <story revision> [test <path>]
 <time> done implement commit <sha> spec <spec hash> [pushed]
@@ -820,16 +800,16 @@ Removed:
 
 Trigger cases (tag `trigger`, `allowed_tools: [Skill, Workflow]`, `max_turns: 8`, `timeout_seconds: 90`, as in `research-triggers`):
 
-| Case                      | Prompt                                                                                                                       | Grader                                                                                                              |
+| Case | Prompt | Grader |
 | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | --------- | ------------------------------------ |
-| `shape-triggers`          | Run the slopify shape workflow on this idea: add a `--json` output flag to our CLI.                                          | `shape-fired`: `tool_used`, `tool: Workflow`, `input_match: '"name"\s*:\s*"slopify:shape"'`                         |
-| `deliver-story-triggers`  | Run the slopify deliver-story workflow for this story: add a `--json` output flag to our CLI that prints the result as JSON. | `deliver-story-fired`, same form with `slopify:deliver-story`                                                       |
-| `deliver-bugfix-triggers` | Run the slopify deliver-bugfix workflow: `add` in `calc.py` subtracts instead of adding.                                     | `deliver-bugfix-fired`                                                                                              |
-| `deliver-spike-triggers`  | Run the slopify deliver-spike workflow: can our CLI stream its output as JSON lines at 1,000 lines per second?               | `deliver-spike-fired`                                                                                               |
-| `reproduce-bug-triggers`  | Run the slopify reproduce-bug workflow: `add` in `calc.py` returns 0 for `add(2, 2)`.                                        | `reproduce-bug-fired`                                                                                               |
-| `review-pr-triggers`      | Run the slopify review-pr workflow on PR 12.                                                                                 | `review-pr-fired`                                                                                                   |
-| `shape-not-automatic`     | Write a story with observable acceptance criteria for adding a `--json` output flag to our CLI.                              | `shape-not-fired`: `tool_used`, `tool: Workflow`, `input_match: '"name"\s*:\s*"slopify:shape"'`, `min: 0`, `max: 0` |
-| `deliver-not-automatic`   | (prompt unchanged) Fix the typo in the README and open a pull request for it.                                                | `deliver-not-fired`: `tool_used`, `tool: Workflow`, `input_match: '"name"\s*:\s*"slopify:(deliver-                  | review-pr | reproduce-bug)'`, `min: 0`, `max: 0` |
+| `shape-triggers` | Run the slopify shape workflow on this idea: add a `--json` output flag to our CLI. | `shape-fired`: `tool_used`, `tool: Workflow`, `input_match: '"name"\s*:\s*"slopify:shape"'` |
+| `deliver-story-triggers` | Run the slopify deliver-story workflow for this story: add a `--json` output flag to our CLI that prints the result as JSON. | `deliver-story-fired`, same form with `slopify:deliver-story` |
+| `deliver-bugfix-triggers` | Run the slopify deliver-bugfix workflow: `add` in `calc.py` subtracts instead of adding. | `deliver-bugfix-fired` |
+| `deliver-spike-triggers` | Run the slopify deliver-spike workflow: can our CLI stream its output as JSON lines at 1,000 lines per second? | `deliver-spike-fired` |
+| `reproduce-bug-triggers` | Run the slopify reproduce-bug workflow: `add` in `calc.py` returns 0 for `add(2, 2)`. | `reproduce-bug-fired` |
+| `review-pr-triggers` | Run the slopify review-pr workflow on PR 12. | `review-pr-fired` |
+| `shape-not-automatic` | Write a story with observable acceptance criteria for adding a `--json` output flag to our CLI. | `shape-not-fired`: `tool_used`, `tool: Workflow`, `input_match: '"name"\s*:\s*"slopify:shape"'`, `min: 0`, `max: 0` |
+| `deliver-not-automatic` | (prompt unchanged) Fix the typo in the README and open a pull request for it. | `deliver-not-fired`: `tool_used`, `tool: Workflow`, `input_match: '"name"\s*:\s*"slopify:(deliver-                  | review-pr | reproduce-bug)'`, `min: 0`, `max: 0` |
 
 The library and bootstrap trigger cases are unchanged.
 

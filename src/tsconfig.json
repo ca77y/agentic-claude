@@ -1,0 +1,8 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    // Workflows run in the Workflow runtime, not Node: only the runtime globals in runtime.d.ts exist.
+    "types": []
+  },
+  "include": ["**/*.ts"]
+}

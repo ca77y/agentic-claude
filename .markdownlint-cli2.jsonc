@@ -1,0 +1,17 @@
+{
+  // Prettier owns formatting; markdownlint checks structure.
+  "config": {
+    "extends": "markdownlint/style/prettier",
+    // Skill, agent, and eval files open with frontmatter and their body, not a heading.
+    "MD041": false,
+    // Code spans sometimes quote a pattern whose spaces matter.
+    "MD038": false,
+  },
+  "ignores": [
+    "node_modules/**",
+    ".tmp/**",
+    ".worktrees/**",
+    "plugins/*/skills/*/resources/**",
+    "plugins/*/evals/results/**",
+  ],
+}

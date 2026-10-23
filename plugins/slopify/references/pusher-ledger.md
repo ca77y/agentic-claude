@@ -6,7 +6,7 @@ The ledger lets a rerun skip the steps a story's earlier runs completed. It is `
 
 The brief gives the lines that record the step it completes. Append them in the same dispatch, after the operations they record have succeeded, and never for an operation that failed. Fill each placeholder from what this dispatch actually produced (a commit sha, a PR reference, a trigger time), and stamp `<time>` with the current UTC time, `date -u +%Y-%m-%dT%H:%M:%SZ`.
 
-```
+```text
 <time> run <n>: <workflow> <primary arg> | worktree <path> | branch <name>
 <time> done spec <path>@<spec hash> commit <sha> story <story revision> [test <path>]
 <time> done implement commit <sha> spec <spec hash> [pushed]

@@ -1,2 +1,6 @@
 # Scaffold templates carry {{TOKENS}} and Templater expressions Prettier would rewrite
 plugins/*/skills/*/resources/
+# Built from src/ by scripts/build.ts
+plugins/*/workflows/*.js
+# npm writes its lockfile
+package-lock.json

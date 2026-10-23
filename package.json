@@ -1,0 +1,35 @@
+{
+  "name": "agentic-slop-dev",
+  "private": true,
+  "description": "Development tooling for the plugins in this repo: build, type checks, linters, and tests.",
+  "type": "module",
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "26.6.5",
+    "esbuild": "0.28.2",
+    "eslint": "10.13.0",
+    "eslint-plugin-regexp": "3.3.1",
+    "eslint-plugin-sonarjs": "4.2.2",
+    "eslint-plugin-unicorn": "78.0.0",
+    "jscpd": "5.4.1",
+    "knip": "6.42.1",
+    "markdownlint-cli2": "0.23.3",
+    "prettier": "3.9.10",
+    "type-coverage": "2.30.4",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.72.0",
+    "typescript7": "npm:typescript@7.0.2"
+  },
+  "scripts": {
+    "build": "node scripts/build.ts",
+    "build:check": "node scripts/build.ts --check",
+    "typecheck": "node node_modules/typescript7/bin/tsc -p src && node node_modules/typescript7/bin/tsc -p test && node node_modules/typescript7/bin/tsc -p .",
+    "lint:ts": "eslint --cache --cache-location node_modules/.cache/eslint/ .",
+    "lint:md": "markdownlint-cli2 \"**/*.md\"",
+    "lint:format": "prettier --check --cache .",
+    "lint:dead": "knip",
+    "lint:dup": "jscpd src",
+    "lint:types": "type-coverage -p src/tsconfig.json --strict --at-least 100",
+    "test:unit": "node --test \"test/**/*.test.ts\""
+  }
+}

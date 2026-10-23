@@ -24,7 +24,7 @@ Write only what the assignment names, from the evidence supplied; don't research
 
 Return:
 
-```
+```text
 Produced: <paths>
 Sources: <note or section ← source>
 Deferred metadata: <index, taxonomy, or log entries for the integrator, or none>

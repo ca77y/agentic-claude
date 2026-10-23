@@ -1,15 +1,32 @@
 #!/bin/sh
-# Format staged Markdown, JSON and YAML, then validate the plugins and the marketplace.
+# Build the workflows, format staged files, run every fast check, and run a plugin's evals when this commit
+# changes its version.
 set -e
 cd "$(git rev-parse --show-toplevel)"
 
-staged=$(git diff --cached --name-only --diff-filter=ACMR)
-formattable=$(printf '%s\n' "$staged" | grep -E '\.(md|json|ya?ml)$' || true)
-if [ -n "$formattable" ]; then
-  printf '%s\n' "$formattable" | tr '\n' '\0' | xargs -0 prettier --write --ignore-unknown --log-level warn
-  printf '%s\n' "$formattable" | tr '\n' '\0' | xargs -0 git add
+if [ ! -x node_modules/.bin/eslint ]; then
+  echo "pre-commit: dev tools are missing; run 'make install'." >&2
+  exit 1
 fi
 
-for target in . plugins/slopify; do
-  claude plugin validate --strict "$target"
+staged() { git diff --cached --name-only --diff-filter=ACMR | grep -E "$1" || true; }
+each() { tr '\n' '\0' | xargs -0 "$@"; }
+
+# Built workflows follow their sources into the commit.
+npm run --silent build
+git add plugins/*/workflows/*.js
+
+formattable=$(staged '\.(md|json|ya?ml|ts|js)$')
+if [ -n "$formattable" ]; then
+  printf '%s\n' "$formattable" | each npx --no-install prettier --write --ignore-unknown --log-level warn
+  printf '%s\n' "$formattable" | each git add
+fi
+
+make --no-print-directory check
+
+version() { git show "$1" 2>/dev/null | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{try{console.log(JSON.parse(d).version||"")}catch{console.log("")}})'; }
+for manifest in $(staged '^plugins/[^/]+/\.claude-plugin/plugin\.json$'); do
+  if [ "$(version "HEAD:$manifest")" != "$(version ":$manifest")" ]; then
+    make --no-print-directory test PLUGINS="${manifest%/.claude-plugin/plugin.json}/"
+  fi
 done

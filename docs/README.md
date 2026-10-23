@@ -1,16 +1,19 @@
 # Engineering docs
 
-Durable engineering knowledge for `agentic-slop`. Toolkit usage stays in the root [`README.md`](../README.md); repo-maintenance rules stay in the root [`CLAUDE.md`](../CLAUDE.md).
+Engineering notes for people working on `agentic-slop`. How to use the toolkit is in the root [`README.md`](../README.md). Rules for agents are in the root [`CLAUDE.md`](../CLAUDE.md) and in [`.claude/rules/`](../.claude/rules/), which loads the rules for whichever files an agent edits.
 
-## Layout
+- [`ARCHITECTURE.md`](ARCHITECTURE.md): the rules every plugin part follows
+- [`DESIGN.md`](DESIGN.md): how the plugins are built now
+- [`BOARD.md`](BOARD.md): how this repo's board is reached and what may be written to it
+- [`FORGE.md`](FORGE.md): how this repo branches, commits, publishes, and is reviewed
+- [`issues/`](issues/): known problems with no solution on our side
+- [`specs/`](specs/): throwaway specs, the how of one unit of work, never kept current
 
-- `BOARD.md` — how this repo's board is reached and what may be written to it; read directly, at this fixed path
-- `FORGE.md` — how this repo branches, commits, publishes, and is reviewed; read directly, at this fixed path
-- `issues/` — known problems with no identified solution on our side
-- `specs/` — durable specs for in-flight or recent units of work
+Tooling:
 
-## Rules
+- `make install` installs the dev tools and enables the pre-commit hook.
+- `make build` bundles the TypeScript workflow sources in `src/` into `plugins/`.
+- `make check` runs every fast check on the whole repo: build freshness, type checks, ESLint, markdownlint, Prettier, knip for dead code, jscpd for duplication, type coverage, unit tests, and plugin validation.
+- `make test` runs the plugin evals, which call models.
 
-- Keep documentation focused on the system as it exists now. It may briefly name gaps or plans, but it is not a history of the discussions behind a decision.
-- The agent and skill definitions under `plugins/` are the product. Prose about how a role should behave belongs in its definition, not here.
-- Record a problem in `issues/` only when it is real but no solution could be identified on our side: what was investigated, the evidence, and what would unblock it. Once a fix becomes identifiable, file it on the board instead.
+The hook builds, formats staged files, and runs `make check`. It runs `make test` for a plugin when a commit changes that plugin's version.
