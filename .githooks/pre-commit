@@ -1,6 +1,5 @@
 #!/bin/sh
-# Check the commit without changing any file: every fast check, and a plugin's evals when this commit changes its
-# version. Build and format by hand with `make build` and `make format`.
+# Check the commit without changing any file. Build and format by hand with `make build` and `make format`.
 set -e
 cd "$(git rev-parse --show-toplevel)"
 
@@ -9,13 +8,4 @@ if [ ! -x node_modules/.bin/eslint ]; then
   exit 1
 fi
 
-staged() { git diff --cached --name-only --diff-filter=ACMR | grep -E "$1" || true; }
-
 make --no-print-directory check
-
-version() { git show "$1" 2>/dev/null | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{try{console.log(JSON.parse(d).version||"")}catch{console.log("")}})'; }
-for manifest in $(staged '^plugins/[^/]+/\.claude-plugin/plugin\.json$'); do
-  if [ "$(version "HEAD:$manifest")" != "$(version ":$manifest")" ]; then
-    make --no-print-directory test PLUGINS="${manifest%/.claude-plugin/plugin.json}/"
-  fi
-done

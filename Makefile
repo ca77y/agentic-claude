@@ -28,7 +28,7 @@ check:
 format:
 	npx --no-install prettier --write .
 
-# Evals call models and take long: run them by hand, and the hook runs them when a plugin's version changes.
+# Evals call models and take long: run them by hand.
 # Smoke workflows can outlast a headless session's wait for background work, so that ceiling is lifted.
 test:
 	for p in $(PLUGINS); do \
