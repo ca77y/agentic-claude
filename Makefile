@@ -11,7 +11,7 @@ install:
 build:
 	npm run --silent build
 
-# Every fast check, on the whole repo: what the pre-commit hook runs on a commit.
+# Every fast check, on the whole repo: what the pre-commit hook and CI run.
 check:
 	npm run --silent build:check
 	npm run --silent typecheck

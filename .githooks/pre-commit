@@ -1,6 +1,6 @@
 #!/bin/sh
-# Build the workflows, format staged files, run every fast check, and run a plugin's evals when this commit
-# changes its version.
+# Check the commit without changing any file: every fast check, and a plugin's evals when this commit changes its
+# version. Build and format by hand with `make build` and `make format`.
 set -e
 cd "$(git rev-parse --show-toplevel)"
 
@@ -10,17 +10,6 @@ if [ ! -x node_modules/.bin/eslint ]; then
 fi
 
 staged() { git diff --cached --name-only --diff-filter=ACMR | grep -E "$1" || true; }
-each() { tr '\n' '\0' | xargs -0 "$@"; }
-
-# Built workflows follow their sources into the commit.
-npm run --silent build
-git add plugins/*/workflows/*.js
-
-formattable=$(staged '\.(md|json|ya?ml|ts|js)$')
-if [ -n "$formattable" ]; then
-  printf '%s\n' "$formattable" | each npx --no-install prettier --write --ignore-unknown --log-level warn
-  printf '%s\n' "$formattable" | each git add
-fi
 
 make --no-print-directory check
 
