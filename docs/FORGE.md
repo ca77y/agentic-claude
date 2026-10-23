@@ -13,6 +13,7 @@ Configuration does not authorize execution; the user's request does. An operatio
 
 - Branch name: the issue's `gitBranchName` from Linear (for example `tokwieci/smr-200-card-content-access`); without an issue, `<commit type>/<slug>`, where `<slug>` is lowercase kebab-case.
 - Story worktree path and its ignore rule: `.worktrees/<gitBranchName without its tokwieci/ prefix>` (for example `.worktrees/smr-200-card-content-access`), or `.worktrees/<slug>` without an issue, ignored by `.worktrees/`. Create it with `git fetch origin master` then `git worktree add <path> -b <branch> origin/master`, so unpushed local `master` commits stay out of the PR; recover it for an existing branch with `git worktree add <path> <branch>`. A repair reuses the PR's worktree.
+- Spike prototypes: the local branch `spike/<slug>` and the worktree `.worktrees/spike-<slug>`, from the spike's slug; the prototype is throwaway, never pushed or merged, and deleting a never-pushed prototype is allowed.
 - Temp folder: `.tmp/` at the root of each checkout, ignored.
 - Cleanup after merge: the user's; on request, `git worktree remove <path>` and `git branch -d <branch>`.
 

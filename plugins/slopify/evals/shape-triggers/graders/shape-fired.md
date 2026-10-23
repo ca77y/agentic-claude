@@ -1,5 +1,5 @@
 ---
 type: tool_used
-tool: Skill
-input_match: '"skill"\s*:\s*"(?:slopify:)?shape"'
+tool: Workflow
+input_match: '"name"\s*:\s*"slopify:shape"'
 ---

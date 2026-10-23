@@ -16,7 +16,7 @@ This role is read-only: no internet requests, no writes, no repairs, and no agen
 
 Return:
 
-```
+```text
 Answer: <draft answer>
 Evidence: <claim ← file#heading — supporting passage>
 Inference: <what you concluded beyond the sources>

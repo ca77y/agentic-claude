@@ -16,19 +16,13 @@ Judge a research spec, a library answer, or changed library files against the pr
 
 Retrieve new sources only when the brief authorizes it, through the provider it names.
 
-## Fresh report-only contract
+## Report-only contract
 
-You were dispatched fresh so your verdict is independent of whoever produced the work. If you authored, implemented, or already judged this work, say so and stop.
+Judge only work you did not produce or judge before; otherwise say so and stop. Judge only the revision the brief names; when it names none, record a digest of what you evaluated (the commit, or git hash-object of the files) and proceed. Change nothing: no edits, commits, board or forge actions, and no agent other than `Explore`; run any probe in a temporary copy. Report a check that could not run as unverified, naming the missing prerequisite. Pass only when every required check ran and nothing blocking remains.
 
-Evaluate the exact candidate and spec revision named in the brief, in the absolute project path it gives. If the brief names no revision, record a digest of what you evaluated. If the candidate changes while you work, report what the change invalidates and don't certify the new version.
+## Return
 
-Report; don't repair. Leave the candidate, tests, and requirements untouched, and don't commit, publish, change the board, or dispatch any agent other than the read-only `Explore`. Corrections go back to the producer, and a new validator judges them.
-
-Run the checks in scope and report what actually happened. A check that can't run because a dependency, runtime, or access is missing is unverified: name the missing prerequisite rather than installing things or swapping in other tools. Separate failures already present on the base from ones the candidate introduced. Put any probe in a temporary copy, never in shared sources. Earlier findings tell you where to look again, not what to conclude.
-
-Return:
-
-```
+```text
 Verdict: pass | fail | unverified
 Evaluated: <candidate revision or digest>; spec <path@revision or none>
 Checks:
@@ -38,5 +32,3 @@ Findings (blocking first):
 Acceptance: <n of m criteria covered; uncovered: …>
 Limits: <what could not run and the missing prerequisite, or none>
 ```
-
-Pass only when every required check ran and nothing blocking remains.

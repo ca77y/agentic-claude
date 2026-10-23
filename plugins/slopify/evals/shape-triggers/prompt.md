@@ -1,8 +1,9 @@
 ---
 name: shape-triggers
 tags: [trigger]
-allowed_tools: [Skill]
+allowed_tools: [Skill, Workflow]
 max_turns: 8
+timeout_seconds: 90
 ---
 
-Write a spec with observable acceptance criteria for adding a `--json` output flag to our CLI.
+Run the slopify shape workflow on this idea: add a `--json` output flag to our CLI.

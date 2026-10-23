@@ -20,6 +20,8 @@ Configuration does not authorize execution; the user's request does. An operatio
 
 - Identity and spec naming: the issue identifier (`SMR-200`), shared by board, branch, PR, and spec. A spec is `docs/specs/<lowercase identifier>-<slug>.md`, for example `docs/specs/smr-200-card-content-access.md`.
 - Type and priority: exactly one of the labels `Bug`, `Improvement`, `Feature`; priority `1` Urgent, `2` High, `3` Medium, `4` Low.
+- Card, spec, and docs: a card holds the why and the what; a spec holds the how for one unit of work, is throwaway once the work lands, and is never kept current; durable knowledge belongs in `docs/`, outside `docs/specs/`.
+- Kinds of work: a story changes code and ends in a PR; a spike answers an open question, and any prototype it builds is throwaway and never merged.
 - Dependencies: Linear blocking relations (`blockedBy`, `blocks`). No sub-issues: one story is one issue and one PR.
 - Body and acceptance criteria format: the title is an action-verb story title; the description is a summary paragraph, then only the applicable sections of `## Why`, `## Scope`, `## Out of scope`, `## Acceptance criteria`, `## References`, with no `#` heading. Acceptance criteria are one observable behavior per line. Linear rewrites `-` bullets to `*` and wraps bare URLs in `<…>` on save; that is not a content change.
 

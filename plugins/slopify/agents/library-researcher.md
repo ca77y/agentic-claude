@@ -20,7 +20,7 @@ You are a leaf: don't write library files or dispatch any agent other than the r
 
 Return:
 
-```
+```text
 Findings:
   - <claim> ← <URL, title, author>; retrieved <date>; published/version <date>
     "<supporting passage>" (quote | paraphrase | inference)
