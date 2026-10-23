@@ -886,7 +886,7 @@ ${JSON.stringify(
 }
 
 // Writes the raw notes, then has exactly one integrator integrate them. "again" sends the loop back to its start.
-async function persist(st: State): Promise<Integration | "again" | BlockedResult> {
+async function persist(st: State): Promise<"again" | BlockedResult | { integration: Integration }> {
   phase("Persist");
   const leads: string[] = [];
   let todo = buildJobs(st, leads);
@@ -935,7 +935,7 @@ async function persist(st: State): Promise<Integration | "again" | BlockedResult
   st.pendingDeferred = [];
   st.pendingLeads = [];
   st.pendingExisting = [];
-  return integrated;
+  return { integration: integrated };
 }
 
 // ---- Validate ----------------------------------------------------------------
@@ -1072,6 +1072,11 @@ async function validate(st: State, persisted: Integration): Promise<DoneResult |
 
 // ---- Retrieve, persist, validate ------------------------------------------
 
+// The integration to validate, wrapped so a key the scribe adds to it can never read as a blocked result.
+async function integrationOf(st: State): Promise<"again" | BlockedResult | { integration: Integration }> {
+  return st.persisted ? { integration: st.persisted } : persist(st);
+}
+
 async function researchLoop(st: State): Promise<DoneResult | BlockedResult> {
   for (;;) {
     if (st.pending.length > 0) {
@@ -1079,10 +1084,10 @@ async function researchLoop(st: State): Promise<DoneResult | BlockedResult> {
       if (next === "again") continue;
       if (next) return next;
     }
-    const persisted = st.persisted ?? (await persist(st));
+    const persisted = await integrationOf(st);
     if (persisted === "again") continue;
-    if ("done" in persisted) return persisted;
-    const result = await validate(st, persisted);
+    if (!("integration" in persisted)) return persisted;
+    const result = await validate(st, persisted.integration);
     if (result) return result;
   }
 }

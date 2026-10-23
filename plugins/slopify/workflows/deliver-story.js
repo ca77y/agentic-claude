@@ -1205,7 +1205,7 @@ function answerValue(x) {
   return x === null || x === void 0 || typeof x === "string" || typeof x === "number" || typeof x === "boolean" ? x : text;
 }
 function answersOf(v) {
-  return isRecord(v) ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, answerValue(x)])) : {};
+  return isRecord(v) && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, answerValue(x)])) : {};
 }
 
 // src/slopify/workflows/deliver-story.ts

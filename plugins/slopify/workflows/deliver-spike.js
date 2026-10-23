@@ -297,7 +297,7 @@ function answerValue(x) {
   return x === null || x === void 0 || typeof x === "string" || typeof x === "number" || typeof x === "boolean" ? x : text;
 }
 function answersOf(v) {
-  return isRecord(v) ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, answerValue(x)])) : {};
+  return isRecord(v) && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, answerValue(x)])) : {};
 }
 function whereOf(projectRoot) {
   return projectRoot ? `The project is at ${projectRoot}; address files by absolute path under it.` : "The project is the session project directory; address files by absolute path.";
@@ -679,7 +679,7 @@ ${evidenceText}`,
     );
   }
   s.completed.push("plan");
-  return sd.res;
+  return { plan: sd.res };
 }
 function pusherProblem(r) {
   return r.unmet.length > 0 ? `unmet: ${r.unmet.join("; ")}` : r.done ? "" : "the operation did not complete";
@@ -827,8 +827,10 @@ ${evidenceText}`,
 }
 async function produce(s) {
   const evidenceText = await gather(s);
-  const plan = await planClaims(s, evidenceText);
-  return "status" in plan ? plan : await prototype(s, plan, evidenceText) ?? findings(s, plan, evidenceText);
+  const planned = await planClaims(s, evidenceText);
+  if (!("plan" in planned)) return planned;
+  const { plan } = planned;
+  return await prototype(s, plan, evidenceText) ?? findings(s, plan, evidenceText);
 }
 function judges(s) {
   const docBrief = (task) => `${s.where}

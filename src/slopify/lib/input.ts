@@ -49,9 +49,11 @@ function answerValue(x: unknown): Answers[string] {
     : text;
 }
 
-/** The answers arg, by need id. */
+/** The answers arg, by need id; an array is no answers. */
 export function answersOf(v: unknown): Answers {
-  return isRecord(v) ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, answerValue(x)])) : {};
+  return isRecord(v) && !Array.isArray(v)
+    ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, answerValue(x)]))
+    : {};
 }
 
 /** The brief line that says where the project is. */

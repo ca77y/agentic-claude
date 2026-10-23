@@ -424,7 +424,7 @@ function planProblem(r: Plan): string {
   return bad ? `claim ${bad.id} needs a measurement but names none` : "";
 }
 
-async function planClaims(s: Spike, evidenceText: string): Promise<Plan | Stopped> {
+async function planClaims(s: Spike, evidenceText: string): Promise<Stopped | { plan: Plan }> {
   phase("Plan");
   // Open decisions get ids derived from their text, so an answer stays with its question
   // whatever else the writer asks. The first plan call never carries answers (so a resumed run
@@ -469,7 +469,7 @@ ${evidenceText}`,
     );
   }
   s.completed.push("plan");
-  return sd.res;
+  return { plan: sd.res };
 }
 
 // ---- Prototype --------------------------------------------------------------
@@ -637,8 +637,11 @@ ${evidenceText}`,
 // Codebase, Outside, Plan, Prototype, and Findings: everything that produces the findings document.
 async function produce(s: Spike): Promise<Stopped | undefined> {
   const evidenceText = await gather(s);
-  const plan = await planClaims(s, evidenceText);
-  return "status" in plan ? plan : ((await prototype(s, plan, evidenceText)) ?? findings(s, plan, evidenceText));
+  // Wrapped, so a key the writer adds to its plan can never read as a stopped result.
+  const planned = await planClaims(s, evidenceText);
+  if (!("plan" in planned)) return planned;
+  const { plan } = planned;
+  return (await prototype(s, plan, evidenceText)) ?? findings(s, plan, evidenceText);
 }
 
 // ---- Validate ---------------------------------------------------------------

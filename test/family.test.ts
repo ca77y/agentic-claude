@@ -12,6 +12,7 @@ import {
   shaped,
   slugged,
 } from "../src/slopify/lib/family.ts";
+import { answersOf } from "../src/slopify/lib/input.ts";
 
 describe("absent", () => {
   for (const v of [
@@ -97,6 +98,10 @@ describe("decisions and answers", () => {
     assert.equal(answerOf({ a: "  yes " }, "a"), "yes");
     assert.equal(answerOf({ a: null }, "a"), "");
     assert.equal(answerOf(undefined, "a"), "");
+  });
+  test("answersOf reads an answers object and treats an array as no answers", () => {
+    assert.deepEqual(answersOf({ a: "yes" }), { a: "yes" });
+    assert.deepEqual(answersOf(["a", "b"]), {});
   });
 });
 

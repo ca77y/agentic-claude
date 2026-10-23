@@ -797,7 +797,7 @@ async function persist(st) {
   st.pendingDeferred = [];
   st.pendingLeads = [];
   st.pendingExisting = [];
-  return integrated;
+  return { integration: integrated };
 }
 function validatePrompt(st, persisted) {
   return `${st.where}
@@ -918,6 +918,9 @@ async function validate(st, persisted) {
   } else st.attempts.push({ gate: "persist", approach: "repair", failed: "the scribe did not return" });
   return void 0;
 }
+async function integrationOf(st) {
+  return st.persisted ? { integration: st.persisted } : persist(st);
+}
 async function researchLoop(st) {
   for (; ; ) {
     if (st.pending.length > 0) {
@@ -925,10 +928,10 @@ async function researchLoop(st) {
       if (next === "again") continue;
       if (next) return next;
     }
-    const persisted = st.persisted ?? await persist(st);
+    const persisted = await integrationOf(st);
     if (persisted === "again") continue;
-    if ("done" in persisted) return persisted;
-    const result = await validate(st, persisted);
+    if (!("integration" in persisted)) return persisted;
+    const result = await validate(st, persisted.integration);
     if (result) return result;
   }
 }
