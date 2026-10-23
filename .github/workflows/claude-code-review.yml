@@ -33,7 +33,9 @@ jobs:
           fetch-depth: 1
 
       - name: Run Claude Code Review
-        uses: anthropics/claude-code-action@v1
+        # Pinned to v1.0.253, the last release whose reviews finished: later releases end the run while the review's
+        # background agents are still working (anthropics/claude-code-action#1852).
+        uses: anthropics/claude-code-action@5eb090f3c3afd701a0672cd32981197ca27688f6 # v1.0.253
         env:
           # The review fans out to subagents that can outlast a headless session's 10-minute wait for background work.
           CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS: "0"
