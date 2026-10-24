@@ -32,6 +32,5 @@ format:
 # Smoke workflows can outlast a headless session's wait for background work, so that ceiling is lifted.
 test:
 	for p in $(PLUGINS); do \
-	  claude plugin eval "$$p" --tag trigger --runs 1 --allow-tools Workflow --ablation none --trust-plugin || exit 1; \
 	  CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0 claude plugin eval "$$p" --tag smoke --allow-tools Bash Write Edit Agent Workflow --scaffold --ablation none --trust-plugin || exit 1; \
 	done

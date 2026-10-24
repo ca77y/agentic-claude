@@ -1,6 +1,7 @@
 ---
 name: ask
 description: Answer a question, comparison, or synthesis from the existing project library, citing its evidence and exposing gaps or staleness. Does not initiate internet research, persist content, or perform maintenance.
+disable-model-invocation: true
 ---
 
 Answer the question in the conversation from the existing project library. This is read-only: no internet research, no library writes, no maintenance. If a good answer needs new sources, say so and suggest running `/slopify:research`.

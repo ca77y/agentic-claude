@@ -5,7 +5,7 @@ How the plugins are built now. When the code changes a decision below, update it
 ## Workflows and skills
 
 - A multi-step process (shaping a story, delivering a change, reviewing a PR, researching) is a workflow under `plugins/<plugin>/workflows/`. A task that fits one session turn, such as setup, answering from the library, or linting, is a skill.
-- A workflow runs only when the user invokes it. The invocation is the user's request, and each workflow states what that request authorizes.
+- A workflow or skill runs only when the user invokes it; skills set `disable-model-invocation`. The invocation is the user's request, and each workflow states what that request authorizes.
 
 ## Sources and build
 

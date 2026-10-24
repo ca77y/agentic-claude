@@ -1,6 +1,7 @@
 ---
 name: lint
 description: Check the whole project research library for broken links, pages missing from the index, frontmatter and tag violations, duplicate sources, and contested or superseded pages, and repair them when asked. Use for library maintenance, not new research.
+disable-model-invocation: true
 ---
 
 Check the whole `library/` against `library/_meta/librarian.md` and report what's wrong. Repair only when the user asks.

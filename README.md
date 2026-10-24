@@ -65,6 +65,6 @@ claude plugin install slopify@agentic-slop
 
 Run `/reload-plugins`, or start a new session, after installing or updating to load skills, workflows, and agents.
 
-Every workflow runs only when invoked explicitly: as `/slopify:<name>`, such as `/slopify:deliver-story SMR-12`, or when you ask to run the slopify `<name>` workflow. This includes `shape`, which no longer runs when you merely describe shaping work. The skills run by qualified name, such as `/slopify:ask`, or when you describe matching work.
+Every workflow runs only when invoked explicitly: as `/slopify:<name>`, such as `/slopify:deliver-story SMR-12`, or when you ask to run the slopify `<name>` workflow. This includes `shape`, which no longer runs when you merely describe shaping work. The skills also run only when invoked, by qualified name such as `/slopify:ask`.
 
 The workflows dispatch many background agents that run git, tests, and the forge CLI, so they are designed for auto-approve or bypass permission mode; in default mode those agents' permission prompts arrive while the workflow is waiting.

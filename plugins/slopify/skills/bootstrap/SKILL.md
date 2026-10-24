@@ -1,6 +1,7 @@
 ---
 name: bootstrap
 description: Create a project's board and forge declarations (`docs/BOARD.md`, `docs/FORGE.md`), its Markdown research library, and the root `CLAUDE.md` library pointer, or verify and fix existing ones, with optional Obsidian settings. Use for project setup, not research, content maintenance, or external board/forge operations.
+disable-model-invocation: true
 ---
 
 Create or complete `docs/BOARD.md`, `docs/FORGE.md`, and the project's `library/` from repository facts and the user's choices. The library comes from `${CLAUDE_SKILL_DIR}/resources/library/` and works as plain Markdown. This is local setup: it creates no external projects, cards, branches, commits, PRs, or messages, researches nothing, and creates no source content.
