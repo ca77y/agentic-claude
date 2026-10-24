@@ -4,3 +4,4 @@ This repo is the source of Claude Code plugins under `plugins/` and the marketpl
 
 - Run `make install` once per clone. It installs the dev tools and enables the pre-commit hook, which runs `make check` on every commit and changes no file. Run `make build` after editing `src/` and `make format` before committing. A commit the hook or CI rejects is not done.
 - Change a plugin's `version` only when the user asks for that bump.
+- Run `make smoke-test` only when the user asks; it calls models.

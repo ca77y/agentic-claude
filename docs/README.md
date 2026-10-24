@@ -15,6 +15,7 @@ Tooling:
 - `make build` bundles the TypeScript workflow sources in `src/` into `plugins/`.
 - `make format` formats the repo with Prettier.
 - `make check` runs every fast check on the whole repo: build freshness, type checks, ESLint, markdownlint, Prettier, knip for dead code, jscpd for duplication, type coverage, unit tests, and plugin validation.
-- `make test` runs the plugin evals, which call models.
+- `make test` runs the unit tests.
+- `make smoke-test` runs the plugin's smoke evals, four cases at a time. They call models and take about 12 minutes, so nothing runs them automatically.
 
 The hook only checks: it runs `make check`. It changes no file, so run `make build` after editing `src/` and `make format` before committing. CI runs `make check` on every pull request and every push to `master`.
