@@ -2,7 +2,7 @@ import { createDeliver, type Stopped } from "../lib/deliver.ts";
 import { workspace } from "../lib/deliver-steps.ts";
 import { specReviser, type HowInput } from "../lib/how.ts";
 import { answersOf, inputOf, textOf, type NotStarted } from "../lib/input.ts";
-import { must, runLoop, stopOf, type LoopResult } from "../lib/loop.ts";
+import { must, reportOf, runLoop, stopOf, type LoopResult } from "../lib/loop.ts";
 import { readResume } from "../lib/resume.ts";
 
 export const meta = {
@@ -10,7 +10,7 @@ export const meta = {
   description:
     "Run the build and validate loop on an existing pull request: wait for its review, rule on each finding, fix what is confirmed through a coder and qa inner loop, validate, and push every round, until the review is clean and the PR goes ready or a limit leaves it a draft",
   whenToUse:
-    "Run only when the user invokes /slopify:review-pr or asks for the slopify review-pr workflow; deliver-bugfix also runs it as its last step. Args: {pr, story?, projectRoot?, answers?}, or the pull request as a plain string. pr names the pull request, story is the acceptance source when known, projectRoot defaults to the session project directory, and answers maps a decision id to its answer.",
+    "Run only when the user invokes /slopify:review-pr or asks for the slopify review-pr workflow. Args: {pr, story?, projectRoot?, answers?}, or the pull request as a plain string. pr names the pull request, story is the acceptance source when known, projectRoot defaults to the session project directory, and answers maps a decision id to its answer.",
   phases: [
     { title: "Locate", detail: "scout-checkpoint reports the PR, worktree, ledger, and spec" },
     { title: "Workspace", detail: "pusher recovers a missing worktree" },
@@ -38,9 +38,6 @@ export default async function run(): Promise<ReviewPrResult> {
   }
   const d = createDeliver({
     workflow: "review-pr",
-    maxFailures: 3,
-    planPhase: "Build",
-    failures: { spec: 0, implementation: 0 },
     projectRoot: textOf(input["projectRoot"]),
     storyArg: pr,
   });
@@ -53,7 +50,6 @@ export default async function run(): Promise<ReviewPrResult> {
       cardId: "",
       boardBranch: d.state.branch,
       boardStartDone: true,
-      specRel: resume.specDir,
       worktree: "the pull request's worktree",
       subject: `pull request ${pr}`,
     });
@@ -83,7 +79,7 @@ export default async function run(): Promise<ReviewPrResult> {
     return {
       ...result,
       workflow: "review-pr",
-      report: `review-pr finished: the PR is ${result.status === "ready" ? "ready for review" : "a draft"}. Fix rounds: ${String(result.rounds)}. Review: ${result.review}.${result.draftReasons.length > 0 ? `\nWhy it is a draft:\n${result.draftReasons.map((x) => `- ${x.text}`).join("\n")}` : ""}`,
+      report: reportOf("review-pr", result),
     };
   } catch (error) {
     return stopOf(d, must(error, "review", "The review."));

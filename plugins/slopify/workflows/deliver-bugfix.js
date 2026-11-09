@@ -1,47 +1,31 @@
 export const meta = {
   "name": "deliver-bugfix",
-  "description": "Deliver a bug fix through a verified pull request: scouts gather evidence, a coder writes a regression test that shows the failure and a fresh lens-repro confirms it, a writer writes a spec only as large as the fix that a fresh lens-scope must pass, a coder fixes, a fresh qa and lens-regression validate that the test fails before the fix and passes after it, pusher publishes, and review-pr runs the review loop",
-  "whenToUse": "Run only when the user invokes /slopify:deliver-bugfix or asks for the slopify deliver-bugfix workflow. Args: {bug, projectRoot?, answers?}, or the bug as a plain string; bug is a card identifier or URL, or the report text; projectRoot defaults to the session project directory; answers maps a decision id from a blocked result to its answer when rerunning.",
+  "description": "Fix a bug autonomously, from a Linear issue or a prompt to a pull request: reproduce it, turn the reproduction into a failing test, fix it, run the reproduction again in the app, and show the before and after in a PR that goes ready once its review is clean. A bug that can't be reproduced stops the run with no PR",
+  "whenToUse": "Run only when the user invokes /slopify:deliver-bugfix or asks for the slopify deliver-bugfix workflow. Args: {story, projectRoot?, answers?}, or the bug as a plain string; story is a card identifier or URL, or the report; projectRoot defaults to the session project directory; answers maps a decision id from a draft or blocked result to its answer when rerunning.",
   "phases": [
     {
       "title": "Locate",
-      "detail": "scout-card reads the report, then scout-checkpoint reports the run's durable state"
+      "detail": "scout-card reads the Bug card reproduce-bug filed, or the report as written"
     },
     {
       "title": "Workspace",
-      "detail": "pusher creates or recovers the worktree and starts delivery"
+      "detail": "pusher creates or recovers the worktree and branch"
     },
     {
-      "title": "Gather",
-      "detail": "scout-code, scout-tests, and scout-history in parallel"
-    },
-    {
-      "title": "Reproduce",
-      "detail": "coder writes a regression test that shows the failure; lens-repro judges it"
-    },
-    {
-      "title": "Spec",
-      "detail": "writer writes the small spec: bug, cause, fix, test, verification"
-    },
-    {
-      "title": "Spec gate",
-      "detail": "lens-scope (and lens-consistency when the spec changes a documented contract) must pass; pusher commits the spec and the test"
-    },
-    {
-      "title": "Fix",
-      "detail": "coder fixes and leaves the regression test as it is"
+      "title": "Build",
+      "detail": "the reproduction as a failing test, the fix, checks, and qa, then any affected docs"
     },
     {
       "title": "Validate",
-      "detail": "qa and lens-regression judge the candidate; pusher commits the fix"
+      "detail": "validator runs the reproduction again in the app"
     },
     {
-      "title": "Publish",
+      "title": "Push",
       "detail": "pusher pushes, opens or updates the PR, and fires the review"
     },
     {
       "title": "Review",
-      "detail": "the review-pr workflow runs the review loop as a sub-workflow"
+      "detail": "watcher reads the review, and one judge rules on each finding"
     }
   ]
 };
@@ -186,16 +170,6 @@ function shaped(kind, v) {
   if (tok && re.test(tok)) return tok;
   return re.test(t) ? t : "";
 }
-function sameRev(briefed, evaluated) {
-  const b = (briefed || "").trim().toLowerCase();
-  const e = (evaluated || "").trim().toLowerCase();
-  if (!b || e.includes(b)) return true;
-  const HEX = /(?<![0-9a-z])[0-9a-f]{7,64}(?![0-9a-z])/g;
-  const bh = b.match(HEX) ?? [];
-  if (bh.length === 0) return false;
-  const eh = e.match(HEX) ?? [];
-  return bh.every((x) => eh.some((y) => x.startsWith(y) || y.startsWith(x))) && b.split(HEX).map((p) => p.trim()).filter((p) => p && !/[a-z]{3}/.test(p)).every((p) => e.includes(p));
-}
 function hashOf(text) {
   let h = 5381;
   for (const ch of text) h = (h * 33 ^ (ch.codePointAt(0) ?? 0)) >>> 0;
@@ -205,65 +179,6 @@ function slugged(text, fallback) {
   const norm = (text || "").toLowerCase().replaceAll(/[^a-z0-9]+/g, " ").trim();
   const words = norm.split(" ").filter(Boolean).slice(0, 6).join("-");
   return norm ? `${words}-${hashOf(norm)}` : fallback || "item";
-}
-var HASH = "[0-9a-f]{7,64}";
-function parseSpec(v) {
-  const m = new RegExp(String.raw`^(.+)(?:@|\s)(${HASH})$`).exec(
-    unremark("path", ((v || "").split("\n", 1)[0] ?? "").trim())
-  );
-  const path = m?.[1]?.trim() ?? "";
-  const hash = m?.[2] ?? "";
-  return path && (shaped("path", path) === path || shaped("rel", path) === path) ? { path, hash } : null;
-}
-function decisionsOf(prefix, questions) {
-  const out = [];
-  const asked = questions ?? [];
-  for (const q of asked) {
-    const question = q.trim();
-    const norm = question.toLowerCase().replaceAll(/[^a-z0-9]+/g, " ").trim();
-    const id = `${prefix}-${norm.split(" ").slice(0, 4).join("-") || "question"}-${hashOf(norm)}`;
-    if (question && out.every((d) => d.id !== id)) out.push({ id, question });
-  }
-  return out;
-}
-function answerOf(answers, id) {
-  const a = answers?.[id];
-  return a === void 0 || a === null ? "" : String(a).trim();
-}
-function settledText(settled) {
-  return settled.length > 0 ? `
-
-The user has settled these earlier questions; apply each answer and do not ask them again:
-${settled.map((d) => `- Question: ${d.question}
-  Answer: ${d.answer}`).join("\n")}` : "";
-}
-async function settleDecisions(prefix, answers, run2) {
-  const settled = [];
-  let carriedTried = false;
-  for (let round = 0; ; round++) {
-    const res = await run2(settled);
-    if (!res || res.storyBlockers?.length) return { res, open: [] };
-    const decisions = decisionsOf(prefix, res.openDecisions);
-    const open = decisions.filter((d) => !answerOf(answers, d.id));
-    if (open.length > 0) {
-      const carried = Object.keys(answers).filter(
-        (k) => k.startsWith(`${prefix}-`) && !k.startsWith(`${prefix}-blocker-`) && answerOf(answers, k) && decisions.every((d) => d.id !== k) && settled.every((x) => x.id !== k)
-      );
-      if (carried.length === 0 || carriedTried || round >= 2) return { res, open };
-      carriedTried = true;
-      settled.push(
-        ...carried.map((k) => ({
-          id: k,
-          question: `an earlier question whose id was ${k}; its words ran: ${k.replace(`${prefix}-`, "").replace(/-[a-z0-9]{6,7}$/, "").replaceAll("-", " ")}`,
-          answer: answerOf(answers, k)
-        }))
-      );
-      continue;
-    }
-    const fresh = decisions.filter((d) => settled.every((x) => x.id !== d.id));
-    if (fresh.length === 0 || round >= 2) return { res, open: [] };
-    settled.push(...fresh.map((d) => ({ ...d, answer: answerOf(answers, d.id) })));
-  }
 }
 function rerunText(workflow2, needs) {
   const cmd = `/slopify:${workflow2}`;
@@ -281,8 +196,8 @@ function blocked(workflow2, step, needs, extra = {}) {
 function described(schema, description) {
   return description === void 0 ? schema : { ...schema, description };
 }
-function arrayOf(items, description) {
-  return description === void 0 ? { type: "array", items } : { type: "array", description, items };
+function arrayOf(items2, description) {
+  return description === void 0 ? { type: "array", items: items2 } : { type: "array", description, items: items2 };
 }
 function pusherSchema(notes = {}) {
   return {
@@ -305,205 +220,41 @@ function pusherSchema(notes = {}) {
 }
 
 // src/slopify/lib/deliver.ts
-var CODER_SCHEMA = {
-  type: "object",
-  required: ["changed", "tests", "ran", "revision", "open", "specMismatch"],
-  properties: {
-    changed: { ...STRINGS, description: "Paths changed, relative to the worktree root" },
-    tests: { ...STRINGS, description: "Test paths added or changed" },
-    ran: { ...STRINGS, description: "Each command and its result" },
-    revision: {
-      type: "string",
-      description: "The revision left, as the brief defines it"
-    },
-    open: STRINGS,
-    specMismatch: {
-      type: "string",
-      description: "Why the spec cannot be implemented as written, or an empty string when it can"
-    },
-    steps: STRINGS,
-    observed: { type: "string" },
-    measurements: {
-      type: "array",
-      items: {
-        type: "object",
-        required: ["claim", "value", "command"],
-        properties: {
-          claim: { type: "string" },
-          value: { type: "string" },
-          command: { type: "string" }
-        }
-      }
-    }
-  }
-};
 var PUSHER_SCHEMA = pusherSchema({ reference: "A commit sha, PR URL or path, card id, or worktree path" });
-function prop(v, key) {
-  if (v === null || v === void 0) throw new TypeError(`Cannot read properties of ${String(v)} (reading '${key}')`);
-  if (typeof v !== "object") return void 0;
-  const value = Reflect.get(v, key);
-  return value;
-}
-var isList = (v) => Array.isArray(v);
-function jsonText(v) {
-  if (typeof v === "string") return v;
-  if (isList(v)) return v.map((x) => x === null || x === void 0 ? "" : jsonText(x)).join(",");
-  if (typeof v === "object" && v !== null) return "[object Object]";
-  if (typeof v === "number" || typeof v === "boolean") return String(v);
-  return v === null ? "null" : "undefined";
-}
-function dirtyEntry(x) {
-  const t = (x || "").trim().replace(/^[ MADRCUT?!]{1,2}\s+/, "").replace(/\s+\([^)]*\)$/, "");
-  const m = /^(.*) -> (.*)$/.exec(t);
-  return m ? [m[1] ?? "", m[2] ?? ""] : [t];
-}
 var NO_WRITES = "Do not commit, push, branch, or change the board or forge; pusher does that.";
-var DIRTY_SENTENCE = "Uncommitted changes in these paths come from an interrupted run of this step; inspect them, keep what serves your assignment, and continue from them rather than starting over.";
-var DECIDE = `Decide anything that does not change the story's goal, scope, or acceptance criteria, and record it as a labelled assumption ("Assumption: ..."). Raise openDecisions only for a choice that would change the outcome or contradict the story; otherwise leave openDecisions empty.`;
-var candidateNote = (cand) => `The candidate is the worktree's current state: HEAD plus its uncommitted changes. "${cand}" is an identifier for that state, not a git object, so do not resolve it with git. Report it back unchanged in evaluated.`;
 function need(step, n, kind, what, evidence) {
   return { id: `${step}-${n}`, kind, what, evidence: evidence || "" };
 }
-var decisionNeed = (d, who) => ({
-  id: d.id,
-  kind: "decision",
-  what: d.question,
-  evidence: `raised by ${who}`
-});
-var list = (items) => items?.length ? items.map((x) => `- ${x}`).join("\n") : "- none";
+var list = (items2) => items2?.length ? items2.map((x) => `- ${x}`).join("\n") : "- none";
 var slugOf = (s) => (s || "").toLowerCase().replaceAll(/[^a-z0-9]+/g, " ").trim().split(/\s+/).slice(0, 6).join("-");
 var clean = (v) => absent(v) ? "" : (v ?? "").trim();
 var val = (res, key) => clean(fact(res, key));
-var isRel = (p) => !!p && shaped("rel", p) === p;
-var splitList = (v) => absent(v) ? [] : v.split(/[,\n]/).map((s) => s.trim()).filter(Boolean);
-function unique(items) {
-  return [...new Set(items.filter(Boolean))];
+function unique(items2) {
+  return [...new Set(items2.filter(Boolean))];
 }
-function show(label, r) {
-  if (!r) return `${label}: the scout returned nothing, which is a gap, not an absence`;
-  const ev = r.evidence.map((e) => `  - ${e.source} @ ${e.location}: ${e.excerpt}`).join("\n");
-  const gaps = r.gaps.length > 0 ? `
-  Gaps: ${r.gaps.join("; ")}` : "";
-  return `${label}: ${r.answer}${ev ? `
-${ev}` : ""}${gaps}`;
-}
-function passed(v) {
-  return !!v && v.verdict === "pass" && v.findings.every((f) => !f.blocking);
-}
-function usable(v, revision) {
-  if (!v || !revision || !sameRev(revision, v.evaluated)) return false;
-  const blocking = v.findings.some((f) => f.blocking);
-  return v.verdict === "fail" ? blocking : v.verdict !== "pass" || !blocking;
-}
-function blockingOf(name, v) {
-  if (!v || v.verdict === "pass") return [];
-  const out = v.findings.filter((f) => f.blocking).map((f) => ({ from: name, ...f }));
-  if (v.verdict === "unverified") {
-    const lim = v.limits && !absent(v.limits, true) ? v.limits : "";
-    out.push({
-      from: name,
-      location: name,
-      problem: `could not check${lim ? `: ${lim}` : " (no reason given)"}`,
-      blocking: true
-    });
-  }
-  return out;
-}
-var findingText = (f) => `${f.from} (${f.blocking ? "blocking" : "note"}) at ${f.location}: ${f.problem}`;
 var pushOk = (r) => !!r && r.done && r.unmet.length === 0;
 var opRef = (r, name) => {
   const o = (r?.operations ?? []).find((x) => x.op.toLowerCase() === name);
   return o ? o.reference.trim() : "";
 };
 function callWriter(prompt, label, phaseTitle, schema) {
-  return agent(prompt, {
-    agentType: "slopify:writer",
-    label,
-    phase: phaseTitle,
-    schema
-  });
+  return agent(prompt, { agentType: "slopify:writer", label, phase: phaseTitle, schema });
 }
 function callCoder(prompt, label, phaseTitle, schema) {
-  return agent(prompt, {
-    agentType: "slopify:coder",
-    label,
-    phase: phaseTitle,
-    schema: schema ?? CODER_SCHEMA
-  });
-}
-function callQa(prompt, label, phaseTitle) {
-  return agent(prompt, {
-    agentType: "slopify:qa",
-    label,
-    phase: phaseTitle,
-    schema: LENS_SCHEMA
-  });
+  return agent(prompt, { agentType: "slopify:coder", label, phase: phaseTitle, schema });
 }
 function callPusher(prompt, label, phaseTitle) {
-  return agent(prompt, {
-    agentType: "slopify:pusher",
-    label,
-    phase: phaseTitle,
-    schema: PUSHER_SCHEMA
-  });
-}
-function ledgerLine(v) {
-  const m = /^(\d+)\|([\s\S]*)$/.exec(v.trim());
-  return m ? { n: Number(m[1]), text: (m[2] ?? "").trim() } : { n: NaN, text: v.trim() };
-}
-function parseDoneSpec(v) {
-  if (!v) return null;
-  const l = ledgerLine(v);
-  const m = new RegExp(
-    String.raw`done spec (.*)@(${HASH})\s+commit\s+(\S+)\s+story\s+(${HASH})(?:\s+test\s+(.+))?\s*$`
-  ).exec(l.text);
-  if (!m) return null;
-  const [, path = "", hash = "", commit = "", story = "", test = ""] = m;
-  return { n: l.n, path: path.trim(), hash, commit, story, test: test.trim() };
-}
-function parseDoneImplement(v) {
-  if (!v) return null;
-  const l = ledgerLine(v);
-  const m = new RegExp(String.raw`done implement\s+commit\s+(\S+)\s+spec\s+(${HASH})(\s+pushed)?\s*$`).exec(l.text);
-  if (!m) return null;
-  const [, commit = "", spec = "", pushed] = m;
-  return { n: l.n, commit, spec, pushed: !!pushed };
-}
-function parseDonePublish(v) {
-  if (!v) return null;
-  const l = ledgerLine(v);
-  const m = /done publish(?:\s+(?!commit\b)(.*?))?(?:\s+commit\b.*)?$/.exec(l.text);
-  return m ? { n: l.n, pr: shaped("ref", (m[1] || "").trim()) } : null;
-}
-function parseDoneBoard(v, kind) {
-  if (!v) return null;
-  const l = ledgerLine(v);
-  const m = new RegExp(String.raw`done board-${kind}\s+(\S+)`).exec(l.text);
-  return m ? { n: l.n, ref: m[1] ?? "" } : null;
+  return agent(prompt, { agentType: "slopify:pusher", label, phase: phaseTitle, schema: PUSHER_SCHEMA });
 }
 function createDeliver(config) {
-  const {
-    workflow: WORKFLOW,
-    maxFailures: MAX_FAILURES,
-    planPhase: PLAN_PHASE,
-    failures,
-    projectRoot,
-    storyArg
-  } = config;
+  const { workflow: WORKFLOW, projectRoot, storyArg } = config;
   const WHERE = projectRoot ? `The project is at ${projectRoot}; address files by absolute path under it.` : "The project is the session project directory; address files by absolute path.";
-  const AUTH = `Authorization, from the user's invocation of /slopify:${WORKFLOW}: the story branch and worktree, attributable commits, the pushes the brief asks for, opening or updating this task's PR as a draft or ready, the declared review trigger, the one issue comment the brief asks for when the run ends or halts, and filing the issues the brief lists. It does not authorize merging, releases, any other message, rewriting docs/BOARD.md or docs/FORGE.md, or changing a card's content. Work exactly as docs/BOARD.md and docs/FORGE.md declare; an operation that is not bound is unmet, never improvised. Stage explicit paths only.`;
+  const AUTH = `Authorization, from the user's invocation of /slopify:${WORKFLOW}: the story branch and worktree, attributable commits, the pushes the brief asks for, opening or updating this task's PR as a draft or ready, the declared review trigger, the one issue comment and label the brief asks for when the run ends or halts, and filing the issues the brief lists. It does not authorize merging, releases, any other message, rewriting docs/BOARD.md or docs/FORGE.md, or changing a card's content. Work exactly as docs/BOARD.md and docs/FORGE.md declare; an operation that is not bound is unmet, never improvised. Stage explicit paths only.`;
   const completed = [];
-  const skipped = [];
-  const attempts = [];
-  const verification = [];
-  const limits = [];
   const state = {
     worktree: "",
     branch: "",
     ledger: "",
-    specPath: "",
-    specHash: "",
-    specExists: false,
     pr: ""
   };
   let runLinePending = true;
@@ -511,102 +262,17 @@ function createDeliver(config) {
     completed.push(step);
   }
   function skip(step) {
-    skipped.push(step);
     completed.push(step);
   }
   function stop(step, needs) {
-    const checkpoint2 = {};
-    if (state.worktree) checkpoint2.worktree = state.worktree;
-    if (state.branch) checkpoint2.branch = state.branch;
-    if (state.specExists) checkpoint2.spec = state.specPath;
-    if (state.ledger) checkpoint2.ledger = state.ledger;
-    if (state.pr) checkpoint2.pr = state.pr;
+    const checkpoint = {};
+    if (state.worktree) checkpoint.worktree = state.worktree;
+    if (state.branch) checkpoint.branch = state.branch;
+    if (state.ledger) checkpoint.ledger = state.ledger;
+    if (state.pr) checkpoint.pr = state.pr;
     return blocked(WORKFLOW, step, needs, {
       completed: [...completed],
-      checkpoint: checkpoint2,
-      attempts
-    });
-  }
-  function fail(gate, approach, failed) {
-    failures[gate] += 1;
-    attempts.push({ gate, approach, failed });
-    return failures[gate] >= MAX_FAILURES;
-  }
-  function exhausted(step, gate) {
-    const last = attempts.filter((a) => a.gate === gate).slice(-MAX_FAILURES);
-    return stop(step, [
-      need(
-        step,
-        1,
-        "validation",
-        `A ${gate} that passes its gate; ${MAX_FAILURES} attempts failed.`,
-        last.map((a) => `${a.approach}: ${a.failed}`).join(" | ")
-      )
-    ]);
-  }
-  function rel(p) {
-    let t = (p || "").trim().replace(/^\.\//, "");
-    if (state.worktree && t.startsWith(state.worktree + "/")) t = t.slice(state.worktree.length + 1);
-    return t.replace(/\/+$/, "");
-  }
-  function within(p, scope) {
-    const a = rel(p);
-    const b = rel(scope);
-    return !!a && !!b && (a === b || a.startsWith(b + "/"));
-  }
-  function overlaps(x, y) {
-    return x.some((p) => y.some((q) => within(p, q) || within(q, p)));
-  }
-  function pathOf(location) {
-    const m = /^(.*?)(?::\d+(?:-\d+)?)?$/.exec(location.trim());
-    return rel(m ? m[1] : location);
-  }
-  function relList(v) {
-    if (!isList(v)) throw new TypeError("not a list of paths");
-    return v.map((p) => rel(jsonText(p || "")));
-  }
-  async function judge(items, revision, step) {
-    const out = Array.from({ length: items.length }, () => null);
-    let rounds = 0;
-    for (; ; ) {
-      const todo = items.map((item, i) => ({ item, i })).filter((t) => !usable(out[t.i], revision));
-      if (todo.length === 0) return { verdicts: out };
-      const names = todo.map((t) => t.item.name).join(", ");
-      if (rounds >= MAX_FAILURES) {
-        attempts.push({
-          gate: "validator",
-          approach: `${names} on ${revision}`,
-          failed: "no usable verdict after repeated dispatches"
-        });
-        return {
-          stop: stop(step, [
-            need(
-              step,
-              1,
-              "validation",
-              `A usable verdict from ${names} on revision ${revision}.`,
-              `${rounds} dispatches returned no verdict, a verdict on another revision, or a fail with no blocking finding`
-            )
-          ])
-        };
-      }
-      if (rounds > 0)
-        attempts.push({
-          gate: "validator",
-          approach: `re-run ${names}`,
-          failed: "no verdict, or a verdict on another revision"
-        });
-      const res = await parallel(todo.map((t) => () => t.item.call()));
-      for (const [k, t] of todo.entries()) out[t.i] = res[k];
-      rounds += 1;
-    }
-  }
-  function record(name, v, revision) {
-    verification.push({
-      agent: name,
-      verdict: v ? v.verdict : "none",
-      evaluated: v ? v.evaluated : revision,
-      findings: v ? v.findings.length : 0
+      checkpoint
     });
   }
   function takeLines(lines) {
@@ -647,117 +313,1083 @@ Report each operation you performed as an operations entry, named worktree, bran
       )
     ]);
   }
-  function makeReport(extra, review2) {
-    const outcome = (r) => {
-      const o = r.review === void 0 ? r.status : r.review;
-      const text = typeof o === "string" ? o : JSON.stringify(o);
-      const rounds = isList(r.rounds) ? `${r.rounds.length} round(s)` : "";
-      const unfixed = isList(r.unfixed) && r.unfixed.length > 0 ? `${r.unfixed.length} finding(s) left unfixed` : "";
-      return [text, rounds, unfixed].filter(Boolean).join("; ");
-    };
-    return [
-      `${WORKFLOW} done.`,
-      ...extra ?? [],
-      verification.length > 0 ? `Verification this run: ${verification.map((v) => `${v.agent} ${v.verdict} on ${v.evaluated}`).join("; ")}.` : "Verification: every gate was already satisfied by earlier checkpoints; no new verdicts this run.",
-      skipped.length > 0 ? `Skipped from checkpoints: ${skipped.join(", ")}.` : "",
-      `PR: ${state.pr}.`,
-      `Review: ${outcome(review2)}.`,
-      limits.length > 0 ? `Limits: ${limits.join(" | ")}.` : ""
-    ].filter(Boolean).join("\n");
-  }
-  async function recoverPlan() {
-    const r = await scout(
-      "scout-docs",
-      `${WHERE}
-Read the spec at ${state.specPath} and report only its task list and the documentation it says to update; quote the spec, claim nothing of your own. Report one evidence item per task: source "task:<id>", location the spec path, excerpt a JSON object {"summary": "...", "paths": ["..."]} with the task's paths relative to the worktree root. Report one evidence item with source "docs" and excerpt a JSON array of the documentation paths to update (an empty array when none). Quote the spec; make no changes.`,
-      { label: "read spec tasks", phase: PLAN_PHASE }
-    );
-    const tasks = [];
-    let docs = [];
-    const evidence = r?.evidence ?? [];
-    for (const e of evidence) {
-      try {
-        if (e.source.startsWith("task:")) {
-          const j = JSON.parse(e.excerpt);
-          const id = e.source.slice(5);
-          const summary = jsonText(prop(j, "summary") || "");
-          tasks.push({ id, summary, paths: relList(prop(j, "paths") || []) });
-        } else if (e.source === "docs") {
-          docs = relList(JSON.parse(e.excerpt));
-        }
-      } catch {
-      }
-    }
-    return tasks.length > 0 ? { tasks, docs } : null;
-  }
-  return {
-    WHERE,
-    completed,
-    skipped,
-    attempts,
-    verification,
-    limits,
-    state,
-    done,
-    skip,
-    stop,
-    fail,
-    exhausted,
-    rel,
-    within,
-    overlaps,
-    pathOf,
-    judge,
-    record,
-    pushBrief,
-    pushStop,
-    makeReport,
-    recoverPlan
-  };
+  return { WHERE, state, done, skip, stop, pushBrief, pushStop };
 }
 
-// src/slopify/lib/deliver-steps.ts
-var WRITER_SCHEMA = {
+// src/slopify/lib/input.ts
+function isRecord(v) {
+  return typeof v === "object" && v !== null;
+}
+function inputOf(a, primary, numbers = false) {
+  if (typeof a !== "string") return isRecord(a) ? a : {};
+  const text = a.trim();
+  try {
+    const parsed2 = JSON.parse(text);
+    if (isRecord(parsed2)) return parsed2;
+    if (typeof parsed2 === "string" || numbers && typeof parsed2 === "number") {
+      return { [primary]: String(parsed2).trim() };
+    }
+  } catch {
+  }
+  return { [primary]: text };
+}
+var textOf = (v) => typeof v === "string" ? v.trim() : "";
+function answerValue(x) {
+  const text = String(x);
+  return x === null || x === void 0 || typeof x === "string" || typeof x === "number" || typeof x === "boolean" ? x : text;
+}
+function answersOf(v) {
+  return isRecord(v) && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, answerValue(x)])) : {};
+}
+
+// src/slopify/lib/rules.ts
+var MAX_FIX_ROUNDS = 3;
+var MAX_INNER_TRIES = 3;
+var isBlocking = (r) => r.severity === "blocker" || r.severity === "major";
+function routeOf(r, priorFixes, differentlyUsed, hasSpec) {
+  if (r.verdict === "dismissed") return "dismiss";
+  if (r.verdict === "unverified") return "unverified";
+  if (r.kind === "cannot-verify") return "not-validated";
+  if (r.kind === "decision") return "needs-confirmation";
+  if (r.severity === "pre-existing") return "new-issue";
+  if (!isBlocking(r)) return "suggestion";
+  if (priorFixes > 0) {
+    const recurring = recurrenceRoute(r, differentlyUsed);
+    if (recurring) return recurring;
+  }
+  if (r.kind === "docs") return "writer";
+  if (r.kind === "test") return "correct-test";
+  return r.kind === "spec" && hasSpec ? "revise-spec" : "coder";
+}
+function recurrenceRoute(r, differentlyUsed) {
+  if (r.ruling === "accept-as-debt") return r.severity === "major" ? "known-debt" : "escalate";
+  if (r.ruling === "split-to-issue") return r.severity === "major" ? "split-issue" : "escalate";
+  if (r.ruling === "fix-differently") return differentlyUsed ? "escalate" : null;
+  return "escalate";
+}
+var FIX_ROUTES = ["coder", "correct-test", "writer", "revise-spec"];
+function gate(s) {
+  if (!s.prOpen || !s.reviewClean || s.open > 0) return "fix";
+  return s.held > 0 ? "held" : "clean";
+}
+function noProgress(openByRound) {
+  const [a, b, c] = openByRound.slice(-3);
+  return a !== void 0 && b !== void 0 && c !== void 0 && b >= a && c >= b;
+}
+var allowsReady = (setting) => setting?.trim() === "ready";
+var samePath = (a, b) => a === b || a.startsWith(`${b}/`) || b.startsWith(`${a}/`);
+var filesOverlap = (x, y) => x.files.some((a) => y.files.some((b) => samePath(a, b)));
+function waves(tasks) {
+  const out = [];
+  const finished = /* @__PURE__ */ new Set();
+  let left = [...tasks];
+  while (left.length > 0) {
+    const ready = left.filter((t) => t.dependsOn.every((d) => finished.has(d)));
+    const pool = ready.length > 0 ? ready : left;
+    const group = [];
+    for (const t of pool) {
+      if (group.every((g) => !filesOverlap(g, t))) group.push(t);
+    }
+    out.push(group);
+    for (const t of group) finished.add(t.id);
+    left = left.filter((t) => !group.includes(t));
+  }
+  return out;
+}
+var items = (list2) => list2.map((x) => `- ${x.text}${x.detail ? `
+  ${x.detail}` : ""}`).join("\n");
+var cell = (s) => s.replaceAll("|", String.raw`\|`).replaceAll("\n", " ");
+var section = (title, body2) => body2 ? `## ${title}
+
+${body2}` : "";
+function criteriaTable(rows) {
+  if (rows.length === 0) return "";
+  const lines = rows.map(
+    (c) => `| ${cell(c.wording)} | ${cell(c.category)} | ${cell(c.path)} | ${cell(c.result)} | ${cell(c.evidence.join(", "))} |`
+  );
+  return [
+    "| Criterion | Category | Validation path | Result | Evidence |",
+    "| --- | --- | --- | --- | --- |",
+    ...lines
+  ].join("\n");
+}
+function renderBody(b) {
+  return [
+    `Issue: ${b.issue}${b.specDir ? `
+
+Spec: \`${b.specDir}\`` : ""}`,
+    section("Why this is a draft", items(b.draftReasons)),
+    section("Needs confirmation", items(b.needsConfirmation)),
+    section("Reproduced", items(b.reproduced ?? [])),
+    section("Criteria", criteriaTable(b.criteria)),
+    section("Assumptions", b.assumptions.map((a) => `- ${a}`).join("\n")),
+    section("Unverified findings", items(b.unverified)),
+    section("Not validated", items(b.notValidated)),
+    section("Known debt", items(b.knownDebt)),
+    section("Suggestions", items(b.suggestions)),
+    section("Test changes", b.testChanges.map((t) => `- ${t}`).join("\n"))
+  ].filter(Boolean).join("\n\n");
+}
+
+// src/slopify/lib/spec.ts
+var TASK = {
   type: "object",
-  required: ["produced", "revision", "openDecisions", "storyBlockers", "tasks", "docs"],
+  required: ["id", "dependsOn", "files", "criteria", "todo", "reuse", "create"],
   properties: {
-    produced: { ...STRINGS, description: "Absolute paths written" },
-    revision: {
-      type: "string",
-      description: "git hash-object of the main artifact"
-    },
-    openDecisions: {
+    id: { type: "string" },
+    dependsOn: { ...STRINGS, description: "Ids of the tasks this one needs finished first" },
+    files: { ...STRINGS, description: "Files or directories this task may write, relative to the worktree root" },
+    criteria: { ...STRINGS, description: "Ids of the criteria this task delivers" },
+    todo: { type: "string", description: "What to do, including anything only this task needs" },
+    reuse: { ...STRINGS, description: "What already exists and must be used, not rebuilt" },
+    create: { ...STRINGS, description: "What this task creates" }
+  }
+};
+var BUILD = {
+  type: "object",
+  required: ["shared", "tasks", "docs"],
+  properties: {
+    shared: {
       ...STRINGS,
-      description: "Decisions only the user can make; empty when none"
+      description: "Constraints and interfaces every task of this story must follow; never a repeated project rule"
     },
-    storyBlockers: {
-      ...STRINGS,
-      description: "Reasons the story is unbuildable or a criterion is wrong as stated; empty when none"
-    },
-    tasks: {
+    tasks: { type: "array", items: TASK },
+    docs: { ...STRINGS, description: "Documents making claims about the area the change touches; can be empty" }
+  }
+};
+var DECISION = {
+  type: "object",
+  required: ["id", "question", "choice", "rationale", "reversible", "affectsAcceptance"],
+  properties: {
+    id: { type: "string" },
+    question: { type: "string" },
+    choice: { type: "string" },
+    rationale: { type: "string", description: "What grounds the choice" },
+    reversible: { type: "boolean" },
+    affectsAcceptance: { type: "boolean", description: "True when the choice changes behavior a criterion describes" }
+  }
+};
+var DECISIONS = { type: "array", items: DECISION };
+function parsed(text) {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+var isBuild = (v) => typeof v === "object" && v !== null && "tasks" in v;
+var isValidate = (v) => typeof v === "object" && v !== null && "criteria" in v;
+function parseBuild(text) {
+  const v = parsed(text);
+  return isBuild(v) ? v : null;
+}
+function parseValidate(text) {
+  const v = parsed(text);
+  return isValidate(v) ? v : null;
+}
+
+// src/slopify/lib/loop.ts
+var Halt = class extends Error {
+  step;
+  needs;
+  constructor(step, needs, evidence) {
+    super(evidence);
+    this.step = step;
+    this.needs = needs;
+  }
+};
+function must(value, step, what) {
+  if (value === null || value === void 0) throw new Halt(step, what, "the agent did not return");
+  return value;
+}
+function stopOf(d, error) {
+  if (error instanceof Halt)
+    return d.stop(error.step, [need(error.step, 1, "prerequisite", error.needs, error.message)]);
+  throw error;
+}
+var TEST_SCHEMA = {
+  type: "object",
+  required: ["tests", "failingOutput", "noTest", "decisions"],
+  properties: {
+    tests: { ...STRINGS, description: "Test paths written or changed, relative to the worktree root" },
+    failingOutput: { type: "string", description: "The test's failing output on the current code" },
+    noTest: { type: "string", description: "Why the behavior can't be expressed as a test; empty when it can" },
+    decisions: DECISIONS
+  }
+};
+var FIX_SCHEMA = {
+  type: "object",
+  required: ["changed", "ran", "testProblem", "decisions"],
+  properties: {
+    changed: { ...STRINGS, description: "Paths changed, relative to the worktree root" },
+    ran: { ...STRINGS, description: "Each command and its result" },
+    testProblem: { type: "string", description: "Why the test is wrong; empty when it isn't" },
+    decisions: DECISIONS
+  }
+};
+var QA_SCHEMA = {
+  type: "object",
+  required: [...LENS_SCHEMA.required, "testAtFault"],
+  properties: {
+    ...LENS_SCHEMA.properties,
+    testAtFault: { type: "boolean", description: "True when the test itself is what has to change" }
+  }
+};
+var CHECKS_SCHEMA = {
+  type: "object",
+  required: ["commands"],
+  properties: {
+    commands: {
       type: "array",
-      description: "Spec only: the tasks, with disjoint paths; empty otherwise",
       items: {
         type: "object",
-        required: ["id", "summary", "paths"],
+        required: ["command", "exitCode", "failingLines"],
         properties: {
-          id: { type: "string" },
-          summary: { type: "string" },
-          paths: {
-            ...STRINGS,
-            description: "Files or directories the task may write, relative to the worktree root, no globs"
-          }
+          command: { type: "string" },
+          exitCode: { type: "number" },
+          failingLines: { type: "string" }
         }
       }
-    },
-    docs: {
-      ...STRINGS,
-      description: "Spec only: documentation files to update, relative to the worktree root; empty otherwise"
     }
   }
 };
-var inTmp = (p) => /^\.tmp(?:\/|$)/.test(p);
-var sameHash = (a, b) => !!a && !!b && (a.startsWith(b) || b.startsWith(a));
+var VALIDATOR_SCHEMA = {
+  type: "object",
+  required: ["results", "uncategorizedSetting"],
+  properties: {
+    results: {
+      type: "array",
+      items: {
+        type: "object",
+        required: ["id", "result", "ran", "evidence", "detail", "setting"],
+        properties: {
+          id: { type: "string" },
+          result: { type: "string", enum: ["pass", "fail", "cannot-verify"] },
+          ran: { type: "string", description: "The validation path that ran: its commands, flows, or tests" },
+          evidence: { ...STRINGS, description: "Paths under .tmp/evidence/ or quoted output" },
+          detail: { type: "string", description: "For a fail, the flow step or file and line; else why" },
+          setting: { type: "string", description: "What TESTING.md's category states when it can't be verified" }
+        }
+      }
+    },
+    uncategorizedSetting: { type: "string", description: "What TESTING.md's Uncategorized setting states" }
+  }
+};
+var JUDGE_SCHEMA = {
+  type: "object",
+  required: ["verdict", "severity", "kind", "ruling", "reason", "fingerprint"],
+  properties: {
+    verdict: { type: "string", enum: ["confirmed", "dismissed", "unverified"] },
+    severity: { type: "string", enum: ["blocker", "major", "minor", "nit", "pre-existing", "none"] },
+    kind: { type: "string", enum: ["code", "test", "docs", "spec", "cannot-verify", "decision"] },
+    ruling: { type: "string", enum: ["none", "fix-differently", "accept-as-debt", "split-to-issue", "escalate"] },
+    reason: { type: "string", description: "What the evidence shows" },
+    fingerprint: { type: "string", description: "file|symbol|category, the same whenever this problem comes back" }
+  }
+};
+var GATEWAY_SCHEMA = {
+  type: "object",
+  required: ["missed", "docsToAdd"],
+  properties: {
+    missed: {
+      type: "array",
+      items: {
+        type: "object",
+        required: ["location", "text"],
+        properties: { location: { type: "string" }, text: { type: "string" } }
+      }
+    },
+    docsToAdd: { ...STRINGS, description: "Documents the change affects that aren't on the docs list" }
+  }
+};
+var WATCHER_SCHEMA = {
+  type: "object",
+  required: ["outcome", "waitingFor", "limitMinutes", "reference", "findings"],
+  properties: {
+    outcome: { type: "string", enum: ["finished", "failed", "timed-out", "pending", "not-declared"] },
+    waitingFor: { type: "string", enum: ["start", "finish", ""] },
+    limitMinutes: { type: "number" },
+    reference: { type: "string" },
+    findings: {
+      type: "array",
+      items: {
+        type: "object",
+        required: ["id", "location", "text"],
+        properties: { id: { type: "string" }, location: { type: "string" }, text: { type: "string" } }
+      }
+    }
+  }
+};
+var DOCS_SCHEMA = {
+  type: "object",
+  required: ["changed"],
+  properties: { changed: { ...STRINGS, description: "Documents changed, relative to the worktree root" } }
+};
+var SEVERITY_RUBRIC = `Severity: blocker when a criterion fails, the build or tests are broken, data is lost or corrupted, there is a security hole, or tests were weakened without a recorded reason. major for a correctness bug on a reachable path in changed code, an error swallowed on a path the user sees, or documentation the change made untrue. minor for real but low impact. nit for style, naming, or readability. pre-existing for a defect the change didn't introduce. none when the problem isn't a defect in the change.
+Kind: code when the behavior is wrong. test when the behavior is right but the test or flow is wrong. docs when documentation is untrue or missing. spec when the spec is wrong, or the finding conflicts with its design. cannot-verify when a tool, simulator, or credential stopped working, the check hits a blind spot, or the proof is missing or unusable. decision when only a person can settle what a criterion should mean.
+Never downgrade a confirmed failure. Filter out what a linter would catch, and style. Run a reproduction when you can, rather than only reading the code. An earlier dismissal of the same fingerprint stands.`;
+var RECURRENCE_RUBRIC = `If this problem's fingerprint appears under earlier rulings after a fix attempt, also give a ruling, reading those attempts: fix-differently when another approach could work, accept-as-debt when a major can ship and be paid later, split-to-issue when a major belongs in its own issue, or escalate. Otherwise the ruling is none.`;
+var checksBrief = (where, worktree) => `${where}
+In the worktree ${worktree}, run the Checks commands TESTING.md declares, and return each command's exit code and failing lines. Change nothing.`;
+var worktreeOf = (l) => l.d.state.worktree;
+var rowsOf = (l) => Object.values(l.rows);
+function inOrder(l, step) {
+  const turn = async () => {
+    await l.commits;
+    return step();
+  };
+  const next = turn();
+  l.commits = settled(next);
+  return next;
+}
+async function settled(p) {
+  try {
+    await p;
+  } catch {
+  }
+}
+function pushed(r, what) {
+  const unmet = r?.unmet.join("; ");
+  if (pushOk(r)) return r;
+  throw new Halt("push", what, unmet ?? "pusher didn't return");
+}
+async function commit(l, paths, message) {
+  const r = await inOrder(
+    l,
+    () => callPusher(
+      l.d.pushBrief(
+        `Commit exactly these paths as they stand, staged by explicit path, with a message in the convention docs/FORGE.md declares, saying: ${message}.${l.cardId ? ` Name the issue ${l.cardId} in it.` : ""} Do not push.
+${list(paths)}`
+      ),
+      `commit: ${message}`,
+      "Build"
+    )
+  );
+  return opRef(pushed(r, `A commit of ${paths.join(", ")}.`), "commit");
+}
+var answersText = (l) => Object.keys(l.answers).length > 0 ? `The user answered these earlier questions:
+${JSON.stringify(l.answers)}` : "";
+function changeBrief(l, c) {
+  const criteria = c.criteria.map((x) => `- ${x.id}: ${x.wording}
+  First test: ${x.firstTest}`).join("\n");
+  return [
+    `${l.where}
+Work in the worktree ${worktreeOf(l)}.`,
+    l.build?.shared.length ? `Constraints every task follows:
+${list(l.build.shared)}` : "",
+    c.assignment ?? "",
+    c.task ? `Your task (${c.task.id}): ${c.task.todo}
+Files you may write:
+${list(c.task.files)}
+Reuse, don't rebuild:
+${list(c.task.reuse)}
+Create:
+${list(c.task.create)}` : "",
+    criteria ? `The criteria it delivers:
+${criteria}` : "",
+    c.item ? `The problem to fix, at ${c.item.problem.location}:
+${c.item.problem.text}
+${c.item.reason}` : "",
+    answersText(l),
+    "If you have to choose something the brief doesn't settle, pick the most reasonable option, cite what grounds it, and report it in decisions. Don't stop to ask.",
+    NO_WRITES
+  ].filter(Boolean).join("\n\n");
+}
+async function writeTest(l, c, reason) {
+  const t = must(
+    await callCoder(
+      `${changeBrief(l, c)}
+
+Write a new test or change an existing one, so that it states the required behavior. Change no production code. It must fail on the current code: run it and return the failing output. When the behavior can't be expressed as a test, return noTest with the reason instead.${reason ? `
+
+An earlier attempt showed the test has to change: ${reason}` : ""}`,
+      `${c.id}: test`,
+      "Build",
+      TEST_SCHEMA
+    ),
+    "build",
+    `A test for ${c.id}.`
+  );
+  l.decisions.push(...t.decisions);
+  if (t.noTest || t.tests.length === 0) return { paths: [], commit: "", noTest: t.noTest };
+  l.testChanges.push(...t.tests);
+  const sha = await commit(l, t.tests, `add a failing test for ${c.id}`);
+  return { paths: t.tests, commit: sha, noTest: "" };
+}
+function qaBrief(l, c, test) {
+  const history = test.commit ? `The test commit is ${test.commit}, and its protected paths are:
+${list(test.paths)}
+Check in a temporary copy that the test fails at that commit and passes at HEAD. Check that nothing after that commit touches a protected path, and that nothing skips, weakens, or excludes the test, for example by loosening a tolerance, regenerating a snapshot, or changing the test config.` : `This change has no test, because: ${test.noTest}. Judge that reason.`;
+  return `${changeBrief(l, c)}
+
+Validate one change and its history.
+${history}
+Check that the fix delivers the behavior asked for and doesn't merely satisfy the test, for example by special-casing the test's input. Check that the change stays within its criterion or problem. Any failed check is a blocking finding. Set testAtFault when the test is what has to change.`;
+}
+function fixPrompt(l, c, cycle, lastFailure) {
+  const assignment = cycle.paths.length > 0 ? `Make this test pass. These paths are protected, so change none of them:
+${list(cycle.paths)}
+If the test is wrong, return testProblem with the reason and stop.` : `Make the change. It has no test because: ${cycle.noTest}`;
+  return `${changeBrief(l, c)}
+
+${assignment}${lastFailure ? `
+
+The last attempt failed validation:
+${lastFailure}` : ""}`;
+}
+async function qaOf(l, c, cycle) {
+  return must(
+    await agent(qaBrief(l, c, cycle), {
+      agentType: "slopify:qa",
+      label: `${c.id}: qa`,
+      phase: "Build",
+      schema: QA_SCHEMA
+    }),
+    "build",
+    `A qa verdict on ${c.id}.`
+  );
+}
+async function failingChecks(l) {
+  if (!l.small) return "";
+  const brief = checksBrief(l.where, worktreeOf(l));
+  const ran = must(
+    await agent(brief, {
+      agentType: "slopify:checks",
+      label: "checks",
+      phase: "Build",
+      schema: CHECKS_SCHEMA
+    }),
+    "build",
+    "The project's checks."
+  );
+  const failed = ran.commands.filter((x) => x.exitCode !== 0);
+  const lines = failed.map((x) => `${x.command}: ${x.failingLines}`);
+  return lines.join("\n");
+}
+async function tryFix(l, c, cycle, lastFailure, attempt) {
+  const fix = must(
+    await callCoder(
+      fixPrompt(l, c, cycle, lastFailure),
+      `${c.id}: fix${attempt > 1 ? ` (try ${String(attempt)})` : ""}`,
+      "Build",
+      FIX_SCHEMA
+    ),
+    "build",
+    `A fix for ${c.id}.`
+  );
+  l.decisions.push(...fix.decisions);
+  if (fix.testProblem) return { reason: fix.testProblem, rewriteTest: true };
+  if (fix.changed.length > 0) await commit(l, fix.changed, `implement ${c.id}`);
+  l.changedThisRound.push(...fix.changed);
+  const failing = await failingChecks(l);
+  if (failing) return { reason: failing, rewriteTest: false };
+  if (l.small && l.round > 0) return { reason: "", rewriteTest: false };
+  const verdict = await qaOf(l, c, cycle);
+  if (verdict.verdict === "pass") return { reason: "", rewriteTest: false };
+  const reason = verdict.findings.map((f) => `${f.location}: ${f.problem}`).join("\n") || verdict.limits;
+  return { reason, rewriteTest: verdict.testAtFault };
+}
+async function runChange(l, c) {
+  let test = await writeTest(l, c, "");
+  let last = { reason: "", rewriteTest: false };
+  for (let attempt = 1; attempt <= MAX_INNER_TRIES; attempt += 1) {
+    if (last.rewriteTest) test = await writeTest(l, c, last.reason);
+    last = await tryFix(l, c, test, last.rewriteTest ? "" : last.reason, attempt);
+    if (!last.reason) return "";
+  }
+  return last.reason;
+}
+function criteriaOf(l, ids) {
+  return (l.validate?.criteria ?? []).filter((c) => ids.includes(c.id));
+}
+function changeOfTask(l, task) {
+  return {
+    id: task.id,
+    files: task.files,
+    task,
+    criteria: criteriaOf(l, task.criteria)
+  };
+}
+function changeOfItem(l, item, index) {
+  const { location, criterion } = item.problem;
+  return {
+    id: `fix-${String(index + 1)}`,
+    files: [location.replace(/:\d+(?:-\d+)?$/, "")],
+    criteria: criteriaOf(l, criterion ? [criterion] : []),
+    item
+  };
+}
+async function changeHoldingHalt(l, c) {
+  try {
+    return await runChange(l, c);
+  } catch (error) {
+    if (!(error instanceof Halt)) throw error;
+    l.halted ??= error;
+    return "";
+  }
+}
+async function runChanges(l, changes) {
+  const asTasks = changes.map((c) => ({ ...c, dependsOn: c.task?.dependsOn ?? [] }));
+  for (const wave of waves(asTasks)) {
+    const left = await parallel(wave.map((c) => () => changeHoldingHalt(l, c)));
+    if (l.halted) throw l.halted;
+    for (const [i, c] of wave.entries()) {
+      const remaining = left[i];
+      if (remaining === "") continue;
+      l.open.push({
+        problem: c.item?.problem ?? { source: "qa", location: c.id, text: remaining ?? "the inner loop didn't return" },
+        route: "coder",
+        severity: "blocker",
+        fingerprint: c.item?.fingerprint ?? c.id,
+        reason: remaining ?? "the inner loop didn't return"
+      });
+    }
+  }
+}
+function countFix(l, item) {
+  const prior = l.fixes.get(item.fingerprint) ?? 0;
+  if (prior > 0) l.differently.add(item.fingerprint);
+  l.fixes.set(item.fingerprint, prior + 1);
+}
+async function reviseSpec(l, items2) {
+  if (items2.length === 0 || !l.reviseSpec) return [];
+  const revised = await l.reviseSpec(items2.map((i) => `${i.problem.location}: ${i.problem.text}`));
+  l.build = revised.build;
+  l.validate = revised.validate;
+  return revised.rerun.map((t) => changeOfTask(l, t));
+}
+async function updateDocs(l, problems) {
+  if (l.docs.length === 0 && problems.length === 0) return;
+  if (l.changedThisRound.length === 0 && problems.length === 0) return;
+  const problemLines = problems.map((i) => `${i.problem.location}: ${i.problem.text}`);
+  const w = must(
+    await callWriter(
+      `${l.where}
+Update these documents in the worktree ${worktreeOf(l)} so they describe the code as built. Every claim must be true against the code.
+${list(l.docs)}
+${problems.length > 0 ? `
+Problems to fix:
+${list(problemLines)}` : ""}
+Paths this round changed:
+${list(l.changedThisRound)}
+${NO_WRITES}`,
+      "update the docs",
+      "Build",
+      DOCS_SCHEMA
+    ),
+    "build",
+    "Updated documentation."
+  );
+  if (w.changed.length > 0) await commit(l, w.changed, "update the docs the change affects");
+}
+function firstChanges(l) {
+  if (!l.small) return (l.build?.tasks ?? []).map((t) => changeOfTask(l, t));
+  const assignment = `Deliver this:
+<<<ISSUE
+${l.story}
+ISSUE>>>
+
+The first test ${l.small.firstTest}`;
+  return [{ id: "change", files: [], criteria: [], assignment }];
+}
+async function findDocs(l) {
+  if (!l.small || l.changedThisRound.length === 0) return;
+  const found = await scout(
+    "scout-docs",
+    `${l.where}
+In the worktree ${worktreeOf(l)}, read the diff of these paths, and find the documents it makes untrue or leaves incomplete. Report one evidence item per document, with source set to its path relative to the worktree root, and none when no document is affected.
+${list(l.changedThisRound)}`,
+    { label: "find affected docs", phase: "Build" }
+  );
+  l.docs = must(found, "build", "The documents the change affects.").evidence.map((e) => e.source);
+}
+async function buildRound(l) {
+  phase("Build");
+  const openItems = l.open;
+  l.open = [];
+  l.changedThisRound = [];
+  for (const item of openItems) countFix(l, item);
+  const first = l.round === 0 ? firstChanges(l) : [];
+  const fromSpec = await reviseSpec(
+    l,
+    openItems.filter((i) => i.route === "revise-spec")
+  );
+  const fixes = openItems.filter((i) => i.route === "coder" || i.route === "correct-test").map((item, i) => changeOfItem(l, item, i));
+  const changes = [...first, ...fromSpec, ...fixes];
+  l.affected = unique(changes.flatMap((c) => c.criteria.map((x) => x.id)));
+  await runChanges(l, changes);
+  await findDocs(l);
+  await updateDocs(
+    l,
+    openItems.filter((i) => i.route === "writer")
+  );
+}
+async function runValidation(o) {
+  phase("Validate");
+  const categorized = o.criteria.filter((c) => c.category !== "uncategorized");
+  const toRun = o.focus.length > 0 ? categorized.filter((c) => o.focus.includes(c.id)) : categorized;
+  const [checks, validated] = await parallel([
+    () => o.checks === false ? Promise.resolve({ commands: [] }) : agent(checksBrief(o.where, o.worktree), {
+      agentType: "slopify:checks",
+      label: "checks",
+      phase: "Validate",
+      schema: CHECKS_SCHEMA
+    }),
+    () => (
+      // With no criteria at all, as when review-pr runs on a PR with no spec, there is nothing to drive the app for.
+      o.criteria.length === 0 ? Promise.resolve({ results: [], uncategorizedSetting: "" }) : agent(
+        `${o.where}
+In the worktree ${o.worktree}, follow TESTING.md's setup and boot, then run each criterion's validation path below, and capture its evidence under .tmp/evidence/. Report what TESTING.md states for its category when it can't be verified, and what it states for uncategorized criteria.${o.changed.length > 0 ? ` Also run every criterion whose code path these changed paths touch, and every criterion if one is a boot or config file:
+${list(o.changed)}` : ""}
+
+Criteria to run:
+${JSON.stringify(toRun)}${o.focus.length > 0 ? `
+
+The other criteria:
+${JSON.stringify(categorized.filter((c) => !toRun.includes(c)))}` : ""}`,
+        { agentType: "slopify:validator", label: "validator", phase: "Validate", schema: VALIDATOR_SCHEMA }
+      )
+    )
+  ]);
+  const ran = must(checks, "validate", "The project's checks.");
+  const verdicts = must(validated, "validate", "The validator's verdicts.");
+  const byId = new Map(o.criteria.map((c) => [c.id, c]));
+  const rows = verdicts.results.map((v) => {
+    const c = byId.get(v.id);
+    const result = v.result === "pass" && v.evidence.length === 0 ? "cannot-verify" : v.result;
+    return {
+      id: v.id,
+      wording: c?.wording ?? v.id,
+      category: c?.category ?? "uncategorized",
+      path: v.ran,
+      result,
+      evidence: v.evidence,
+      setting: v.setting,
+      detail: v.detail
+    };
+  });
+  const problems = [
+    ...ran.commands.filter((x) => x.exitCode !== 0).map((x) => ({ source: "checks", location: x.command, text: x.failingLines || `exit ${String(x.exitCode)}` })),
+    ...rows.filter((r) => r.result === "fail").map((r) => ({
+      source: "validator",
+      location: r.detail,
+      text: `Criterion ${r.id} fails: ${r.wording}`,
+      criterion: r.id
+    }))
+  ];
+  return { rows, uncategorizedSetting: verdicts.uncategorizedSetting, problems };
+}
+async function checkDocs(l) {
+  if (l.docs.length === 0) return [];
+  const verdicts = await parallel(
+    l.docs.map(
+      (doc) => () => lens(
+        "lens-docs",
+        `${l.where}
+In the worktree ${worktreeOf(l)}, judge this document against the code: ${doc}`,
+        {
+          label: `docs: ${doc}`,
+          phase: "Validate"
+        }
+      )
+    )
+  );
+  return verdicts.flatMap(
+    (v, i) => must(v, "validate", `A verdict on ${l.docs[i] ?? "a document"}.`).findings.map((f) => ({
+      source: "lens-docs",
+      location: f.location,
+      text: f.problem
+    }))
+  );
+}
+async function validateRound(l) {
+  const uncategorized = (l.validate?.criteria ?? []).filter((c) => c.category === "uncategorized");
+  const v = await runValidation({
+    where: l.where,
+    worktree: worktreeOf(l),
+    criteria: l.validate?.criteria ?? [],
+    focus: l.round === 0 ? [] : l.affected,
+    changed: l.round === 0 ? [] : l.changedThisRound
+  });
+  for (const r of v.rows) l.rows[r.id] = r;
+  for (const c of uncategorized) {
+    l.rows[c.id] = {
+      id: c.id,
+      wording: c.wording,
+      category: "uncategorized",
+      path: "none: suggest a category to add to TESTING.md",
+      result: "uncategorized",
+      evidence: [],
+      setting: v.uncategorizedSetting,
+      detail: ""
+    };
+  }
+  return [...v.problems, ...await checkDocs(l)];
+}
+function judgeBrief(l, p) {
+  const criterion = p.criterion ? criteriaOf(l, [p.criterion])[0] : void 0;
+  return `${l.where}
+Rule on one problem in the worktree ${worktreeOf(l)}, against the diff from the target branch docs/FORGE.md declares. ${l.story ? `
+
+The issue:
+<<<ISSUE
+${l.story}
+ISSUE>>>` : ""}
+
+Reported by ${p.source} at ${p.location}:
+${p.text}
+${criterion ? `
+The criterion: ${criterion.wording}` : ""}
+
+${SEVERITY_RUBRIC}
+${l.small ? "The ruling is none." : RECURRENCE_RUBRIC}
+
+Earlier rulings:
+${list(l.rulings)}
+
+${answersText(l)}`;
+}
+function listRouted(l, route, item) {
+  const entry = { text: `${item.problem.location}: ${item.problem.text}`, detail: item.reason };
+  const lists = {
+    unverified: l.unverified,
+    "needs-confirmation": l.confirmations,
+    suggestion: l.suggestions,
+    "known-debt": l.knownDebt,
+    "new-issue": l.newIssues,
+    "split-issue": l.newIssues
+  };
+  lists[route]?.push(entry);
+  if (route === "not-validated" && !item.problem.criterion) l.unverified.push(entry);
+  if (route === "escalate") l.escalated.push(item);
+  if (FIX_ROUTES.includes(route)) l.open.push(item);
+}
+function applyToRow(l, p, route, reason) {
+  const row = p.criterion ? l.rows[p.criterion] : void 0;
+  if (!row) return;
+  if (route === "dismiss") {
+    row.result = `pass (the judge overturned a fail: ${reason})`;
+    return;
+  }
+  if (route !== "not-validated") return;
+  row.result = "cannot-verify";
+  row.detail = reason;
+}
+async function judgeProblems(l, problems, phaseTitle) {
+  if (problems.length === 0) return;
+  const hasSpec = !!l.reviseSpec;
+  const verdicts = await parallel(
+    problems.map(
+      (p, i) => () => agent(judgeBrief(l, p), {
+        agentType: "slopify:judge",
+        label: `rule ${String(i + 1)}`,
+        phase: phaseTitle,
+        schema: JUDGE_SCHEMA
+      })
+    )
+  );
+  for (const [i, p] of problems.entries()) {
+    const v = must(verdicts[i], "judge", `A ruling on ${p.location}.`);
+    const route = routeOf(v, l.fixes.get(v.fingerprint) ?? 0, l.differently.has(v.fingerprint), hasSpec);
+    applyToRow(l, p, route, v.reason);
+    l.rulings.push(`${v.fingerprint}: ${v.verdict}, ${v.severity}, ${v.kind}, ${route}. ${v.reason}`);
+    listRouted(l, route, {
+      problem: p,
+      route,
+      severity: v.severity,
+      fingerprint: v.fingerprint,
+      reason: v.reason
+    });
+  }
+}
+async function gateway(l) {
+  phase("Gateway");
+  const results = JSON.stringify(rowsOf(l));
+  const g = must(
+    await agent(
+      `${l.where}
+Check this round before it is pushed, in the worktree ${worktreeOf(l)}: was anything missed? Read the round's diff, and judge it against the spec below and the evidence.
+${l.build ? `
+Build spec:
+${JSON.stringify(l.build)}` : ""}
+${l.validate ? `
+Validation spec:
+${JSON.stringify(l.validate)}` : ""}
+
+Criterion results:
+${results}
+
+Rulings so far:
+${list(l.rulings)}
+
+Return each thing missed. Don't repeat a ruling. Return any document the change affects that isn't on this list:
+${list(l.docs)}`,
+      { agentType: "slopify:judge", label: "gateway", phase: "Gateway", schema: GATEWAY_SCHEMA }
+    ),
+    "gateway",
+    "The gateway judge's verdict."
+  );
+  l.docs = unique([...l.docs, ...g.docsToAdd]);
+  await judgeProblems(
+    l,
+    g.missed.map((m) => ({ source: "gateway judge", location: m.location, text: m.text })),
+    "Gateway"
+  );
+}
+var countOpen = (l) => l.open.length + l.escalated.length;
+function heldRows(l) {
+  return rowsOf(l).filter(
+    (r) => (r.result === "cannot-verify" || r.result === "uncategorized") && !allowsReady(r.setting)
+  );
+}
+function unvalidatedRows(l) {
+  return rowsOf(l).filter(
+    (r) => (r.result === "cannot-verify" || r.result === "uncategorized") && allowsReady(r.setting)
+  );
+}
+var rowEntry = (r) => ({
+  text: `${r.wording} (${r.result})`,
+  detail: r.result === "uncategorized" ? "Suggest a category to add to TESTING.md." : r.detail
+});
+function draftReasons(l) {
+  const item = (i) => ({
+    text: `${i.severity}: ${i.problem.location}: ${i.problem.text}`,
+    detail: `${i.reason} Fix attempts: ${String(l.fixes.get(i.fingerprint) ?? 0)}.`
+  });
+  return [
+    ...l.escalated.map((i) => item(i)),
+    ...l.open.map((i) => item(i)),
+    ...heldRows(l).map((r) => rowEntry(r)),
+    ...l.review.clean ? [] : [{ text: l.review.note || "The review hasn't come back clean yet." }]
+  ];
+}
+function body(l) {
+  return renderBody({
+    issue: l.cardId || "none",
+    specDir: l.specDir,
+    draftReasons: draftReasons(l),
+    needsConfirmation: [
+      ...l.confirmations,
+      ...l.decisions.filter((d) => d.affectsAcceptance).map((d) => ({ text: d.question, detail: `Chose: ${d.choice}. Why: ${d.rationale}` }))
+    ],
+    ...l.small?.reproduced && { reproduced: l.small.reproduced },
+    criteria: rowsOf(l),
+    assumptions: l.decisions.filter((d) => !d.affectsAcceptance).map((d) => `${d.question} ${d.choice}`),
+    unverified: l.unverified,
+    notValidated: unvalidatedRows(l).map((r) => rowEntry(r)),
+    knownDebt: l.knownDebt,
+    suggestions: l.suggestions,
+    testChanges: unique(l.testChanges)
+  });
+}
+var bodyInstruction = (l) => `Write this PR description to ${worktreeOf(l)}/.tmp/pr-body.md, exactly as it stands, and use that file for the body:
+<<<BODY
+${body(l)}
+BODY>>>`;
+async function pushRound(l, last) {
+  phase("Push");
+  const { state } = l.d;
+  const open = !state.pr && (countOpen(l) === 0 || last);
+  const number = l.reviewNumber + 1;
+  const steps = state.pr ? `Push the branch even if something is still flagged. Then update the PR ${state.pr}. ${bodyInstruction(l)}
+Then fire the review trigger as docs/FORGE.md declares, if it declares one.` : open ? `Push the branch even if something is still flagged. Then open the branch's PR as a draft as docs/FORGE.md declares. ${bodyInstruction(l)}
+Fire the review trigger only if docs/FORGE.md says opening doesn't fire it. ${l.cardId ? `Then attach the PR to card ${l.cardId} as docs/BOARD.md declares.` : ""} Report the PR reference as the operation named pr.` : "Push the branch even if something is still flagged. Open no PR yet.";
+  const lines = [
+    ...open ? ["done publish <the PR reference>"] : [],
+    ...state.pr || open ? [`review ${String(number)} fired <the trigger time>`] : [],
+    `done round ${String(l.round)}`
+  ];
+  const r = pushed(
+    await inOrder(l, () => callPusher(l.d.pushBrief(steps, lines), "push the round", "Push")),
+    "A push of the story branch, and its PR."
+  );
+  if (open) state.pr = opRef(r, "pr");
+  if (state.pr) l.reviewNumber = number;
+}
+var WATCH_MINUTES = 9;
+var WATCH_DISPATCHES = 40;
+async function waitForReview(l) {
+  const { state } = l.d;
+  for (let n = 1; n <= WATCH_DISPATCHES; n += 1) {
+    const w = must(
+      await agent(
+        `${l.where}
+Wait for review ${String(l.reviewNumber)} of this pull request, as docs/FORGE.md's review-status binding declares: first for the review to start, then for it to finish. Wait at most ${String(WATCH_MINUTES)} minutes in this dispatch, then return pending. On finished, return each finding with its id, its location (path:line, or empty), and its text. Change nothing.
+
+Pull request: ${state.pr}
+Worktree: ${worktreeOf(l)}`,
+        {
+          agentType: "slopify:watcher",
+          label: `review ${String(l.reviewNumber)} wait ${String(n)}`,
+          phase: "Review",
+          schema: WATCHER_SCHEMA
+        }
+      ),
+      "review",
+      "The review's status."
+    );
+    if (w.outcome !== "pending") return w;
+  }
+  return null;
+}
+async function reviewRound(l) {
+  phase("Review");
+  const w = await waitForReview(l);
+  const outcome = w?.outcome ?? "timed-out";
+  await inOrder(
+    l,
+    () => callPusher(
+      l.d.pushBrief("Do nothing except append the ledger line.", [
+        `review ${String(l.reviewNumber)} ended ${outcome}: ${String(w?.findings.length ?? 0)} finding(s)`
+      ]),
+      "record the review",
+      "Review"
+    )
+  );
+  l.review = {
+    clean: outcome === "finished" || outcome === "not-declared",
+    note: outcome === "finished" || outcome === "not-declared" ? "" : `Review ${String(l.reviewNumber)} ${outcome}.`
+  };
+  await judgeProblems(
+    l,
+    (w?.findings ?? []).map((f) => ({ source: "the review", location: f.location, text: f.text })),
+    "Review"
+  );
+}
+async function finish(l, ready) {
+  const { state } = l.d;
+  const issues = l.newIssues.length > 0 ? `File one Linear issue for each of these, as docs/BOARD.md declares:
+${list(l.newIssues.map((i) => `${i.text} ${i.detail ?? ""}`))}
+` : "";
+  const questions = [
+    ...l.decisions.filter((d) => d.affectsAcceptance).map((d) => `${d.question} We chose: ${d.choice}.`),
+    ...draftReasons(l).map((x) => x.text)
+  ];
+  const card = l.cardId ? ready ? `Perform the operations docs/BOARD.md declares for when the PR's review is clean on card ${l.cardId} (for example moving it to In Review), and comment on the card with the evidence and assumptions:
+${list(questions)}` : `Comment on card ${l.cardId} with what is open:
+${list(questions)}` : "";
+  pushed(
+    await inOrder(
+      l,
+      () => callPusher(
+        l.d.pushBrief(
+          `Update the PR ${state.pr}. ${bodyInstruction(l)}
+${ready ? "Mark the PR ready for review, as docs/FORGE.md declares.\n" : "Leave it a draft.\n"}${issues}${card}`,
+          [`delivery ${ready ? "ready" : "draft"}`]
+        ),
+        ready ? "mark the PR ready" : "report the draft",
+        "Push"
+      )
+    ),
+    "The final PR update."
+  );
+}
+async function validateSmall(l) {
+  if (l.round > 0 && l.affected.length === 0) return;
+  const v = await runValidation({
+    where: l.where,
+    worktree: worktreeOf(l),
+    criteria: l.validate?.criteria ?? [],
+    focus: [],
+    changed: [],
+    checks: false
+  });
+  for (const r of v.rows) l.rows[r.id] = r;
+  for (const p of v.problems) {
+    l.open.push({ problem: p, route: "coder", severity: "blocker", fingerprint: p.text, reason: "" });
+  }
+}
+async function round(l, last) {
+  if (l.round > 0 || !l.built) await buildRound(l);
+  if (l.small) {
+    await validateSmall(l);
+  } else {
+    await judgeProblems(l, await validateRound(l), "Judge");
+    await gateway(l);
+  }
+  await pushRound(l, last);
+}
+function freshLoop(input) {
+  return {
+    ...input,
+    docs: input.build?.docs ?? [],
+    round: 0,
+    reviewNumber: input.startAtReview > 0 ? input.startAtReview - 1 : 0,
+    open: [],
+    escalated: [],
+    rows: {},
+    affected: [],
+    fixes: /* @__PURE__ */ new Map(),
+    differently: /* @__PURE__ */ new Set(),
+    rulings: [],
+    decisions: [],
+    unverified: [],
+    confirmations: [],
+    knownDebt: [],
+    suggestions: [],
+    newIssues: [],
+    testChanges: [],
+    review: { clean: false, note: "" },
+    changedThisRound: [],
+    openByRound: [],
+    commits: Promise.resolve(),
+    halted: null
+  };
+}
+function nextStep(l) {
+  const g = gate({
+    prOpen: !!l.d.state.pr,
+    reviewClean: l.review.clean,
+    open: countOpen(l),
+    held: heldRows(l).length
+  });
+  if (g !== "fix") return g;
+  if (l.round >= MAX_FIX_ROUNDS || noProgress(l.openByRound)) return "end";
+  return l.open.length > 0 || !l.d.state.pr ? "fix" : "end";
+}
+async function runLoop(input) {
+  const l = freshLoop(input);
+  if (input.startAtReview > 0) {
+    l.reviewNumber = input.startAtReview;
+    await reviewRound(l);
+  } else {
+    await round(l, false);
+    if (l.d.state.pr) await reviewRound(l);
+  }
+  l.openByRound.push(countOpen(l));
+  for (let step = nextStep(l); step === "fix"; step = nextStep(l)) {
+    l.round += 1;
+    await round(l, l.round >= MAX_FIX_ROUNDS || noProgress([...l.openByRound, countOpen(l)]));
+    if (l.d.state.pr) await reviewRound(l);
+    l.openByRound.push(countOpen(l));
+  }
+  return endLoop(l, nextStep(l) === "clean");
+}
+async function endLoop(l, ready) {
+  if (!l.d.state.pr) await pushRound(l, true);
+  await finish(l, ready);
+  return {
+    status: ready ? "ready" : "draft",
+    rounds: l.round,
+    pr: l.d.state.pr,
+    review: l.review.note || "clean",
+    draftReasons: ready ? [] : draftReasons(l),
+    decisions: l.decisions.filter((d) => d.affectsAcceptance).map((d) => d.id)
+  };
+}
+function reportOf(workflowName, r, specDir = "") {
+  return [
+    `${workflowName} finished: the PR is ${r.status === "ready" ? "ready for review" : "a draft"}.`,
+    `PR: ${r.pr}.`,
+    specDir ? `Spec: ${specDir}.` : "",
+    `Fix rounds: ${String(r.rounds)}. Review: ${r.review}.`,
+    r.draftReasons.length > 0 ? `Why it is a draft:
+${r.draftReasons.map((x) => `- ${x.text}`).join("\n")}` : "",
+    r.decisions.length > 0 ? `Decisions to confirm: ${r.decisions.join(", ")}.` : ""
+  ].filter(Boolean).join("\n");
+}
+
+// src/slopify/lib/deliver-steps.ts
 function readStory(cardRes, storyArg, ask) {
   const storySource = (/^\s*(card|text|none)\b/i.exec(fact(cardRes, "story-source"))?.[1] || "").toLowerCase();
   const story = storySource === "text" ? storyArg : fact(cardRes, "story");
@@ -810,76 +1442,6 @@ function locate(d, cardRes, storyArg, fallbackSlug, ask) {
   const specRel = specRelOf(cardRes, cardId, read.storySource, read.story, slug);
   return { ...read, cardId, boardBranch, slug, specRel };
 }
-function readCheckpoint(d, o) {
-  return scout(
-    "scout-checkpoint",
-    `${d.WHERE}
-Report where this run stands. It is the delivery of ${o.delivery}${o.boardBranch ? `; the board gives the branch name ${o.boardBranch}` : ""}. ${o.specNoun}, relative to the worktree root, is ${o.specRel}.
-Report these keys, each as an evidence item with source set to the key; leave out a key that does not exist:
-- worktree, branch, head, dirty (comma-separated paths relative to the worktree root, or none), ledger
-- ledger-story: the story revision on the last done spec line${o.tests ? "\n- ledger-test: the comma-separated test paths on the most recent done spec line that has a test field" : ""}
-- done-spec, done-implement, done-publish, done-board-start, done-board-pr: the last ledger line of that name ("done board-start" and "done board-pr" lines name the card or the PR), with its leading timestamp removed and the ledger line number put in front as "<line number>|"
-- review-fired, review-ended
-- ledger-exclude: the paths after the word "exclude" on the last ledger line whose text, after its leading timestamp, starts with that word, comma-separated, or none
-- spec: "<absolute path>@<git hash-object>" of the spec at the path above
-- pr: the PR reference on the first line, then its description`,
-    { label: "read checkpoints", phase: "Locate" }
-  );
-}
-async function checkpoint(d, o) {
-  const cp = await readCheckpoint(d, o);
-  if (!cp) {
-    return {
-      stop: d.stop("locate", [
-        need(
-          "locate",
-          1,
-          "prerequisite",
-          "The run's checkpoints, to know which steps are complete.",
-          "scout-checkpoint did not return"
-        )
-      ])
-    };
-  }
-  const { state, rel } = d;
-  const cpWorktree = shaped("path", val(cp, "worktree"));
-  if (cpWorktree.startsWith("/")) state.worktree = cpWorktree.replace(/\/+$/, "");
-  state.branch = shaped("branch", val(cp, "branch")) || o.boardBranch;
-  state.ledger = shaped("path", val(cp, "ledger"));
-  state.pr = shaped("ref", val(cp, "pr"));
-  const dirty = state.worktree ? splitList(fact(cp, "dirty")).flatMap((x) => dirtyEntry(x)).map((p) => rel(p)).filter((p) => isRel(p) && !inTmp(p)) : [];
-  const cpSpecRaw = parseSpec(val(cp, "spec"));
-  const cpSpec = cpSpecRaw && state.worktree ? {
-    ...cpSpecRaw,
-    path: cpSpecRaw.path.startsWith("/") ? cpSpecRaw.path : `${state.worktree}/${rel(cpSpecRaw.path)}`
-  } : null;
-  if (cpSpec?.path.startsWith(state.worktree + "/")) {
-    state.specPath = cpSpec.path;
-    state.specHash = cpSpec.hash;
-    state.specExists = true;
-  }
-  return { cp, dirty };
-}
-function currencyOf(d, cp, o) {
-  const { state, rel } = d;
-  const { cardId } = o;
-  const doneSpec = parseDoneSpec(val(cp, "done-spec"));
-  const doneImpl = parseDoneImplement(val(cp, "done-implement"));
-  const donePub = parseDonePublish(val(cp, "done-publish"));
-  if (!state.pr && donePub) state.pr = donePub.pr;
-  const boardStartDone = !cardId || !!parseDoneBoard(val(cp, "done-board-start"), "start");
-  const boardPrDone = !cardId || !!parseDoneBoard(val(cp, "done-board-pr"), "pr");
-  const ledgerStory = shaped("sha", val(cp, "ledger-story")) || (doneSpec ? doneSpec.story : "");
-  const ledgerTests = o.tests ? (doneSpec?.test || val(cp, "ledger-test")).split(",").map((t) => rel(t.trim())).filter((t) => isRel(t)) : [];
-  const published = !!donePub && !!state.pr && !!state.worktree;
-  const specCurrent = published || !!doneSpec && (!o.tests || ledgerTests.length > 0) && state.specExists && sameHash(doneSpec.hash, state.specHash) && !!ledgerStory && sameHash(ledgerStory, o.storyRevision);
-  const implCurrent = published || specCurrent && !!doneImpl && sameHash(doneImpl.spec, state.specHash);
-  const publishCurrent = published || implCurrent && !!donePub && !!doneImpl && (doneImpl.pushed || doneImpl.n < donePub.n);
-  return { doneSpec, doneImpl, ledgerTests, boardStartDone, boardPrDone, specCurrent, implCurrent, publishCurrent };
-}
-function excludedOf(d, cp) {
-  return splitList(val(cp, "ledger-exclude")).map((p) => d.rel(p)).filter((p) => isRel(p) && !inTmp(p));
-}
 async function createWorktree(d, o) {
   const { state, stop, done, pushBrief, pushStop } = d;
   const { cardId, boardBranch } = o;
@@ -929,802 +1491,195 @@ async function workspace(d, o) {
     done("board-start");
   }
   if (!state.ledger) state.ledger = `${state.worktree}/.tmp/ledger.md`;
-  if (!state.specPath) state.specPath = `${state.worktree}/${o.specRel}`;
   return null;
 }
-function draftStop(d, w, open) {
-  if (w.storyBlockers.length > 0) {
-    return d.stop(
-      "spec",
-      w.storyBlockers.map((b, i) => need("spec", i + 1, "story", b, "reported by the spec writer"))
-    );
-  }
-  return open.length > 0 ? d.stop(
-    "spec",
-    open.map((dec) => decisionNeed(dec, "the spec writer"))
-  ) : null;
-}
-function draftProblem(d, w, tasksProblem) {
-  if (!w) return "the writer did not return";
-  if (!w.revision) return "the writer returned no spec revision";
-  if (w.produced.every((p) => d.rel(p) !== d.rel(d.state.specPath)))
-    return `the writer did not write the spec at ${d.state.specPath}`;
-  return w.tasks.length === 0 || w.tasks.some((t) => t.paths.length === 0) ? tasksProblem : "";
-}
-async function specGate(d, findings, o) {
-  const { state, rel, done, fail, exhausted } = d;
-  let carry = findings;
-  let pending = carry;
-  for (; ; ) {
-    phase("Spec");
-    const { res: w, open } = await o.draft(pending);
-    const blockedDraft = w ? draftStop(d, w, open) : null;
-    if (blockedDraft) return blockedDraft;
-    const problem = draftProblem(d, w, o.tasksProblem);
-    if (problem || !w) {
-      pending = [...carry, problem];
-      if (fail("spec", "spec draft", problem)) return exhausted("spec", "spec");
-      continue;
-    }
-    state.specExists = true;
-    const drafted = {
-      tasks: w.tasks.map((t) => ({ ...t, paths: t.paths.map((p) => rel(p)) })),
-      docs: w.docs.map((p) => rel(p))
-    };
-    o.accept(w.revision, drafted);
-    done("spec");
-    const gate = await o.gate(drafted, carry);
-    if (gate && "stop" in gate) return gate.stop;
-    if (gate) {
-      carry = gate.carry;
-      pending = carry;
-      continue;
-    }
-    return o.commit();
-  }
-}
-async function judged(d, items, revision, step) {
-  const j = await d.judge(items, revision, step);
-  if (j.stop) return { stop: j.stop };
-  const verdicts = j.verdicts;
-  for (const [i, item] of items.entries()) d.record(item.name, verdicts[i], revision);
+
+// src/slopify/lib/resume.ts
+async function readResume(d, identifies, specDir) {
+  const cp = must(
+    await scout(
+      "scout-checkpoint",
+      `${d.WHERE}
+Report where this run stands. It is the delivery of ${identifies}.
+Report these keys, each as an evidence item with source set to the key; leave out a key that does not exist:
+- worktree, branch, ledger
+- pr: the PR reference
+- done-board-start: the last "done board-start" ledger line
+- done-round: the last "done round" ledger line
+- review-fired: the highest <n> among the ledger's "review <n> fired" lines
+- spec-dir: ${specDir ? `the folder ${specDir}, if it exists in the worktree` : 'the spec folder the PR description names after "Spec:"'}, relative to the worktree root
+- build-json: the exact contents of build.json in that folder
+- validate-json: the exact contents of validate.json in that folder`,
+      { label: "read checkpoints", phase: "Locate" }
+    ),
+    "locate",
+    "The run's checkpoints."
+  );
+  const { state } = d;
+  const worktree = shaped("path", val(cp, "worktree"));
+  if (worktree.startsWith("/")) state.worktree = worktree.replace(/\/+$/, "");
+  state.branch = shaped("branch", val(cp, "branch"));
+  state.ledger = shaped("path", val(cp, "ledger"));
+  state.pr = shaped("ref", val(cp, "pr"));
   return {
-    findings: verdicts.every((x) => passed(x)) ? null : items.flatMap((item, i) => blockingOf(item.name, verdicts[i]))
+    build: parseBuild(fact(cp, "build-json")),
+    validate: parseValidate(fact(cp, "validate-json")),
+    specDir: shaped("rel", val(cp, "spec-dir")) || specDir,
+    reviewFired: Number(/\d+/.exec(val(cp, "review-fired"))?.[0] ?? 0),
+    built: !!val(cp, "done-round"),
+    boardStartDone: !!val(cp, "done-board-start")
   };
 }
-async function lensGate(d, o) {
-  const { WHERE, state, fail, exhausted } = d;
-  const { revision, carry } = o;
-  phase("Spec gate");
-  const brief = (what) => `${WHERE}
-${o.worktree} is ${state.worktree}. ${what}
-Spec: ${state.specPath}, revision ${revision}. Set evaluated to exactly that revision.
 
-${o.storyBlock}${carry.length > 0 ? `
-
-Earlier findings to recheck:
-${list(carry)}` : ""}`;
-  const items = [
+// src/slopify/lib/small.ts
+var WHOLE_CHANGE = (wording, path) => ({
+  criteria: [
     {
-      name: "lens-scope",
-      call: () => lens("lens-scope", brief(o.scope), { label: "scope", phase: "Spec gate" })
+      id: "change",
+      wording,
+      category: "",
+      path,
+      evidence: "What that category requires",
+      firstTest: ""
     }
-  ];
-  if (o.consistency)
-    items.push({
-      name: "lens-consistency",
-      call: () => lens(
-        "lens-consistency",
-        brief("Judge whether the spec agrees with the repository's constraints and its existing specs."),
-        { label: "consistency", phase: "Spec gate" }
-      )
-    });
-  const r = await judged(d, items, revision, "spec-gate");
-  if ("stop" in r) return r;
-  if (!r.findings) return null;
-  const next = r.findings.map((f) => findingText(f));
-  return fail("spec", `spec revision ${revision}`, next.join("; ")) ? { stop: exhausted("spec-gate", "spec") } : { carry: next };
-}
-async function judgeCandidate(d, items, v) {
-  const { cand } = v;
-  const r = await judged(d, items, cand, "validate");
-  if ("stop" in r) return r;
-  if (!r.findings) return { ok: true, candidate: cand };
-  v.findings = r.findings;
-  v.prior = r.findings.map((f) => findingText(f));
-  return d.fail("implementation", `candidate ${cand}`, v.prior.join("; ")) ? { stop: d.exhausted("validate", "implementation") } : null;
-}
-function leaveOutside(d, outside, outsideDirty) {
-  if (outside.length > 0)
-    d.limits.push(`Uncommitted paths outside the assigned paths, not committed: ${outside.join(", ")}`);
-  outsideDirty.splice(0, outsideDirty.length, ...outside);
-}
-async function commitWork(d, commitPaths, outsideDirty, label) {
-  const c = await callPusher(
-    d.pushBrief(
-      `Commit exactly these paths as they stand, staged by explicit path, with the commit convention docs/FORGE.md declares. Do not push. Commit nothing else, even if the worktree holds other uncommitted changes. If every path is already committed, make no commit and record the current HEAD sha in the ledger line.
-Paths:
-${list(commitPaths)}`,
-      [
-        `exclude ${outsideDirty.join(", ") || "none"}`,
-        `done implement commit <the new commit's sha> spec ${d.state.specHash}`
-      ]
-    ),
-    label,
-    "Validate"
-  );
-  return pushOk(c) ? null : d.pushStop("validate", c);
-}
-async function planOf(d, step, what) {
-  const plan = await d.recoverPlan();
-  return plan ?? d.stop(step, [
-    need(step, 1, "prerequisite", `${what} in the spec at ${d.state.specPath}.`, "scout-docs could not read them")
-  ]);
-}
-async function boardPr(d, cardId) {
-  const { state } = d;
-  const b = await callPusher(
-    d.pushBrief(
-      `Perform the board operations docs/BOARD.md declares for when the PR opens (for example attaching ${state.pr} to card ${cardId} and a status transition), only as bound and only where the card does not already show them. Do nothing else, and change no card content.`,
-      [`done board-pr ${state.pr}`]
-    ),
-    "update the card for the PR",
-    "Publish"
-  );
-  if (!pushOk(b)) return d.pushStop("publish", b);
-  d.done("board-pr");
-  return null;
-}
-async function openPr(d, o, needBoardPr) {
-  const { state } = d;
-  const verified = list(d.verification.map((v) => `${v.agent}: ${v.verdict} on ${v.evaluated}`));
+  ]
+});
+var CATEGORY_PATH = "The validation path of the TESTING.md category that covers this change. When no category fits, report cannot-verify, with what TESTING.md states for uncategorized criteria as the setting.";
+async function fileCard(d, story, slug, cardType) {
+  const marker = `<!-- deliver-small ${slug} -->`;
   const r = await callPusher(
     d.pushBrief(
-      `Push ${o.branch} ${state.branch || ""} as docs/FORGE.md declares. ${state.pr ? `A PR exists (${state.pr}); update it as docs/FORGE.md declares${needBoardPr ? ", then perform the board operations docs/BOARD.md declares for when the PR opens (for example attaching it and a status transition), only where the card does not already show them" : " and perform no board operation"}.` : "Open the PR as docs/FORGE.md declares, then perform the board operations docs/BOARD.md declares for when the PR opens (for example attaching it and a status transition)."} The PR describes ${o.describes}, links the spec at ${state.specPath}, and lists this verification:
-${verified}
-Then fire the review trigger docs/FORGE.md declares, unless opening the PR fires it; if none is declared, fire none and do not report that as unmet. Change no card content.`,
-      [
-        ...o.cardId && (needBoardPr || !state.pr) ? [
-          `done board-pr <the PR reference> (write this line as soon as the board operations are done, before the review trigger)`
-        ] : [],
-        `done publish <the PR reference> commit <HEAD sha>`,
-        `review 1 fired <trigger time; the PR's creation time when opening it fires the review> head <HEAD sha> (write this line only if a review was requested)`
-      ]
+      `Create a ${cardType} card from this text, as docs/BOARD.md declares, with one trailing line in its body: ${marker}. First search the board for a card whose body holds that line, and use that card instead of creating another. If docs/BOARD.md declares no board, do nothing. Report the card's identifier as the operation named card.
+<<<TEXT
+${story}
+TEXT>>>`
     ),
-    "publish the PR",
-    "Publish"
+    "file the card",
+    "Locate"
   );
-  if (!pushOk(r)) return d.pushStop("publish", r);
-  state.pr = opRef(r, "pr") || state.pr;
-  if (!state.pr) {
-    return d.stop("publish", [need("publish", 1, "prerequisite", "The PR reference.", JSON.stringify(r.operations))]);
-  }
-  d.done("publish");
-  return null;
+  if (!pushOk(r)) throw new Halt("locate", "A card for this work.", "pusher didn't file one");
+  return opRef(r, "card");
 }
-async function publish(d, o) {
-  phase("Publish");
-  const needBoardPr = !!o.cardId && !o.boardPrDone;
-  if (!o.publishCurrent) return openPr(d, o, needBoardPr);
-  d.skip("publish");
-  return needBoardPr && d.state.pr ? boardPr(d, o.cardId) : null;
-}
-async function review(d, o) {
-  const { state, stop } = d;
-  phase("Review");
-  if (!state.pr) {
-    return {
-      stop: stop("review", [
-        need(
-          "review",
-          1,
-          "prerequisite",
-          "The PR reference, to start the review.",
-          "the checkpoint and the ledger name no PR"
-        )
-      ])
-    };
-  }
-  let result;
-  try {
-    result = await workflow("slopify:review-pr", {
-      pr: state.pr,
-      story: o.story,
-      projectRoot: o.projectRoot || void 0,
-      answers: o.answers
-    });
-  } catch (error) {
-    const message = !!error && typeof error === "object" ? Reflect.get(error, "message") : void 0;
-    return {
-      stop: stop("review", [
-        need("review", 1, "prerequisite", "The review-pr workflow, which could not run.", String(message || error))
-      ])
-    };
-  }
-  if (!result) {
-    return {
-      stop: stop("review", [
-        need("review", 1, "prerequisite", "A result from the review-pr workflow.", "it returned nothing")
-      ])
-    };
-  }
-  if (result.status === "blocked") {
-    return {
-      stop: {
-        ...stop("review", result.needs),
-        completed: [...d.completed, ...result.completed.map((s) => `review-pr:${s}`)]
-      }
-    };
-  }
-  if (result.status === "not-started") {
-    return {
-      stop: stop("review", [
-        need(
-          "review",
-          1,
-          "prerequisite",
-          "A finished review of the PR.",
-          `the review-pr workflow returned status ${JSON.stringify(result.status)}`
-        )
-      ])
-    };
-  }
-  return { review: result };
-}
-
-// src/slopify/lib/input.ts
-function isRecord(v) {
-  return typeof v === "object" && v !== null;
-}
-function inputOf(a, primary, numbers = false) {
-  if (typeof a !== "string") return isRecord(a) ? a : {};
-  const text = a.trim();
-  try {
-    const parsed = JSON.parse(text);
-    if (isRecord(parsed)) return parsed;
-    if (typeof parsed === "string" || numbers && typeof parsed === "number") {
-      return { [primary]: String(parsed).trim() };
-    }
-  } catch {
-  }
-  return { [primary]: text };
-}
-var textOf = (v) => typeof v === "string" ? v.trim() : "";
-function answerValue(x) {
-  const text = String(x);
-  return x === null || x === void 0 || typeof x === "string" || typeof x === "number" || typeof x === "boolean" ? x : text;
-}
-function answersOf(v) {
-  return isRecord(v) && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, answerValue(x)])) : {};
-}
-
-// src/slopify/workflows/deliver-bugfix.ts
-var REPRO_CODER_SCHEMA = {
-  ...CODER_SCHEMA,
-  required: [...CODER_SCHEMA.required, "steps", "observed"]
-};
-function inputFrom(a) {
-  const input = inputOf(a, "bug");
-  return {
-    storyArg: textOf(input["bug"]),
-    projectRoot: textOf(input["projectRoot"]),
-    answers: answersOf(input["answers"])
-  };
-}
-function reproProblem(r) {
-  if (!r) return "the coder did not return";
-  if (r.tests.length === 0)
-    return `the coder wrote no regression test${r.open.length > 0 ? `: ${r.open.join("; ")}` : ""}`;
-  return r.revision.trim() ? "" : "the coder returned no revision for the regression test";
-}
-function fixPaths(plan) {
-  return unique([...plan.tasks.flatMap((t) => t.paths), ...plan.docs]);
-}
-async function run() {
-  const { storyArg, projectRoot, answers } = inputFrom(args);
-  if (!storyArg) {
-    return {
-      status: "not-started",
-      next: "Ask the user for the bug: a card identifier or URL, or the report text. Then invoke again."
-    };
-  }
-  const WORKFLOW = "deliver-bugfix";
-  const d = createDeliver({
-    workflow: WORKFLOW,
-    maxFailures: 3,
-    planPhase: "Fix",
-    // the phase recoverPlan reports under
-    failures: { reproduce: 0, spec: 0, implementation: 0 },
-    projectRoot,
-    storyArg
-  });
-  const {
-    WHERE,
-    skipped,
-    attempts,
-    verification,
-    limits,
-    state,
-    done,
-    skip,
-    stop,
-    fail,
-    exhausted,
-    rel,
-    within,
-    judge,
-    record,
-    pushBrief,
-    pushStop,
-    makeReport
-  } = d;
+async function readWork(d, arg) {
   phase("Locate");
   const cardRes = await scout(
     "scout-card",
-    `${WHERE}
-Read the one card this delivery names, through the read bindings in docs/BOARD.md, or, when the argument below is the bug report text itself, take that text as the report. Report these evidence items, each with source set to the item name and excerpt set to its value; leave out an item that does not exist:
-- card: the card identifier, or none when the argument is report text or there is no board
-- story-source: card, text, or none
-- story: the report text exactly as you wrote it for hashing (title line, empty line, body), or the argument verbatim for report text
+    `${d.WHERE}
+The argument below names one card on the board, or is the work itself as a prompt. Read a named card through the read bindings in docs/BOARD.md, or take a prompt as the story. Report these evidence items, each with source set to the item name and excerpt set to its value; leave out an item that does not exist:
+- card: the card identifier, or none for a prompt
+- story-source: card or text
+- story: the story text exactly as you wrote it for hashing, or the argument verbatim for a prompt
 - story-revision: the story revision digest
 - field-re: the field regex you used for it
 - branch: the branch name the board gives the card, or the single word none
-- spec-path: the repository-relative spec path docs/BOARD.md's naming gives this card, built from the card identifier and the card title's lowercase kebab slug as the declaration's pattern says (for example docs/specs/<identifier>-<slug>.md), or the single word none
-- relations: related, blocking, and blocked-by cards
-- linked-specs: specs the card links
 Change nothing on the board or forge.
 
 Argument:
 <<<ARG
-${storyArg}
+${arg}
 ARG>>>`,
-    { label: "read the bug report", phase: "Locate" }
+    { label: "read the work", phase: "Locate" }
   );
-  const located = locate(d, cardRes, storyArg, slugged(storyArg, "story"), {
-    readable: "A readable bug report: the card, or the report text.",
-    input: "A bug report the board can read, or the report text (pass it as args.bug).",
-    arg: "bug",
+  return locate(d, cardRes, arg, slugged(arg, "change"), {
+    readable: "A readable Linear issue, or a prompt.",
+    input: "A Linear issue or a prompt saying what to change.",
+    arg: "story",
     criteria: false
   });
-  if ("stop" in located) return located.stop;
-  const { story, storyRevision, cardId, boardBranch, slug, specRel } = located;
-  const STORY_BLOCK = `The bug report, verbatim, is the acceptance source (story revision ${storyRevision}):
-<<<BUG
-${story}
-BUG>>>`;
-  const adopted = await checkpoint(d, {
-    delivery: `the fix for ${cardId ? `card ${cardId}` : `the bug "${slug}"`}`,
-    boardBranch,
-    specNoun: "The spec path",
-    specRel,
-    tests: true
-  });
-  if ("stop" in adopted) return adopted.stop;
-  const { cp: cpRes, dirty: cpDirty } = adopted;
-  let specRevision = state.specHash;
-  const { doneSpec, doneImpl, ledgerTests, boardStartDone, boardPrDone, specCurrent, implCurrent, publishCurrent } = currencyOf(d, cpRes, { cardId, storyRevision, tests: true });
-  const fixInPlace = !specCurrent && ledgerTests.length > 0 && (!!doneImpl || cpDirty.some((p) => !within(p, specRel) && ledgerTests.every((t) => !within(p, t))));
-  const carryDirty = specCurrent || fixInPlace;
-  done("locate");
-  const workspaceStop = await workspace(d, {
+}
+async function deliverSmall(d, arg, input) {
+  let located = await readWork(d, arg);
+  if ("stop" in located) return { status: "not-started", next: located.stop.needs.map((n) => n.what).join(" ") };
+  if (!located.cardId) {
+    const filed = await fileCard(d, located.story, located.slug, input.cardType);
+    if (filed) located = await readWork(d, filed);
+    if ("stop" in located) return { status: "not-started", next: located.stop.needs.map((n) => n.what).join(" ") };
+  }
+  const { story, cardId, boardBranch, slug } = located;
+  const resume = await readResume(d, cardId ? `card ${cardId}` : `the change "${slug}"`, "");
+  const stopped = await workspace(d, {
     cardId,
     boardBranch,
-    boardStartDone,
-    specRel,
+    boardStartDone: resume.boardStartDone,
     worktree: "the worktree",
-    subject: `the fix of ${cardId ? `card ${cardId}` : `the bug "${slug}"`}`
+    subject: "this change"
   });
-  if (workspaceStop) return workspaceStop;
-  let plan = null;
-  let gathered = "";
-  let repro = { tests: [], files: [], revision: "", observed: "", steps: [] };
-  let specCommit = doneSpec ? doneSpec.commit : "";
-  const fixTouched = /* @__PURE__ */ new Set();
-  const outsideDirty = excludedOf(d, cpRes);
-  const fixTests = /* @__PURE__ */ new Set();
-  const touched = /* @__PURE__ */ new Set();
-  if (specCurrent || fixInPlace) {
-    repro.tests = ledgerTests.map((t) => rel(t)).filter(Boolean);
-    repro.files = repro.tests;
-  }
-  const isSpec = (p) => within(p, state.specPath);
-  async function writeReproTest(pending) {
-    const dirtyNow = unique([...specCurrent ? [] : cpDirty, ...touched]).filter((p) => !isSpec(p));
-    const r = await callCoder(
-      `${WHERE}
-Work in the worktree ${state.worktree}; address every file by absolute path under it. ${NO_WRITES}
-
-Write a regression test that shows the reported failure, and change no production code: write only test files and test support, in the project's test location. The test must fail now, for the reported reason. Run it to show that, and return the tests you wrote or changed, the steps to reproduce, and what you observed. Report the revision you leave as your instructions describe. If you cannot reproduce the failure, say so in open and leave tests empty.
-
-${STORY_BLOCK}
-
-Evidence:
-${gathered}
-${dirtyNow.length > 0 ? `
-${DIRTY_SENTENCE}
-Paths:
-${list(dirtyNow)}
-` : ""}${pending.length > 0 ? `
-Resolve these findings:
-${list(pending)}
-` : ""}`,
-      "write the regression test",
-      "Reproduce",
-      REPRO_CODER_SCHEMA
-    );
-    if (r) for (const p of [...r.changed, ...r.tests]) touched.add(rel(p));
-    return r;
-  }
-  async function judgeRepro(r, carry) {
-    const jr = await judge(
-      [
-        {
-          name: "lens-repro",
-          call: () => lens(
-            "lens-repro",
-            `${WHERE}
-Judge whether the regression test(s) below reliably show the reported failure on the current production code in the worktree ${state.worktree}. Revision: ${r.revision}. ${candidateNote(r.revision)}
-Tests:
-${list(r.tests)}
-
-${STORY_BLOCK}${carry.length > 0 ? `
-
-Earlier findings to recheck:
-${list(carry)}` : ""}`,
-            { label: "repro", phase: "Reproduce" }
-          )
-        }
-      ],
-      r.revision,
-      "reproduce"
-    );
-    if (jr.stop) return { stop: jr.stop };
-    const v = jr.verdicts[0];
-    record("lens-repro", v, r.revision);
-    if (!passed(v)) return { carry: blockingOf("lens-repro", v).map((f) => findingText(f)) };
-    const files = unique([...r.changed, ...r.tests].map((p) => rel(p))).filter((f) => f && !inTmp(f) && !isSpec(f));
-    repro = {
-      tests: r.tests.map((p) => rel(p)),
-      files,
-      revision: r.revision,
-      observed: r.observed || "",
-      steps: r.steps
-    };
-    done("reproduce");
-    return null;
-  }
-  async function reproduce(extra) {
-    let carry = extra;
-    let pending = carry;
-    for (; ; ) {
-      phase("Reproduce");
-      const r = await writeReproTest(pending);
-      let problem = reproProblem(r);
-      if (problem || !r) pending = [...carry, problem];
-      else {
-        const judged2 = await judgeRepro(r, carry);
-        if (!judged2) return null;
-        if ("stop" in judged2) return judged2.stop;
-        carry = judged2.carry;
-        pending = carry;
-        problem = carry.join("; ");
-      }
-      if (fail("reproduce", "regression test", problem)) {
-        return stop("reproduce", [
-          need(
-            "reproduce",
-            1,
-            "story",
-            "a reproducible report",
-            attempts.filter((a) => a.gate === "reproduce").map((a) => a.failed).join(" | ")
-          )
-        ]);
-      }
-    }
-  }
-  function draftSpec(pending) {
-    const exists = state.specExists;
-    return settleDecisions(
-      "spec",
-      answers,
-      (settled) => callWriter(
-        `${WHERE}
-Work in the worktree ${state.worktree}; address every file by absolute path. ${exists ? `Revise the spec at ${state.specPath} against the bug report below.` : `Write the spec at ${state.specPath}.`} Write only that one file. ${NO_WRITES}
-
-Write a spec only as large as the fix needs: the bug, its cause, the fix, the regression test, and how the fix is verified. The regression test is already written; it is not yours to change:
-${list(repro.tests)}
-What it shows: ${repro.observed || "(see the test)"}
-Return one task for the fix (id, summary, and the production paths it may write, relative to the worktree root, files or directories, no globs), and in docs the documentation files that state a contract the fix changes (empty when none).
-
-Story authority: you may clarify an ambiguous point of the report in the spec without changing its meaning, keeping the original wording beside the clarification. A report that is wrong, or a bug that cannot be fixed as reported, is a story blocker: report it in storyBlockers. ${DECIDE}
-${STORY_BLOCK}
-
-Evidence:
-${gathered || "(see the existing spec)"}
-${pending.length > 0 ? `
-Resolve these findings:
-${list(pending)}` : ""}${settledText(settled)}`,
-        exists ? "revise the spec" : "write the spec",
-        "Spec",
-        WRITER_SCHEMA
-      )
-    );
-  }
-  function lensGate2(drafted, carry) {
-    return lensGate(d, {
-      revision: specRevision,
-      carry,
-      storyBlock: STORY_BLOCK,
-      worktree: "The worktree",
-      scope: "Judge whether the spec covers the report's failure and its fix, with no added or dropped scope.",
-      consistency: drafted.docs.length > 0
-    });
-  }
-  async function commitSpec() {
-    const specFiles = unique([...repro.files, ...touched].map((p) => rel(p))).filter(
-      (f) => f && !inTmp(f) && !isSpec(f)
-    );
-    const listed = list(specFiles.map((t) => `${state.worktree}/${t}`));
-    const c = await callPusher(
-      pushBrief(
-        `Commit exactly these files together in one commit, staged by explicit path: the spec ${state.specPath}, the regression test, and the fixtures and helpers its reproduction attempts wrote:
-${listed}
-A file with no uncommitted change needs no staging, and one that no longer exists needs none. First check that the spec's git hash-object is ${specRevision}; if it differs, commit nothing and report that as unmet. If these files are already committed with the spec at that hash, make no commit and record the current HEAD sha in the ledger line. Use the commit convention docs/FORGE.md declares. Do not push.`,
-        [
-          `done spec ${state.specPath}@${specRevision} commit <the new commit's sha> story ${storyRevision} test ${repro.tests.join(",")}`
-        ]
-      ),
-      "commit the spec and the test",
-      "Spec gate"
-    );
-    if (!pushOk(c)) return pushStop("spec-gate", c);
-    repro.files = specFiles;
-    state.specHash = specRevision;
-    specCommit = opRef(c, "commit");
-    done("spec-gate");
-    return null;
-  }
-  function specGate2(findings) {
-    return specGate(d, findings, {
-      draft: draftSpec,
-      tasksProblem: "the spec needs a fix task with the production paths it may write",
-      accept: (revision, drafted) => {
-        specRevision = revision;
-        plan = drafted;
-      },
-      gate: lensGate2,
-      commit: commitSpec
-    });
-  }
-  async function gather() {
-    phase("Gather");
-    const CTX = `${WHERE}
-The worktree is ${state.worktree}; look there.
-${STORY_BLOCK}
-`;
-    const [sCode, sTests, sHistory] = await parallel([
-      () => scout(
-        "scout-code",
-        `${CTX}Find the code locations and call paths relevant to this bug, including where the failure originates.`,
-        { label: "code", phase: "Gather" }
-      ),
-      () => scout(
-        "scout-tests",
-        `${CTX}Find the existing tests that cover the area of this bug, where a regression test belongs, and how to run the tests.`,
-        { label: "tests", phase: "Gather" }
-      ),
-      () => scout(
-        "scout-history",
-        `${CTX}Find from git history and blame when and why behavior in the area of this bug was last changed.`,
-        { label: "history", phase: "Gather" }
-      )
-    ]);
-    gathered = [show("Code", sCode), show("Tests", sTests), show("History", sHistory)].join("\n");
-    done("gather");
-  }
-  async function specPhase() {
-    if (specCurrent) {
-      for (const s of ["gather", "reproduce", "spec", "spec-gate"]) skip(s);
-      return null;
-    }
-    await gather();
-    if (fixInPlace) skip("reproduce");
-    else {
-      const noRepro = await reproduce([]);
-      if (noRepro) return noRepro;
-    }
-    gathered += `
-Reproduction: ${repro.steps.join("; ") || "(see the test)"}
-Observed: ${repro.observed}`;
-    return specGate2([]);
-  }
-  const specStop = await specPhase();
-  if (specStop) return specStop;
-  function fixPrompt(plan2, findings, judged2) {
-    const dirtyNow = unique([...carryDirty ? cpDirty : [], ...fixTouched]).filter((p) => !isSpec(p));
-    return `${WHERE}
-Work in the worktree ${state.worktree}; address every file by absolute path under it. ${NO_WRITES}
-
-Fix the bug. Assigned paths (write only these): ${fixPaths(plan2).join(", ")}${judged2 ? "\nIf a finding asks for more regression coverage, you may also add a new test file in the project's test location and report it in tests." : ""}
-The regression test is already committed and passed an independent check; leave these files exactly as they are:
-${list(repro.tests)}
-If the spec cannot be implemented as written, or the regression test cannot pass with a correct fix, say why in specMismatch and stop; never weaken the test or a criterion to fit.
-
-Spec: ${state.specPath} (revision ${specRevision}), validated before coding.
-${STORY_BLOCK}
-
-Run the focused tests as you work, including the regression test, which must pass after the fix. Report the revision you leave as your instructions describe.
-${dirtyNow.length > 0 ? `
-${DIRTY_SENTENCE}
-Paths:
-${list(dirtyNow)}
-` : ""}${findings?.length ? `
-Fix these findings, reported by an independent validator of candidate ${judged2}, and change only what they require:
-${list(findings.map((f) => findingText(f)))}
-` : ""}`;
-  }
-  function noteFix(r, judged2) {
-    for (const p of [...r.changed, ...r.tests]) fixTouched.add(rel(p));
-    if (judged2) {
-      for (const p of r.tests) if (repro.tests.every((q) => !(within(p, q) || within(q, p)))) fixTests.add(rel(p));
-    }
-    for (const o of r.open) limits.push(`open: ${o}`);
-  }
-  async function fix(plan2, findings, judged2) {
-    const step = judged2 ? "validate" : "fix";
-    const phaseTitle = judged2 ? "Validate" : "Fix";
-    const label = judged2 ? "fix the findings" : "fix the bug";
-    for (; ; ) {
-      phase(phaseTitle);
-      const r = await callCoder(fixPrompt(plan2, findings, judged2), label, phaseTitle);
-      if (!r) {
-        if (fail("implementation", "fix", "the coder did not return"))
-          return { stop: exhausted(step, "implementation") };
-        continue;
-      }
-      noteFix(r, judged2);
-      if (r.specMismatch.trim()) return { mismatch: r.specMismatch.trim() };
-      if (!r.revision) {
-        return {
-          stop: stop(step, [need(step, 1, "prerequisite", "The candidate code revision.", "the coder reported none")])
-        };
-      }
-      return { ok: true, candidate: r.revision };
-    }
-  }
-  async function judgeFix(v) {
-    phase("Validate");
-    const { cand, prior } = v;
-    const base = fixInPlace && doneImpl ? `the commit ${doneImpl.commit}^ (resolve it with git rev-parse), the parent of the earlier run's fix commit, so without the fix` : specCommit ? `the commit ${specCommit}^ (resolve it with git rev-parse), the parent of the commit that added the regression test and the spec, so without the fix` : "the parent of the commit that added the regression test (find that commit with git log), so without the fix";
-    const items = [
-      {
-        name: "qa",
-        call: () => callQa(
-          `${WHERE}
-Validate the candidate in the worktree ${state.worktree} against the validated spec and the bug report. Candidate revision: ${cand}. ${candidateNote(cand)}
-Spec: ${state.specPath}, revision ${specRevision}.
-Changed paths:
-${list([...fixTouched, ...repro.tests])}
-
-${STORY_BLOCK}
-
-Run the project's tests and the checks the spec requires, judge that the bug is fixed and that nothing regressed, and judge any affected documentation.${prior.length > 0 ? `
-
-Earlier findings to recheck:
-${list(prior)}` : ""}`,
-          "qa",
-          "Validate"
-        )
-      },
-      {
-        name: "lens-regression",
-        call: () => lens(
-          "lens-regression",
-          `${WHERE}
-Judge whether the regression test(s) fail before the fix and pass after it.
-Tests:
-${list(repro.tests)}
-Before: the base revision is ${base}. It is a real commit: export it with git archive into a temporary directory, copy in from the worktree ${state.worktree} the test files and the fixtures and helpers committed with them (${repro.files.join(", ")}, and any other file that commit added besides the spec, which \`git show --stat\` on it lists), and run the tests there; never change the worktree. After: run the tests in the worktree ${state.worktree} as it stands now, with HEAD plus its uncommitted changes. The candidate label "${cand}" is an identifier for that state, not a git object, so do not resolve it with git. Report it back unchanged in evaluated.
-
-${STORY_BLOCK}${prior.length > 0 ? `
-
-Earlier findings to recheck:
-${list(prior)}` : ""}`,
-          { label: "regression", phase: "Validate" }
-        )
-      }
-    ];
-    return judgeCandidate(d, items, v);
-  }
-  async function validate(plan2, first) {
-    const v = { cand: first.candidate, findings: null, prior: [] };
-    for (; ; ) {
-      if (v.findings) {
-        const f = await fix(plan2, v.findings, v.cand);
-        if ("stop" in f || "mismatch" in f) return f;
-        v.cand = f.candidate;
-        v.findings = null;
-      }
-      const judged2 = await judgeFix(v);
-      if (judged2) return judged2;
-    }
-  }
-  async function backToSpec(mismatch) {
-    if (fail("spec", "fix against the spec and the test", mismatch)) return exhausted("spec", "spec");
-    return specGate2([
-      `The fix step reports the spec cannot be implemented as written, or the regression test cannot pass with a correct fix: ${mismatch}. The regression test is fixed; revise the spec, or report a story blocker if the report itself is the problem.`
-    ]);
-  }
-  async function deliverFix() {
-    for (; ; ) {
-      if (!plan) {
-        const recovered = await planOf(d, "fix", "The fix task and documentation list");
-        if ("status" in recovered) return recovered;
-        plan = recovered;
-      }
-      const f = await fix(plan, null, "");
-      let next = f;
-      if ("ok" in f) {
-        done("fix");
-        next = await validate(plan, f);
-      }
-      if ("stop" in next) return next.stop;
-      if (!("mismatch" in next)) return plan;
-      const stopped = await backToSpec(next.mismatch);
-      if (stopped) return stopped;
-    }
-  }
-  async function implementPhase() {
-    if (implCurrent) {
-      skip("fix");
-      skip("validate");
-      return null;
-    }
-    const fixedPlan = await deliverFix();
-    if ("status" in fixedPlan) return fixedPlan;
-    done("validate");
-    const dirtyAll = unique([...cpDirty, ...fixTouched]).filter((p) => p && !inTmp(p) && !isSpec(p));
-    const scopes = [...fixPaths(fixedPlan), ...fixTests];
-    const commitPaths = dirtyAll.filter((p) => scopes.some((s) => within(p, s)));
-    leaveOutside(
-      d,
-      dirtyAll.filter((p) => !commitPaths.includes(p)),
-      outsideDirty
-    );
-    return commitWork(d, commitPaths, outsideDirty, "commit the fix");
-  }
-  const implementStop = await implementPhase();
-  if (implementStop) return implementStop;
-  const publishStop = await publish(d, {
-    cardId,
-    boardPrDone,
-    publishCurrent,
-    branch: "the branch",
-    describes: "the bug and the fix"
-  });
-  if (publishStop) return publishStop;
-  const reviewed = await review(d, {
+  if (stopped) return stopped;
+  const result = await runLoop({
+    d,
+    where: d.WHERE,
     story,
-    projectRoot,
-    answers
+    cardId,
+    build: null,
+    validate: WHOLE_CHANGE(story, input.validationPath ?? CATEGORY_PATH),
+    specDir: "",
+    answers: input.answers,
+    // Once the PR exists, a rerun resumes at its review.
+    startAtReview: d.state.pr ? Math.max(resume.reviewFired, 1) : 0,
+    built: resume.built,
+    small: { firstTest: input.firstTest, ...input.reproduced && { reproduced: input.reproduced } }
   });
-  if ("stop" in reviewed) return reviewed.stop;
-  const { review: review2 } = reviewed;
-  done("review");
-  return {
-    status: "done",
-    workflow: WORKFLOW,
-    skipped,
-    attempts,
-    completed: d.completed,
-    pr: state.pr,
-    spec: state.specPath,
-    regressionTests: repro.tests,
-    verification,
-    review: review2,
-    limits,
-    report: makeReport([`Spec: ${state.specPath}.`, `Regression test(s): ${repro.tests.join(", ")}.`], review2)
-  };
+  return { ...result, workflow: input.workflowName, report: reportOf(input.workflowName, result) };
+}
+
+// src/slopify/workflows/deliver-bugfix.ts
+var UNREPRODUCIBLE_LABEL = "Unreproducible";
+async function reportNotReproduced(d, arg, bug) {
+  const cardId = shaped("id", arg) || shaped("id", bug.checkpoint.bugCard);
+  const tried = bug.needs.map((n) => `${n.what} ${n.evidence}`).join("\n");
+  const comment = `This bug could not be reproduced, so no fix was attempted.
+${tried}`;
+  const target = cardId ? `On card ${cardId}` : `No card reports this bug, so create a Bug card from this report, word for word, and on it:
+<<<REPORT
+${arg}
+REPORT>>>
+`;
+  await callPusher(
+    d.pushBrief(
+      `${target} add the label ${UNREPRODUCIBLE_LABEL} and comment, as docs/BOARD.md declares. If it declares no board, do nothing.
+The comment: ${comment}`
+    ),
+    "report the failed reproduction",
+    "Push"
+  );
+  return bug;
+}
+async function run() {
+  const input = inputOf(args, "story");
+  const arg = textOf(input["story"]);
+  if (!arg) return { status: "not-started", next: "Ask the user for the bug: a Linear issue or a report." };
+  const projectRoot = textOf(input["projectRoot"]);
+  const answers = answersOf(input["answers"]);
+  const d = createDeliver({ workflow: "deliver-bugfix", projectRoot, storyArg: arg });
+  try {
+    const bug = await workflow("slopify:reproduce-bug", {
+      report: arg,
+      projectRoot: projectRoot || void 0,
+      answers,
+      autonomous: true
+    });
+    if (bug.status === "not-started") return bug;
+    if (bug.status !== "done") return await reportNotReproduced(d, arg, bug);
+    const steps = bug.steps.join("\n");
+    return await deliverSmall(d, shaped("id", bug.card) || arg, {
+      answers,
+      workflowName: "deliver-bugfix",
+      cardType: "Bug",
+      firstTest: `turns this reproduction into a regression test: it fails now the way the reproduction shows, and passes once the bug is fixed.
+Steps:
+${steps}
+Observed: ${bug.observed}`,
+      validationPath: `Run the reproduction's steps again in the running app, as TESTING.md says to run it. It passes when the observed failure is gone.
+Steps:
+${steps}
+Observed before the fix: ${bug.observed}`,
+      reproduced: [
+        { text: steps || "See the reproduction steps on the issue.", detail: `Before the fix: ${bug.observed}` }
+      ]
+    });
+  } catch (error) {
+    return stopOf(d, error);
+  }
 }
 
 // src/slopify/workflows/deliver-bugfix.entry.ts

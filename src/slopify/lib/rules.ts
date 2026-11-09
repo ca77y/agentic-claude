@@ -142,6 +142,8 @@ export interface PrBody {
   specDir: string;
   draftReasons: readonly Listed[];
   needsConfirmation: readonly Listed[];
+  /** A bug's reproduction, as it behaved before the fix; the criteria table shows it after. */
+  reproduced?: readonly Listed[];
   criteria: readonly CriterionRow[];
   assumptions: readonly string[];
   unverified: readonly Listed[];
@@ -175,6 +177,7 @@ export function renderBody(b: PrBody): string {
     `Issue: ${b.issue}${b.specDir ? `\n\nSpec: \`${b.specDir}\`` : ""}`,
     section("Why this is a draft", items(b.draftReasons)),
     section("Needs confirmation", items(b.needsConfirmation)),
+    section("Reproduced", items(b.reproduced ?? [])),
     section("Criteria", criteriaTable(b.criteria)),
     section("Assumptions", b.assumptions.map((a) => `- ${a}`).join("\n")),
     section("Unverified findings", items(b.unverified)),
@@ -185,4 +188,26 @@ export function renderBody(b: PrBody): string {
   ]
     .filter(Boolean)
     .join("\n\n");
+}
+
+export interface Reproduction {
+  steps: string[];
+  observed: string;
+}
+
+// One ledger line, so the evidence a PR shows survives a rerun that keeps the reproduction instead of building it again.
+export const reproductionLine = (r: Reproduction): string => `reproduced ${JSON.stringify(r)}`;
+
+const isReproduction = (v: unknown): v is Reproduction =>
+  typeof v === "object" && v !== null && "steps" in v && Array.isArray(v.steps) && "observed" in v;
+
+export function parseReproduction(line: string): Reproduction | null {
+  const at = line.indexOf("{");
+  if (at === -1) return null;
+  try {
+    const v: unknown = JSON.parse(line.slice(at));
+    return isReproduction(v) ? v : null;
+  } catch {
+    return null;
+  }
 }

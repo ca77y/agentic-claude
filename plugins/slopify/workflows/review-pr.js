@@ -1,7 +1,7 @@
 export const meta = {
   "name": "review-pr",
   "description": "Run the build and validate loop on an existing pull request: wait for its review, rule on each finding, fix what is confirmed through a coder and qa inner loop, validate, and push every round, until the review is clean and the PR goes ready or a limit leaves it a draft",
-  "whenToUse": "Run only when the user invokes /slopify:review-pr or asks for the slopify review-pr workflow; deliver-bugfix also runs it as its last step. Args: {pr, story?, projectRoot?, answers?}, or the pull request as a plain string. pr names the pull request, story is the acceptance source when known, projectRoot defaults to the session project directory, and answers maps a decision id to its answer.",
+  "whenToUse": "Run only when the user invokes /slopify:review-pr or asks for the slopify review-pr workflow. Args: {pr, story?, projectRoot?, answers?}, or the pull request as a plain string. pr names the pull request, story is the acceptance source when known, projectRoot defaults to the session project directory, and answers maps a decision id to its answer.",
   "phases": [
     {
       "title": "Locate",
@@ -186,26 +186,16 @@ function shaped(kind, v) {
   if (tok && re.test(tok)) return tok;
   return re.test(t) ? t : "";
 }
-function sameRev(briefed, evaluated) {
-  const b = (briefed || "").trim().toLowerCase();
-  const e = (evaluated || "").trim().toLowerCase();
-  if (!b || e.includes(b)) return true;
-  const HEX = /(?<![0-9a-z])[0-9a-f]{7,64}(?![0-9a-z])/g;
-  const bh = b.match(HEX) ?? [];
-  if (bh.length === 0) return false;
-  const eh = e.match(HEX) ?? [];
-  return bh.every((x) => eh.some((y) => x.startsWith(y) || y.startsWith(x))) && b.split(HEX).map((p) => p.trim()).filter((p) => p && !/[a-z]{3}/.test(p)).every((p) => e.includes(p));
-}
-function rerunText(workflow2, needs) {
-  const cmd = `/slopify:${workflow2}`;
+function rerunText(workflow, needs) {
+  const cmd = `/slopify:${workflow}`;
   const list2 = needs ?? [];
   const viaArg = list2.filter((n) => n.arg);
   const answerable = list2.some((n) => !n.arg && (n.kind === "decision" || n.kind === "input"));
   const argText = viaArg.length > 0 ? ` Give ${viaArg.map((n) => `${n.id} in args.${n.arg ?? ""}`).join(" and ")}, not in answers.` : "";
   return list2.length > 0 && list2.every((n) => n.kind === "decision") ? `Invoke ${cmd} again with the same args and add answers.<id> for each decision. In this session, pass resumeFromRunId to reuse the steps already completed.` : `Resolve what each need names, then invoke ${cmd} again with the same args${answerable ? " and answers.<id> for each decision or input need" : ""}, without resumeFromRunId, so every step reads the repository afresh.${argText}`;
 }
-function blocked(workflow2, step, needs, extra = {}) {
-  return { status: "blocked", workflow: workflow2, step, needs, rerun: rerunText(workflow2, needs), ...extra };
+function blocked(workflow, step, needs, extra = {}) {
+  return { status: "blocked", workflow, step, needs, rerun: rerunText(workflow, needs), ...extra };
 }
 
 // src/slopify/lib/schemas.ts
@@ -236,53 +226,7 @@ function pusherSchema(notes = {}) {
 }
 
 // src/slopify/lib/deliver.ts
-var CODER_SCHEMA = {
-  type: "object",
-  required: ["changed", "tests", "ran", "revision", "open", "specMismatch"],
-  properties: {
-    changed: { ...STRINGS, description: "Paths changed, relative to the worktree root" },
-    tests: { ...STRINGS, description: "Test paths added or changed" },
-    ran: { ...STRINGS, description: "Each command and its result" },
-    revision: {
-      type: "string",
-      description: "The revision left, as the brief defines it"
-    },
-    open: STRINGS,
-    specMismatch: {
-      type: "string",
-      description: "Why the spec cannot be implemented as written, or an empty string when it can"
-    },
-    steps: STRINGS,
-    observed: { type: "string" },
-    measurements: {
-      type: "array",
-      items: {
-        type: "object",
-        required: ["claim", "value", "command"],
-        properties: {
-          claim: { type: "string" },
-          value: { type: "string" },
-          command: { type: "string" }
-        }
-      }
-    }
-  }
-};
 var PUSHER_SCHEMA = pusherSchema({ reference: "A commit sha, PR URL or path, card id, or worktree path" });
-function prop(v, key) {
-  if (v === null || v === void 0) throw new TypeError(`Cannot read properties of ${String(v)} (reading '${key}')`);
-  if (typeof v !== "object") return void 0;
-  const value = Reflect.get(v, key);
-  return value;
-}
-var isList = (v) => Array.isArray(v);
-function jsonText(v) {
-  if (typeof v === "string") return v;
-  if (isList(v)) return v.map((x) => x === null || x === void 0 ? "" : jsonText(x)).join(",");
-  if (typeof v === "object" && v !== null) return "[object Object]";
-  if (typeof v === "number" || typeof v === "boolean") return String(v);
-  return v === null ? "null" : "undefined";
-}
 var NO_WRITES = "Do not commit, push, branch, or change the board or forge; pusher does that.";
 function need(step, n, kind, what, evidence) {
   return { id: `${step}-${n}`, kind, what, evidence: evidence || "" };
@@ -293,63 +237,29 @@ var val = (res, key) => clean(fact(res, key));
 function unique(items2) {
   return [...new Set(items2.filter(Boolean))];
 }
-function usable(v, revision) {
-  if (!v || !revision || !sameRev(revision, v.evaluated)) return false;
-  const blocking = v.findings.some((f) => f.blocking);
-  return v.verdict === "fail" ? blocking : v.verdict !== "pass" || !blocking;
-}
 var pushOk = (r) => !!r && r.done && r.unmet.length === 0;
 var opRef = (r, name) => {
   const o = (r?.operations ?? []).find((x) => x.op.toLowerCase() === name);
   return o ? o.reference.trim() : "";
 };
 function callWriter(prompt, label, phaseTitle, schema) {
-  return agent(prompt, {
-    agentType: "slopify:writer",
-    label,
-    phase: phaseTitle,
-    schema
-  });
+  return agent(prompt, { agentType: "slopify:writer", label, phase: phaseTitle, schema });
 }
 function callCoder(prompt, label, phaseTitle, schema) {
-  return agent(prompt, {
-    agentType: "slopify:coder",
-    label,
-    phase: phaseTitle,
-    schema: schema ?? CODER_SCHEMA
-  });
+  return agent(prompt, { agentType: "slopify:coder", label, phase: phaseTitle, schema });
 }
 function callPusher(prompt, label, phaseTitle) {
-  return agent(prompt, {
-    agentType: "slopify:pusher",
-    label,
-    phase: phaseTitle,
-    schema: PUSHER_SCHEMA
-  });
+  return agent(prompt, { agentType: "slopify:pusher", label, phase: phaseTitle, schema: PUSHER_SCHEMA });
 }
 function createDeliver(config) {
-  const {
-    workflow: WORKFLOW,
-    maxFailures: MAX_FAILURES,
-    planPhase: PLAN_PHASE,
-    failures,
-    projectRoot,
-    storyArg
-  } = config;
+  const { workflow: WORKFLOW, projectRoot, storyArg } = config;
   const WHERE = projectRoot ? `The project is at ${projectRoot}; address files by absolute path under it.` : "The project is the session project directory; address files by absolute path.";
-  const AUTH = `Authorization, from the user's invocation of /slopify:${WORKFLOW}: the story branch and worktree, attributable commits, the pushes the brief asks for, opening or updating this task's PR as a draft or ready, the declared review trigger, the one issue comment the brief asks for when the run ends or halts, and filing the issues the brief lists. It does not authorize merging, releases, any other message, rewriting docs/BOARD.md or docs/FORGE.md, or changing a card's content. Work exactly as docs/BOARD.md and docs/FORGE.md declare; an operation that is not bound is unmet, never improvised. Stage explicit paths only.`;
+  const AUTH = `Authorization, from the user's invocation of /slopify:${WORKFLOW}: the story branch and worktree, attributable commits, the pushes the brief asks for, opening or updating this task's PR as a draft or ready, the declared review trigger, the one issue comment and label the brief asks for when the run ends or halts, and filing the issues the brief lists. It does not authorize merging, releases, any other message, rewriting docs/BOARD.md or docs/FORGE.md, or changing a card's content. Work exactly as docs/BOARD.md and docs/FORGE.md declare; an operation that is not bound is unmet, never improvised. Stage explicit paths only.`;
   const completed = [];
-  const skipped = [];
-  const attempts = [];
-  const verification = [];
-  const limits = [];
   const state = {
     worktree: "",
     branch: "",
     ledger: "",
-    specPath: "",
-    specHash: "",
-    specExists: false,
     pr: ""
   };
   let runLinePending = true;
@@ -357,102 +267,17 @@ function createDeliver(config) {
     completed.push(step);
   }
   function skip(step) {
-    skipped.push(step);
     completed.push(step);
   }
   function stop(step, needs) {
     const checkpoint = {};
     if (state.worktree) checkpoint.worktree = state.worktree;
     if (state.branch) checkpoint.branch = state.branch;
-    if (state.specExists) checkpoint.spec = state.specPath;
     if (state.ledger) checkpoint.ledger = state.ledger;
     if (state.pr) checkpoint.pr = state.pr;
     return blocked(WORKFLOW, step, needs, {
       completed: [...completed],
-      checkpoint,
-      attempts
-    });
-  }
-  function fail(gate2, approach, failed) {
-    failures[gate2] += 1;
-    attempts.push({ gate: gate2, approach, failed });
-    return failures[gate2] >= MAX_FAILURES;
-  }
-  function exhausted(step, gate2) {
-    const last = attempts.filter((a) => a.gate === gate2).slice(-MAX_FAILURES);
-    return stop(step, [
-      need(
-        step,
-        1,
-        "validation",
-        `A ${gate2} that passes its gate; ${MAX_FAILURES} attempts failed.`,
-        last.map((a) => `${a.approach}: ${a.failed}`).join(" | ")
-      )
-    ]);
-  }
-  function rel(p) {
-    let t = (p || "").trim().replace(/^\.\//, "");
-    if (state.worktree && t.startsWith(state.worktree + "/")) t = t.slice(state.worktree.length + 1);
-    return t.replace(/\/+$/, "");
-  }
-  function within(p, scope) {
-    const a = rel(p);
-    const b = rel(scope);
-    return !!a && !!b && (a === b || a.startsWith(b + "/"));
-  }
-  function overlaps(x, y) {
-    return x.some((p) => y.some((q) => within(p, q) || within(q, p)));
-  }
-  function pathOf(location) {
-    const m = /^(.*?)(?::\d+(?:-\d+)?)?$/.exec(location.trim());
-    return rel(m ? m[1] : location);
-  }
-  function relList(v) {
-    if (!isList(v)) throw new TypeError("not a list of paths");
-    return v.map((p) => rel(jsonText(p || "")));
-  }
-  async function judge(items2, revision, step) {
-    const out = Array.from({ length: items2.length }, () => null);
-    let rounds = 0;
-    for (; ; ) {
-      const todo = items2.map((item, i) => ({ item, i })).filter((t) => !usable(out[t.i], revision));
-      if (todo.length === 0) return { verdicts: out };
-      const names = todo.map((t) => t.item.name).join(", ");
-      if (rounds >= MAX_FAILURES) {
-        attempts.push({
-          gate: "validator",
-          approach: `${names} on ${revision}`,
-          failed: "no usable verdict after repeated dispatches"
-        });
-        return {
-          stop: stop(step, [
-            need(
-              step,
-              1,
-              "validation",
-              `A usable verdict from ${names} on revision ${revision}.`,
-              `${rounds} dispatches returned no verdict, a verdict on another revision, or a fail with no blocking finding`
-            )
-          ])
-        };
-      }
-      if (rounds > 0)
-        attempts.push({
-          gate: "validator",
-          approach: `re-run ${names}`,
-          failed: "no verdict, or a verdict on another revision"
-        });
-      const res = await parallel(todo.map((t) => () => t.item.call()));
-      for (const [k, t] of todo.entries()) out[t.i] = res[k];
-      rounds += 1;
-    }
-  }
-  function record(name, v, revision) {
-    verification.push({
-      agent: name,
-      verdict: v ? v.verdict : "none",
-      evaluated: v ? v.evaluated : revision,
-      findings: v ? v.findings.length : 0
+      checkpoint
     });
   }
   function takeLines(lines) {
@@ -493,115 +318,10 @@ Report each operation you performed as an operations entry, named worktree, bran
       )
     ]);
   }
-  function makeReport(extra, review) {
-    const outcome = (r) => {
-      const o = r.review === void 0 ? r.status : r.review;
-      const text = typeof o === "string" ? o : JSON.stringify(o);
-      const rounds = isList(r.rounds) ? `${r.rounds.length} round(s)` : "";
-      const unfixed = isList(r.unfixed) && r.unfixed.length > 0 ? `${r.unfixed.length} finding(s) left unfixed` : "";
-      return [text, rounds, unfixed].filter(Boolean).join("; ");
-    };
-    return [
-      `${WORKFLOW} done.`,
-      ...extra ?? [],
-      verification.length > 0 ? `Verification this run: ${verification.map((v) => `${v.agent} ${v.verdict} on ${v.evaluated}`).join("; ")}.` : "Verification: every gate was already satisfied by earlier checkpoints; no new verdicts this run.",
-      skipped.length > 0 ? `Skipped from checkpoints: ${skipped.join(", ")}.` : "",
-      `PR: ${state.pr}.`,
-      `Review: ${outcome(review)}.`,
-      limits.length > 0 ? `Limits: ${limits.join(" | ")}.` : ""
-    ].filter(Boolean).join("\n");
-  }
-  async function recoverPlan() {
-    const r = await scout(
-      "scout-docs",
-      `${WHERE}
-Read the spec at ${state.specPath} and report only its task list and the documentation it says to update; quote the spec, claim nothing of your own. Report one evidence item per task: source "task:<id>", location the spec path, excerpt a JSON object {"summary": "...", "paths": ["..."]} with the task's paths relative to the worktree root. Report one evidence item with source "docs" and excerpt a JSON array of the documentation paths to update (an empty array when none). Quote the spec; make no changes.`,
-      { label: "read spec tasks", phase: PLAN_PHASE }
-    );
-    const tasks = [];
-    let docs = [];
-    const evidence = r?.evidence ?? [];
-    for (const e of evidence) {
-      try {
-        if (e.source.startsWith("task:")) {
-          const j = JSON.parse(e.excerpt);
-          const id = e.source.slice(5);
-          const summary = jsonText(prop(j, "summary") || "");
-          tasks.push({ id, summary, paths: relList(prop(j, "paths") || []) });
-        } else if (e.source === "docs") {
-          docs = relList(JSON.parse(e.excerpt));
-        }
-      } catch {
-      }
-    }
-    return tasks.length > 0 ? { tasks, docs } : null;
-  }
-  return {
-    WHERE,
-    completed,
-    skipped,
-    attempts,
-    verification,
-    limits,
-    state,
-    done,
-    skip,
-    stop,
-    fail,
-    exhausted,
-    rel,
-    within,
-    overlaps,
-    pathOf,
-    judge,
-    record,
-    pushBrief,
-    pushStop,
-    makeReport,
-    recoverPlan
-  };
+  return { WHERE, state, done, skip, stop, pushBrief, pushStop };
 }
 
 // src/slopify/lib/deliver-steps.ts
-var WRITER_SCHEMA = {
-  type: "object",
-  required: ["produced", "revision", "openDecisions", "storyBlockers", "tasks", "docs"],
-  properties: {
-    produced: { ...STRINGS, description: "Absolute paths written" },
-    revision: {
-      type: "string",
-      description: "git hash-object of the main artifact"
-    },
-    openDecisions: {
-      ...STRINGS,
-      description: "Decisions only the user can make; empty when none"
-    },
-    storyBlockers: {
-      ...STRINGS,
-      description: "Reasons the story is unbuildable or a criterion is wrong as stated; empty when none"
-    },
-    tasks: {
-      type: "array",
-      description: "Spec only: the tasks, with disjoint paths; empty otherwise",
-      items: {
-        type: "object",
-        required: ["id", "summary", "paths"],
-        properties: {
-          id: { type: "string" },
-          summary: { type: "string" },
-          paths: {
-            ...STRINGS,
-            description: "Files or directories the task may write, relative to the worktree root, no globs"
-          }
-        }
-      }
-    },
-    docs: {
-      ...STRINGS,
-      description: "Spec only: documentation files to update, relative to the worktree root; empty otherwise"
-    }
-  }
-};
 async function createWorktree(d, o) {
   const { state, stop, done, pushBrief, pushStop } = d;
   const { cardId, boardBranch } = o;
@@ -651,7 +371,6 @@ async function workspace(d, o) {
     done("board-start");
   }
   if (!state.ledger) state.ledger = `${state.worktree}/.tmp/ledger.md`;
-  if (!state.specPath) state.specPath = `${state.worktree}/${o.specRel}`;
   return null;
 }
 
@@ -733,6 +452,7 @@ function renderBody(b) {
 Spec: \`${b.specDir}\`` : ""}`,
     section("Why this is a draft", items(b.draftReasons)),
     section("Needs confirmation", items(b.needsConfirmation)),
+    section("Reproduced", items(b.reproduced ?? [])),
     section("Criteria", criteriaTable(b.criteria)),
     section("Assumptions", b.assumptions.map((a) => `- ${a}`).join("\n")),
     section("Unverified findings", items(b.unverified)),
@@ -958,6 +678,8 @@ var SEVERITY_RUBRIC = `Severity: blocker when a criterion fails, the build or te
 Kind: code when the behavior is wrong. test when the behavior is right but the test or flow is wrong. docs when documentation is untrue or missing. spec when the spec is wrong, or the finding conflicts with its design. cannot-verify when a tool, simulator, or credential stopped working, the check hits a blind spot, or the proof is missing or unusable. decision when only a person can settle what a criterion should mean.
 Never downgrade a confirmed failure. Filter out what a linter would catch, and style. Run a reproduction when you can, rather than only reading the code. An earlier dismissal of the same fingerprint stands.`;
 var RECURRENCE_RUBRIC = `If this problem's fingerprint appears under earlier rulings after a fix attempt, also give a ruling, reading those attempts: fix-differently when another approach could work, accept-as-debt when a major can ship and be paid later, split-to-issue when a major belongs in its own issue, or escalate. Otherwise the ruling is none.`;
+var checksBrief = (where, worktree2) => `${where}
+In the worktree ${worktree2}, run the Checks commands TESTING.md declares, and return each command's exit code and failing lines. Change nothing.`;
 var worktreeOf = (l) => l.d.state.worktree;
 var rowsOf = (l) => Object.values(l.rows);
 function inOrder(l, step) {
@@ -1004,6 +726,7 @@ function changeBrief(l, c) {
 Work in the worktree ${worktreeOf(l)}.`,
     l.build?.shared.length ? `Constraints every task follows:
 ${list(l.build.shared)}` : "",
+    c.assignment ?? "",
     c.task ? `Your task (${c.task.id}): ${c.task.todo}
 Files you may write:
 ${list(c.task.files)}
@@ -1075,37 +798,55 @@ async function qaOf(l, c, cycle) {
     `A qa verdict on ${c.id}.`
   );
 }
+async function failingChecks(l) {
+  if (!l.small) return "";
+  const brief = checksBrief(l.where, worktreeOf(l));
+  const ran = must(
+    await agent(brief, {
+      agentType: "slopify:checks",
+      label: "checks",
+      phase: "Build",
+      schema: CHECKS_SCHEMA
+    }),
+    "build",
+    "The project's checks."
+  );
+  const failed = ran.commands.filter((x) => x.exitCode !== 0);
+  const lines = failed.map((x) => `${x.command}: ${x.failingLines}`);
+  return lines.join("\n");
+}
+async function tryFix(l, c, cycle, lastFailure, attempt) {
+  const fix = must(
+    await callCoder(
+      fixPrompt(l, c, cycle, lastFailure),
+      `${c.id}: fix${attempt > 1 ? ` (try ${String(attempt)})` : ""}`,
+      "Build",
+      FIX_SCHEMA
+    ),
+    "build",
+    `A fix for ${c.id}.`
+  );
+  l.decisions.push(...fix.decisions);
+  if (fix.testProblem) return { reason: fix.testProblem, rewriteTest: true };
+  if (fix.changed.length > 0) await commit(l, fix.changed, `implement ${c.id}`);
+  l.changedThisRound.push(...fix.changed);
+  const failing = await failingChecks(l);
+  if (failing) return { reason: failing, rewriteTest: false };
+  if (l.small && l.round > 0) return { reason: "", rewriteTest: false };
+  const verdict = await qaOf(l, c, cycle);
+  if (verdict.verdict === "pass") return { reason: "", rewriteTest: false };
+  const reason = verdict.findings.map((f) => `${f.location}: ${f.problem}`).join("\n") || verdict.limits;
+  return { reason, rewriteTest: verdict.testAtFault };
+}
 async function runChange(l, c) {
-  let test = null;
-  let reason = "";
-  let rewriteTest = true;
+  let test = await writeTest(l, c, "");
+  let last = { reason: "", rewriteTest: false };
   for (let attempt = 1; attempt <= MAX_INNER_TRIES; attempt += 1) {
-    if (rewriteTest) test = await writeTest(l, c, reason);
-    const cycle = must(test, "build", `A test for ${c.id}.`);
-    const fix = must(
-      await callCoder(
-        fixPrompt(l, c, cycle, rewriteTest ? "" : reason),
-        `${c.id}: fix${attempt > 1 ? ` (try ${String(attempt)})` : ""}`,
-        "Build",
-        FIX_SCHEMA
-      ),
-      "build",
-      `A fix for ${c.id}.`
-    );
-    l.decisions.push(...fix.decisions);
-    if (fix.testProblem) {
-      reason = fix.testProblem;
-      rewriteTest = true;
-      continue;
-    }
-    if (fix.changed.length > 0) await commit(l, fix.changed, `implement ${c.id}`);
-    l.changedThisRound.push(...fix.changed);
-    const verdict = await qaOf(l, c, cycle);
-    if (verdict.verdict === "pass") return "";
-    reason = verdict.findings.map((f) => `${f.location}: ${f.problem}`).join("\n") || verdict.limits;
-    rewriteTest = verdict.testAtFault;
+    if (last.rewriteTest) test = await writeTest(l, c, last.reason);
+    last = await tryFix(l, c, test, last.rewriteTest ? "" : last.reason, attempt);
+    if (!last.reason) return "";
   }
-  return reason;
+  return last.reason;
 }
 function criteriaOf(l, ids) {
   return (l.validate?.criteria ?? []).filter((c) => ids.includes(c.id));
@@ -1190,13 +931,34 @@ ${NO_WRITES}`,
   );
   if (w.changed.length > 0) await commit(l, w.changed, "update the docs the change affects");
 }
+function firstChanges(l) {
+  if (!l.small) return (l.build?.tasks ?? []).map((t) => changeOfTask(l, t));
+  const assignment = `Deliver this:
+<<<ISSUE
+${l.story}
+ISSUE>>>
+
+The first test ${l.small.firstTest}`;
+  return [{ id: "change", files: [], criteria: [], assignment }];
+}
+async function findDocs(l) {
+  if (!l.small || l.changedThisRound.length === 0) return;
+  const found = await scout(
+    "scout-docs",
+    `${l.where}
+In the worktree ${worktreeOf(l)}, read the diff of these paths, and find the documents it makes untrue or leaves incomplete. Report one evidence item per document, with source set to its path relative to the worktree root, and none when no document is affected.
+${list(l.changedThisRound)}`,
+    { label: "find affected docs", phase: "Build" }
+  );
+  l.docs = must(found, "build", "The documents the change affects.").evidence.map((e) => e.source);
+}
 async function buildRound(l) {
   phase("Build");
   const openItems = l.open;
   l.open = [];
   l.changedThisRound = [];
   for (const item of openItems) countFix(l, item);
-  const first = l.round === 0 ? (l.build?.tasks ?? []).map((t) => changeOfTask(l, t)) : [];
+  const first = l.round === 0 ? firstChanges(l) : [];
   const fromSpec = await reviseSpec(
     l,
     openItems.filter((i) => i.route === "revise-spec")
@@ -1205,6 +967,7 @@ async function buildRound(l) {
   const changes = [...first, ...fromSpec, ...fixes];
   l.affected = unique(changes.flatMap((c) => c.criteria.map((x) => x.id)));
   await runChanges(l, changes);
+  await findDocs(l);
   await updateDocs(
     l,
     openItems.filter((i) => i.route === "writer")
@@ -1215,11 +978,12 @@ async function runValidation(o) {
   const categorized = o.criteria.filter((c) => c.category !== "uncategorized");
   const toRun = o.focus.length > 0 ? categorized.filter((c) => o.focus.includes(c.id)) : categorized;
   const [checks, validated] = await parallel([
-    () => agent(
-      `${o.where}
-In the worktree ${o.worktree}, run the Checks commands TESTING.md declares, and return each command's exit code and failing lines. Change nothing.`,
-      { agentType: "slopify:checks", label: "checks", phase: "Validate", schema: CHECKS_SCHEMA }
-    ),
+    () => o.checks === false ? Promise.resolve({ commands: [] }) : agent(checksBrief(o.where, o.worktree), {
+      agentType: "slopify:checks",
+      label: "checks",
+      phase: "Validate",
+      schema: CHECKS_SCHEMA
+    }),
     () => (
       // With no criteria at all, as when review-pr runs on a PR with no spec, there is nothing to drive the app for.
       o.criteria.length === 0 ? Promise.resolve({ results: [], uncategorizedSetting: "" }) : agent(
@@ -1327,7 +1091,7 @@ ${criterion ? `
 The criterion: ${criterion.wording}` : ""}
 
 ${SEVERITY_RUBRIC}
-${RECURRENCE_RUBRIC}
+${l.small ? "The ruling is none." : RECURRENCE_RUBRIC}
 
 Earlier rulings:
 ${list(l.rulings)}
@@ -1457,6 +1221,7 @@ function body(l) {
       ...l.confirmations,
       ...l.decisions.filter((d) => d.affectsAcceptance).map((d) => ({ text: d.question, detail: `Chose: ${d.choice}. Why: ${d.rationale}` }))
     ],
+    ...l.small?.reproduced && { reproduced: l.small.reproduced },
     criteria: rowsOf(l),
     assumptions: l.decisions.filter((d) => !d.affectsAcceptance).map((d) => `${d.question} ${d.choice}`),
     unverified: l.unverified,
@@ -1568,11 +1333,29 @@ ${ready ? "Mark the PR ready for review, as docs/FORGE.md declares.\n" : "Leave 
     "The final PR update."
   );
 }
+async function validateSmall(l) {
+  if (l.round > 0 && l.affected.length === 0) return;
+  const v = await runValidation({
+    where: l.where,
+    worktree: worktreeOf(l),
+    criteria: l.validate?.criteria ?? [],
+    focus: [],
+    changed: [],
+    checks: false
+  });
+  for (const r of v.rows) l.rows[r.id] = r;
+  for (const p of v.problems) {
+    l.open.push({ problem: p, route: "coder", severity: "blocker", fingerprint: p.text, reason: "" });
+  }
+}
 async function round(l, last) {
   if (l.round > 0 || !l.built) await buildRound(l);
-  const problems = await validateRound(l);
-  await judgeProblems(l, problems, "Judge");
-  await gateway(l);
+  if (l.small) {
+    await validateSmall(l);
+  } else {
+    await judgeProblems(l, await validateRound(l), "Judge");
+    await gateway(l);
+  }
   await pushRound(l, last);
 }
 function freshLoop(input) {
@@ -1642,6 +1425,17 @@ async function endLoop(l, ready) {
     draftReasons: ready ? [] : draftReasons(l),
     decisions: l.decisions.filter((d) => d.affectsAcceptance).map((d) => d.id)
   };
+}
+function reportOf(workflowName, r, specDir = "") {
+  return [
+    `${workflowName} finished: the PR is ${r.status === "ready" ? "ready for review" : "a draft"}.`,
+    `PR: ${r.pr}.`,
+    specDir ? `Spec: ${specDir}.` : "",
+    `Fix rounds: ${String(r.rounds)}. Review: ${r.review}.`,
+    r.draftReasons.length > 0 ? `Why it is a draft:
+${r.draftReasons.map((x) => `- ${x.text}`).join("\n")}` : "",
+    r.decisions.length > 0 ? `Decisions to confirm: ${r.decisions.join(", ")}.` : ""
+  ].filter(Boolean).join("\n");
 }
 
 // src/slopify/lib/how.ts
@@ -1855,9 +1649,6 @@ async function run() {
   }
   const d = createDeliver({
     workflow: "review-pr",
-    maxFailures: 3,
-    planPhase: "Build",
-    failures: { spec: 0, implementation: 0 },
     projectRoot: textOf(input["projectRoot"]),
     storyArg: pr
   });
@@ -1870,7 +1661,6 @@ async function run() {
       cardId: "",
       boardBranch: d.state.branch,
       boardStartDone: true,
-      specRel: resume.specDir,
       worktree: "the pull request's worktree",
       subject: `pull request ${pr}`
     });
@@ -1900,9 +1690,7 @@ async function run() {
     return {
       ...result,
       workflow: "review-pr",
-      report: `review-pr finished: the PR is ${result.status === "ready" ? "ready for review" : "a draft"}. Fix rounds: ${String(result.rounds)}. Review: ${result.review}.${result.draftReasons.length > 0 ? `
-Why it is a draft:
-${result.draftReasons.map((x) => `- ${x.text}`).join("\n")}` : ""}`
+      report: reportOf("review-pr", result)
     };
   } catch (error) {
     return stopOf(d, must(error, "review", "The review."));

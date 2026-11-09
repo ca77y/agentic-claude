@@ -20,7 +20,8 @@ Configuration does not authorize execution; the user's request does. An operatio
 
 - Identity and spec naming: the issue identifier (`SMR-200`), shared by board, branch, PR, and spec. A spec is a folder, `docs/specs/<lowercase identifier>-<slug>/`, for example `docs/specs/smr-200-card-content-access/`.
 - Type and priority: exactly one of the labels `Bug`, `Improvement`, `Feature`; priority `1` Urgent, `2` High, `3` Medium, `4` Low.
-- Deliverable: the label `Deliverable` marks a card as written by the shaping process, and is added when that process files or updates it. Only a card with this label can be delivered.
+- Deliverable: the label `Deliverable` marks a card as written by the shaping process, and is added when that process files or updates it. Only a card with this label can go through a full story delivery.
+- Unreproducible: the label `Unreproducible` marks a Bug card whose bug an automated fix could not reproduce.
 - Card, spec, and docs: a card holds the why and the what; a spec holds the how for one unit of work, is written and read by agents, stays in the repository as context for later failures, and is never kept current; humans compact or remove it. Durable knowledge belongs in `docs/`, outside `docs/specs/`.
 - Kinds of work: a story changes code and ends in a PR; a spike answers an open question, and any prototype it builds is throwaway and never merged.
 - Dependencies: Linear blocking relations (`blockedBy`, `blocks`). No sub-issues: one story is one issue and one PR.
@@ -33,7 +34,7 @@ Configuration does not authorize execution; the user's request does. An operatio
 
 ## Delivery
 
-- When delivery starts: from `Backlog` or `Todo`, move the card to `In Progress`; asking for delivery is the user's readiness decision. In any other status, leave it, and report a card in `Done`, `Canceled`, or `Duplicate`. An archived card (`archivedAt` set) gets no card write during the delivery; report it. Delivery refuses only a card without the `Deliverable` label.
+- When delivery starts: from `Backlog` or `Todo`, move the card to `In Progress`; asking for delivery is the user's readiness decision. In any other status, leave it, and report a card in `Done`, `Canceled`, or `Duplicate`. An archived card (`archivedAt` set) gets no card write during the delivery; report it. A full story delivery refuses a card without the `Deliverable` label; the short flow for trivial stories and bugs refuses none.
 - When the PR opens: attach the PR.
 - When the PR's review is clean: move the card to `In Review` only if it is `In Progress`.
 - On a later round: no card operation.

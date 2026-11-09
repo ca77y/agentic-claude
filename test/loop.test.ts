@@ -114,9 +114,6 @@ function inputFor(d: Run, over: Partial<LoopInput> = {}): LoopInput {
 function freshRun(): Run {
   const d = createDeliver({
     workflow: "deliver-story",
-    maxFailures: 3,
-    planPhase: "Build",
-    failures: { spec: 0, implementation: 0 },
     projectRoot: "/p",
     storyArg: "SMR-1",
   });
@@ -591,6 +588,118 @@ describe("starting points", () => {
     await runLoop(inputFor(freshRun(), { built: true }));
     assert.equal(count("coder"), 0);
     assert.equal(count("validator"), 1);
+  });
+});
+
+describe("the small flow", () => {
+  const SMALL = {
+    build: null,
+    specDir: "",
+    small: { firstTest: "states the new behavior." },
+  };
+
+  test("runs test, fix, checks, and qa once, then the app once, with no judge or gateway", async () => {
+    use(happy({ "scout-docs": () => ({ answer: "none", evidence: [], gaps: [] }) }));
+    assert.equal(await statusOf(SMALL), "ready");
+    assert.equal(count("coder", ": test"), 1);
+    assert.equal(count("coder", ": fix"), 1);
+    assert.equal(count("checks"), 1);
+    assert.equal(count("qa"), 1);
+    assert.equal(count("validator"), 1);
+    assert.equal(count("judge"), 0);
+  });
+
+  test("gives the first test its instruction", async () => {
+    use(happy({ "scout-docs": () => ({ answer: "none", evidence: [], gaps: [] }) }));
+    await statusOf(SMALL);
+    const first = calls.find((c) => c.label === "change: test");
+    assert.ok(first?.prompt.includes("states the new behavior."));
+    assert.ok(first?.prompt.includes("the issue"));
+  });
+
+  test("skips the writer when the scout finds no affected docs", async () => {
+    use(happy({ "scout-docs": () => ({ answer: "none", evidence: [], gaps: [] }) }));
+    await statusOf(SMALL);
+    assert.equal(count("scout-docs"), 1);
+    assert.equal(count("writer"), 0);
+  });
+
+  test("runs the writer when the scout finds affected docs", async () => {
+    const found = { answer: "one", evidence: [{ source: "docs/a.md", location: "x", excerpt: "y" }], gaps: [] };
+    use(happy({ "scout-docs": () => found }));
+    await statusOf(SMALL);
+    assert.equal(count("writer"), 1);
+    assert.ok(calls.some((c) => c.type === "writer" && c.prompt.includes("docs/a.md")));
+    assert.equal(count("lens-docs"), 0);
+  });
+
+  test("sends failing checks back to the coder before qa sees it", async () => {
+    let n = 0;
+    use(
+      happy({
+        "scout-docs": () => ({ answer: "none", evidence: [], gaps: [] }),
+        checks: () => {
+          n += 1;
+          return n === 1 ? { commands: [{ command: "lint", exitCode: 1, failingLines: "bad" }] } : CHECKS_OK;
+        },
+      }),
+    );
+    assert.equal(await statusOf(SMALL), "ready");
+    assert.equal(count("coder", ": fix"), 2);
+    assert.equal(count("qa"), 1);
+  });
+
+  test("fixes a review finding with only the checks, not qa or the app", async () => {
+    let review = 0;
+    use(
+      happy({
+        "scout-docs": () => ({ answer: "none", evidence: [], gaps: [] }),
+        watcher: () => {
+          review += 1;
+          return review === 1 ? finding("bug") : CLEAN_REVIEW;
+        },
+      }),
+    );
+    assert.equal(await statusOf(SMALL), "ready");
+    assert.equal(count("coder", "fix-1: fix"), 1);
+    assert.equal(count("qa"), 1);
+    assert.equal(count("validator"), 1);
+    assert.equal(count("checks"), 2);
+  });
+
+  test("sends a failed app run back to the coder before opening the PR, and runs the app again", async () => {
+    let n = 0;
+    use(
+      happy({
+        "scout-docs": () => ({ answer: "none", evidence: [], gaps: [] }),
+        validator: () => {
+          n += 1;
+          return n === 1
+            ? { results: [{ ...PASS_ROW, result: "fail", detail: "step 2" }], uncategorizedSetting: "draft" }
+            : VALIDATOR_PASS;
+        },
+      }),
+    );
+    assert.equal(await statusOf(SMALL), "ready");
+    assert.equal(count("validator"), 2);
+    assert.equal(count("judge"), 0);
+    const [first, second] = pushPrompts();
+    assert.ok(first?.includes("Open no PR yet"));
+    assert.ok(second?.includes("open the branch's PR"));
+  });
+
+  test("keeps a recurring finding open as a draft instead of asking for a ruling", async () => {
+    use(
+      happy({
+        "scout-docs": () => ({ answer: "none", evidence: [], gaps: [] }),
+        watcher: () => finding("same bug"),
+        judge: () => ruling({ fingerprint: "same" }),
+      }),
+    );
+    const { status, draftReasons } = await runLoop(inputFor(freshRun(), SMALL));
+    assert.equal(status, "draft");
+    assert.ok(draftReasons.length > 0);
+    assert.ok(calls.filter((c) => c.type === "judge").every((c) => c.prompt.includes("The ruling is none.")));
   });
 });
 

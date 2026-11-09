@@ -220,7 +220,7 @@ export function slugged(text: string | null | undefined, fallback?: string): str
   return norm ? `${words}-${hashOf(norm)}` : fallback || "item";
 }
 
-export const HASH = "[0-9a-f]{7,64}";
+const HASH = "[0-9a-f]{7,64}";
 // A path and its git hash-object, written "<path>@<hash>" or "<path> <hash>", on the first line and
 // with any trailing remark dropped; null for anything else.
 // The path is all the text before the last hash, and must have the path or rel shape.

@@ -3,7 +3,7 @@ import { callPusher, createDeliver, type Stopped } from "../lib/deliver.ts";
 import { locate, workspace } from "../lib/deliver-steps.ts";
 import { runHow, specReviser, type HowInput } from "../lib/how.ts";
 import { answersOf, inputOf, textOf, type NotStarted } from "../lib/input.ts";
-import { must, runLoop, stopOf, type LoopResult, type Run } from "../lib/loop.ts";
+import { must, reportOf, runLoop, stopOf, type LoopResult, type Run } from "../lib/loop.ts";
 import { readResume } from "../lib/resume.ts";
 import { isDeliverable } from "../lib/rules.ts";
 
@@ -44,19 +44,6 @@ async function refuse(d: Run, cardId: string): Promise<NotStarted> {
     );
   }
   return { status: "not-started", next };
-}
-
-function reportOf(specDir: string, r: LoopResult): string {
-  return [
-    `deliver-story finished: the PR is ${r.status === "ready" ? "ready for review" : "a draft"}.`,
-    `PR: ${r.pr}.`,
-    specDir ? `Spec: ${specDir}.` : "",
-    `Fix rounds: ${String(r.rounds)}. Review: ${r.review}.`,
-    r.draftReasons.length > 0 ? `Why it is a draft:\n${r.draftReasons.map((x) => `- ${x.text}`).join("\n")}` : "",
-    r.decisions.length > 0 ? `Decisions to confirm: ${r.decisions.join(", ")}.` : "",
-  ]
-    .filter(Boolean)
-    .join("\n");
 }
 
 async function brokenWorkflow(d: Run, cardId: string, tried: readonly string[]): Promise<Stopped> {
@@ -113,7 +100,6 @@ ARG>>>`,
     cardId,
     boardBranch,
     boardStartDone: resume.boardStartDone,
-    specRel,
     worktree: "the story worktree",
     subject: "this story",
   });
@@ -144,7 +130,7 @@ ARG>>>`,
     built: resume.built,
     reviseSpec: specReviser(howInput),
   });
-  return { ...result, workflow: "deliver-story", specDir, report: reportOf(specDir, result) };
+  return { ...result, workflow: "deliver-story", specDir, report: reportOf("deliver-story", result, specDir) };
 }
 
 export default async function run(): Promise<NotStarted | Stopped | Delivered> {
@@ -156,9 +142,6 @@ export default async function run(): Promise<NotStarted | Stopped | Delivered> {
   const projectRoot = textOf(input["projectRoot"]);
   const d = createDeliver({
     workflow: "deliver-story",
-    maxFailures: 3,
-    planPhase: "Build",
-    failures: { spec: 0, implementation: 0 },
     projectRoot,
     storyArg,
   });

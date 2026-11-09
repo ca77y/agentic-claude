@@ -1,6 +1,6 @@
 # Deliver story
 
-How `deliver-story` takes a Linear issue to a GitHub pull request (PR) whose review is clean. It is built for non-simple stories, and it spends the most on the how and on validation. It follows the shared rules in [`DESIGN.md`](../DESIGN.md): the severity scale, recorded decisions, bounded loops, and run outcomes.
+How `deliver-story` takes a Linear issue to a GitHub pull request (PR) whose review is clean. It is built for non-simple stories, and it spends the most on the how and on validation. [`TRIVIAL.md`](TRIVIAL.md) and [`BUGFIX.md`](BUGFIX.md) cover the short flow. It follows the shared rules in [`DESIGN.md`](../DESIGN.md): the severity scale, recorded decisions, bounded loops, and run outcomes.
 
 ## Invariants
 

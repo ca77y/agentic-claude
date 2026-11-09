@@ -6,6 +6,8 @@ import {
   gate,
   isDeliverable,
   noProgress,
+  parseReproduction,
+  reproductionLine,
   renderBody,
   routeOf,
   waves,
@@ -187,5 +189,18 @@ describe("renderBody", () => {
     const text = renderBody({ ...body, unverified: [{ text: "race?" }], notValidated: [{ text: "no simulator" }] });
     assert.ok(text.includes("## Unverified findings\n\n- race?"));
     assert.ok(text.includes("## Not validated\n\n- no simulator"));
+  });
+});
+
+describe("the reproduction's ledger line", () => {
+  test("reads back what it wrote, with a timestamp in front", () => {
+    const r = { steps: ["run add(1, 1)", 'see "0"'], observed: "got 0\nthen stop" };
+    assert.deepEqual(parseReproduction(`2026-11-09T10:00:00Z ${reproductionLine(r)}`), r);
+  });
+
+  test("reads nothing from a line that isn't one", () => {
+    assert.equal(parseReproduction(""), null);
+    assert.equal(parseReproduction("reproduced {broken"), null);
+    assert.equal(parseReproduction('reproduced {"steps":"x","observed":"y"}'), null);
   });
 });

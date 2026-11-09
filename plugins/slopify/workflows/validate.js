@@ -182,38 +182,6 @@ function pusherSchema(notes = {}) {
 }
 
 // src/slopify/lib/deliver.ts
-var CODER_SCHEMA = {
-  type: "object",
-  required: ["changed", "tests", "ran", "revision", "open", "specMismatch"],
-  properties: {
-    changed: { ...STRINGS, description: "Paths changed, relative to the worktree root" },
-    tests: { ...STRINGS, description: "Test paths added or changed" },
-    ran: { ...STRINGS, description: "Each command and its result" },
-    revision: {
-      type: "string",
-      description: "The revision left, as the brief defines it"
-    },
-    open: STRINGS,
-    specMismatch: {
-      type: "string",
-      description: "Why the spec cannot be implemented as written, or an empty string when it can"
-    },
-    steps: STRINGS,
-    observed: { type: "string" },
-    measurements: {
-      type: "array",
-      items: {
-        type: "object",
-        required: ["claim", "value", "command"],
-        properties: {
-          claim: { type: "string" },
-          value: { type: "string" },
-          command: { type: "string" }
-        }
-      }
-    }
-  }
-};
 var PUSHER_SCHEMA = pusherSchema({ reference: "A commit sha, PR URL or path, card id, or worktree path" });
 var list = (items) => items?.length ? items.map((x) => `- ${x}`).join("\n") : "- none";
 var clean = (v) => absent(v) ? "" : (v ?? "").trim();
@@ -395,16 +363,19 @@ var DOCS_SCHEMA = {
   required: ["changed"],
   properties: { changed: { ...STRINGS, description: "Documents changed, relative to the worktree root" } }
 };
+var checksBrief = (where, worktree) => `${where}
+In the worktree ${worktree}, run the Checks commands TESTING.md declares, and return each command's exit code and failing lines. Change nothing.`;
 async function runValidation(o) {
   phase("Validate");
   const categorized = o.criteria.filter((c) => c.category !== "uncategorized");
   const toRun = o.focus.length > 0 ? categorized.filter((c) => o.focus.includes(c.id)) : categorized;
   const [checks, validated] = await parallel([
-    () => agent(
-      `${o.where}
-In the worktree ${o.worktree}, run the Checks commands TESTING.md declares, and return each command's exit code and failing lines. Change nothing.`,
-      { agentType: "slopify:checks", label: "checks", phase: "Validate", schema: CHECKS_SCHEMA }
-    ),
+    () => o.checks === false ? Promise.resolve({ commands: [] }) : agent(checksBrief(o.where, o.worktree), {
+      agentType: "slopify:checks",
+      label: "checks",
+      phase: "Validate",
+      schema: CHECKS_SCHEMA
+    }),
     () => (
       // With no criteria at all, as when review-pr runs on a PR with no spec, there is nothing to drive the app for.
       o.criteria.length === 0 ? Promise.resolve({ results: [], uncategorizedSetting: "" }) : agent(

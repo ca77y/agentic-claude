@@ -16,4 +16,4 @@ Configuring an operation never authorizes running it. If a choice would broaden 
 
 Each validation is a new `Agent` dispatch, never a `SendMessage` continuation, so its verdict is independent of the production. Allow three attempts per outcome; on the third failure, stop and return the approaches, why each failed, and what you need.
 
-Report the created and updated paths, the existing content preserved, the validation evidence, and remaining gaps, including a missing `Deliverable` label and anything the testing harness doesn't run.
+Report the created and updated paths, the existing content preserved, the validation evidence, and remaining gaps, including a missing `Deliverable` or `Unreproducible` label and anything the testing harness doesn't run.

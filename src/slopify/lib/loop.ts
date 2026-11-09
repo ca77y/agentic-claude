@@ -1,6 +1,6 @@
 // The build and validate loop deliver-story and review-pr share: an outer loop over the whole story, with one coder and
 // qa inner loop per change. docs/deliver/STORY.md describes it. All of its control flow comes from rules.ts.
-import { LENS_SCHEMA, lens, STRINGS, type Answers, type LensResult } from "./family.ts";
+import { LENS_SCHEMA, lens, scout, STRINGS, type Answers, type LensResult } from "./family.ts";
 import {
   NO_WRITES,
   callCoder,
@@ -32,7 +32,7 @@ import {
 } from "./rules.ts";
 import { DECISIONS, type Build, type Criterion, type RecordedDecision, type Task, type Validate } from "./spec.ts";
 
-export type Run = Deliver<"spec" | "implementation">;
+export type Run = Deliver;
 
 /** An agent that died, or a write the forge refused. It ends the run as a halt, because no later step can use it. */
 export class Halt extends Error {
@@ -212,6 +212,8 @@ interface Change {
   task?: Task;
   criteria: readonly Criterion[];
   item?: OpenItem;
+  /** What to deliver when no task or problem says it: a small flow's first change. */
+  assignment?: string;
 }
 interface CriterionState extends CriterionRow {
   setting: string;
@@ -236,6 +238,8 @@ export interface LoopInput {
   startAtReview: number;
   /** The spec's tasks are already built, so the first round starts at validation. */
   built: boolean;
+  /** The short flow for a trivial story or a bug: no spec, and what the first test has to state. */
+  small?: { firstTest: string; reproduced?: readonly Listed[] };
   /** Advisors and the writer revise the spec for these problems, and return the tasks to run again. */
   reviseSpec?: (problems: readonly string[]) => Promise<{ build: Build; validate: Validate; rerun: Task[] }>;
 }
@@ -277,6 +281,8 @@ interface Loop extends LoopInput {
   halted: Halt | null;
 }
 
+const checksBrief = (where: string, worktree: string): string =>
+  `${where}\nIn the worktree ${worktree}, run the Checks commands TESTING.md declares, and return each command's exit code and failing lines. Change nothing.`;
 const worktreeOf = (l: Loop): string => l.d.state.worktree;
 const rowsOf = (l: Loop): CriterionState[] => Object.values(l.rows);
 
@@ -328,6 +334,7 @@ function changeBrief(l: Loop, c: Change): string {
   return [
     `${l.where}\nWork in the worktree ${worktreeOf(l)}.`,
     l.build?.shared.length ? `Constraints every task follows:\n${list(l.build.shared)}` : "",
+    c.assignment ?? "",
     c.task
       ? `Your task (${c.task.id}): ${c.task.todo}\nFiles you may write:\n${list(c.task.files)}\nReuse, don't rebuild:\n${list(c.task.reuse)}\nCreate:\n${list(c.task.create)}`
       : "",
@@ -379,7 +386,6 @@ ${history}
 Check that the fix delivers the behavior asked for and doesn't merely satisfy the test, for example by special-casing the test's input. Check that the change stays within its criterion or problem. Any failed check is a blocking finding. Set testAtFault when the test is what has to change.`;
 }
 
-// Test, fix, validate. Returns what's still wrong after the last try, or an empty string.
 function fixPrompt(l: Loop, c: Change, cycle: CycleTest, lastFailure: string): string {
   const assignment =
     cycle.paths.length > 0
@@ -401,37 +407,67 @@ async function qaOf(l: Loop, c: Change, cycle: CycleTest) {
   );
 }
 
+// The small flow runs the project's checks inside the inner loop; the story flow runs them once a round.
+async function failingChecks(l: Loop): Promise<string> {
+  if (!l.small) return "";
+  const brief = checksBrief(l.where, worktreeOf(l));
+  const ran = must(
+    await agent(brief, {
+      agentType: "slopify:checks",
+      label: "checks",
+      phase: "Build",
+      schema: CHECKS_SCHEMA,
+    }),
+    "build",
+    "The project's checks.",
+  );
+  const failed = ran.commands.filter((x) => x.exitCode !== 0);
+  const lines = failed.map((x) => `${x.command}: ${x.failingLines}`);
+  return lines.join("\n");
+}
+
+interface TryResult {
+  /** What is still wrong; empty when this try delivered the change. */
+  reason: string;
+  rewriteTest: boolean;
+}
+
+// One fix, and whatever validates it.
+async function tryFix(l: Loop, c: Change, cycle: CycleTest, lastFailure: string, attempt: number): Promise<TryResult> {
+  const fix = must(
+    await callCoder(
+      fixPrompt(l, c, cycle, lastFailure),
+      `${c.id}: fix${attempt > 1 ? ` (try ${String(attempt)})` : ""}`,
+      "Build",
+      FIX_SCHEMA,
+    ),
+    "build",
+    `A fix for ${c.id}.`,
+  );
+  l.decisions.push(...fix.decisions);
+  if (fix.testProblem) return { reason: fix.testProblem, rewriteTest: true };
+  if (fix.changed.length > 0) await commit(l, fix.changed, `implement ${c.id}`);
+  l.changedThisRound.push(...fix.changed);
+  const failing = await failingChecks(l);
+  if (failing) return { reason: failing, rewriteTest: false };
+  // A small flow's qa runs once, on its first change; a review fix there has only the checks.
+  if (l.small && l.round > 0) return { reason: "", rewriteTest: false };
+  const verdict = await qaOf(l, c, cycle);
+  if (verdict.verdict === "pass") return { reason: "", rewriteTest: false };
+  const reason = verdict.findings.map((f) => `${f.location}: ${f.problem}`).join("\n") || verdict.limits;
+  return { reason, rewriteTest: verdict.testAtFault };
+}
+
+// Test, fix, validate. Returns what's still wrong after the last try, or an empty string.
 async function runChange(l: Loop, c: Change): Promise<string> {
-  let test: CycleTest | null = null;
-  let reason = "";
-  let rewriteTest = true;
+  let test = await writeTest(l, c, "");
+  let last: TryResult = { reason: "", rewriteTest: false };
   for (let attempt = 1; attempt <= MAX_INNER_TRIES; attempt += 1) {
-    if (rewriteTest) test = await writeTest(l, c, reason);
-    const cycle = must(test, "build", `A test for ${c.id}.`);
-    const fix = must(
-      await callCoder(
-        fixPrompt(l, c, cycle, rewriteTest ? "" : reason),
-        `${c.id}: fix${attempt > 1 ? ` (try ${String(attempt)})` : ""}`,
-        "Build",
-        FIX_SCHEMA,
-      ),
-      "build",
-      `A fix for ${c.id}.`,
-    );
-    l.decisions.push(...fix.decisions);
-    if (fix.testProblem) {
-      reason = fix.testProblem;
-      rewriteTest = true;
-      continue;
-    }
-    if (fix.changed.length > 0) await commit(l, fix.changed, `implement ${c.id}`);
-    l.changedThisRound.push(...fix.changed);
-    const verdict = await qaOf(l, c, cycle);
-    if (verdict.verdict === "pass") return "";
-    reason = verdict.findings.map((f) => `${f.location}: ${f.problem}`).join("\n") || verdict.limits;
-    rewriteTest = verdict.testAtFault;
+    if (last.rewriteTest) test = await writeTest(l, c, last.reason);
+    last = await tryFix(l, c, test, last.rewriteTest ? "" : last.reason, attempt);
+    if (!last.reason) return "";
   }
-  return reason;
+  return last.reason;
 }
 
 // ---- Build ------------------------------------------------------------------
@@ -524,13 +560,30 @@ ${NO_WRITES}`,
   if (w.changed.length > 0) await commit(l, w.changed, "update the docs the change affects");
 }
 
+function firstChanges(l: Loop): Change[] {
+  if (!l.small) return (l.build?.tasks ?? []).map((t) => changeOfTask(l, t));
+  const assignment = `Deliver this:\n<<<ISSUE\n${l.story}\nISSUE>>>\n\nThe first test ${l.small.firstTest}`;
+  return [{ id: "change", files: [], criteria: [], assignment }];
+}
+
+// With no spec to list them, a scout finds the documents this round's diff makes untrue, and an empty list skips the writer.
+async function findDocs(l: Loop): Promise<void> {
+  if (!l.small || l.changedThisRound.length === 0) return;
+  const found = await scout(
+    "scout-docs",
+    `${l.where}\nIn the worktree ${worktreeOf(l)}, read the diff of these paths, and find the documents it makes untrue or leaves incomplete. Report one evidence item per document, with source set to its path relative to the worktree root, and none when no document is affected.\n${list(l.changedThisRound)}`,
+    { label: "find affected docs", phase: "Build" },
+  );
+  l.docs = must(found, "build", "The documents the change affects.").evidence.map((e) => e.source);
+}
+
 async function buildRound(l: Loop): Promise<void> {
   phase("Build");
   const openItems = l.open;
   l.open = [];
   l.changedThisRound = [];
   for (const item of openItems) countFix(l, item);
-  const first = l.round === 0 ? (l.build?.tasks ?? []).map((t) => changeOfTask(l, t)) : [];
+  const first = l.round === 0 ? firstChanges(l) : [];
   const fromSpec = await reviseSpec(
     l,
     openItems.filter((i) => i.route === "revise-spec"),
@@ -541,6 +594,7 @@ async function buildRound(l: Loop): Promise<void> {
   const changes = [...first, ...fromSpec, ...fixes];
   l.affected = unique(changes.flatMap((c) => c.criteria.map((x) => x.id)));
   await runChanges(l, changes);
+  await findDocs(l);
   await updateDocs(
     l,
     openItems.filter((i) => i.route === "writer"),
@@ -563,16 +617,22 @@ export async function runValidation(o: {
   /** Ids to run again; empty runs every criterion. */
   focus: readonly string[];
   changed: readonly string[];
+  /** The small flow already ran them in its inner loop. */
+  checks?: boolean;
 }): Promise<ValidatedRun> {
   phase("Validate");
   const categorized = o.criteria.filter((c) => c.category !== "uncategorized");
   const toRun = o.focus.length > 0 ? categorized.filter((c) => o.focus.includes(c.id)) : categorized;
   const [checks, validated] = await parallel([
     () =>
-      agent(
-        `${o.where}\nIn the worktree ${o.worktree}, run the Checks commands TESTING.md declares, and return each command's exit code and failing lines. Change nothing.`,
-        { agentType: "slopify:checks", label: "checks", phase: "Validate", schema: CHECKS_SCHEMA },
-      ),
+      o.checks === false
+        ? Promise.resolve({ commands: [] })
+        : agent(checksBrief(o.where, o.worktree), {
+            agentType: "slopify:checks",
+            label: "checks",
+            phase: "Validate",
+            schema: CHECKS_SCHEMA,
+          }),
     () =>
       // With no criteria at all, as when review-pr runs on a PR with no spec, there is nothing to drive the app for.
       o.criteria.length === 0
@@ -677,7 +737,7 @@ ${p.text}
 ${criterion ? `\nThe criterion: ${criterion.wording}` : ""}
 
 ${SEVERITY_RUBRIC}
-${RECURRENCE_RUBRIC}
+${l.small ? "The ruling is none." : RECURRENCE_RUBRIC}
 
 Earlier rulings:
 ${list(l.rulings)}
@@ -819,6 +879,7 @@ function body(l: Loop): string {
         .filter((d) => d.affectsAcceptance)
         .map((d) => ({ text: d.question, detail: `Chose: ${d.choice}. Why: ${d.rationale}` })),
     ],
+    ...(l.small?.reproduced && { reproduced: l.small.reproduced }),
     criteria: rowsOf(l),
     assumptions: l.decisions.filter((d) => !d.affectsAcceptance).map((d) => `${d.question} ${d.choice}`),
     unverified: l.unverified,
@@ -943,11 +1004,31 @@ async function finish(l: Loop, ready: boolean): Promise<void> {
 
 // ---- The outer loop ---------------------------------------------------------
 
+// The app runs before the PR opens, and again only if that run failed; a review fix has only the checks.
+async function validateSmall(l: Loop): Promise<void> {
+  if (l.round > 0 && l.affected.length === 0) return;
+  const v = await runValidation({
+    where: l.where,
+    worktree: worktreeOf(l),
+    criteria: l.validate?.criteria ?? [],
+    focus: [],
+    changed: [],
+    checks: false,
+  });
+  for (const r of v.rows) l.rows[r.id] = r;
+  for (const p of v.problems) {
+    l.open.push({ problem: p, route: "coder", severity: "blocker", fingerprint: p.text, reason: "" });
+  }
+}
+
 async function round(l: Loop, last: boolean): Promise<void> {
   if (l.round > 0 || !l.built) await buildRound(l);
-  const problems = await validateRound(l);
-  await judgeProblems(l, problems, "Judge");
-  await gateway(l);
+  if (l.small) {
+    await validateSmall(l);
+  } else {
+    await judgeProblems(l, await validateRound(l), "Judge");
+    await gateway(l);
+  }
   await pushRound(l, last);
 }
 
@@ -1024,4 +1105,18 @@ async function endLoop(l: Loop, ready: boolean): Promise<LoopResult> {
     draftReasons: ready ? [] : draftReasons(l),
     decisions: l.decisions.filter((d) => d.affectsAcceptance).map((d) => d.id),
   };
+}
+
+/** A short account of how the run ended, for the session to relay. */
+export function reportOf(workflowName: string, r: LoopResult, specDir = ""): string {
+  return [
+    `${workflowName} finished: the PR is ${r.status === "ready" ? "ready for review" : "a draft"}.`,
+    `PR: ${r.pr}.`,
+    specDir ? `Spec: ${specDir}.` : "",
+    `Fix rounds: ${String(r.rounds)}. Review: ${r.review}.`,
+    r.draftReasons.length > 0 ? `Why it is a draft:\n${r.draftReasons.map((x) => `- ${x.text}`).join("\n")}` : "",
+    r.decisions.length > 0 ? `Decisions to confirm: ${r.decisions.join(", ")}.` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
 }

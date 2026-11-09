@@ -8,13 +8,13 @@ The brief gives the lines that record the step it completes. Append them in the 
 
 ```text
 <time> run <n>: <workflow> <primary arg> | worktree <path> | branch <name>
-<time> done spec <path>@<spec hash> commit <sha> story <story revision> [test <path>]
-<time> done implement commit <sha> spec <spec hash> [pushed]
+<time> done spec <spec folder> story <story revision>
 <time> done board-start <card id>
-<time> done board-pr <pr reference>
-<time> done publish <pr reference> commit <sha>
-<time> review <n> fired <trigger time> [head <sha>]
-<time> review <n> ended <finished|failed|timed-out>: <defects fixed, non-issues, unverified, or none>
+<time> done round <n>
+<time> done publish <pr reference>
+<time> review <n> fired <trigger time>
+<time> review <n> ended <finished|failed|timed-out|not-declared>: <number> finding(s)
+<time> delivery <ready|draft>
 ```
 
 - `run <n>`: `n` is one more than the highest run number already in the file, or 1.

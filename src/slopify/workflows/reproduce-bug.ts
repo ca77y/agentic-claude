@@ -29,6 +29,7 @@ import {
 } from "../lib/gates.ts";
 import { answersOf, startInput, textOf, whereOf, type NotStarted } from "../lib/input.ts";
 import { measuringCoderSchema, pusherSchema, writerSchema } from "../lib/schemas.ts";
+import { parseReproduction, reproductionLine } from "../lib/rules.ts";
 import { show, slugify, withoutTrailing } from "../lib/text.ts";
 
 export const meta = {
@@ -36,7 +37,7 @@ export const meta = {
   description:
     "Reproduce a reported bug in an ignored reproduction directory without changing production code, then file a Bug card with evidence, steps to reproduce, expected outcome, and observed outcome, each validated by a fresh lens",
   whenToUse:
-    "Run only when the user invokes /slopify:reproduce-bug or asks for the slopify reproduce-bug workflow. Args: {report, projectRoot?, answers?}, or the report as a plain string; projectRoot defaults to the session project directory, and answers maps a need id to its answer when rerunning.",
+    "Run only when the user invokes /slopify:reproduce-bug or asks for the slopify reproduce-bug workflow; deliver-bugfix also runs it as its first step. Args: {report, projectRoot?, answers?, autonomous?}, or the report as a plain string; projectRoot defaults to the session project directory, answers maps a need id to its answer when rerunning, and autonomous: true means no human is available, so it decides what it would otherwise ask and reproduces a bug that already has a card.",
   phases: [
     { title: "Locate", detail: "scout-card and scout-related-cards, then scout-checkpoint" },
     { title: "Gather", detail: "scout-code, scout-tests, and scout-history" },
@@ -97,6 +98,7 @@ interface Verdict {
 }
 
 type Stopped = Halted<Checkpoint>;
+export type ReproduceResult = NotStarted | Stopped | Done;
 interface Done {
   status: "done";
   workflow: string;
@@ -105,6 +107,8 @@ interface Done {
   card: string;
   issue: string | null;
   reproduction: string | null;
+  steps: string[];
+  observed: string;
   verdicts: Verdict[];
   filed: boolean;
 }
@@ -112,6 +116,9 @@ interface Done {
 // The state one run carries between its steps.
 interface Ctx extends RunLog<Checkpoint> {
   report: string;
+  autonomous: boolean;
+  /** The card that already reports this bug, which a hands-free run reproduces instead of filing another. */
+  existingCard: string;
   answers: Answers;
   where: string;
   verdicts: Verdict[];
@@ -182,6 +189,9 @@ Report: ${ctx.report}`,
   ]);
 }
 
+// Beside the reproduction directory, never in it, so it can't change the reproduction's digest.
+const ledgerOf = (ctx: Ctx): string => `${ctx.reproDir}.ledger.md`;
+
 async function readCheckpoint(ctx: Ctx, relatedR: ScoutResult | null | undefined): Promise<ScoutResult | null> {
   let cp: ScoutResult | null = null;
   for (let i = 1; i <= MAX_FAILURES && !cp; i++) {
@@ -194,6 +204,7 @@ Report where a reproduce-bug run stands from its durable checkpoints. The run's 
 
 Keys:
 - repro-dir: present only when the directory holds a reproduction: a runnable script or test, and the notes file recording its steps and observed output. Its value is the directory's absolute path, then "@", then its revision, computed as: ${REPRO_REVISION}
+- repro-ledger: the last line of ${ledgerOf(ctx)} that contains the word reproduced; omit when there is none.
 - bug-card: the identifier of an existing Bug card that reports this same bug, read through the board declaration; omit when there is none. The related-cards search found: ${fact(relatedR, "bug-card") || "none"}
 
 Report: ${ctx.report}`,
@@ -410,7 +421,7 @@ Reproduction steps: ${ctx.reproSteps.length > 0 ? ctx.reproSteps.join(" | ") : "
 Reproduction observed: ${ctx.reproObserved || "see the notes file in the reproduction directory"}
 
 Evidence:
-${ctx.evidenceText}${settledText(settled)}`;
+${ctx.evidenceText}${settledText(settled)}${ctx.autonomous ? "\n\nNo human is available. Decide what you would otherwise ask, from the reproduction and the evidence, and record it as a labelled assumption. Leave openDecisions empty." : ""}`;
 }
 
 // What the writer's questions and blockers leave for the user; null when the run can go on.
@@ -463,7 +474,7 @@ async function writeIssue(ctx: Ctx, why: string, label: string): Promise<Stopped
         schema: WRITER_SCHEMA,
       }),
     );
-    const early = writerStop(ctx, w, settledOpen);
+    const early = writerStop(ctx, w, ctx.autonomous ? [] : settledOpen);
     if (early) return early;
     if (w && draftOk(ctx, w)) {
       ctx.issueRev = textOf(w.revision);
@@ -597,8 +608,10 @@ File the issue at ${ctx.issuePath}, revision ${ctx.issueRev}, as a Bug card, wit
   }
 }
 
-function newCtx(report: string, projectRoot: string, answers: Answers): Ctx {
+function newCtx(report: string, projectRoot: string, answers: Answers, autonomous: boolean): Ctx {
   return {
+    autonomous,
+    existingCard: "",
     report,
     answers,
     where: whereOf(projectRoot),
@@ -645,8 +658,31 @@ function standing(
   const reproMatch = parseSpec(fact(cp, "repro-dir"));
   const reproHeld = !!reproMatch && withoutTrailing(reproMatch.path, "/").endsWith(ctx.reproRel);
   if (bugCard) ctx.checkpoint.bugCard = bugCard;
-  if (reproHeld) ctx.checkpoint.reproduction = ctx.reproDir;
+  if (reproHeld) {
+    ctx.checkpoint.reproduction = ctx.reproDir;
+    const kept = parseReproduction(fact(cp, "repro-ledger"));
+    if (kept) {
+      ctx.reproSteps = kept.steps;
+      ctx.reproObserved = kept.observed;
+    }
+  }
   return { bugCard, heldRev: reproHeld ? reproMatch.hash : null };
+}
+
+async function recordReproduction(ctx: Ctx): Promise<void> {
+  await agent(
+    `${ctx.where}
+
+Append this one line to ${ledgerOf(ctx)}, exactly as written, with the current time in front; create the file if it is absent. Perform no other operation.
+
+${reproductionLine({ steps: ctx.reproSteps, observed: ctx.reproObserved })}`,
+    {
+      agentType: "slopify:pusher",
+      label: "record the reproduction",
+      phase: "Validate reproduction",
+      schema: PUSHER_SCHEMA,
+    },
+  );
 }
 
 // Gather, reproduce, report, and file, once no Bug card reports this bug yet.
@@ -667,6 +703,24 @@ async function reproduceAndFile(
   const reproStop = await validateRepro(ctx);
   if (reproStop) return reproStop;
   done(ctx, "validate-repro");
+  if (heldRev === null) await recordReproduction(ctx);
+
+  // The card already says what is wrong, so a hands-free run needs only the reproduction.
+  if (ctx.existingCard) {
+    return {
+      status: "done",
+      workflow: NAME,
+      skipped: ctx.skipped,
+      attempts: ctx.attempts,
+      card: ctx.existingCard,
+      issue: null,
+      reproduction: ctx.reproDir,
+      steps: ctx.reproSteps,
+      observed: ctx.reproObserved,
+      verdicts: ctx.verdicts,
+      filed: false,
+    };
+  }
 
   phase("Report");
   ctx.settledBlockers = answeredBlockers("issue-blocker", ctx.answers);
@@ -694,6 +748,8 @@ async function reproduceAndFile(
     card,
     issue: ctx.issuePath,
     reproduction: ctx.reproDir,
+    steps: ctx.reproSteps,
+    observed: ctx.reproObserved,
     verdicts: ctx.verdicts,
     filed: true,
   };
@@ -708,7 +764,12 @@ export default async function run(): Promise<NotStarted | Stopped | Done> {
   if ("status" in started) return started;
   const projectRoot = withoutTrailing(textOf(started.input["projectRoot"]), "/");
 
-  const ctx = newCtx(started.subject, projectRoot, answersOf(started.input["answers"]));
+  const ctx = newCtx(
+    started.subject,
+    projectRoot,
+    answersOf(started.input["answers"]),
+    started.input["autonomous"] === true,
+  );
   const [cardR, relatedR] = await locateCards(ctx);
   placeRepro(ctx, projectRoot, cardR);
 
@@ -726,7 +787,9 @@ export default async function run(): Promise<NotStarted | Stopped | Done> {
   done(ctx, "locate");
 
   const { bugCard, heldRev } = standing(ctx, cp, relatedR);
-  if (bugCard) {
+  if (bugCard && ctx.autonomous) {
+    ctx.existingCard = bugCard;
+  } else if (bugCard) {
     // A Bug card already reports this bug: nothing to reproduce or file.
     for (const s of ["gather", "reproduce", "validate-repro", "report", "validate-report", "file"]) skip(ctx, s);
     return {
@@ -737,6 +800,8 @@ export default async function run(): Promise<NotStarted | Stopped | Done> {
       card: bugCard,
       issue: null,
       reproduction: heldRev === null ? null : ctx.reproDir,
+      steps: [],
+      observed: "",
       verdicts: ctx.verdicts,
       filed: false,
     };

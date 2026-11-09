@@ -1,7 +1,7 @@
 export const meta = {
   "name": "reproduce-bug",
   "description": "Reproduce a reported bug in an ignored reproduction directory without changing production code, then file a Bug card with evidence, steps to reproduce, expected outcome, and observed outcome, each validated by a fresh lens",
-  "whenToUse": "Run only when the user invokes /slopify:reproduce-bug or asks for the slopify reproduce-bug workflow. Args: {report, projectRoot?, answers?}, or the report as a plain string; projectRoot defaults to the session project directory, and answers maps a need id to its answer when rerunning.",
+  "whenToUse": "Run only when the user invokes /slopify:reproduce-bug or asks for the slopify reproduce-bug workflow; deliver-bugfix also runs it as its first step. Args: {report, projectRoot?, answers?, autonomous?}, or the report as a plain string; projectRoot defaults to the session project directory, answers maps a need id to its answer when rerunning, and autonomous: true means no human is available, so it decides what it would otherwise ask and reproduces a bug that already has a card.",
   "phases": [
     {
       "title": "Locate",
@@ -420,6 +420,20 @@ function pusherSchema(notes = {}) {
   };
 }
 
+// src/slopify/lib/rules.ts
+var reproductionLine = (r) => `reproduced ${JSON.stringify(r)}`;
+var isReproduction = (v) => typeof v === "object" && v !== null && "steps" in v && Array.isArray(v.steps) && "observed" in v;
+function parseReproduction(line) {
+  const at = line.indexOf("{");
+  if (at === -1) return null;
+  try {
+    const v = JSON.parse(line.slice(at));
+    return isReproduction(v) ? v : null;
+  } catch {
+    return null;
+  }
+}
+
 // src/slopify/lib/text.ts
 function withoutLeading(text, chars) {
   let t = text;
@@ -516,6 +530,7 @@ Report: ${ctx.report}`,
     )
   ]);
 }
+var ledgerOf = (ctx) => `${ctx.reproDir}.ledger.md`;
 async function readCheckpoint(ctx, relatedR) {
   let cp = null;
   for (let i = 1; i <= MAX_FAILURES && !cp; i++) {
@@ -528,6 +543,7 @@ Report where a reproduce-bug run stands from its durable checkpoints. The run's 
 
 Keys:
 - repro-dir: present only when the directory holds a reproduction: a runnable script or test, and the notes file recording its steps and observed output. Its value is the directory's absolute path, then "@", then its revision, computed as: ${REPRO_REVISION}
+- repro-ledger: the last line of ${ledgerOf(ctx)} that contains the word reproduced; omit when there is none.
 - bug-card: the identifier of an existing Bug card that reports this same bug, read through the board declaration; omit when there is none. The related-cards search found: ${fact(relatedR, "bug-card") || "none"}
 
 Report: ${ctx.report}`,
@@ -727,7 +743,7 @@ Reproduction steps: ${ctx.reproSteps.length > 0 ? ctx.reproSteps.join(" | ") : "
 Reproduction observed: ${ctx.reproObserved || "see the notes file in the reproduction directory"}
 
 Evidence:
-${ctx.evidenceText}${settledText(settled)}`;
+${ctx.evidenceText}${settledText(settled)}${ctx.autonomous ? "\n\nNo human is available. Decide what you would otherwise ask, from the reproduction and the evidence, and record it as a labelled assumption. Leave openDecisions empty." : ""}`;
 }
 function writerStop(ctx, w, settledOpen) {
   const blockers = decisionsOf("issue-blocker", w ? w.storyBlockers : []);
@@ -774,7 +790,7 @@ async function writeIssue(ctx, why, label) {
         schema: WRITER_SCHEMA
       })
     );
-    const early = writerStop(ctx, w, settledOpen);
+    const early = writerStop(ctx, w, ctx.autonomous ? [] : settledOpen);
     if (early) return early;
     if (w && draftOk(ctx, w)) {
       ctx.issueRev = textOf(w.revision);
@@ -908,8 +924,10 @@ File the issue at ${ctx.issuePath}, revision ${ctx.issueRev}, as a Bug card, wit
     }
   }
 }
-function newCtx(report, projectRoot, answers) {
+function newCtx(report, projectRoot, answers, autonomous) {
   return {
+    autonomous,
+    existingCard: "",
     report,
     answers,
     where: whereOf(projectRoot),
@@ -946,8 +964,30 @@ function standing(ctx, cp, relatedR) {
   const reproMatch = parseSpec(fact(cp, "repro-dir"));
   const reproHeld = !!reproMatch && withoutTrailing(reproMatch.path, "/").endsWith(ctx.reproRel);
   if (bugCard) ctx.checkpoint.bugCard = bugCard;
-  if (reproHeld) ctx.checkpoint.reproduction = ctx.reproDir;
+  if (reproHeld) {
+    ctx.checkpoint.reproduction = ctx.reproDir;
+    const kept = parseReproduction(fact(cp, "repro-ledger"));
+    if (kept) {
+      ctx.reproSteps = kept.steps;
+      ctx.reproObserved = kept.observed;
+    }
+  }
   return { bugCard, heldRev: reproHeld ? reproMatch.hash : null };
+}
+async function recordReproduction(ctx) {
+  await agent(
+    `${ctx.where}
+
+Append this one line to ${ledgerOf(ctx)}, exactly as written, with the current time in front; create the file if it is absent. Perform no other operation.
+
+${reproductionLine({ steps: ctx.reproSteps, observed: ctx.reproObserved })}`,
+    {
+      agentType: "slopify:pusher",
+      label: "record the reproduction",
+      phase: "Validate reproduction",
+      schema: PUSHER_SCHEMA
+    }
+  );
 }
 async function reproduceAndFile(ctx, cardR, heldRev) {
   await gather(ctx, cardR);
@@ -960,6 +1000,22 @@ async function reproduceAndFile(ctx, cardR, heldRev) {
   const reproStop = await validateRepro(ctx);
   if (reproStop) return reproStop;
   done(ctx, "validate-repro");
+  if (heldRev === null) await recordReproduction(ctx);
+  if (ctx.existingCard) {
+    return {
+      status: "done",
+      workflow: NAME,
+      skipped: ctx.skipped,
+      attempts: ctx.attempts,
+      card: ctx.existingCard,
+      issue: null,
+      reproduction: ctx.reproDir,
+      steps: ctx.reproSteps,
+      observed: ctx.reproObserved,
+      verdicts: ctx.verdicts,
+      filed: false
+    };
+  }
   phase("Report");
   ctx.settledBlockers = answeredBlockers("issue-blocker", ctx.answers);
   const draftStop = await writeIssue(
@@ -983,6 +1039,8 @@ async function reproduceAndFile(ctx, cardR, heldRev) {
     card,
     issue: ctx.issuePath,
     reproduction: ctx.reproDir,
+    steps: ctx.reproSteps,
+    observed: ctx.reproObserved,
     verdicts: ctx.verdicts,
     filed: true
   };
@@ -995,7 +1053,12 @@ async function run() {
   );
   if ("status" in started) return started;
   const projectRoot = withoutTrailing(textOf(started.input["projectRoot"]), "/");
-  const ctx = newCtx(started.subject, projectRoot, answersOf(started.input["answers"]));
+  const ctx = newCtx(
+    started.subject,
+    projectRoot,
+    answersOf(started.input["answers"]),
+    started.input["autonomous"] === true
+  );
   const [cardR, relatedR] = await locateCards(ctx);
   placeRepro(ctx, projectRoot, cardR);
   const cp = await readCheckpoint(ctx, relatedR);
@@ -1011,7 +1074,9 @@ async function run() {
   }
   done(ctx, "locate");
   const { bugCard, heldRev } = standing(ctx, cp, relatedR);
-  if (bugCard) {
+  if (bugCard && ctx.autonomous) {
+    ctx.existingCard = bugCard;
+  } else if (bugCard) {
     for (const s of ["gather", "reproduce", "validate-repro", "report", "validate-report", "file"]) skip(ctx, s);
     return {
       status: "done",
@@ -1021,6 +1086,8 @@ async function run() {
       card: bugCard,
       issue: null,
       reproduction: heldRev === null ? null : ctx.reproDir,
+      steps: [],
+      observed: "",
       verdicts: ctx.verdicts,
       filed: false
     };
