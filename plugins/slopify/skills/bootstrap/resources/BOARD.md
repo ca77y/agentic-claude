@@ -22,6 +22,7 @@ Configuration does not authorize execution; the user's request does. An operatio
 - Type and priority: {{TYPE_AND_PRIORITY}}
 - Dependencies: {{DEPENDENCIES}}
 - Body and acceptance criteria format: {{BODY_AND_ACCEPTANCE}}
+- Deliverable: the label `Deliverable` marks a card as written by the shaping process, and is added when that process files or updates it. Only a card with this label can be delivered.
 
 ## Statuses
 

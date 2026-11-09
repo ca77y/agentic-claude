@@ -16,4 +16,4 @@ Replace these tokens wherever they occur in newly copied files:
 
 Preserve `<% ... %>` Templater expressions in `_meta/templates/`; they are intentional. Resolve any tokens left unresolved in existing files.
 
-For an existing root `CLAUDE.md`, add a library entry to its layout when appropriate and merge `resources/root-claude-md-library-section.md` into the matching section. Preserve unrelated instructions and avoid duplicate sections. If no root file exists, report that no pointer was added.
+For an existing root `AGENTS.md` or `CLAUDE.md`, add a library entry to its layout when appropriate and merge `resources/root-claude-md-library-section.md` into the matching section. Preserve unrelated instructions and avoid duplicate sections. If no root file exists, report that no pointer was added.
