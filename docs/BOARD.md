@@ -18,9 +18,10 @@ Configuration does not authorize execution; the user's request does. An operatio
 
 ## Cards
 
-- Identity and spec naming: the issue identifier (`SMR-200`), shared by board, branch, PR, and spec. A spec is `docs/specs/<lowercase identifier>-<slug>.md`, for example `docs/specs/smr-200-card-content-access.md`.
+- Identity and spec naming: the issue identifier (`SMR-200`), shared by board, branch, PR, and spec. A spec is a folder, `docs/specs/<lowercase identifier>-<slug>/`, for example `docs/specs/smr-200-card-content-access/`.
 - Type and priority: exactly one of the labels `Bug`, `Improvement`, `Feature`; priority `1` Urgent, `2` High, `3` Medium, `4` Low.
-- Card, spec, and docs: a card holds the why and the what; a spec holds the how for one unit of work, is throwaway once the work lands, and is never kept current; durable knowledge belongs in `docs/`, outside `docs/specs/`.
+- Deliverable: the label `Deliverable` marks a card as written by the shaping process, and is added when that process files or updates it. Only a card with this label can be delivered.
+- Card, spec, and docs: a card holds the why and the what; a spec holds the how for one unit of work, is written and read by agents, stays in the repository as context for later failures, and is never kept current; humans compact or remove it. Durable knowledge belongs in `docs/`, outside `docs/specs/`.
 - Kinds of work: a story changes code and ends in a PR; a spike answers an open question, and any prototype it builds is throwaway and never merged.
 - Dependencies: Linear blocking relations (`blockedBy`, `blocks`). No sub-issues: one story is one issue and one PR.
 - Body and acceptance criteria format: the title is an action-verb story title; the description is a summary paragraph, then only the applicable sections of `## Why`, `## Scope`, `## Out of scope`, `## Acceptance criteria`, `## References`, with no `#` heading. Acceptance criteria are one observable behavior per line. Linear rewrites `-` bullets to `*` and wraps bare URLs in `<…>` on save; that is not a content change.
@@ -32,7 +33,7 @@ Configuration does not authorize execution; the user's request does. An operatio
 
 ## Delivery
 
-- When delivery starts: from `Backlog` or `Todo`, move the card to `In Progress`; asking for delivery is the user's readiness decision. In any other status, leave it, and report a card in `Done`, `Canceled`, or `Duplicate`. An archived card (`archivedAt` set) gets no card write during the delivery; report it. Delivery never refuses a card.
+- When delivery starts: from `Backlog` or `Todo`, move the card to `In Progress`; asking for delivery is the user's readiness decision. In any other status, leave it, and report a card in `Done`, `Canceled`, or `Duplicate`. An archived card (`archivedAt` set) gets no card write during the delivery; report it. Delivery refuses only a card without the `Deliverable` label.
 - When the PR opens: attach the PR, and move the card to `In Review` only if it is `In Progress`.
 - On a repair run: no card operation.
 
