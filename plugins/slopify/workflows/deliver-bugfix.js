@@ -237,8 +237,8 @@ var opRef = (r, name) => {
   const o = (r?.operations ?? []).find((x) => x.op.toLowerCase() === name);
   return o ? o.reference.trim() : "";
 };
-function callWriter(prompt, label, phaseTitle, schema) {
-  return agent(prompt, { agentType: "slopify:writer", label, phase: phaseTitle, schema });
+function callDocsWriter(prompt, label, phaseTitle, schema) {
+  return agent(prompt, { agentType: "slopify:writer-docs", label, phase: phaseTitle, schema });
 }
 function callCoder(prompt, label, phaseTitle, schema) {
   return agent(prompt, { agentType: "slopify:coder", label, phase: phaseTitle, schema });
@@ -445,18 +445,6 @@ var TASK = {
     create: { ...STRINGS, description: "What this task creates" }
   }
 };
-var BUILD = {
-  type: "object",
-  required: ["shared", "tasks", "docs"],
-  properties: {
-    shared: {
-      ...STRINGS,
-      description: "Constraints and interfaces every task of this story must follow; never a repeated project rule"
-    },
-    tasks: { type: "array", items: TASK },
-    docs: { ...STRINGS, description: "Documents making claims about the area the change touches; can be empty" }
-  }
-};
 var DECISION = {
   type: "object",
   required: ["id", "question", "choice", "rationale", "reversible", "affectsAcceptance"],
@@ -469,7 +457,19 @@ var DECISION = {
     affectsAcceptance: { type: "boolean", description: "True when the choice changes behavior a criterion describes" }
   }
 };
-var DECISIONS = { type: "array", items: DECISION };
+var BUILD = {
+  type: "object",
+  required: ["shared", "tasks", "docs", "decisions"],
+  properties: {
+    shared: {
+      ...STRINGS,
+      description: "Constraints and interfaces every task of this story must follow; never a repeated project rule"
+    },
+    tasks: { type: "array", items: TASK },
+    docs: { ...STRINGS, description: "Documents making claims about the area the change touches; can be empty" },
+    decisions: { type: "array", items: DECISION }
+  }
+};
 function parsed(text) {
   try {
     return JSON.parse(text);
@@ -509,22 +509,28 @@ function stopOf(d, error) {
 }
 var TEST_SCHEMA = {
   type: "object",
-  required: ["tests", "failingOutput", "noTest", "decisions"],
+  required: ["tests", "failingOutput", "noTest", "specProblem"],
   properties: {
     tests: { ...STRINGS, description: "Test paths written or changed, relative to the worktree root" },
     failingOutput: { type: "string", description: "The test's failing output on the current code" },
     noTest: { type: "string", description: "Why the behavior can't be expressed as a test; empty when it can" },
-    decisions: DECISIONS
+    specProblem: {
+      type: "string",
+      description: "What the brief doesn't settle or can't deliver as written; empty when none"
+    }
   }
 };
 var FIX_SCHEMA = {
   type: "object",
-  required: ["changed", "ran", "testProblem", "decisions"],
+  required: ["changed", "ran", "testProblem", "specProblem"],
   properties: {
     changed: { ...STRINGS, description: "Paths changed, relative to the worktree root" },
     ran: { ...STRINGS, description: "Each command and its result" },
     testProblem: { type: "string", description: "Why the test is wrong; empty when it isn't" },
-    decisions: DECISIONS
+    specProblem: {
+      type: "string",
+      description: "What the brief doesn't settle or can't deliver as written; empty when none"
+    }
   }
 };
 var QA_SCHEMA = {
@@ -691,7 +697,7 @@ ${criteria}` : "",
 ${c.item.problem.text}
 ${c.item.reason}` : "",
     answersText(l),
-    "If you have to choose something the brief doesn't settle, pick the most reasonable option, cite what grounds it, and report it in decisions. Don't stop to ask.",
+    "Implement what this says, and make no decisions. If it doesn't settle something, or can't be delivered as written, return specProblem and stop.",
     NO_WRITES
   ].filter(Boolean).join("\n\n");
 }
@@ -710,11 +716,11 @@ An earlier attempt showed the test has to change: ${reason}` : ""}`,
     "build",
     `A test for ${c.id}.`
   );
-  l.decisions.push(...t.decisions);
-  if (t.noTest || t.tests.length === 0) return { paths: [], commit: "", noTest: t.noTest };
+  if (t.specProblem) return { paths: [], commit: "", noTest: "", specProblem: t.specProblem };
+  if (t.noTest || t.tests.length === 0) return { paths: [], commit: "", noTest: t.noTest, specProblem: "" };
   l.testChanges.push(...t.tests);
   const sha = await commit(l, t.tests, `add a failing test for ${c.id}`);
-  return { paths: t.tests, commit: sha, noTest: "" };
+  return { paths: t.tests, commit: sha, noTest: "", specProblem: "" };
 }
 function qaBrief(l, c, test) {
   const history = test.commit ? `The test commit is ${test.commit}, and its protected paths are:
@@ -766,6 +772,17 @@ async function failingChecks(l) {
   const lines = failed.map((x) => `${x.command}: ${x.failingLines}`);
   return lines.join("\n");
 }
+function specStopped(l, c, problem) {
+  const route = l.reviseSpec ? "revise-spec" : "escalate";
+  listRouted(l, route, {
+    problem: { source: "the coder", location: c.id, text: problem },
+    route,
+    severity: "blocker",
+    fingerprint: `${c.id}|spec`,
+    reason: "The coder can't deliver this without making a decision."
+  });
+  return { reason: "", rewriteTest: false };
+}
 async function tryFix(l, c, cycle, lastFailure, attempt) {
   const fix = must(
     await callCoder(
@@ -777,7 +794,7 @@ async function tryFix(l, c, cycle, lastFailure, attempt) {
     "build",
     `A fix for ${c.id}.`
   );
-  l.decisions.push(...fix.decisions);
+  if (fix.specProblem) return specStopped(l, c, fix.specProblem);
   if (fix.testProblem) return { reason: fix.testProblem, rewriteTest: true };
   if (fix.changed.length > 0) await commit(l, fix.changed, `implement ${c.id}`);
   l.changedThisRound.push(...fix.changed);
@@ -794,6 +811,7 @@ async function runChange(l, c) {
   let last = { reason: "", rewriteTest: false };
   for (let attempt = 1; attempt <= MAX_INNER_TRIES; attempt += 1) {
     if (last.rewriteTest) test = await writeTest(l, c, last.reason);
+    if (test.specProblem) return specStopped(l, c, test.specProblem).reason;
     last = await tryFix(l, c, test, last.rewriteTest ? "" : last.reason, attempt);
     if (!last.reason) return "";
   }
@@ -863,7 +881,7 @@ async function updateDocs(l, problems) {
   if (l.changedThisRound.length === 0 && problems.length === 0) return;
   const problemLines = problems.map((i) => `${i.problem.location}: ${i.problem.text}`);
   const w = must(
-    await callWriter(
+    await callDocsWriter(
       `${l.where}
 Update these documents in the worktree ${worktreeOf(l)} so they describe the code as built. Every claim must be true against the code.
 ${list(l.docs)}
@@ -1322,7 +1340,7 @@ function freshLoop(input) {
     fixes: /* @__PURE__ */ new Map(),
     differently: /* @__PURE__ */ new Set(),
     rulings: [],
-    decisions: [],
+    decisions: input.build?.decisions ?? [],
     unverified: [],
     confirmations: [],
     knownDebt: [],

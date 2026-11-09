@@ -20,7 +20,7 @@ How the plugins are built. When the code changes a decision below, update it her
 - **Scouts and checks** run on haiku. Each has one small task whose answer can be checked: gather one kind of evidence, or test one property. They fan out widely, and each returns evidence with its claim.
 - **`designer`** runs on opus. It produces one full approach from a stance the script gives it, independently of the other designers.
 - **`judge`** runs on opus. Most dispatches rule on one item, such as one review finding or one validation verdict. A gateway dispatch checks a whole round before it is pushed. It confirms, overturns, or dismisses what a cheaper agent or the forge's reviewer reported, against the evidence and the rubric in its brief. It never downgrades a confirmed defect, and it never accepts a pass that lacks evidence.
-- **Producers** change files: `writer` for specs and documents, `coder` for code and tests. Both run on opus. Code is written test first: one dispatch commits a failing test, and a separate dispatch makes it pass without changing any committed test. `qa` checks the history for that.
+- **Producers** change files: `writer-spec` for specs, `writer-docs` for documents, `writer` for stories, bug reports, and findings, and `coder` for code and tests. All run on opus. `coder` only implements its brief and makes no decisions: what the brief leaves open goes back as a spec problem. Code is written test first: one dispatch commits a failing test, and a separate dispatch makes it pass without changing any committed test. `qa` checks the history for that.
 - **`qa`** runs on sonnet. It validates one `coder` change against what that change was meant to do, for example one fix against its finding.
 - **`validator`** runs on sonnet. It drives the running app as the project's `TESTING.md` describes, and returns per-criterion verdicts with evidence.
 - **Operations agents** act on the world outside the files. `pusher` performs every write the declarations bind. `watcher` waits on an external event.
@@ -43,12 +43,12 @@ Minor problems and nits go to the PR's Suggestions section. A pre-existing probl
 
 Each confirmed `blocker` or `major` has one kind:
 
-| Kind   | The problem                                          | Next step                                                                    |
-| ------ | ---------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `code` | The behavior is wrong                                | `coder` and `qa`, from a failing test that shows the problem                 |
-| `test` | The behavior is right, but the test or flow is wrong | `coder` and `qa`, starting by correcting the test                            |
-| `docs` | Documentation is untrue or missing                   | `writer`, with no test                                                       |
-| `spec` | The spec is wrong, so building it can't work         | The advisors and `writer` revise the spec, then the affected tasks run again |
+| Kind   | The problem                                          | Next step                                                                         |
+| ------ | ---------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `code` | The behavior is wrong                                | `coder` and `qa`, from a failing test that shows the problem                      |
+| `test` | The behavior is right, but the test or flow is wrong | `coder` and `qa`, starting by correcting the test                                 |
+| `docs` | Documentation is untrue or missing                   | `writer-docs`, with no test                                                       |
+| `spec` | The spec is wrong, so building it can't work         | The advisors and `writer-spec` revise the spec, then the affected tasks run again |
 
 Two kinds of problem aren't defects in the change. They have no severity, and no producer sees them:
 
@@ -63,7 +63,7 @@ An `unverified` finding doesn't block and goes in its own PR section. Whether a 
 
 ## Decisions
 
-- An agent that would ask a question instead picks the most reasonable option, cites what grounds the choice, and continues. Each choice becomes a decision with these fields: `id`, `question`, `choice`, `rationale`, `reversible`, and `affectsAcceptance`.
+- An agent that designs or writes a spec, and would ask a question, instead picks the most reasonable option, cites what grounds the choice, and continues. Each choice becomes a decision with these fields: `id`, `question`, `choice`, `rationale`, `reversible`, and `affectsAcceptance`.
 - A decision that changes behavior a criterion describes is listed as **Needs confirmation** in the PR and in the issue comment. It doesn't stop the run or keep the PR a draft. The human confirms it when reviewing the PR, and a wrong choice is corrected by a rerun with `answers`.
 - An irreversible action outside the story's scope is never taken on an assumption. Examples are a migration on shared data, deleting a public API, or changing production config. Only its reversible part is built, and the rest is recorded as deferred.
 - Producers have no field that halts the run. Only the halt conditions a workflow lists stop it.

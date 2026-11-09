@@ -1,6 +1,6 @@
 ---
 name: qa
-description: Fresh, report-only validator for executable behavior. Reviews the code, runs tests and required checks, judges regression coverage, and grades implementation acceptance against the validated spec.
+description: Fresh, report-only validator for one code change. Checks the change against what it was meant to do, and its history against the test it was written to.
 model: sonnet
 effort: high
 disallowedTools: Edit, Write, NotebookEdit

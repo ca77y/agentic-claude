@@ -57,6 +57,7 @@ const SPEC = {
     shared: [],
     tasks: [{ id: "t1", dependsOn: [], files: ["a.ts"], criteria: ["c1"], todo: "x", reuse: [], create: [] }],
     docs: [],
+    decisions: [],
   },
   validate: {
     criteria: [{ id: "c1", wording: "w", category: "UI", path: "p", evidence: "e", firstTest: "t" }],
@@ -74,7 +75,7 @@ const adviceOrAttack = (label: string): Reply => (label.startsWith("attack") ? L
 
 const DEFAULTS: Record<string, Script> = {
   designer: () => DESIGN,
-  writer: () => SPEC,
+  "writer-spec": () => SPEC,
   pusher: () => OK_PUSH,
   "check-claim": () => ({ holds: true, location: "a.ts:1", problem: "" }),
   "check-criterion": () => ({ holds: true, location: "c1", problem: "" }),
@@ -179,7 +180,7 @@ describe("the how phase", () => {
     assert.ok("exhausted" in r);
     assert.deepEqual(r.exhausted, ["can't work", "can't work"]);
     assert.equal(count("designer"), 6);
-    assert.equal(count("writer"), 0);
+    assert.equal(count("writer-spec"), 0);
   });
 
   test("revises the spec for a confirmed problem, then passes", async () => {
@@ -195,7 +196,7 @@ describe("the how phase", () => {
       }),
     );
     assert.ok("build" in r);
-    assert.equal(count("writer"), 2);
+    assert.equal(count("writer-spec"), 2);
   });
 
   test("halts on a blocker still open after every round", async () => {
@@ -214,7 +215,7 @@ describe("the how phase", () => {
   test("records a major still open after every round, and continues", async () => {
     const r = await how(happy({ "check-claim": () => ({ holds: false, location: "a.ts", problem: "gone" }) }));
     assert.ok("build" in r);
-    assert.ok(calls.some((c) => c.type === "writer" && c.prompt.includes("Record these open problems")));
+    assert.ok(calls.some((c) => c.type === "writer-spec" && c.prompt.includes("Record these open problems")));
   });
 
   test("ignores a dismissed problem", async () => {
@@ -225,7 +226,7 @@ describe("the how phase", () => {
       }),
     );
     assert.ok("build" in r);
-    assert.equal(count("writer"), 1);
+    assert.equal(count("writer-spec"), 1);
   });
 
   test("never treats a check that died as a pass", async () => {
@@ -263,8 +264,8 @@ describe("deliver-story's intake", () => {
 const SMALL_AGENTS: Record<string, Script> = {
   coder: (_t, label) =>
     label.endsWith(": test")
-      ? { tests: ["t.py"], failingOutput: "red", noTest: "", decisions: [] }
-      : { changed: ["calc.py"], ran: [], testProblem: "", decisions: [] },
+      ? { tests: ["t.py"], failingOutput: "red", noTest: "", specProblem: "" }
+      : { changed: ["calc.py"], ran: [], testProblem: "", specProblem: "" },
   checks: () => ({ commands: [{ command: "unit", exitCode: 0, failingLines: "" }] }),
   qa: () => ({ ...LENS_PASS, testAtFault: false }),
   validator: () => ({
@@ -341,7 +342,7 @@ describe("the small workflows", () => {
     Object.assign(globalThis, { args: "Add mul to calc.py" });
     await deliverTrivial();
     assert.equal(count("designer"), 0);
-    assert.equal(count("writer"), 0);
+    assert.equal(count("writer-spec"), 0);
     const first = calls.find((c) => c.label === "change: test");
     assert.ok(first?.prompt.includes("Add mul to calc.py"));
     assert.ok(first?.prompt.includes("states the new behavior"));

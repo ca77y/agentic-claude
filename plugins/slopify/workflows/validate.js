@@ -223,18 +223,6 @@ var TASK = {
     create: { ...STRINGS, description: "What this task creates" }
   }
 };
-var BUILD = {
-  type: "object",
-  required: ["shared", "tasks", "docs"],
-  properties: {
-    shared: {
-      ...STRINGS,
-      description: "Constraints and interfaces every task of this story must follow; never a repeated project rule"
-    },
-    tasks: { type: "array", items: TASK },
-    docs: { ...STRINGS, description: "Documents making claims about the area the change touches; can be empty" }
-  }
-};
 var DECISION = {
   type: "object",
   required: ["id", "question", "choice", "rationale", "reversible", "affectsAcceptance"],
@@ -247,7 +235,19 @@ var DECISION = {
     affectsAcceptance: { type: "boolean", description: "True when the choice changes behavior a criterion describes" }
   }
 };
-var DECISIONS = { type: "array", items: DECISION };
+var BUILD = {
+  type: "object",
+  required: ["shared", "tasks", "docs", "decisions"],
+  properties: {
+    shared: {
+      ...STRINGS,
+      description: "Constraints and interfaces every task of this story must follow; never a repeated project rule"
+    },
+    tasks: { type: "array", items: TASK },
+    docs: { ...STRINGS, description: "Documents making claims about the area the change touches; can be empty" },
+    decisions: { type: "array", items: DECISION }
+  }
+};
 function parsed(text) {
   try {
     return JSON.parse(text);
@@ -277,22 +277,28 @@ function must(value, step, what) {
 }
 var TEST_SCHEMA = {
   type: "object",
-  required: ["tests", "failingOutput", "noTest", "decisions"],
+  required: ["tests", "failingOutput", "noTest", "specProblem"],
   properties: {
     tests: { ...STRINGS, description: "Test paths written or changed, relative to the worktree root" },
     failingOutput: { type: "string", description: "The test's failing output on the current code" },
     noTest: { type: "string", description: "Why the behavior can't be expressed as a test; empty when it can" },
-    decisions: DECISIONS
+    specProblem: {
+      type: "string",
+      description: "What the brief doesn't settle or can't deliver as written; empty when none"
+    }
   }
 };
 var FIX_SCHEMA = {
   type: "object",
-  required: ["changed", "ran", "testProblem", "decisions"],
+  required: ["changed", "ran", "testProblem", "specProblem"],
   properties: {
     changed: { ...STRINGS, description: "Paths changed, relative to the worktree root" },
     ran: { ...STRINGS, description: "Each command and its result" },
     testProblem: { type: "string", description: "Why the test is wrong; empty when it isn't" },
-    decisions: DECISIONS
+    specProblem: {
+      type: "string",
+      description: "What the brief doesn't settle or can't deliver as written; empty when none"
+    }
   }
 };
 var QA_SCHEMA = {

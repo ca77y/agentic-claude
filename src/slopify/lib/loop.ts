@@ -4,8 +4,8 @@ import { LENS_SCHEMA, lens, scout, STRINGS, type Answers, type LensResult } from
 import {
   NO_WRITES,
   callCoder,
+  callDocsWriter,
   callPusher,
-  callWriter,
   list,
   need,
   opRef,
@@ -30,7 +30,7 @@ import {
   type Route,
   type Severity,
 } from "./rules.ts";
-import { DECISIONS, type Build, type Criterion, type RecordedDecision, type Task, type Validate } from "./spec.ts";
+import { type Build, type Criterion, type RecordedDecision, type Task, type Validate } from "./spec.ts";
 
 export type Run = Deliver;
 
@@ -59,23 +59,29 @@ export function stopOf(d: Run, error: unknown): Stopped {
 
 const TEST_SCHEMA = {
   type: "object",
-  required: ["tests", "failingOutput", "noTest", "decisions"],
+  required: ["tests", "failingOutput", "noTest", "specProblem"],
   properties: {
     tests: { ...STRINGS, description: "Test paths written or changed, relative to the worktree root" },
     failingOutput: { type: "string", description: "The test's failing output on the current code" },
     noTest: { type: "string", description: "Why the behavior can't be expressed as a test; empty when it can" },
-    decisions: DECISIONS,
+    specProblem: {
+      type: "string",
+      description: "What the brief doesn't settle or can't deliver as written; empty when none",
+    },
   },
 } as const;
 
 const FIX_SCHEMA = {
   type: "object",
-  required: ["changed", "ran", "testProblem", "decisions"],
+  required: ["changed", "ran", "testProblem", "specProblem"],
   properties: {
     changed: { ...STRINGS, description: "Paths changed, relative to the worktree root" },
     ran: { ...STRINGS, description: "Each command and its result" },
     testProblem: { type: "string", description: "Why the test is wrong; empty when it isn't" },
-    decisions: DECISIONS,
+    specProblem: {
+      type: "string",
+      description: "What the brief doesn't settle or can't deliver as written; empty when none",
+    },
   },
 } as const;
 
@@ -341,7 +347,7 @@ function changeBrief(l: Loop, c: Change): string {
     criteria ? `The criteria it delivers:\n${criteria}` : "",
     c.item ? `The problem to fix, at ${c.item.problem.location}:\n${c.item.problem.text}\n${c.item.reason}` : "",
     answersText(l),
-    "If you have to choose something the brief doesn't settle, pick the most reasonable option, cite what grounds it, and report it in decisions. Don't stop to ask.",
+    "Implement what this says, and make no decisions. If it doesn't settle something, or can't be delivered as written, return specProblem and stop.",
     NO_WRITES,
   ]
     .filter(Boolean)
@@ -352,6 +358,7 @@ interface CycleTest {
   paths: string[];
   commit: string;
   noTest: string;
+  specProblem: string;
 }
 
 async function writeTest(l: Loop, c: Change, reason: string): Promise<CycleTest> {
@@ -367,11 +374,11 @@ Write a new test or change an existing one, so that it states the required behav
     "build",
     `A test for ${c.id}.`,
   );
-  l.decisions.push(...t.decisions);
-  if (t.noTest || t.tests.length === 0) return { paths: [], commit: "", noTest: t.noTest };
+  if (t.specProblem) return { paths: [], commit: "", noTest: "", specProblem: t.specProblem };
+  if (t.noTest || t.tests.length === 0) return { paths: [], commit: "", noTest: t.noTest, specProblem: "" };
   l.testChanges.push(...t.tests);
   const sha = await commit(l, t.tests, `add a failing test for ${c.id}`);
-  return { paths: t.tests, commit: sha, noTest: "" };
+  return { paths: t.tests, commit: sha, noTest: "", specProblem: "" };
 }
 
 function qaBrief(l: Loop, c: Change, test: CycleTest): string {
@@ -432,6 +439,20 @@ interface TryResult {
   rewriteTest: boolean;
 }
 
+// A coder decides nothing, so what its brief leaves open goes back to whoever writes the brief: the spec's writer, or,
+// with no spec, the person reading the draft.
+function specStopped(l: Loop, c: Change, problem: string): TryResult {
+  const route: Route = l.reviseSpec ? "revise-spec" : "escalate";
+  listRouted(l, route, {
+    problem: { source: "the coder", location: c.id, text: problem },
+    route,
+    severity: "blocker",
+    fingerprint: `${c.id}|spec`,
+    reason: "The coder can't deliver this without making a decision.",
+  });
+  return { reason: "", rewriteTest: false };
+}
+
 // One fix, and whatever validates it.
 async function tryFix(l: Loop, c: Change, cycle: CycleTest, lastFailure: string, attempt: number): Promise<TryResult> {
   const fix = must(
@@ -444,7 +465,7 @@ async function tryFix(l: Loop, c: Change, cycle: CycleTest, lastFailure: string,
     "build",
     `A fix for ${c.id}.`,
   );
-  l.decisions.push(...fix.decisions);
+  if (fix.specProblem) return specStopped(l, c, fix.specProblem);
   if (fix.testProblem) return { reason: fix.testProblem, rewriteTest: true };
   if (fix.changed.length > 0) await commit(l, fix.changed, `implement ${c.id}`);
   l.changedThisRound.push(...fix.changed);
@@ -464,6 +485,7 @@ async function runChange(l: Loop, c: Change): Promise<string> {
   let last: TryResult = { reason: "", rewriteTest: false };
   for (let attempt = 1; attempt <= MAX_INNER_TRIES; attempt += 1) {
     if (last.rewriteTest) test = await writeTest(l, c, last.reason);
+    if (test.specProblem) return specStopped(l, c, test.specProblem).reason;
     last = await tryFix(l, c, test, last.rewriteTest ? "" : last.reason, attempt);
     if (!last.reason) return "";
   }
@@ -543,7 +565,7 @@ async function updateDocs(l: Loop, problems: readonly OpenItem[]): Promise<void>
   if (l.changedThisRound.length === 0 && problems.length === 0) return;
   const problemLines = problems.map((i) => `${i.problem.location}: ${i.problem.text}`);
   const w = must(
-    await callWriter(
+    await callDocsWriter(
       `${l.where}
 Update these documents in the worktree ${worktreeOf(l)} so they describe the code as built. Every claim must be true against the code.
 ${list(l.docs)}
@@ -1045,7 +1067,7 @@ function freshLoop(input: LoopInput): Loop {
     fixes: new Map(),
     differently: new Set(),
     rulings: [],
-    decisions: [],
+    decisions: input.build?.decisions ?? [],
     unverified: [],
     confirmations: [],
     knownDebt: [],

@@ -1,7 +1,7 @@
 // deliver-story's how phase: three independent designs, opus advisors, one decision, a spec folder, and a challenge
 // that tries to break it. The issue says why and what; this decides how, so choices here are made, never asked.
 import { LENS_SCHEMA, STRINGS, lens, scout, type Answers, type LensResult, type ScoutResult } from "./family.ts";
-import { NO_WRITES, callPusher, callWriter, list, opRef, pushOk, show, unique } from "./deliver.ts";
+import { NO_WRITES, callPusher, callSpecWriter, list, opRef, pushOk, show, unique } from "./deliver.ts";
 import { Halt, must, type Run } from "./loop.ts";
 import { MAX_CHALLENGE_ROUNDS, MAX_DESIGN_TRIES } from "./rules.ts";
 import { BUILD, VALIDATE, type Build, type Task, type Validate } from "./spec.ts";
@@ -279,7 +279,7 @@ const SPEC_FILES = (o: HowInput): string =>
 async function writeSpec(o: HowInput, instruction: string): Promise<SpecResult> {
   phase("Spec");
   return must(
-    await callWriter(
+    await callSpecWriter(
       `${o.where}
 ${STORY_BLOCK(o)}
 

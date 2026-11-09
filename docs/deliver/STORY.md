@@ -29,10 +29,10 @@ A delivery ends in a PR unless one of the halt conditions below holds. Anything 
  │   │                ADVISE     architecture, performance, risk, security, testability (opus, high)
  │   │                           each compares all 3 designs
  │   └── none viable  DECIDE     judge (opus) picks one and grafts the best of the others  ⛔ H3
- │                    SPEC       writer (opus) writes the spec folder → pusher commits it
+ │                    SPEC       writer-spec (opus) writes the spec folder → pusher commits it
  │   ▲  ≤3 rounds     CHALLENGE  check-claim × N, check-criterion × N, lens-scope, lens-consistency (haiku)
  │   │                           the 5 advisors, fresh, try to break the spec
- │   └── confirmed →             judge × N (opus) → writer revises                         ⛔ H3
+ │   └── confirmed →             judge × N (opus) → writer-spec revises                         ⛔ H3
  ▼
  4 BUILD AND VALIDATE  outer loop: the first build, then ≤3 fix rounds
  │
@@ -44,7 +44,7 @@ A delivery ends in a PR unless one of the halt conditions below holds. Anything 
  │  │                  │ qa (sonnet) checks the change and its history │
  │  │                  │   fail → back to coder                        │
  │  │                  └───────────────────────────────────────────────┘
- │  │                  then writer (opus) updates the listed docs against that code → commit
+ │  │                  then writer-docs (opus) updates the listed docs against that code → commit
  │  │   VALIDATE ───── checks (haiku) runs the TESTING.md checks
  │  │                  validator (sonnet) follows each criterion's category path
  │  │                  lens-docs (haiku) × N, one per listed doc: are its claims true?
@@ -57,7 +57,7 @@ A delivery ends in a PR unless one of the halt conditions below holds. Anything 
  │  │   REVIEW ─────── only if a PR exists: watcher (haiku) reads the findings
  │  │                  judge × N (opus), one per finding: severity and kind
  │  │   GATE (code) ── clean → exit
- │  └── code or test → inner loop     docs → writer     spec → advisors and writer
+ │  └── code or test → inner loop     docs → writer-docs     spec → advisors and writer-spec
  ▼
  clean → PR ready, issue In Review            not clean → PR stays draft, issue gets questions
 ```
@@ -85,13 +85,13 @@ The issue says why and what. This stage decides how, and it deserves more time a
 2. **Design.** Three independent `designer` dispatches each produce a full approach, and none sees the others. The script gives each a fixed stance: the smallest change that fits the existing patterns, the best long-term structure, and the most robust under failure. Each reads the project's full architecture and design documents, and marks what it reuses and what it creates. `scout-upstream-docs` and `scout-known-issues` then run once for each dependency any design names.
 3. **Advise.** Five advisors each compare all three designs from one angle: `advisor-architecture`, `advisor-performance`, `advisor-risk`, `advisor-security`, and `advisor-testability`. The last asks whether each criterion can be proved through its `TESTING.md` validation path. Each claim cites the code, and each concern says what would fix it.
 4. **Decide.** One `judge` picks a design, grafts in the best of the others, and records what was rejected and why. If it rules no design viable, Design runs again with its reasons, at most once more. If none survives that, the run halts.
-5. **Spec.** `writer` writes the [spec folder](#the-spec), and `pusher` commits it before any code exists.
+5. **Spec.** `writer-spec` writes the [spec folder](#the-spec), and `pusher` commits it before any code exists.
 6. **Challenge.** At most three rounds:
    - One `check-claim` per file, symbol, or API claim checks that it is true of the code.
    - One `check-criterion` per criterion checks that its category matches what `TESTING.md` says that category covers, and that the category's path can check it.
    - `lens-scope` checks that the spec adds and drops no scope. `lens-consistency` checks it against the project's rules and documents.
    - The same five advisors, in fresh dispatches, try to break the finished spec.
-   - One `judge` per problem rules on it, and `writer` revises for each confirmed `blocker` or `major`. The rulings go in `RATIONALE.md`.
+   - One `judge` per problem rules on it, and `writer-spec` revises for each confirmed `blocker` or `major`. The rulings go in `RATIONALE.md`.
 
    A `major` still open after the last round is recorded and the run continues. A `blocker` still open halts the run.
 
@@ -101,6 +101,7 @@ Each story gets one folder, `docs/specs/<lowercase issue id>-<slug>/`. Nothing i
 
 - **`build.json`** says what to build:
   - `shared`: the constraints and interfaces every task of this story must follow. It never repeats a project rule.
+  - `decisions`: each choice the spec made, with `affectsAcceptance` set when it changes behavior a criterion describes. A coder has no choices left to make.
   - `tasks`: for each task, its `id`, `dependsOn`, `files`, `criteria`, what to do, what to reuse, and what to create. Anything only one task needs goes in that task.
   - `docs`: the documents making claims about the area the change touches, which `scout-docs` found. The list can be empty.
 - **`validate.json`** says how to prove it. For each criterion:
@@ -111,16 +112,16 @@ Each story gets one folder, `docs/specs/<lowercase issue id>-<slug>/`. Nothing i
 
 No agent opens the whole spec. The script hands each one its slice, and project rules reach agents through `.claude/rules/` and `AGENTS.md`:
 
-| Agent                                      | Gets                                                                 |
-| ------------------------------------------ | -------------------------------------------------------------------- |
-| `coder`                                    | `shared`, its task, and its criteria, plus the problem if it's a fix |
-| `qa`                                       | The same, plus the git history                                       |
-| `writer`, for documentation                | The `docs` list and the code                                         |
-| `validator`                                | `validate.json` and `TESTING.md`                                     |
-| `lens-docs`                                | One listed document and the code                                     |
-| `judge`, on one problem                    | The problem, the diff, and the relevant task and criterion           |
-| Gateway `judge`                            | `build.json`, `validate.json`, and the round's evidence and diff     |
-| Advisors and `writer`, on a `spec` problem | All three files                                                      |
+| Agent                                           | Gets                                                                 |
+| ----------------------------------------------- | -------------------------------------------------------------------- |
+| `coder`                                         | `shared`, its task, and its criteria, plus the problem if it's a fix |
+| `qa`                                            | The same, plus the git history                                       |
+| `writer-docs`                                   | The `docs` list and the code                                         |
+| `validator`                                     | `validate.json` and `TESTING.md`                                     |
+| `lens-docs`                                     | One listed document and the code                                     |
+| `judge`, on one problem                         | The problem, the diff, and the relevant task and criterion           |
+| Gateway `judge`                                 | `build.json`, `validate.json`, and the round's evidence and diff     |
+| Advisors and `writer-spec`, on a `spec` problem | All three files                                                      |
 
 ### 4. Build and validate
 
@@ -128,10 +129,10 @@ This stage is two nested loops. The inner loop makes one change correct, and onl
 
 1. **Build.** Each change runs its own inner loop, the [test-first cycle](#test-first).
    - In the first round, each task in `build.json` is one change. The script works out dependency waves from `dependsOn`. Tasks in a wave whose files don't overlap run in parallel, and the others run one after another. When a criterion's category validates with a flow, the flow is the test, for example a Playwright spec or a Maestro file.
-   - In later rounds, each open `code` or `test` problem is one change, and an open `spec` problem first goes to the advisors and `writer`, who revise the spec. `pusher` commits the revision, and the tasks it changes run again.
-   - `coder` has no way to halt. It records anything it is unsure of as a decision.
+   - In later rounds, each open `code` or `test` problem is one change, and an open `spec` problem first goes to the advisors and `writer-spec`, who revise the spec. `pusher` commits the revision, and the tasks it changes run again.
+   - `coder` implements what its brief says and makes no decisions. If the brief leaves something open, it returns a spec problem, which goes to `writer-spec`.
    - An inner loop that runs out of tries doesn't stop the round. Its problem stays open as a `blocker`.
-   - After the inner loops, `writer` updates the documents on the `docs` list, so they describe the code as built. It runs in every round that changed code or has an open `docs` problem, and when the list isn't empty. `pusher` commits its work. Documentation needs no failing test, so it stays out of the inner loop.
+   - After the inner loops, `writer-docs` updates the documents on the `docs` list, so they describe the code as built. It runs in every round that changed code or has an open `docs` problem, and when the list isn't empty. `pusher` commits its work. Documentation needs no failing test, so it stays out of the inner loop.
 2. **Validate.** `checks` runs the `Checks` commands from `TESTING.md` and returns the exit codes and failing lines. `validator` then follows each criterion's category path, as defined below. In the first round it runs every criterion. In later rounds it runs the criteria whose code paths changed, or every criterion when a fix touched boot or config files. It runs even when `checks` fails. Boot is its first step, so a broken build fails there and is judged like any other problem. One `lens-docs` per listed document checks that its claims are true against the code.
 3. **Judge.** One `judge` (opus) per problem, all in parallel, gives one verdict: `confirmed` with a severity and a [kind](../DESIGN.md#severity-and-problem-kinds), `dismissed` with a reason, or `unverified`. The judge reads the evidence and the diff:
    - It never downgrades a confirmed failure.

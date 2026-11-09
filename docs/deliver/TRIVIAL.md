@@ -15,13 +15,13 @@ How `deliver-trivial` takes a trivial story from a Linear issue or a prompt to a
  │   │           checks (haiku) runs the TESTING.md checks
  │   └────────── qa (sonnet) checks the change and its history
  │               scout-docs (haiku) finds docs the diff affects
- │               writer (opus) fixes them, only if it found any → commit
+ │               writer-docs (opus) fixes them, only if it found any → commit
  4 VALIDATE ──── validator (sonnet) runs the app as TESTING.md says, once
  5 PUSH ──────── pusher pushes, opens a draft PR, which fires the review             ⛔ H2
  6 REVIEW ────── watcher (haiku) reads the findings
  │   ▲ ≤3 fix    judge × N (opus), one per finding
  │   │  rounds   each blocker/major: failing test → commit → coder → commit → checks
- │   │           scout-docs, then writer if it found any
+ │   │           scout-docs, then writer-docs if it found any
  │   └────────── pusher pushes and comments "@review"
  ▼
  clean → PR ready, issue In Review            not clean → PR stays draft, saying why
@@ -37,6 +37,7 @@ How `deliver-trivial` takes a trivial story from a Linear issue or a prompt to a
 - **`judge` rules only on review findings.** A failing check or validator run goes straight back to `coder`.
 - **No gateway `judge`, and no recurrence rulings.** A finding that comes back stays open and keeps the PR a draft.
 - **A scout finds the affected docs**, because no spec lists them.
+- **`coder` still makes no decisions.** With no spec to send it back to, what the issue or prompt leaves open keeps the PR a draft, listed for you to settle.
 
 The PR, its sections, the loop limits, test first, and what the run is allowed to do are as in `STORY.md`, except that the criteria table has one row.
 

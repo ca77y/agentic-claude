@@ -43,14 +43,15 @@ const BUILD: Build = {
   shared: [],
   tasks: [{ id: "t1", dependsOn: [], files: ["src/a.ts"], criteria: ["c1"], todo: "do it", reuse: [], create: [] }],
   docs: [],
+  decisions: [],
 };
 const VALIDATE: Validate = {
   criteria: [{ id: "c1", wording: "it works", category: "UI", path: "flow", evidence: "shot", firstTest: "t" }],
 };
 
 const OK_PUSH = { done: true, unmet: [], operations: [{ op: "commit", reference: "abc" }] };
-const OK_TEST = { tests: ["a.test.ts"], failingOutput: "red", noTest: "", decisions: [] };
-const OK_FIX = { changed: ["src/a.ts"], ran: [], testProblem: "", decisions: [] };
+const OK_TEST = { tests: ["a.test.ts"], failingOutput: "red", noTest: "", specProblem: "" };
+const OK_FIX = { changed: ["src/a.ts"], ran: [], testProblem: "", specProblem: "" };
 const QA_PASS = { verdict: "pass", evaluated: "x", findings: [], limits: "none", testAtFault: false };
 const QA_FAIL = {
   verdict: "fail",
@@ -89,7 +90,7 @@ const DEFAULTS: Record<string, Script> = {
   validator: () => VALIDATOR_PASS,
   watcher: () => CLEAN_REVIEW,
   judge: (_t, label) => (label === "gateway" ? GATEWAY_OK : ruling()),
-  writer: () => ({ changed: ["docs/a.md"] }),
+  "writer-docs": () => ({ changed: ["docs/a.md"] }),
 };
 const happy = (over: Partial<Record<string, Script>> = {}): Script => {
   const agents = { ...DEFAULTS, ...over };
@@ -253,6 +254,58 @@ describe("the inner loop", () => {
   });
 });
 
+describe("a coder decides nothing", () => {
+  const OPEN = "the spec doesn't say which store to use";
+
+  test("tells the coder to make no decisions", async () => {
+    use(happy());
+    await statusOf();
+    const fix = calls.find((c) => c.label === "t1: fix");
+    assert.ok(fix?.prompt.includes("make no decisions"));
+  });
+
+  test("sends what the brief leaves open to the spec's writer, then builds the revised task", async () => {
+    let revised = 0;
+    let fixes = 0;
+    use(
+      happy({
+        coder: (_t, label) => {
+          if (label.endsWith(": test")) return OK_TEST;
+          fixes += 1;
+          return fixes === 1 ? { ...OK_FIX, specProblem: OPEN } : OK_FIX;
+        },
+      }),
+    );
+    const status = await statusOf({
+      reviseSpec: async (problems) => {
+        revised += 1;
+        assert.ok(problems[0]?.includes(OPEN));
+        await Promise.resolve();
+        return { build: BUILD, validate: VALIDATE, rerun: BUILD.tasks };
+      },
+    });
+    assert.equal(revised, 1);
+    assert.equal(status, "ready");
+    assert.equal(fixes, 2);
+  });
+
+  test("with no spec, keeps the PR a draft and lists it, instead of retrying", async () => {
+    use(happy({ coder: (_t, label) => (label.endsWith(": test") ? OK_TEST : { ...OK_FIX, specProblem: OPEN }) }));
+    const r = await runLoop(inputFor(freshRun()));
+    assert.equal(r.status, "draft");
+    assert.ok(r.draftReasons.some((x) => x.text.includes(OPEN)));
+    assert.equal(count("coder", ": fix"), 1);
+    assert.equal(count("qa"), 0);
+  });
+
+  test("a test dispatch can stop the same way", async () => {
+    use(happy({ coder: (_t, label) => (label.endsWith(": test") ? { ...OK_TEST, specProblem: OPEN } : OK_FIX) }));
+    const r = await runLoop(inputFor(freshRun()));
+    assert.equal(r.status, "draft");
+    assert.equal(count("coder", ": fix"), 0);
+  });
+});
+
 describe("the outer loop", () => {
   test("fixes a confirmed review finding in a later round, then goes ready", async () => {
     let review = 0;
@@ -343,7 +396,7 @@ describe("the outer loop", () => {
     const r = await runLoop(inputFor(freshRun()));
     assert.equal(r.status, "ready");
     assert.equal(count("coder", "fix-"), 0);
-    assert.equal(count("writer", "update the docs"), 1);
+    assert.equal(count("writer-docs", "update the docs"), 1);
   });
 
   test("sends a spec problem to the reviser, and reruns the tasks it returns", async () => {
@@ -490,7 +543,7 @@ describe("the PR's other sections", () => {
     assert.ok(finalPrompt().includes("## Unverified findings"));
   });
 
-  test("marks ready with a decision that changes acceptance, and lists it to confirm", async () => {
+  test("marks ready with a spec decision that changes acceptance, and lists it to confirm", async () => {
     const decision = {
       id: "d1",
       question: "keep the data?",
@@ -499,14 +552,21 @@ describe("the PR's other sections", () => {
       reversible: true,
       affectsAcceptance: true,
     };
-    use(
-      happy({
-        coder: (_t, label) => (label.endsWith(": test") ? OK_TEST : { ...OK_FIX, decisions: [decision] }),
-      }),
-    );
-    const r = await runLoop(inputFor(freshRun()));
+    use(happy());
+    const r = await runLoop(inputFor(freshRun(), { build: { ...BUILD, decisions: [decision] } }));
     assert.equal(r.status, "ready");
     assert.deepEqual(r.decisions, ["d1"]);
+    assert.ok(finalPrompt().includes("## Needs confirmation"));
+  });
+
+  test("lists a finding only a person can settle under Needs confirmation", async () => {
+    use(
+      happy({
+        watcher: () => finding("what should this mean?"),
+        judge: (_t, label) => (label === "gateway" ? GATEWAY_OK : ruling({ kind: "decision", severity: "none" })),
+      }),
+    );
+    assert.equal(await statusOf(), "ready");
     assert.ok(finalPrompt().includes("## Needs confirmation"));
   });
 
@@ -621,15 +681,15 @@ describe("the small flow", () => {
     use(happy({ "scout-docs": () => ({ answer: "none", evidence: [], gaps: [] }) }));
     await statusOf(SMALL);
     assert.equal(count("scout-docs"), 1);
-    assert.equal(count("writer"), 0);
+    assert.equal(count("writer-docs"), 0);
   });
 
   test("runs the writer when the scout finds affected docs", async () => {
     const found = { answer: "one", evidence: [{ source: "docs/a.md", location: "x", excerpt: "y" }], gaps: [] };
     use(happy({ "scout-docs": () => found }));
     await statusOf(SMALL);
-    assert.equal(count("writer"), 1);
-    assert.ok(calls.some((c) => c.type === "writer" && c.prompt.includes("docs/a.md")));
+    assert.equal(count("writer-docs"), 1);
+    assert.ok(calls.some((c) => c.type === "writer-docs" && c.prompt.includes("docs/a.md")));
     assert.equal(count("lens-docs"), 0);
   });
 
@@ -711,6 +771,7 @@ describe("parallel inner loops", () => {
       { id: "b", dependsOn: ["a"], files: ["b.ts"], criteria: [], todo: "", reuse: [], create: [] },
     ],
     docs: [],
+    decisions: [],
   };
 
   test("runs a dependent task after the one it needs", async () => {

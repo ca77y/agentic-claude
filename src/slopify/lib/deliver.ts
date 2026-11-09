@@ -64,13 +64,21 @@ export const opRef = (r: PusherResult | null, name: string): string => {
 };
 
 // Each dispatch of a producer or operator names its agent type literally.
-export function callWriter<const S extends Schema>(
+export function callSpecWriter<const S extends Schema>(
   prompt: string,
   label: string,
   phaseTitle: string,
   schema: S,
 ): Promise<Infer<S> | null> {
-  return agent(prompt, { agentType: "slopify:writer", label, phase: phaseTitle, schema });
+  return agent(prompt, { agentType: "slopify:writer-spec", label, phase: phaseTitle, schema });
+}
+export function callDocsWriter<const S extends Schema>(
+  prompt: string,
+  label: string,
+  phaseTitle: string,
+  schema: S,
+): Promise<Infer<S> | null> {
+  return agent(prompt, { agentType: "slopify:writer-docs", label, phase: phaseTitle, schema });
 }
 export function callCoder<const S extends Schema>(
   prompt: string,

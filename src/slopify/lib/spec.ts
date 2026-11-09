@@ -29,25 +29,6 @@ const CRITERION = {
   },
 } as const;
 
-export const BUILD = {
-  type: "object",
-  required: ["shared", "tasks", "docs"],
-  properties: {
-    shared: {
-      ...STRINGS,
-      description: "Constraints and interfaces every task of this story must follow; never a repeated project rule",
-    },
-    tasks: { type: "array", items: TASK },
-    docs: { ...STRINGS, description: "Documents making claims about the area the change touches; can be empty" },
-  },
-} as const;
-
-export const VALIDATE = {
-  type: "object",
-  required: ["criteria"],
-  properties: { criteria: { type: "array", items: CRITERION } },
-} as const;
-
 const DECISION = {
   type: "object",
   required: ["id", "question", "choice", "rationale", "reversible", "affectsAcceptance"],
@@ -60,7 +41,26 @@ const DECISION = {
     affectsAcceptance: { type: "boolean", description: "True when the choice changes behavior a criterion describes" },
   },
 } as const;
-export const DECISIONS = { type: "array", items: DECISION } as const;
+
+export const BUILD = {
+  type: "object",
+  required: ["shared", "tasks", "docs", "decisions"],
+  properties: {
+    shared: {
+      ...STRINGS,
+      description: "Constraints and interfaces every task of this story must follow; never a repeated project rule",
+    },
+    tasks: { type: "array", items: TASK },
+    docs: { ...STRINGS, description: "Documents making claims about the area the change touches; can be empty" },
+    decisions: { type: "array", items: DECISION },
+  },
+} as const;
+
+export const VALIDATE = {
+  type: "object",
+  required: ["criteria"],
+  properties: { criteria: { type: "array", items: CRITERION } },
+} as const;
 
 export type Build = Infer<typeof BUILD>;
 export type Task = Build["tasks"][number];
