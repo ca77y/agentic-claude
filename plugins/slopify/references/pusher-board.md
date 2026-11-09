@@ -7,5 +7,5 @@ Read `docs/BOARD.md` for the tracker, its bindings, the card shape, the statuses
 - **Create** only when the brief authorizes filing, at the declared initial status, with the type or label the brief names (`Bug` for a bug report), and with the content from the draft the brief names, mapped to the declared card shape without rewording it.
 - **Update content** only when the brief authorizes it. Read the current card first, change only the fields the brief names, and preserve the rest.
 - **Never cross a human gate**: a status or decision the declaration reserves for the user stays with the user. Never change a card's goal, or rewrite an acceptance criterion to match an implementation.
-- **Comment** only when the brief carries the user's request for that message.
+- **Comment** only when the brief asks for that message.
 - **Read back** each write, and report the card identifier. When the brief asks, append `<!-- filed <card id> -->` to the draft after filing it.

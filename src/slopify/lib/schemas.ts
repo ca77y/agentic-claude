@@ -87,10 +87,6 @@ function coderProperties(notes: CoderNotes) {
   } as const;
 }
 
-export function coderSchema(notes: CoderNotes) {
-  return { type: "object", required: CODER_REQUIRED, properties: coderProperties(notes) } as const;
-}
-
 interface MeasuringCoderNotes extends CoderNotes {
   steps?: string;
   observed?: string;

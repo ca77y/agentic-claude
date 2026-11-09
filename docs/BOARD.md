@@ -34,8 +34,9 @@ Configuration does not authorize execution; the user's request does. An operatio
 ## Delivery
 
 - When delivery starts: from `Backlog` or `Todo`, move the card to `In Progress`; asking for delivery is the user's readiness decision. In any other status, leave it, and report a card in `Done`, `Canceled`, or `Duplicate`. An archived card (`archivedAt` set) gets no card write during the delivery; report it. Delivery refuses only a card without the `Deliverable` label.
-- When the PR opens: attach the PR, and move the card to `In Review` only if it is `In Progress`.
-- On a repair run: no card operation.
+- When the PR opens: attach the PR.
+- When the PR's review is clean: move the card to `In Review` only if it is `In Progress`.
+- On a later round: no card operation.
 
 ## Other conditions
 

@@ -10,7 +10,7 @@ export interface NotStarted {
   next: string;
 }
 
-export function isRecord(v: unknown): v is Input {
+function isRecord(v: unknown): v is Input {
   return typeof v === "object" && v !== null;
 }
 

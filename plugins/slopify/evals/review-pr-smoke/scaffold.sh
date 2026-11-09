@@ -23,6 +23,54 @@ if __name__ == "__main__":
     unittest.main()
 PY
 mkdir -p docs
+cat > TESTING.md <<'MD'
+# Testing
+
+## Platform
+
+cli
+
+## Tools
+
+Python 3, already installed.
+
+## Setup
+
+Nothing to install.
+
+## Boot
+
+Nothing to boot: `calc.py` is a module.
+
+## Checks
+
+- Unit tests: `python3 -m unittest`
+
+## Categories
+
+### Library
+
+- Covers: `calc.py`.
+- Validation path: run `python3 -m unittest` and call the function with `python3 -c`.
+- Required evidence: the command's output.
+- When a criterion in this category can't be verified, the pull request is `ready` or stays `draft`: draft
+
+### Uncategorized
+
+When a criterion fits no category, the pull request is `ready` or stays `draft`: draft
+
+## Flows
+
+None.
+
+## Evidence
+
+Under `.tmp/evidence/`.
+
+## Blind spots
+
+None.
+MD
 cat > docs/BOARD.md <<'MD'
 # Board declaration
 
@@ -47,11 +95,11 @@ Configuration does not authorize execution; the user's request does.
 
 ## Commits and push
 
-- Commit convention: Conventional Commits. Push with `git -C <worktree> push -u origin fix/smoke` once the gates pass, and `git -C <worktree> push` after each verified repair.
+- Commit convention: Conventional Commits. Push with `git -C <worktree> push -u origin fix/smoke`, then `git -C <worktree> push` each later round.
 
 ## Pull request
 
-- Create or update: write `.forge/prs/smoke.md` with `# <title>`, then `## Summary`, `## Spec`, `## Verification`; a repair appends `## Repair <n>`.
+- Create or update: write `.forge/prs/smoke.md` with `# <title>` and the body the delivery renders, under a `Draft: yes` line while it's a draft; marking it ready removes that line.
 - Review trigger: opening the PR requested review 1; re-fire review `n` by creating `.forge/reviews/smoke-<n>.requested`.
 - Review status: review `n` has finished when `.forge/reviews/smoke-<n>.md` exists, and its findings are that file's list items. Poll every 10 seconds; a review not finished within 2 minutes of its trigger has timed out.
 

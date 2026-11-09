@@ -23,7 +23,6 @@ import {
   val,
   isRel,
   splitList,
-  unique,
   passed,
   blockingOf,
   findingText,
@@ -85,7 +84,7 @@ export const WRITER_SCHEMA = {
 
 export type WriterResult = Infer<typeof WRITER_SCHEMA>;
 /** review-pr's finished result, which a delivery returns as its review. */
-export type ReviewDone = Extract<ReviewPrResult, { status: "done" }>;
+export type ReviewDone = Extract<ReviewPrResult, { status: "ready" | "draft" }>;
 type Gated = { stop: Stopped } | { carry: string[] } | null;
 
 export const inTmp = (p: string): boolean => /^\.tmp(?:\/|$)/.test(p);
@@ -665,11 +664,8 @@ export async function publish(d: Run, o: PublishOpts): Promise<Stopped | null> {
 
 interface ReviewOpts {
   story: string;
-  /** Fields review-pr takes from this delivery alone, passed after the story. */
-  extra?: Readonly<Record<string, string>>;
   projectRoot: string;
   answers: Answers;
-  exclude: readonly string[];
 }
 
 // Run the review loop as a sub-workflow.
@@ -693,14 +689,9 @@ export async function review(d: Run, o: ReviewOpts): Promise<{ stop: Stopped } |
   try {
     result = await workflow<ReviewPrResult | null>("slopify:review-pr", {
       pr: state.pr,
-      worktree: state.worktree,
-      spec: state.specPath,
       story: o.story,
-      ...o.extra,
       projectRoot: o.projectRoot || undefined,
       answers: o.answers,
-      // Dirty paths this run left out of its own commit; the review loop never stages them.
-      exclude: unique(o.exclude),
     });
   } catch (error) {
     const message: unknown = !!error && typeof error === "object" ? Reflect.get(error, "message") : undefined;
@@ -726,7 +717,7 @@ export async function review(d: Run, o: ReviewOpts): Promise<{ stop: Stopped } |
       },
     };
   }
-  if (result.status !== "done") {
+  if (result.status === "not-started") {
     return {
       stop: stop("review", [
         need(

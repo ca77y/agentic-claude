@@ -491,7 +491,7 @@ function createDeliver(config) {
     storyArg
   } = config;
   const WHERE = projectRoot ? `The project is at ${projectRoot}; address files by absolute path under it.` : "The project is the session project directory; address files by absolute path.";
-  const AUTH = `Authorization, from the user's invocation of /slopify:${WORKFLOW}: the story branch and worktree, attributable commits, a push once the gates have passed, opening or updating this task's PR, and the declared review trigger. It does not authorize merging, releases, any other message, rewriting docs/BOARD.md or docs/FORGE.md, or changing a card's content. Work exactly as docs/BOARD.md and docs/FORGE.md declare; an operation that is not bound is unmet, never improvised. Stage explicit paths only.`;
+  const AUTH = `Authorization, from the user's invocation of /slopify:${WORKFLOW}: the story branch and worktree, attributable commits, the pushes the brief asks for, opening or updating this task's PR as a draft or ready, the declared review trigger, the one issue comment the brief asks for when the run ends or halts, and filing the issues the brief lists. It does not authorize merging, releases, any other message, rewriting docs/BOARD.md or docs/FORGE.md, or changing a card's content. Work exactly as docs/BOARD.md and docs/FORGE.md declare; an operation that is not bound is unmet, never improvised. Stage explicit paths only.`;
   const completed = [];
   const skipped = [];
   const attempts = [];
@@ -1129,14 +1129,9 @@ async function review(d, o) {
   try {
     result = await workflow("slopify:review-pr", {
       pr: state.pr,
-      worktree: state.worktree,
-      spec: state.specPath,
       story: o.story,
-      ...o.extra,
       projectRoot: o.projectRoot || void 0,
-      answers: o.answers,
-      // Dirty paths this run left out of its own commit; the review loop never stages them.
-      exclude: unique(o.exclude)
+      answers: o.answers
     });
   } catch (error) {
     const message = !!error && typeof error === "object" ? Reflect.get(error, "message") : void 0;
@@ -1161,7 +1156,7 @@ async function review(d, o) {
       }
     };
   }
-  if (result.status !== "done") {
+  if (result.status === "not-started") {
     return {
       stop: stop("review", [
         need(
@@ -1710,10 +1705,8 @@ ${list(prior)}` : ""}`,
   if (publishStop) return publishStop;
   const reviewed = await review(d, {
     story,
-    extra: { test: repro.tests.join(",") },
     projectRoot,
-    answers,
-    exclude: outsideDirty
+    answers
   });
   if ("stop" in reviewed) return reviewed.stop;
   const { review: review2 } = reviewed;

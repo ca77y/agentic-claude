@@ -700,10 +700,8 @@ ${STORY_BLOCK}${prior.length > 0 ? `\n\nEarlier findings to recheck:\n${list(pri
 
   const reviewed = await runReview(d, {
     story,
-    extra: { test: repro.tests.join(",") },
     projectRoot,
     answers,
-    exclude: outsideDirty,
   });
   if ("stop" in reviewed) return reviewed.stop;
   const { review } = reviewed;

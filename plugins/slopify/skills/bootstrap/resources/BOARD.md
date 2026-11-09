@@ -33,7 +33,8 @@ Configuration does not authorize execution; the user's request does. An operatio
 
 - When delivery starts: {{ON_START}}
 - When the PR opens: {{ON_PR_OPEN}}
-- On a repair run: {{ON_REPAIR}}
+- When the PR's review is clean: {{ON_READY}}
+- On a later round: {{ON_LATER_ROUND}}
 
 ## Other conditions
 

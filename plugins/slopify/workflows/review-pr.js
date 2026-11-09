@@ -1,31 +1,47 @@
 export const meta = {
   "name": "review-pr",
-  "description": "Wait for a pull request review, sort its findings, fix the real defects, and push each round only after a fresh qa passes, for at most three rounds or until a review is clean",
-  "whenToUse": "Run only when the user invokes /slopify:review-pr or asks for the slopify review-pr workflow; deliver-story and deliver-bugfix also run it as their last step. Args: {pr, worktree?, spec?, story?, test?, findings?, exclude?, projectRoot?, answers?}, or the pull request as a plain string. pr names the pull request, worktree is its story worktree, spec and story are the acceptance source when known, test is the regression test path that belongs with the spec on the ledger, findings are review findings to use in round 1 instead of waiting, projectRoot defaults to the session project directory, answers maps a blocked need id to the answer, and exclude lists the dirty paths the caller identified as outside its scope, which this workflow never stages; a producer that changes one leaves it unstaged and the result names it in leftForUser.",
+  "description": "Run the build and validate loop on an existing pull request: wait for its review, rule on each finding, fix what is confirmed through a coder and qa inner loop, validate, and push every round, until the review is clean and the PR goes ready or a limit leaves it a draft",
+  "whenToUse": "Run only when the user invokes /slopify:review-pr or asks for the slopify review-pr workflow; deliver-bugfix also runs it as its last step. Args: {pr, story?, projectRoot?, answers?}, or the pull request as a plain string. pr names the pull request, story is the acceptance source when known, projectRoot defaults to the session project directory, and answers maps a decision id to its answer.",
   "phases": [
     {
       "title": "Locate",
-      "detail": "scout-checkpoint reports the PR, worktree, and ledger state; scout-card reads the PR card; pusher recovers a missing worktree"
+      "detail": "scout-checkpoint reports the PR, worktree, ledger, and spec"
     },
     {
-      "title": "Wait",
-      "detail": "watcher waits for review n, one dispatch at a time"
+      "title": "Workspace",
+      "detail": "pusher recovers a missing worktree"
     },
     {
-      "title": "Sort",
-      "detail": "one lens-finding per review finding, in parallel"
+      "title": "Advise",
+      "detail": "advisors weigh in when a finding shows the spec is wrong"
     },
     {
-      "title": "Fix",
-      "detail": "coder fixes code defects while writer fixes spec and documentation defects; lens-scope and lens-consistency pass a revised spec first"
+      "title": "Spec",
+      "detail": "writer revises the spec, and pusher commits it"
+    },
+    {
+      "title": "Build",
+      "detail": "one coder and qa inner loop per change, then writer updates the listed docs"
     },
     {
       "title": "Validate",
-      "detail": "a fresh qa judges the fixes, with lens-docs when documentation changed"
+      "detail": "checks, validator, and lens-docs"
+    },
+    {
+      "title": "Judge",
+      "detail": "one judge per problem gives its severity and kind"
+    },
+    {
+      "title": "Gateway",
+      "detail": "one judge checks the round for anything missed"
     },
     {
       "title": "Push",
-      "detail": "pusher commits, pushes, updates the PR, re-fires the review trigger, and appends the ledger"
+      "detail": "pusher pushes the round, updates the PR, and fires the review"
+    },
+    {
+      "title": "Review",
+      "detail": "watcher reads the review, and one judge rules on each finding"
     }
   ]
 };
@@ -180,149 +196,24 @@ function sameRev(briefed, evaluated) {
   const eh = e.match(HEX) ?? [];
   return bh.every((x) => eh.some((y) => x.startsWith(y) || y.startsWith(x))) && b.split(HEX).map((p) => p.trim()).filter((p) => p && !/[a-z]{3}/.test(p)).every((p) => e.includes(p));
 }
-function hashOf(text) {
-  let h = 5381;
-  for (const ch of text) h = (h * 33 ^ (ch.codePointAt(0) ?? 0)) >>> 0;
-  return h.toString(36).padStart(6, "0");
-}
-var HASH = "[0-9a-f]{7,64}";
-function parseSpec(v) {
-  const m = new RegExp(String.raw`^(.+)(?:@|\s)(${HASH})$`).exec(
-    unremark("path", ((v || "").split("\n", 1)[0] ?? "").trim())
-  );
-  const path = m?.[1]?.trim() ?? "";
-  const hash = m?.[2] ?? "";
-  return path && (shaped("path", path) === path || shaped("rel", path) === path) ? { path, hash } : null;
-}
-function decisionsOf(prefix, questions) {
-  const out = [];
-  const asked = questions ?? [];
-  for (const q of asked) {
-    const question = q.trim();
-    const norm = question.toLowerCase().replaceAll(/[^a-z0-9]+/g, " ").trim();
-    const id = `${prefix}-${norm.split(" ").slice(0, 4).join("-") || "question"}-${hashOf(norm)}`;
-    if (question && out.every((d) => d.id !== id)) out.push({ id, question });
-  }
-  return out;
-}
-function answerOf(answers, id) {
-  const a = answers?.[id];
-  return a === void 0 || a === null ? "" : String(a).trim();
-}
-function settledText(settled) {
-  return settled.length > 0 ? `
-
-The user has settled these earlier questions; apply each answer and do not ask them again:
-${settled.map((d) => `- Question: ${d.question}
-  Answer: ${d.answer}`).join("\n")}` : "";
-}
-async function settleDecisions(prefix, answers, run2) {
-  const settled = [];
-  let carriedTried = false;
-  for (let round = 0; ; round++) {
-    const res = await run2(settled);
-    if (!res || res.storyBlockers?.length) return { res, open: [] };
-    const decisions = decisionsOf(prefix, res.openDecisions);
-    const open = decisions.filter((d) => !answerOf(answers, d.id));
-    if (open.length > 0) {
-      const carried = Object.keys(answers).filter(
-        (k) => k.startsWith(`${prefix}-`) && !k.startsWith(`${prefix}-blocker-`) && answerOf(answers, k) && decisions.every((d) => d.id !== k) && settled.every((x) => x.id !== k)
-      );
-      if (carried.length === 0 || carriedTried || round >= 2) return { res, open };
-      carriedTried = true;
-      settled.push(
-        ...carried.map((k) => ({
-          id: k,
-          question: `an earlier question whose id was ${k}; its words ran: ${k.replace(`${prefix}-`, "").replace(/-[a-z0-9]{6,7}$/, "").replaceAll("-", " ")}`,
-          answer: answerOf(answers, k)
-        }))
-      );
-      continue;
-    }
-    const fresh = decisions.filter((d) => settled.every((x) => x.id !== d.id));
-    if (fresh.length === 0 || round >= 2) return { res, open: [] };
-    settled.push(...fresh.map((d) => ({ ...d, answer: answerOf(answers, d.id) })));
-  }
-}
-function rerunText(workflow, needs) {
-  const cmd = `/slopify:${workflow}`;
+function rerunText(workflow2, needs) {
+  const cmd = `/slopify:${workflow2}`;
   const list2 = needs ?? [];
   const viaArg = list2.filter((n) => n.arg);
   const answerable = list2.some((n) => !n.arg && (n.kind === "decision" || n.kind === "input"));
   const argText = viaArg.length > 0 ? ` Give ${viaArg.map((n) => `${n.id} in args.${n.arg ?? ""}`).join(" and ")}, not in answers.` : "";
   return list2.length > 0 && list2.every((n) => n.kind === "decision") ? `Invoke ${cmd} again with the same args and add answers.<id> for each decision. In this session, pass resumeFromRunId to reuse the steps already completed.` : `Resolve what each need names, then invoke ${cmd} again with the same args${answerable ? " and answers.<id> for each decision or input need" : ""}, without resumeFromRunId, so every step reads the repository afresh.${argText}`;
 }
-function blocked(workflow, step, needs, extra = {}) {
-  return { status: "blocked", workflow, step, needs, rerun: rerunText(workflow, needs), ...extra };
-}
-
-// src/slopify/lib/input.ts
-function isRecord(v) {
-  return typeof v === "object" && v !== null;
-}
-function inputOf(a, primary, numbers = false) {
-  if (typeof a !== "string") return isRecord(a) ? a : {};
-  const text = a.trim();
-  try {
-    const parsed = JSON.parse(text);
-    if (isRecord(parsed)) return parsed;
-    if (typeof parsed === "string" || numbers && typeof parsed === "number") {
-      return { [primary]: String(parsed).trim() };
-    }
-  } catch {
-  }
-  return { [primary]: text };
-}
-function answerValue(x) {
-  const text = String(x);
-  return x === null || x === void 0 || typeof x === "string" || typeof x === "number" || typeof x === "boolean" ? x : text;
-}
-function answersOf(v) {
-  return isRecord(v) && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, answerValue(x)])) : {};
-}
-function whereOf(projectRoot) {
-  return projectRoot ? `The project is at ${projectRoot}; address files by absolute path under it.` : "The project is the session project directory; address files by absolute path.";
+function blocked(workflow2, step, needs, extra = {}) {
+  return { status: "blocked", workflow: workflow2, step, needs, rerun: rerunText(workflow2, needs), ...extra };
 }
 
 // src/slopify/lib/schemas.ts
 function described(schema, description) {
   return description === void 0 ? schema : { ...schema, description };
 }
-function arrayOf(items, description) {
-  return description === void 0 ? { type: "array", items } : { type: "array", description, items };
-}
-var TASK = {
-  type: "object",
-  required: ["id", "summary", "paths"],
-  properties: { id: { type: "string" }, summary: { type: "string" }, paths: STRINGS }
-};
-function writerSchema(notes) {
-  return {
-    type: "object",
-    required: ["produced", "revision", "openDecisions", "storyBlockers", "tasks", "docs"],
-    properties: {
-      produced: { ...STRINGS, description: notes.produced },
-      revision: { type: "string", description: notes.revision },
-      openDecisions: described(STRINGS, notes.openDecisions),
-      storyBlockers: described(STRINGS, notes.storyBlockers),
-      tasks: arrayOf(TASK, notes.tasks),
-      docs: described(STRINGS, notes.docs)
-    }
-  };
-}
-var CODER_REQUIRED = ["changed", "tests", "ran", "revision", "open", "specMismatch"];
-function coderProperties(notes) {
-  return {
-    changed: described(STRINGS, notes.changed),
-    tests: described(STRINGS, notes.tests),
-    ran: described(STRINGS, notes.ran),
-    revision: { type: "string", description: notes.revision },
-    open: described(STRINGS, notes.open),
-    specMismatch: { type: "string", description: notes.specMismatch }
-  };
-}
-function coderSchema(notes) {
-  return { type: "object", required: CODER_REQUIRED, properties: coderProperties(notes) };
+function arrayOf(items2, description) {
+  return description === void 0 ? { type: "array", items: items2 } : { type: "array", description, items: items2 };
 }
 function pusherSchema(notes = {}) {
   return {
@@ -344,22 +235,702 @@ function pusherSchema(notes = {}) {
   };
 }
 
-// src/slopify/workflows/review-pr.ts
-var PATHS = "Paths, absolute or relative to the worktree";
-var WRITER_SCHEMA = writerSchema({
-  produced: "Absolute paths of the files written or changed; the spec path when the spec was revised",
-  revision: "git hash-object of the main artifact written",
-  openDecisions: "Decisions only the user can make",
-  storyBlockers: "Reasons the story cannot be built or fixed as stated; empty when none"
-});
-var CODER_SCHEMA = coderSchema({
-  changed: PATHS,
-  tests: PATHS,
-  ran: "Each command run, as: command -> result",
-  revision: "The candidate revision left: <HEAD sha>+<digest>",
-  specMismatch: "Why the spec cannot be followed; an empty string when none"
-});
+// src/slopify/lib/deliver.ts
+var CODER_SCHEMA = {
+  type: "object",
+  required: ["changed", "tests", "ran", "revision", "open", "specMismatch"],
+  properties: {
+    changed: { ...STRINGS, description: "Paths changed, relative to the worktree root" },
+    tests: { ...STRINGS, description: "Test paths added or changed" },
+    ran: { ...STRINGS, description: "Each command and its result" },
+    revision: {
+      type: "string",
+      description: "The revision left, as the brief defines it"
+    },
+    open: STRINGS,
+    specMismatch: {
+      type: "string",
+      description: "Why the spec cannot be implemented as written, or an empty string when it can"
+    },
+    steps: STRINGS,
+    observed: { type: "string" },
+    measurements: {
+      type: "array",
+      items: {
+        type: "object",
+        required: ["claim", "value", "command"],
+        properties: {
+          claim: { type: "string" },
+          value: { type: "string" },
+          command: { type: "string" }
+        }
+      }
+    }
+  }
+};
 var PUSHER_SCHEMA = pusherSchema({ reference: "A commit sha, PR URL or path, card id, or worktree path" });
+function prop(v, key) {
+  if (v === null || v === void 0) throw new TypeError(`Cannot read properties of ${String(v)} (reading '${key}')`);
+  if (typeof v !== "object") return void 0;
+  const value = Reflect.get(v, key);
+  return value;
+}
+var isList = (v) => Array.isArray(v);
+function jsonText(v) {
+  if (typeof v === "string") return v;
+  if (isList(v)) return v.map((x) => x === null || x === void 0 ? "" : jsonText(x)).join(",");
+  if (typeof v === "object" && v !== null) return "[object Object]";
+  if (typeof v === "number" || typeof v === "boolean") return String(v);
+  return v === null ? "null" : "undefined";
+}
+var NO_WRITES = "Do not commit, push, branch, or change the board or forge; pusher does that.";
+function need(step, n, kind, what, evidence) {
+  return { id: `${step}-${n}`, kind, what, evidence: evidence || "" };
+}
+var list = (items2) => items2?.length ? items2.map((x) => `- ${x}`).join("\n") : "- none";
+var clean = (v) => absent(v) ? "" : (v ?? "").trim();
+var val = (res, key) => clean(fact(res, key));
+function unique(items2) {
+  return [...new Set(items2.filter(Boolean))];
+}
+function usable(v, revision) {
+  if (!v || !revision || !sameRev(revision, v.evaluated)) return false;
+  const blocking = v.findings.some((f) => f.blocking);
+  return v.verdict === "fail" ? blocking : v.verdict !== "pass" || !blocking;
+}
+var pushOk = (r) => !!r && r.done && r.unmet.length === 0;
+var opRef = (r, name) => {
+  const o = (r?.operations ?? []).find((x) => x.op.toLowerCase() === name);
+  return o ? o.reference.trim() : "";
+};
+function callWriter(prompt, label, phaseTitle, schema) {
+  return agent(prompt, {
+    agentType: "slopify:writer",
+    label,
+    phase: phaseTitle,
+    schema
+  });
+}
+function callCoder(prompt, label, phaseTitle, schema) {
+  return agent(prompt, {
+    agentType: "slopify:coder",
+    label,
+    phase: phaseTitle,
+    schema: schema ?? CODER_SCHEMA
+  });
+}
+function callPusher(prompt, label, phaseTitle) {
+  return agent(prompt, {
+    agentType: "slopify:pusher",
+    label,
+    phase: phaseTitle,
+    schema: PUSHER_SCHEMA
+  });
+}
+function createDeliver(config) {
+  const {
+    workflow: WORKFLOW,
+    maxFailures: MAX_FAILURES,
+    planPhase: PLAN_PHASE,
+    failures,
+    projectRoot,
+    storyArg
+  } = config;
+  const WHERE = projectRoot ? `The project is at ${projectRoot}; address files by absolute path under it.` : "The project is the session project directory; address files by absolute path.";
+  const AUTH = `Authorization, from the user's invocation of /slopify:${WORKFLOW}: the story branch and worktree, attributable commits, the pushes the brief asks for, opening or updating this task's PR as a draft or ready, the declared review trigger, the one issue comment the brief asks for when the run ends or halts, and filing the issues the brief lists. It does not authorize merging, releases, any other message, rewriting docs/BOARD.md or docs/FORGE.md, or changing a card's content. Work exactly as docs/BOARD.md and docs/FORGE.md declare; an operation that is not bound is unmet, never improvised. Stage explicit paths only.`;
+  const completed = [];
+  const skipped = [];
+  const attempts = [];
+  const verification = [];
+  const limits = [];
+  const state = {
+    worktree: "",
+    branch: "",
+    ledger: "",
+    specPath: "",
+    specHash: "",
+    specExists: false,
+    pr: ""
+  };
+  let runLinePending = true;
+  function done(step) {
+    completed.push(step);
+  }
+  function skip(step) {
+    skipped.push(step);
+    completed.push(step);
+  }
+  function stop(step, needs) {
+    const checkpoint = {};
+    if (state.worktree) checkpoint.worktree = state.worktree;
+    if (state.branch) checkpoint.branch = state.branch;
+    if (state.specExists) checkpoint.spec = state.specPath;
+    if (state.ledger) checkpoint.ledger = state.ledger;
+    if (state.pr) checkpoint.pr = state.pr;
+    return blocked(WORKFLOW, step, needs, {
+      completed: [...completed],
+      checkpoint,
+      attempts
+    });
+  }
+  function fail(gate2, approach, failed) {
+    failures[gate2] += 1;
+    attempts.push({ gate: gate2, approach, failed });
+    return failures[gate2] >= MAX_FAILURES;
+  }
+  function exhausted(step, gate2) {
+    const last = attempts.filter((a) => a.gate === gate2).slice(-MAX_FAILURES);
+    return stop(step, [
+      need(
+        step,
+        1,
+        "validation",
+        `A ${gate2} that passes its gate; ${MAX_FAILURES} attempts failed.`,
+        last.map((a) => `${a.approach}: ${a.failed}`).join(" | ")
+      )
+    ]);
+  }
+  function rel(p) {
+    let t = (p || "").trim().replace(/^\.\//, "");
+    if (state.worktree && t.startsWith(state.worktree + "/")) t = t.slice(state.worktree.length + 1);
+    return t.replace(/\/+$/, "");
+  }
+  function within(p, scope) {
+    const a = rel(p);
+    const b = rel(scope);
+    return !!a && !!b && (a === b || a.startsWith(b + "/"));
+  }
+  function overlaps(x, y) {
+    return x.some((p) => y.some((q) => within(p, q) || within(q, p)));
+  }
+  function pathOf(location) {
+    const m = /^(.*?)(?::\d+(?:-\d+)?)?$/.exec(location.trim());
+    return rel(m ? m[1] : location);
+  }
+  function relList(v) {
+    if (!isList(v)) throw new TypeError("not a list of paths");
+    return v.map((p) => rel(jsonText(p || "")));
+  }
+  async function judge(items2, revision, step) {
+    const out = Array.from({ length: items2.length }, () => null);
+    let rounds = 0;
+    for (; ; ) {
+      const todo = items2.map((item, i) => ({ item, i })).filter((t) => !usable(out[t.i], revision));
+      if (todo.length === 0) return { verdicts: out };
+      const names = todo.map((t) => t.item.name).join(", ");
+      if (rounds >= MAX_FAILURES) {
+        attempts.push({
+          gate: "validator",
+          approach: `${names} on ${revision}`,
+          failed: "no usable verdict after repeated dispatches"
+        });
+        return {
+          stop: stop(step, [
+            need(
+              step,
+              1,
+              "validation",
+              `A usable verdict from ${names} on revision ${revision}.`,
+              `${rounds} dispatches returned no verdict, a verdict on another revision, or a fail with no blocking finding`
+            )
+          ])
+        };
+      }
+      if (rounds > 0)
+        attempts.push({
+          gate: "validator",
+          approach: `re-run ${names}`,
+          failed: "no verdict, or a verdict on another revision"
+        });
+      const res = await parallel(todo.map((t) => () => t.item.call()));
+      for (const [k, t] of todo.entries()) out[t.i] = res[k];
+      rounds += 1;
+    }
+  }
+  function record(name, v, revision) {
+    verification.push({
+      agent: name,
+      verdict: v ? v.verdict : "none",
+      evaluated: v ? v.evaluated : revision,
+      findings: v ? v.findings.length : 0
+    });
+  }
+  function takeLines(lines) {
+    const out = [];
+    if (runLinePending) {
+      out.push(
+        `run <n, one more than the highest run number in the ledger, or 1>: ${WORKFLOW} ${storyArg.replaceAll(/\s+/g, " ").slice(
+          0,
+          80
+        )} | worktree ${state.worktree || "<the worktree path>"} | branch ${state.branch || "<the branch name>"}`
+      );
+      runLinePending = false;
+    }
+    return [...out, ...lines ?? []];
+  }
+  function pushBrief(instruction, lines, ledgerNote) {
+    const ln = takeLines(lines);
+    return `${WHERE}
+You are the only agent in this workflow that acts on the board and forge. ${AUTH}
+
+Worktree: ${state.worktree || "(not created yet)"}. Ledger: ${ledgerNote || `${state.worktree}/.tmp/ledger.md`}.
+
+${instruction}
+
+${ln.length > 0 ? `Append these lines, in this order, to the ledger (create it, with its directory, if absent). Stamp each with the current time in front and fill every <placeholder> from what you just did:
+${ln.map((l) => `- ${l}`).join("\n")}` : "Append no ledger lines."}
+
+Report each operation you performed as an operations entry, named worktree, branch, delivery-start, commit, push, pr, review-trigger, or ledger, with its reference. Set done only when every operation asked for is complete; list each one that is unbound or failed in unmet.`;
+  }
+  function pushStop(step, r) {
+    return stop(step, [
+      need(
+        step,
+        1,
+        "prerequisite",
+        "An operation that docs/BOARD.md or docs/FORGE.md bind, and the authorization to run it.",
+        r ? r.unmet.join("; ") || "pusher reported the work incomplete" : "pusher did not return"
+      )
+    ]);
+  }
+  function makeReport(extra, review) {
+    const outcome = (r) => {
+      const o = r.review === void 0 ? r.status : r.review;
+      const text = typeof o === "string" ? o : JSON.stringify(o);
+      const rounds = isList(r.rounds) ? `${r.rounds.length} round(s)` : "";
+      const unfixed = isList(r.unfixed) && r.unfixed.length > 0 ? `${r.unfixed.length} finding(s) left unfixed` : "";
+      return [text, rounds, unfixed].filter(Boolean).join("; ");
+    };
+    return [
+      `${WORKFLOW} done.`,
+      ...extra ?? [],
+      verification.length > 0 ? `Verification this run: ${verification.map((v) => `${v.agent} ${v.verdict} on ${v.evaluated}`).join("; ")}.` : "Verification: every gate was already satisfied by earlier checkpoints; no new verdicts this run.",
+      skipped.length > 0 ? `Skipped from checkpoints: ${skipped.join(", ")}.` : "",
+      `PR: ${state.pr}.`,
+      `Review: ${outcome(review)}.`,
+      limits.length > 0 ? `Limits: ${limits.join(" | ")}.` : ""
+    ].filter(Boolean).join("\n");
+  }
+  async function recoverPlan() {
+    const r = await scout(
+      "scout-docs",
+      `${WHERE}
+Read the spec at ${state.specPath} and report only its task list and the documentation it says to update; quote the spec, claim nothing of your own. Report one evidence item per task: source "task:<id>", location the spec path, excerpt a JSON object {"summary": "...", "paths": ["..."]} with the task's paths relative to the worktree root. Report one evidence item with source "docs" and excerpt a JSON array of the documentation paths to update (an empty array when none). Quote the spec; make no changes.`,
+      { label: "read spec tasks", phase: PLAN_PHASE }
+    );
+    const tasks = [];
+    let docs = [];
+    const evidence = r?.evidence ?? [];
+    for (const e of evidence) {
+      try {
+        if (e.source.startsWith("task:")) {
+          const j = JSON.parse(e.excerpt);
+          const id = e.source.slice(5);
+          const summary = jsonText(prop(j, "summary") || "");
+          tasks.push({ id, summary, paths: relList(prop(j, "paths") || []) });
+        } else if (e.source === "docs") {
+          docs = relList(JSON.parse(e.excerpt));
+        }
+      } catch {
+      }
+    }
+    return tasks.length > 0 ? { tasks, docs } : null;
+  }
+  return {
+    WHERE,
+    completed,
+    skipped,
+    attempts,
+    verification,
+    limits,
+    state,
+    done,
+    skip,
+    stop,
+    fail,
+    exhausted,
+    rel,
+    within,
+    overlaps,
+    pathOf,
+    judge,
+    record,
+    pushBrief,
+    pushStop,
+    makeReport,
+    recoverPlan
+  };
+}
+
+// src/slopify/lib/deliver-steps.ts
+var WRITER_SCHEMA = {
+  type: "object",
+  required: ["produced", "revision", "openDecisions", "storyBlockers", "tasks", "docs"],
+  properties: {
+    produced: { ...STRINGS, description: "Absolute paths written" },
+    revision: {
+      type: "string",
+      description: "git hash-object of the main artifact"
+    },
+    openDecisions: {
+      ...STRINGS,
+      description: "Decisions only the user can make; empty when none"
+    },
+    storyBlockers: {
+      ...STRINGS,
+      description: "Reasons the story is unbuildable or a criterion is wrong as stated; empty when none"
+    },
+    tasks: {
+      type: "array",
+      description: "Spec only: the tasks, with disjoint paths; empty otherwise",
+      items: {
+        type: "object",
+        required: ["id", "summary", "paths"],
+        properties: {
+          id: { type: "string" },
+          summary: { type: "string" },
+          paths: {
+            ...STRINGS,
+            description: "Files or directories the task may write, relative to the worktree root, no globs"
+          }
+        }
+      }
+    },
+    docs: {
+      ...STRINGS,
+      description: "Spec only: documentation files to update, relative to the worktree root; empty otherwise"
+    }
+  }
+};
+async function createWorktree(d, o) {
+  const { state, stop, done, pushBrief, pushStop } = d;
+  const { cardId, boardBranch } = o;
+  const r = await callPusher(
+    pushBrief(
+      `Create or recover ${o.worktree} and branch that docs/FORGE.md declares for ${o.subject}${boardBranch ? ` (the board gives the branch name ${boardBranch})` : ""}. ${cardId ? "Then perform the delivery-start operation docs/BOARD.md declares for the card (for example its status transition), only as bound." : "There is no card, so perform no board operation."} Change no card content. Append the board-start line only once the delivery-start operation is done.`,
+      cardId ? [`done board-start ${cardId}`] : [],
+      "<worktree>/.tmp/ledger.md at the root of the worktree you create or recover"
+    ),
+    "create the worktree",
+    "Workspace"
+  );
+  if (!pushOk(r)) return pushStop("workspace", r);
+  const wt = opRef(r, "worktree");
+  if (!wt.startsWith("/")) {
+    return stop("workspace", [
+      need("workspace", 1, "prerequisite", `The absolute path of ${o.worktree}.`, JSON.stringify(r.operations))
+    ]);
+  }
+  state.worktree = wt.replace(/\/+$/, "");
+  state.branch = opRef(r, "branch") || state.branch;
+  done("workspace");
+  return null;
+}
+async function workspace(d, o) {
+  const { state, done, skip, pushBrief, pushStop } = d;
+  const { cardId } = o;
+  phase("Workspace");
+  let boardStartRecorded = false;
+  if (state.worktree) {
+    skip("workspace");
+  } else {
+    const created = await createWorktree(d, o);
+    if (created) return created;
+    boardStartRecorded = !!cardId;
+  }
+  if (!o.boardStartDone && !boardStartRecorded) {
+    const b = await callPusher(
+      pushBrief(
+        `Perform the delivery-start operation docs/BOARD.md declares for card ${cardId} (for example its status transition), only as bound and only if the card does not already show it. Do nothing else, and change no card content.`,
+        [`done board-start ${cardId}`]
+      ),
+      "start the card",
+      "Workspace"
+    );
+    if (!pushOk(b)) return pushStop("workspace", b);
+    done("board-start");
+  }
+  if (!state.ledger) state.ledger = `${state.worktree}/.tmp/ledger.md`;
+  if (!state.specPath) state.specPath = `${state.worktree}/${o.specRel}`;
+  return null;
+}
+
+// src/slopify/lib/rules.ts
+var MAX_FIX_ROUNDS = 3;
+var MAX_INNER_TRIES = 3;
+var isBlocking = (r) => r.severity === "blocker" || r.severity === "major";
+function routeOf(r, priorFixes, differentlyUsed, hasSpec) {
+  if (r.verdict === "dismissed") return "dismiss";
+  if (r.verdict === "unverified") return "unverified";
+  if (r.kind === "cannot-verify") return "not-validated";
+  if (r.kind === "decision") return "needs-confirmation";
+  if (r.severity === "pre-existing") return "new-issue";
+  if (!isBlocking(r)) return "suggestion";
+  if (priorFixes > 0) {
+    const recurring = recurrenceRoute(r, differentlyUsed);
+    if (recurring) return recurring;
+  }
+  if (r.kind === "docs") return "writer";
+  if (r.kind === "test") return "correct-test";
+  return r.kind === "spec" && hasSpec ? "revise-spec" : "coder";
+}
+function recurrenceRoute(r, differentlyUsed) {
+  if (r.ruling === "accept-as-debt") return r.severity === "major" ? "known-debt" : "escalate";
+  if (r.ruling === "split-to-issue") return r.severity === "major" ? "split-issue" : "escalate";
+  if (r.ruling === "fix-differently") return differentlyUsed ? "escalate" : null;
+  return "escalate";
+}
+var FIX_ROUTES = ["coder", "correct-test", "writer", "revise-spec"];
+function gate(s) {
+  if (!s.prOpen || !s.reviewClean || s.open > 0) return "fix";
+  return s.held > 0 ? "held" : "clean";
+}
+function noProgress(openByRound) {
+  const [a, b, c] = openByRound.slice(-3);
+  return a !== void 0 && b !== void 0 && c !== void 0 && b >= a && c >= b;
+}
+var allowsReady = (setting) => setting?.trim() === "ready";
+var samePath = (a, b) => a === b || a.startsWith(`${b}/`) || b.startsWith(`${a}/`);
+var filesOverlap = (x, y) => x.files.some((a) => y.files.some((b) => samePath(a, b)));
+function waves(tasks) {
+  const out = [];
+  const finished = /* @__PURE__ */ new Set();
+  let left = [...tasks];
+  while (left.length > 0) {
+    const ready = left.filter((t) => t.dependsOn.every((d) => finished.has(d)));
+    const pool = ready.length > 0 ? ready : left;
+    const group = [];
+    for (const t of pool) {
+      if (group.every((g) => !filesOverlap(g, t))) group.push(t);
+    }
+    out.push(group);
+    for (const t of group) finished.add(t.id);
+    left = left.filter((t) => !group.includes(t));
+  }
+  return out;
+}
+var items = (list2) => list2.map((x) => `- ${x.text}${x.detail ? `
+  ${x.detail}` : ""}`).join("\n");
+var cell = (s) => s.replaceAll("|", String.raw`\|`).replaceAll("\n", " ");
+var section = (title, body2) => body2 ? `## ${title}
+
+${body2}` : "";
+function criteriaTable(rows) {
+  if (rows.length === 0) return "";
+  const lines = rows.map(
+    (c) => `| ${cell(c.wording)} | ${cell(c.category)} | ${cell(c.path)} | ${cell(c.result)} | ${cell(c.evidence.join(", "))} |`
+  );
+  return [
+    "| Criterion | Category | Validation path | Result | Evidence |",
+    "| --- | --- | --- | --- | --- |",
+    ...lines
+  ].join("\n");
+}
+function renderBody(b) {
+  return [
+    `Issue: ${b.issue}${b.specDir ? `
+
+Spec: \`${b.specDir}\`` : ""}`,
+    section("Why this is a draft", items(b.draftReasons)),
+    section("Needs confirmation", items(b.needsConfirmation)),
+    section("Criteria", criteriaTable(b.criteria)),
+    section("Assumptions", b.assumptions.map((a) => `- ${a}`).join("\n")),
+    section("Unverified findings", items(b.unverified)),
+    section("Not validated", items(b.notValidated)),
+    section("Known debt", items(b.knownDebt)),
+    section("Suggestions", items(b.suggestions)),
+    section("Test changes", b.testChanges.map((t) => `- ${t}`).join("\n"))
+  ].filter(Boolean).join("\n\n");
+}
+
+// src/slopify/lib/spec.ts
+var TASK = {
+  type: "object",
+  required: ["id", "dependsOn", "files", "criteria", "todo", "reuse", "create"],
+  properties: {
+    id: { type: "string" },
+    dependsOn: { ...STRINGS, description: "Ids of the tasks this one needs finished first" },
+    files: { ...STRINGS, description: "Files or directories this task may write, relative to the worktree root" },
+    criteria: { ...STRINGS, description: "Ids of the criteria this task delivers" },
+    todo: { type: "string", description: "What to do, including anything only this task needs" },
+    reuse: { ...STRINGS, description: "What already exists and must be used, not rebuilt" },
+    create: { ...STRINGS, description: "What this task creates" }
+  }
+};
+var CRITERION = {
+  type: "object",
+  required: ["id", "wording", "category", "path", "evidence", "firstTest"],
+  properties: {
+    id: { type: "string" },
+    wording: { type: "string", description: "The criterion copied word for word from the issue" },
+    category: { type: "string", description: "A category from TESTING.md, or uncategorized when none fits" },
+    path: { type: "string", description: "The validation path to run for this criterion" },
+    evidence: { type: "string", description: "The evidence that path must produce" },
+    firstTest: { type: "string", description: "The first test to write" }
+  }
+};
+var BUILD = {
+  type: "object",
+  required: ["shared", "tasks", "docs"],
+  properties: {
+    shared: {
+      ...STRINGS,
+      description: "Constraints and interfaces every task of this story must follow; never a repeated project rule"
+    },
+    tasks: { type: "array", items: TASK },
+    docs: { ...STRINGS, description: "Documents making claims about the area the change touches; can be empty" }
+  }
+};
+var VALIDATE = {
+  type: "object",
+  required: ["criteria"],
+  properties: { criteria: { type: "array", items: CRITERION } }
+};
+var DECISION = {
+  type: "object",
+  required: ["id", "question", "choice", "rationale", "reversible", "affectsAcceptance"],
+  properties: {
+    id: { type: "string" },
+    question: { type: "string" },
+    choice: { type: "string" },
+    rationale: { type: "string", description: "What grounds the choice" },
+    reversible: { type: "boolean" },
+    affectsAcceptance: { type: "boolean", description: "True when the choice changes behavior a criterion describes" }
+  }
+};
+var DECISIONS = { type: "array", items: DECISION };
+function parsed(text) {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+var isBuild = (v) => typeof v === "object" && v !== null && "tasks" in v;
+var isValidate = (v) => typeof v === "object" && v !== null && "criteria" in v;
+function parseBuild(text) {
+  const v = parsed(text);
+  return isBuild(v) ? v : null;
+}
+function parseValidate(text) {
+  const v = parsed(text);
+  return isValidate(v) ? v : null;
+}
+
+// src/slopify/lib/loop.ts
+var Halt = class extends Error {
+  step;
+  needs;
+  constructor(step, needs, evidence) {
+    super(evidence);
+    this.step = step;
+    this.needs = needs;
+  }
+};
+function must(value, step, what) {
+  if (value === null || value === void 0) throw new Halt(step, what, "the agent did not return");
+  return value;
+}
+function stopOf(d, error) {
+  if (error instanceof Halt)
+    return d.stop(error.step, [need(error.step, 1, "prerequisite", error.needs, error.message)]);
+  throw error;
+}
+var TEST_SCHEMA = {
+  type: "object",
+  required: ["tests", "failingOutput", "noTest", "decisions"],
+  properties: {
+    tests: { ...STRINGS, description: "Test paths written or changed, relative to the worktree root" },
+    failingOutput: { type: "string", description: "The test's failing output on the current code" },
+    noTest: { type: "string", description: "Why the behavior can't be expressed as a test; empty when it can" },
+    decisions: DECISIONS
+  }
+};
+var FIX_SCHEMA = {
+  type: "object",
+  required: ["changed", "ran", "testProblem", "decisions"],
+  properties: {
+    changed: { ...STRINGS, description: "Paths changed, relative to the worktree root" },
+    ran: { ...STRINGS, description: "Each command and its result" },
+    testProblem: { type: "string", description: "Why the test is wrong; empty when it isn't" },
+    decisions: DECISIONS
+  }
+};
+var QA_SCHEMA = {
+  type: "object",
+  required: [...LENS_SCHEMA.required, "testAtFault"],
+  properties: {
+    ...LENS_SCHEMA.properties,
+    testAtFault: { type: "boolean", description: "True when the test itself is what has to change" }
+  }
+};
+var CHECKS_SCHEMA = {
+  type: "object",
+  required: ["commands"],
+  properties: {
+    commands: {
+      type: "array",
+      items: {
+        type: "object",
+        required: ["command", "exitCode", "failingLines"],
+        properties: {
+          command: { type: "string" },
+          exitCode: { type: "number" },
+          failingLines: { type: "string" }
+        }
+      }
+    }
+  }
+};
+var VALIDATOR_SCHEMA = {
+  type: "object",
+  required: ["results", "uncategorizedSetting"],
+  properties: {
+    results: {
+      type: "array",
+      items: {
+        type: "object",
+        required: ["id", "result", "ran", "evidence", "detail", "setting"],
+        properties: {
+          id: { type: "string" },
+          result: { type: "string", enum: ["pass", "fail", "cannot-verify"] },
+          ran: { type: "string", description: "The validation path that ran: its commands, flows, or tests" },
+          evidence: { ...STRINGS, description: "Paths under .tmp/evidence/ or quoted output" },
+          detail: { type: "string", description: "For a fail, the flow step or file and line; else why" },
+          setting: { type: "string", description: "What TESTING.md's category states when it can't be verified" }
+        }
+      }
+    },
+    uncategorizedSetting: { type: "string", description: "What TESTING.md's Uncategorized setting states" }
+  }
+};
+var JUDGE_SCHEMA = {
+  type: "object",
+  required: ["verdict", "severity", "kind", "ruling", "reason", "fingerprint"],
+  properties: {
+    verdict: { type: "string", enum: ["confirmed", "dismissed", "unverified"] },
+    severity: { type: "string", enum: ["blocker", "major", "minor", "nit", "pre-existing", "none"] },
+    kind: { type: "string", enum: ["code", "test", "docs", "spec", "cannot-verify", "decision"] },
+    ruling: { type: "string", enum: ["none", "fix-differently", "accept-as-debt", "split-to-issue", "escalate"] },
+    reason: { type: "string", description: "What the evidence shows" },
+    fingerprint: { type: "string", description: "file|symbol|category, the same whenever this problem comes back" }
+  }
+};
+var GATEWAY_SCHEMA = {
+  type: "object",
+  required: ["missed", "docsToAdd"],
+  properties: {
+    missed: {
+      type: "array",
+      items: {
+        type: "object",
+        required: ["location", "text"],
+        properties: { location: { type: "string" }, text: { type: "string" } }
+      }
+    },
+    docsToAdd: { ...STRINGS, description: "Documents the change affects that aren't on the docs list" }
+  }
+};
 var WATCHER_SCHEMA = {
   type: "object",
   required: ["outcome", "waitingFor", "limitMinutes", "reference", "findings"],
@@ -378,1157 +949,964 @@ var WATCHER_SCHEMA = {
     }
   }
 };
-var listOf = (v) => Array.isArray(v) ? v : [];
-var firstOf = (v) => Array.isArray(v) ? listOf(v)[0] : v;
-var str = (v) => typeof v === "string" ? v.trim() : typeof v === "number" ? String(v) : "";
-function normFindings(items) {
-  const out = [];
-  for (const [i, f] of listOf(items).entries()) {
-    if (typeof f === "string" && f.trim()) {
-      out.push({ id: `f${i + 1}`, location: "", text: f.trim() });
-    } else if (isRecord(f)) {
-      const g = f;
-      if (g.text || g.problem)
-        out.push({ id: str(g.id) || `f${i + 1}`, location: str(g.location), text: String(g.text || g.problem).trim() });
-    }
-  }
-  return out;
-}
-function readInput(a) {
-  const input = inputOf(a, "pr", true);
-  return {
-    pr: str(input["pr"]),
-    projectRoot: str(input["projectRoot"]),
-    storyText: str(input["story"]),
-    testPath: str(firstOf(input["test"])),
-    // Dirty paths the caller deliberately left uncommitted (outside its assigned paths): never staged, never briefed.
-    // The ledger's exclude line adds to them once the checkpoint is read.
-    excluded: listOf(input["exclude"]).map((x) => str(x)).filter(Boolean),
-    answers: answersOf(input["answers"]),
-    givenFindings: normFindings(input["findings"]),
-    worktree: str(input["worktree"]),
-    spec: str(input["spec"])
-  };
-}
-var MAX_ROUNDS = 3;
-var MAX_FAILURES = 3;
-var WATCH_MINUTES = 9;
-var FINAL_ROUND = MAX_ROUNDS + 1;
-var NO_LIMIT_DISPATCHES = 12;
-var READ_ONLY = "You only read and report here: make no commit, push, branch, worktree, pull request comment, review trigger, or board change.";
-var NO_FORGE_WRITES = "Do not commit, push, create or remove branches or worktrees, comment on the pull request, fire a review trigger, or change the board or forge; pusher does all of that.";
-var AUTH = "Authorization: the user invoked the review loop on this pull request. You may create or recover the story worktree, make attributable commits, push the story branch after the gates passed, update this pull request, re-fire the declared review trigger, and append ledger lines. You may not merge, release, send other messages, change a card, force-push, or rewrite history. Work exactly as docs/BOARD.md and docs/FORGE.md declare, resolving their relative paths against the main checkout root. Report any operation they do not bind in unmet; never improvise one.";
-var list = (items) => items.length > 0 ? items.map((x) => `- ${x}`).join("\n") : "- none";
-var KINDS = {
-  worktree: "path",
-  ledger: "path",
-  head: "sha",
-  "pushed-head": "sha",
-  "fired-head": "sha",
-  base: "sha",
-  "story-revision": "sha",
-  branch: "branch"
+var DOCS_SCHEMA = {
+  type: "object",
+  required: ["changed"],
+  properties: { changed: { ...STRINGS, description: "Documents changed, relative to the worktree root" } }
 };
-function val(res, key) {
-  const v = fact(res, key);
-  if (key === "spec") return specOf(v);
-  const kind = KINDS[key];
-  return kind ? shaped(kind, v) : absent(v, true) ? "" : v;
+var SEVERITY_RUBRIC = `Severity: blocker when a criterion fails, the build or tests are broken, data is lost or corrupted, there is a security hole, or tests were weakened without a recorded reason. major for a correctness bug on a reachable path in changed code, an error swallowed on a path the user sees, or documentation the change made untrue. minor for real but low impact. nit for style, naming, or readability. pre-existing for a defect the change didn't introduce. none when the problem isn't a defect in the change.
+Kind: code when the behavior is wrong. test when the behavior is right but the test or flow is wrong. docs when documentation is untrue or missing. spec when the spec is wrong, or the finding conflicts with its design. cannot-verify when a tool, simulator, or credential stopped working, the check hits a blind spot, or the proof is missing or unusable. decision when only a person can settle what a criterion should mean.
+Never downgrade a confirmed failure. Filter out what a linter would catch, and style. Run a reproduction when you can, rather than only reading the code. An earlier dismissal of the same fingerprint stands.`;
+var RECURRENCE_RUBRIC = `If this problem's fingerprint appears under earlier rulings after a fix attempt, also give a ruling, reading those attempts: fix-differently when another approach could work, accept-as-debt when a major can ship and be paid later, split-to-issue when a major belongs in its own issue, or escalate. Otherwise the ruling is none.`;
+var worktreeOf = (l) => l.d.state.worktree;
+var rowsOf = (l) => Object.values(l.rows);
+function inOrder(l, step) {
+  const turn = async () => {
+    await l.commits;
+    return step();
+  };
+  const next = turn();
+  l.commits = settled(next);
+  return next;
 }
-function specOf(v) {
-  const s = parseSpec((v.split("\n", 1)[0] ?? "").replace(/\s*\([^)]*\)\s*$/, ""));
-  return s ? shaped("path", s.path) || shaped("rel", s.path) : shaped("path", v) || shaped("rel", v);
-}
-function reviewRound(v) {
-  const t = v.trim();
-  if (absent(t)) return 0;
-  let best = 0;
-  for (const m of t.matchAll(/review\s+(\d+)\s+(?:fired|ended)/gi)) best = Math.max(best, Number(m[1]));
-  if (best) return best;
-  const bare = /^(?:round\s+)?(\d+)$/i.exec(t);
-  return bare ? Number(bare[1]) : 0;
-}
-var need = (id, kind, what, evidence) => ({ id, kind, what, evidence });
-var isTmp = (p) => /(?:^|\/)\.tmp(?:\/|$)/.test(p);
-function dirtyEntry(x) {
-  const t = x.trim().replace(/^[ MADRCUT?!]{1,2}\s+/, "").replace(/\s+\([^)]*\)$/, "");
-  const m = /^(.*) -> (.*)$/.exec(t);
-  return m ? [m[1] ?? "", m[2] ?? ""] : [t];
-}
-var BUILD_TXT = /(?:^|\/)(?:cmakelists|[\w.-]*(?:requirements|constraints)[\w.-]*|dependencies|packages|manifest|robots|sources|version)\.txt$/i;
-var CHECKPOINT_KEYS = "worktree branch head base pushed-head unpushed dirty ledger review-fired fired-head fired-ancestor review-ended ledger-exclude spec pr";
-var named = (v, rev) => sameRev(rev, v.evaluated);
-var passes = (v, rev) => !!v && v.verdict === "pass" && v.findings.every((f) => !f.blocking) && named(v, rev);
-var judged = (verdicts, rev) => verdicts.every((v) => !!v && named(v, rev));
-function problems(v, rev) {
-  if (!v) return ["no verdict returned"];
-  const out = v.findings.filter((f) => v.verdict !== "pass" || f.blocking).map((f) => `${f.location}: ${f.problem}`);
-  if (!named(v, rev)) out.push(`judged ${v.evaluated || "no revision"}, not the briefed revision ${rev}`);
-  if (out.length === 0) out.push(`${v.verdict}: ${v.limits}`);
-  return out;
-}
-var blockedPass = (v) => v.verdict === "pass" && v.findings.some((x) => x.blocking);
-var usable = (v, head) => !!v && named(v, head) && !blockedPass(v);
-function feedbackOf(verdicts, label, validation) {
-  const feedback = [];
-  for (const [i, v] of verdicts.entries()) {
-    if (passes(v, label)) continue;
-    const src = i === 0 ? "qa" : "lens-docs";
-    const blockers = v.findings.filter((f) => f.blocking);
-    if (blockers.length > 0)
-      for (const [k, f] of blockers.entries())
-        feedback.push({ id: `${src}-${validation}-${k + 1}`, location: f.location, text: f.problem, why: "" });
-    else
-      feedback.push({
-        id: `${src}-${validation}`,
-        location: "",
-        text: problems(v, label).join("; "),
-        why: ""
-      });
+async function settled(p) {
+  try {
+    await p;
+  } catch {
   }
-  return feedback;
 }
-function acceptSpec(st, w) {
-  st.specRevised = true;
-  st.specRevision = w.revision;
-  for (const p of w.produced) st.stage.add(p);
-  return { ok: true };
+function pushed(r, what) {
+  const unmet = r?.unmet.join("; ");
+  if (pushOk(r)) return r;
+  throw new Halt("push", what, unmet ?? "pusher didn't return");
 }
-var labelOf = (st, wantCoder, wantDocs) => (wantCoder && st.coder ? st.coder.revision : wantDocs && st.writer ? st.writer.revision : st.label) || st.specRevision || "";
-var leadingInt = (t) => Number(/^[+-]?\d+/.exec(t)?.[0]);
-var ASSUMPTIONS = `Decide anything that does not change the story's outcome yourself, and record it in the document as a labelled assumption ("Assumption: ..."). Raise an open decision only for a choice that would change the story's outcome.`;
-function cappedReview(r, res, w, count) {
-  const limit = res.limitMinutes || 0;
-  const cap = limit > 0 ? Math.ceil(limit / WATCH_MINUTES) + 1 : NO_LIMIT_DISPATCHES;
-  if (count < cap) return null;
-  log(
-    `Review ${r} did not ${w} within ${limit > 0 ? "its declared limit" : "the fixed cap"}; treating it as timed-out`
+async function commit(l, paths, message) {
+  const r = await inOrder(
+    l,
+    () => callPusher(
+      l.d.pushBrief(
+        `Commit exactly these paths as they stand, staged by explicit path, with a message in the convention docs/FORGE.md declares, saying: ${message}.${l.cardId ? ` Name the issue ${l.cardId} in it.` : ""} Do not push.
+${list(paths)}`
+      ),
+      `commit: ${message}`,
+      "Build"
+    )
   );
-  return {
-    ...res,
-    outcome: "timed-out",
-    ...limit <= 0 && {
-      note: `docs/FORGE.md declares no time limit for the review, so the wait was capped at ${NO_LIMIT_DISPATCHES} dispatches of ${WATCH_MINUTES} minutes (about ${NO_LIMIT_DISPATCHES * WATCH_MINUTES} minutes).`
+  return opRef(pushed(r, `A commit of ${paths.join(", ")}.`), "commit");
+}
+var answersText = (l) => Object.keys(l.answers).length > 0 ? `The user answered these earlier questions:
+${JSON.stringify(l.answers)}` : "";
+function changeBrief(l, c) {
+  const criteria = c.criteria.map((x) => `- ${x.id}: ${x.wording}
+  First test: ${x.firstTest}`).join("\n");
+  return [
+    `${l.where}
+Work in the worktree ${worktreeOf(l)}.`,
+    l.build?.shared.length ? `Constraints every task follows:
+${list(l.build.shared)}` : "",
+    c.task ? `Your task (${c.task.id}): ${c.task.todo}
+Files you may write:
+${list(c.task.files)}
+Reuse, don't rebuild:
+${list(c.task.reuse)}
+Create:
+${list(c.task.create)}` : "",
+    criteria ? `The criteria it delivers:
+${criteria}` : "",
+    c.item ? `The problem to fix, at ${c.item.problem.location}:
+${c.item.problem.text}
+${c.item.reason}` : "",
+    answersText(l),
+    "If you have to choose something the brief doesn't settle, pick the most reasonable option, cite what grounds it, and report it in decisions. Don't stop to ask.",
+    NO_WRITES
+  ].filter(Boolean).join("\n\n");
+}
+async function writeTest(l, c, reason) {
+  const t = must(
+    await callCoder(
+      `${changeBrief(l, c)}
+
+Write a new test or change an existing one, so that it states the required behavior. Change no production code. It must fail on the current code: run it and return the failing output. When the behavior can't be expressed as a test, return noTest with the reason instead.${reason ? `
+
+An earlier attempt showed the test has to change: ${reason}` : ""}`,
+      `${c.id}: test`,
+      "Build",
+      TEST_SCHEMA
+    ),
+    "build",
+    `A test for ${c.id}.`
+  );
+  l.decisions.push(...t.decisions);
+  if (t.noTest || t.tests.length === 0) return { paths: [], commit: "", noTest: t.noTest };
+  l.testChanges.push(...t.tests);
+  const sha = await commit(l, t.tests, `add a failing test for ${c.id}`);
+  return { paths: t.tests, commit: sha, noTest: "" };
+}
+function qaBrief(l, c, test) {
+  const history = test.commit ? `The test commit is ${test.commit}, and its protected paths are:
+${list(test.paths)}
+Check in a temporary copy that the test fails at that commit and passes at HEAD. Check that nothing after that commit touches a protected path, and that nothing skips, weakens, or excludes the test, for example by loosening a tolerance, regenerating a snapshot, or changing the test config.` : `This change has no test, because: ${test.noTest}. Judge that reason.`;
+  return `${changeBrief(l, c)}
+
+Validate one change and its history.
+${history}
+Check that the fix delivers the behavior asked for and doesn't merely satisfy the test, for example by special-casing the test's input. Check that the change stays within its criterion or problem. Any failed check is a blocking finding. Set testAtFault when the test is what has to change.`;
+}
+function fixPrompt(l, c, cycle, lastFailure) {
+  const assignment = cycle.paths.length > 0 ? `Make this test pass. These paths are protected, so change none of them:
+${list(cycle.paths)}
+If the test is wrong, return testProblem with the reason and stop.` : `Make the change. It has no test because: ${cycle.noTest}`;
+  return `${changeBrief(l, c)}
+
+${assignment}${lastFailure ? `
+
+The last attempt failed validation:
+${lastFailure}` : ""}`;
+}
+async function qaOf(l, c, cycle) {
+  return must(
+    await agent(qaBrief(l, c, cycle), {
+      agentType: "slopify:qa",
+      label: `${c.id}: qa`,
+      phase: "Build",
+      schema: QA_SCHEMA
+    }),
+    "build",
+    `A qa verdict on ${c.id}.`
+  );
+}
+async function runChange(l, c) {
+  let test = null;
+  let reason = "";
+  let rewriteTest = true;
+  for (let attempt = 1; attempt <= MAX_INNER_TRIES; attempt += 1) {
+    if (rewriteTest) test = await writeTest(l, c, reason);
+    const cycle = must(test, "build", `A test for ${c.id}.`);
+    const fix = must(
+      await callCoder(
+        fixPrompt(l, c, cycle, rewriteTest ? "" : reason),
+        `${c.id}: fix${attempt > 1 ? ` (try ${String(attempt)})` : ""}`,
+        "Build",
+        FIX_SCHEMA
+      ),
+      "build",
+      `A fix for ${c.id}.`
+    );
+    l.decisions.push(...fix.decisions);
+    if (fix.testProblem) {
+      reason = fix.testProblem;
+      rewriteTest = true;
+      continue;
     }
+    if (fix.changed.length > 0) await commit(l, fix.changed, `implement ${c.id}`);
+    l.changedThisRound.push(...fix.changed);
+    const verdict = await qaOf(l, c, cycle);
+    if (verdict.verdict === "pass") return "";
+    reason = verdict.findings.map((f) => `${f.location}: ${f.problem}`).join("\n") || verdict.limits;
+    rewriteTest = verdict.testAtFault;
+  }
+  return reason;
+}
+function criteriaOf(l, ids) {
+  return (l.validate?.criteria ?? []).filter((c) => ids.includes(c.id));
+}
+function changeOfTask(l, task) {
+  return {
+    id: task.id,
+    files: task.files,
+    task,
+    criteria: criteriaOf(l, task.criteria)
   };
 }
-function sortInto(out, f, verdict, head) {
-  let v = verdict;
-  if (v && (!named(v, head) || blockedPass(v))) {
-    v = { verdict: "unverified", evaluated: v.evaluated, findings: [], limits: problems(v, head).join("; ") };
-  }
-  const why = v?.findings.length ? v.findings.map((x) => x.problem).join("; ") : "";
-  if (v?.verdict === "fail") out.defects.push({ finding: f, why });
-  else if (v?.verdict === "pass")
-    out.nonIssues.push({ finding: f.text, reason: why || "the lens found the change free of it" });
-  else out.unverified.push({ finding: f.text, missing: v ? v.limits : "the lens did not return a verdict" });
-}
-var workBrief = (items) => list(
-  items.map(
-    (i) => `${i.id}${i.location ? ` at ${i.location}` : ""}: ${i.text}${i.why ? ` (the lens found: ${i.why})` : ""}`
-  )
-);
-var dirtyBrief = (paths) => paths.length > 0 ? `
-Uncommitted changes in these paths come from an interrupted run of this step; inspect them, keep what serves your assignment, and continue from them rather than starting over:
-${list(paths)}` : "";
-function fixCommit(pushed) {
-  const commits = (pushed?.operations ?? []).filter((o) => /commit/i.test(o.op) && o.reference);
-  const namedCommits = commits.filter((o) => o.op.trim().toLowerCase() === "commit");
-  const rest = commits.filter((o) => !/spec/i.test(`${o.op} ${o.result}`));
-  const pick = namedCommits.length > 0 ? namedCommits.at(-1) : rest.length > 0 ? rest.at(-1) : commits.at(-1);
-  return pick ? pick.reference : "";
-}
-function roundRecord(round, sorted, verdict, extra) {
+function changeOfItem(l, item, index) {
+  const { location, criterion } = item.problem;
   return {
-    round,
-    defectsFixed: [],
-    nonIssues: sorted ? sorted.nonIssues : [],
-    unverified: sorted ? sorted.unverified : [],
-    verdict,
-    ...extra
+    id: `fix-${String(index + 1)}`,
+    files: [location.replace(/:\d+(?:-\d+)?$/, "")],
+    criteria: criteriaOf(l, criterion ? [criterion] : []),
+    item
   };
 }
-function endedBy(res, round) {
-  return { outcome: res.outcome, round, reference: res.reference || "", ...res.note && { note: res.note } };
+async function changeHoldingHalt(l, c) {
+  try {
+    return await runChange(l, c);
+  } catch (error) {
+    if (!(error instanceof Halt)) throw error;
+    l.halted ??= error;
+    return "";
+  }
 }
-function roundLine(rd) {
-  const bits = [`Round ${rd.round}: ${rd.verdict}`];
-  if (rd.defectsFixed.length > 0) bits.push(`fixed ${rd.defectsFixed.length} (${rd.defectsFixed.join("; ")})`);
-  if (rd.nonIssues.length > 0)
-    bits.push(
-      `non-issues ${rd.nonIssues.length} (${rd.nonIssues.map((x) => `${x.finding} -- ${x.reason}`).join("; ")})`
-    );
-  if (rd.unverified.length > 0)
-    bits.push(
-      `unverified ${rd.unverified.length} (${rd.unverified.map((x) => `${x.finding} -- missing: ${x.missing}`).join("; ")})`
-    );
-  if (rd.validations?.length) bits.push(`qa: ${rd.validations.join(" | ")}`);
-  if (rd.note) bits.push(rd.note);
-  return bits.join("; ");
-}
-function endLine(review, unfixed) {
-  const o = review ? review.outcome : "none";
-  const at = review ? review.round : 0;
-  switch (o) {
-    case "not-declared": {
-      return "Ended: No review is declared in docs/FORGE.md; nothing to wait for.";
-    }
-    case "clean": {
-      return `Ended: clean review at round ${at}.`;
-    }
-    case "no-defects": {
-      return `Ended: no defects at round ${at}, but some findings are unverified.`;
-    }
-    case "defects-remain": {
-      return `Ended: ${MAX_ROUNDS} rounds done; review ${at} still has ${unfixed} unfixed defect(s).`;
-    }
-    default: {
-      return `Ended: review ${at} ${o}.${review?.note ? ` ${review.note}` : ""}`;
+async function runChanges(l, changes) {
+  const asTasks = changes.map((c) => ({ ...c, dependsOn: c.task?.dependsOn ?? [] }));
+  for (const wave of waves(asTasks)) {
+    const left = await parallel(wave.map((c) => () => changeHoldingHalt(l, c)));
+    if (l.halted) throw l.halted;
+    for (const [i, c] of wave.entries()) {
+      const remaining = left[i];
+      if (remaining === "") continue;
+      l.open.push({
+        problem: c.item?.problem ?? { source: "qa", location: c.id, text: remaining ?? "the inner loop didn't return" },
+        route: "coder",
+        severity: "blocker",
+        fingerprint: c.item?.fingerprint ?? c.id,
+        reason: remaining ?? "the inner loop didn't return"
+      });
     }
   }
 }
-function buildReport(pr, rounds, review, unfixed, leftForUser) {
-  const lines = [`review-pr on ${pr}`];
-  for (const rd of rounds) {
-    if (rd.verdict !== "not-declared") lines.push(roundLine(rd));
-  }
-  lines.push(endLine(review, unfixed));
-  if (leftForUser.size > 0)
-    lines.push(
-      `Left for the user, not staged (excluded by the caller, but changed by a producer): ${[...leftForUser].join(", ")}.`
-    );
-  return lines.join("\n");
+function countFix(l, item) {
+  const prior = l.fixes.get(item.fingerprint) ?? 0;
+  if (prior > 0) l.differently.add(item.fingerprint);
+  l.fixes.set(item.fingerprint, prior + 1);
 }
+async function reviseSpec(l, items2) {
+  if (items2.length === 0 || !l.reviseSpec) return [];
+  const revised = await l.reviseSpec(items2.map((i) => `${i.problem.location}: ${i.problem.text}`));
+  l.build = revised.build;
+  l.validate = revised.validate;
+  return revised.rerun.map((t) => changeOfTask(l, t));
+}
+async function updateDocs(l, problems) {
+  if (l.docs.length === 0 && problems.length === 0) return;
+  if (l.changedThisRound.length === 0 && problems.length === 0) return;
+  const problemLines = problems.map((i) => `${i.problem.location}: ${i.problem.text}`);
+  const w = must(
+    await callWriter(
+      `${l.where}
+Update these documents in the worktree ${worktreeOf(l)} so they describe the code as built. Every claim must be true against the code.
+${list(l.docs)}
+${problems.length > 0 ? `
+Problems to fix:
+${list(problemLines)}` : ""}
+Paths this round changed:
+${list(l.changedThisRound)}
+${NO_WRITES}`,
+      "update the docs",
+      "Build",
+      DOCS_SCHEMA
+    ),
+    "build",
+    "Updated documentation."
+  );
+  if (w.changed.length > 0) await commit(l, w.changed, "update the docs the change affects");
+}
+async function buildRound(l) {
+  phase("Build");
+  const openItems = l.open;
+  l.open = [];
+  l.changedThisRound = [];
+  for (const item of openItems) countFix(l, item);
+  const first = l.round === 0 ? (l.build?.tasks ?? []).map((t) => changeOfTask(l, t)) : [];
+  const fromSpec = await reviseSpec(
+    l,
+    openItems.filter((i) => i.route === "revise-spec")
+  );
+  const fixes = openItems.filter((i) => i.route === "coder" || i.route === "correct-test").map((item, i) => changeOfItem(l, item, i));
+  const changes = [...first, ...fromSpec, ...fixes];
+  l.affected = unique(changes.flatMap((c) => c.criteria.map((x) => x.id)));
+  await runChanges(l, changes);
+  await updateDocs(
+    l,
+    openItems.filter((i) => i.route === "writer")
+  );
+}
+async function runValidation(o) {
+  phase("Validate");
+  const categorized = o.criteria.filter((c) => c.category !== "uncategorized");
+  const toRun = o.focus.length > 0 ? categorized.filter((c) => o.focus.includes(c.id)) : categorized;
+  const [checks, validated] = await parallel([
+    () => agent(
+      `${o.where}
+In the worktree ${o.worktree}, run the Checks commands TESTING.md declares, and return each command's exit code and failing lines. Change nothing.`,
+      { agentType: "slopify:checks", label: "checks", phase: "Validate", schema: CHECKS_SCHEMA }
+    ),
+    () => (
+      // With no criteria at all, as when review-pr runs on a PR with no spec, there is nothing to drive the app for.
+      o.criteria.length === 0 ? Promise.resolve({ results: [], uncategorizedSetting: "" }) : agent(
+        `${o.where}
+In the worktree ${o.worktree}, follow TESTING.md's setup and boot, then run each criterion's validation path below, and capture its evidence under .tmp/evidence/. Report what TESTING.md states for its category when it can't be verified, and what it states for uncategorized criteria.${o.changed.length > 0 ? ` Also run every criterion whose code path these changed paths touch, and every criterion if one is a boot or config file:
+${list(o.changed)}` : ""}
+
+Criteria to run:
+${JSON.stringify(toRun)}${o.focus.length > 0 ? `
+
+The other criteria:
+${JSON.stringify(categorized.filter((c) => !toRun.includes(c)))}` : ""}`,
+        { agentType: "slopify:validator", label: "validator", phase: "Validate", schema: VALIDATOR_SCHEMA }
+      )
+    )
+  ]);
+  const ran = must(checks, "validate", "The project's checks.");
+  const verdicts = must(validated, "validate", "The validator's verdicts.");
+  const byId = new Map(o.criteria.map((c) => [c.id, c]));
+  const rows = verdicts.results.map((v) => {
+    const c = byId.get(v.id);
+    const result = v.result === "pass" && v.evidence.length === 0 ? "cannot-verify" : v.result;
+    return {
+      id: v.id,
+      wording: c?.wording ?? v.id,
+      category: c?.category ?? "uncategorized",
+      path: v.ran,
+      result,
+      evidence: v.evidence,
+      setting: v.setting,
+      detail: v.detail
+    };
+  });
+  const problems = [
+    ...ran.commands.filter((x) => x.exitCode !== 0).map((x) => ({ source: "checks", location: x.command, text: x.failingLines || `exit ${String(x.exitCode)}` })),
+    ...rows.filter((r) => r.result === "fail").map((r) => ({
+      source: "validator",
+      location: r.detail,
+      text: `Criterion ${r.id} fails: ${r.wording}`,
+      criterion: r.id
+    }))
+  ];
+  return { rows, uncategorizedSetting: verdicts.uncategorizedSetting, problems };
+}
+async function checkDocs(l) {
+  if (l.docs.length === 0) return [];
+  const verdicts = await parallel(
+    l.docs.map(
+      (doc) => () => lens(
+        "lens-docs",
+        `${l.where}
+In the worktree ${worktreeOf(l)}, judge this document against the code: ${doc}`,
+        {
+          label: `docs: ${doc}`,
+          phase: "Validate"
+        }
+      )
+    )
+  );
+  return verdicts.flatMap(
+    (v, i) => must(v, "validate", `A verdict on ${l.docs[i] ?? "a document"}.`).findings.map((f) => ({
+      source: "lens-docs",
+      location: f.location,
+      text: f.problem
+    }))
+  );
+}
+async function validateRound(l) {
+  const uncategorized = (l.validate?.criteria ?? []).filter((c) => c.category === "uncategorized");
+  const v = await runValidation({
+    where: l.where,
+    worktree: worktreeOf(l),
+    criteria: l.validate?.criteria ?? [],
+    focus: l.round === 0 ? [] : l.affected,
+    changed: l.round === 0 ? [] : l.changedThisRound
+  });
+  for (const r of v.rows) l.rows[r.id] = r;
+  for (const c of uncategorized) {
+    l.rows[c.id] = {
+      id: c.id,
+      wording: c.wording,
+      category: "uncategorized",
+      path: "none: suggest a category to add to TESTING.md",
+      result: "uncategorized",
+      evidence: [],
+      setting: v.uncategorizedSetting,
+      detail: ""
+    };
+  }
+  return [...v.problems, ...await checkDocs(l)];
+}
+function judgeBrief(l, p) {
+  const criterion = p.criterion ? criteriaOf(l, [p.criterion])[0] : void 0;
+  return `${l.where}
+Rule on one problem in the worktree ${worktreeOf(l)}, against the diff from the target branch docs/FORGE.md declares. ${l.story ? `
+
+The issue:
+<<<ISSUE
+${l.story}
+ISSUE>>>` : ""}
+
+Reported by ${p.source} at ${p.location}:
+${p.text}
+${criterion ? `
+The criterion: ${criterion.wording}` : ""}
+
+${SEVERITY_RUBRIC}
+${RECURRENCE_RUBRIC}
+
+Earlier rulings:
+${list(l.rulings)}
+
+${answersText(l)}`;
+}
+function listRouted(l, route, item) {
+  const entry = { text: `${item.problem.location}: ${item.problem.text}`, detail: item.reason };
+  const lists = {
+    unverified: l.unverified,
+    "needs-confirmation": l.confirmations,
+    suggestion: l.suggestions,
+    "known-debt": l.knownDebt,
+    "new-issue": l.newIssues,
+    "split-issue": l.newIssues
+  };
+  lists[route]?.push(entry);
+  if (route === "not-validated" && !item.problem.criterion) l.unverified.push(entry);
+  if (route === "escalate") l.escalated.push(item);
+  if (FIX_ROUTES.includes(route)) l.open.push(item);
+}
+function applyToRow(l, p, route, reason) {
+  const row = p.criterion ? l.rows[p.criterion] : void 0;
+  if (!row) return;
+  if (route === "dismiss") {
+    row.result = `pass (the judge overturned a fail: ${reason})`;
+    return;
+  }
+  if (route !== "not-validated") return;
+  row.result = "cannot-verify";
+  row.detail = reason;
+}
+async function judgeProblems(l, problems, phaseTitle) {
+  if (problems.length === 0) return;
+  const hasSpec = !!l.reviseSpec;
+  const verdicts = await parallel(
+    problems.map(
+      (p, i) => () => agent(judgeBrief(l, p), {
+        agentType: "slopify:judge",
+        label: `rule ${String(i + 1)}`,
+        phase: phaseTitle,
+        schema: JUDGE_SCHEMA
+      })
+    )
+  );
+  for (const [i, p] of problems.entries()) {
+    const v = must(verdicts[i], "judge", `A ruling on ${p.location}.`);
+    const route = routeOf(v, l.fixes.get(v.fingerprint) ?? 0, l.differently.has(v.fingerprint), hasSpec);
+    applyToRow(l, p, route, v.reason);
+    l.rulings.push(`${v.fingerprint}: ${v.verdict}, ${v.severity}, ${v.kind}, ${route}. ${v.reason}`);
+    listRouted(l, route, {
+      problem: p,
+      route,
+      severity: v.severity,
+      fingerprint: v.fingerprint,
+      reason: v.reason
+    });
+  }
+}
+async function gateway(l) {
+  phase("Gateway");
+  const results = JSON.stringify(rowsOf(l));
+  const g = must(
+    await agent(
+      `${l.where}
+Check this round before it is pushed, in the worktree ${worktreeOf(l)}: was anything missed? Read the round's diff, and judge it against the spec below and the evidence.
+${l.build ? `
+Build spec:
+${JSON.stringify(l.build)}` : ""}
+${l.validate ? `
+Validation spec:
+${JSON.stringify(l.validate)}` : ""}
+
+Criterion results:
+${results}
+
+Rulings so far:
+${list(l.rulings)}
+
+Return each thing missed. Don't repeat a ruling. Return any document the change affects that isn't on this list:
+${list(l.docs)}`,
+      { agentType: "slopify:judge", label: "gateway", phase: "Gateway", schema: GATEWAY_SCHEMA }
+    ),
+    "gateway",
+    "The gateway judge's verdict."
+  );
+  l.docs = unique([...l.docs, ...g.docsToAdd]);
+  await judgeProblems(
+    l,
+    g.missed.map((m) => ({ source: "gateway judge", location: m.location, text: m.text })),
+    "Gateway"
+  );
+}
+var countOpen = (l) => l.open.length + l.escalated.length;
+function heldRows(l) {
+  return rowsOf(l).filter(
+    (r) => (r.result === "cannot-verify" || r.result === "uncategorized") && !allowsReady(r.setting)
+  );
+}
+function unvalidatedRows(l) {
+  return rowsOf(l).filter(
+    (r) => (r.result === "cannot-verify" || r.result === "uncategorized") && allowsReady(r.setting)
+  );
+}
+var rowEntry = (r) => ({
+  text: `${r.wording} (${r.result})`,
+  detail: r.result === "uncategorized" ? "Suggest a category to add to TESTING.md." : r.detail
+});
+function draftReasons(l) {
+  const item = (i) => ({
+    text: `${i.severity}: ${i.problem.location}: ${i.problem.text}`,
+    detail: `${i.reason} Fix attempts: ${String(l.fixes.get(i.fingerprint) ?? 0)}.`
+  });
+  return [
+    ...l.escalated.map((i) => item(i)),
+    ...l.open.map((i) => item(i)),
+    ...heldRows(l).map((r) => rowEntry(r)),
+    ...l.review.clean ? [] : [{ text: l.review.note || "The review hasn't come back clean yet." }]
+  ];
+}
+function body(l) {
+  return renderBody({
+    issue: l.cardId || "none",
+    specDir: l.specDir,
+    draftReasons: draftReasons(l),
+    needsConfirmation: [
+      ...l.confirmations,
+      ...l.decisions.filter((d) => d.affectsAcceptance).map((d) => ({ text: d.question, detail: `Chose: ${d.choice}. Why: ${d.rationale}` }))
+    ],
+    criteria: rowsOf(l),
+    assumptions: l.decisions.filter((d) => !d.affectsAcceptance).map((d) => `${d.question} ${d.choice}`),
+    unverified: l.unverified,
+    notValidated: unvalidatedRows(l).map((r) => rowEntry(r)),
+    knownDebt: l.knownDebt,
+    suggestions: l.suggestions,
+    testChanges: unique(l.testChanges)
+  });
+}
+var bodyInstruction = (l) => `Write this PR description to ${worktreeOf(l)}/.tmp/pr-body.md, exactly as it stands, and use that file for the body:
+<<<BODY
+${body(l)}
+BODY>>>`;
+async function pushRound(l, last) {
+  phase("Push");
+  const { state } = l.d;
+  const open = !state.pr && (countOpen(l) === 0 || last);
+  const number = l.reviewNumber + 1;
+  const steps = state.pr ? `Push the branch even if something is still flagged. Then update the PR ${state.pr}. ${bodyInstruction(l)}
+Then fire the review trigger as docs/FORGE.md declares, if it declares one.` : open ? `Push the branch even if something is still flagged. Then open the branch's PR as a draft as docs/FORGE.md declares. ${bodyInstruction(l)}
+Fire the review trigger only if docs/FORGE.md says opening doesn't fire it. ${l.cardId ? `Then attach the PR to card ${l.cardId} as docs/BOARD.md declares.` : ""} Report the PR reference as the operation named pr.` : "Push the branch even if something is still flagged. Open no PR yet.";
+  const lines = [
+    ...open ? ["done publish <the PR reference>"] : [],
+    ...state.pr || open ? [`review ${String(number)} fired <the trigger time>`] : [],
+    `done round ${String(l.round)}`
+  ];
+  const r = pushed(
+    await inOrder(l, () => callPusher(l.d.pushBrief(steps, lines), "push the round", "Push")),
+    "A push of the story branch, and its PR."
+  );
+  if (open) state.pr = opRef(r, "pr");
+  if (state.pr) l.reviewNumber = number;
+}
+var WATCH_MINUTES = 9;
+var WATCH_DISPATCHES = 40;
+async function waitForReview(l) {
+  const { state } = l.d;
+  for (let n = 1; n <= WATCH_DISPATCHES; n += 1) {
+    const w = must(
+      await agent(
+        `${l.where}
+Wait for review ${String(l.reviewNumber)} of this pull request, as docs/FORGE.md's review-status binding declares: first for the review to start, then for it to finish. Wait at most ${String(WATCH_MINUTES)} minutes in this dispatch, then return pending. On finished, return each finding with its id, its location (path:line, or empty), and its text. Change nothing.
+
+Pull request: ${state.pr}
+Worktree: ${worktreeOf(l)}`,
+        {
+          agentType: "slopify:watcher",
+          label: `review ${String(l.reviewNumber)} wait ${String(n)}`,
+          phase: "Review",
+          schema: WATCHER_SCHEMA
+        }
+      ),
+      "review",
+      "The review's status."
+    );
+    if (w.outcome !== "pending") return w;
+  }
+  return null;
+}
+async function reviewRound(l) {
+  phase("Review");
+  const w = await waitForReview(l);
+  const outcome = w?.outcome ?? "timed-out";
+  await inOrder(
+    l,
+    () => callPusher(
+      l.d.pushBrief("Do nothing except append the ledger line.", [
+        `review ${String(l.reviewNumber)} ended ${outcome}: ${String(w?.findings.length ?? 0)} finding(s)`
+      ]),
+      "record the review",
+      "Review"
+    )
+  );
+  l.review = {
+    clean: outcome === "finished" || outcome === "not-declared",
+    note: outcome === "finished" || outcome === "not-declared" ? "" : `Review ${String(l.reviewNumber)} ${outcome}.`
+  };
+  await judgeProblems(
+    l,
+    (w?.findings ?? []).map((f) => ({ source: "the review", location: f.location, text: f.text })),
+    "Review"
+  );
+}
+async function finish(l, ready) {
+  const { state } = l.d;
+  const issues = l.newIssues.length > 0 ? `File one Linear issue for each of these, as docs/BOARD.md declares:
+${list(l.newIssues.map((i) => `${i.text} ${i.detail ?? ""}`))}
+` : "";
+  const questions = [
+    ...l.decisions.filter((d) => d.affectsAcceptance).map((d) => `${d.question} We chose: ${d.choice}.`),
+    ...draftReasons(l).map((x) => x.text)
+  ];
+  const card = l.cardId ? ready ? `Perform the operations docs/BOARD.md declares for when the PR's review is clean on card ${l.cardId} (for example moving it to In Review), and comment on the card with the evidence and assumptions:
+${list(questions)}` : `Comment on card ${l.cardId} with what is open:
+${list(questions)}` : "";
+  pushed(
+    await inOrder(
+      l,
+      () => callPusher(
+        l.d.pushBrief(
+          `Update the PR ${state.pr}. ${bodyInstruction(l)}
+${ready ? "Mark the PR ready for review, as docs/FORGE.md declares.\n" : "Leave it a draft.\n"}${issues}${card}`,
+          [`delivery ${ready ? "ready" : "draft"}`]
+        ),
+        ready ? "mark the PR ready" : "report the draft",
+        "Push"
+      )
+    ),
+    "The final PR update."
+  );
+}
+async function round(l, last) {
+  if (l.round > 0 || !l.built) await buildRound(l);
+  const problems = await validateRound(l);
+  await judgeProblems(l, problems, "Judge");
+  await gateway(l);
+  await pushRound(l, last);
+}
+function freshLoop(input) {
+  return {
+    ...input,
+    docs: input.build?.docs ?? [],
+    round: 0,
+    reviewNumber: input.startAtReview > 0 ? input.startAtReview - 1 : 0,
+    open: [],
+    escalated: [],
+    rows: {},
+    affected: [],
+    fixes: /* @__PURE__ */ new Map(),
+    differently: /* @__PURE__ */ new Set(),
+    rulings: [],
+    decisions: [],
+    unverified: [],
+    confirmations: [],
+    knownDebt: [],
+    suggestions: [],
+    newIssues: [],
+    testChanges: [],
+    review: { clean: false, note: "" },
+    changedThisRound: [],
+    openByRound: [],
+    commits: Promise.resolve(),
+    halted: null
+  };
+}
+function nextStep(l) {
+  const g = gate({
+    prOpen: !!l.d.state.pr,
+    reviewClean: l.review.clean,
+    open: countOpen(l),
+    held: heldRows(l).length
+  });
+  if (g !== "fix") return g;
+  if (l.round >= MAX_FIX_ROUNDS || noProgress(l.openByRound)) return "end";
+  return l.open.length > 0 || !l.d.state.pr ? "fix" : "end";
+}
+async function runLoop(input) {
+  const l = freshLoop(input);
+  if (input.startAtReview > 0) {
+    l.reviewNumber = input.startAtReview;
+    await reviewRound(l);
+  } else {
+    await round(l, false);
+    if (l.d.state.pr) await reviewRound(l);
+  }
+  l.openByRound.push(countOpen(l));
+  for (let step = nextStep(l); step === "fix"; step = nextStep(l)) {
+    l.round += 1;
+    await round(l, l.round >= MAX_FIX_ROUNDS || noProgress([...l.openByRound, countOpen(l)]));
+    if (l.d.state.pr) await reviewRound(l);
+    l.openByRound.push(countOpen(l));
+  }
+  return endLoop(l, nextStep(l) === "clean");
+}
+async function endLoop(l, ready) {
+  if (!l.d.state.pr) await pushRound(l, true);
+  await finish(l, ready);
+  return {
+    status: ready ? "ready" : "draft",
+    rounds: l.round,
+    pr: l.d.state.pr,
+    review: l.review.note || "clean",
+    draftReasons: ready ? [] : draftReasons(l),
+    decisions: l.decisions.filter((d) => d.affectsAcceptance).map((d) => d.id)
+  };
+}
+
+// src/slopify/lib/how.ts
+var HOW_ADVISORS = [
+  "advisor-architecture",
+  "advisor-performance",
+  "advisor-risk",
+  "advisor-security",
+  "advisor-testability"
+];
+var CONTEXT_SCHEMA = {
+  type: "object",
+  required: ["summary", "supported", "gaps"],
+  properties: {
+    summary: { type: "string", description: "What the existing library already supports about the story" },
+    supported: { ...STRINGS, description: "Supported claims, each with the library file and heading it comes from" },
+    gaps: { ...STRINGS, description: "What the library doesn't cover, stale or contested material included" }
+  }
+};
+var DESIGN_SCHEMA = {
+  type: "object",
+  required: ["approach", "reuse", "create", "interfaces", "data", "dependencies", "risks"],
+  properties: {
+    approach: { type: "string", description: "Concretely how to build it" },
+    reuse: { ...STRINGS, description: "What already exists and gets used, each with path:line" },
+    create: { ...STRINGS, description: "What gets created" },
+    interfaces: STRINGS,
+    data: STRINGS,
+    dependencies: { ...STRINGS, description: "Each outside library or service it needs; empty when none" },
+    risks: STRINGS
+  }
+};
+var DECISION_SCHEMA = {
+  type: "object",
+  required: ["viable", "chosen", "grafts", "rejected", "reasons"],
+  properties: {
+    viable: { type: "boolean", description: "False only when no design can deliver the issue" },
+    chosen: { type: "string", description: "The stance of the design to build" },
+    grafts: { ...STRINGS, description: "What to take from the other designs" },
+    rejected: {
+      type: "array",
+      items: {
+        type: "object",
+        required: ["design", "why"],
+        properties: { design: { type: "string" }, why: { type: "string" } }
+      }
+    },
+    reasons: { ...STRINGS, description: "Why this design; or, when none is viable, why each one fails" }
+  }
+};
+var SPEC_SCHEMA = {
+  type: "object",
+  required: ["build", "validate", "claims"],
+  properties: {
+    build: BUILD,
+    validate: VALIDATE,
+    claims: { ...STRINGS, description: "Each file, symbol, or API the spec states about existing code" }
+  }
+};
+var STORY_BLOCK = (o) => `The issue says why and what, and it is the acceptance source. Never change what it asks for:
+<<<ISSUE
+${o.story}
+ISSUE>>>`;
+var worktree = (o) => o.d.state.worktree;
+var SPEC_FILES = (o) => `Spec folder: ${worktree(o)}/${o.specDir}. It holds build.json, validate.json, and RATIONALE.md, which only ever grows.`;
+async function writeSpec(o, instruction) {
+  phase("Spec");
+  return must(
+    await callWriter(
+      `${o.where}
+${STORY_BLOCK(o)}
+
+${SPEC_FILES(o)}
+
+${instruction}
+
+Return build and validate exactly as you wrote them. ${NO_WRITES}`,
+      "write the spec",
+      "Spec",
+      SPEC_SCHEMA
+    ),
+    "how",
+    "A spec folder."
+  );
+}
+async function commitSpec(o, message, phaseTitle) {
+  const r = await callPusher(
+    o.d.pushBrief(
+      `Commit the folder ${o.specDir} as it stands, staged by explicit path, with a message in the convention docs/FORGE.md declares, saying: ${message}.${o.cardId ? ` Name the issue ${o.cardId} in it.` : ""} Do not push.`,
+      [`done spec ${o.specDir} story ${o.storyRevision}`]
+    ),
+    "commit the spec",
+    phaseTitle
+  );
+  if (!pushOk(r) || !opRef(r, "commit")) {
+    throw new Halt("how", "A commit of the spec folder.", r?.unmet.join("; ") || "pusher didn't commit it");
+  }
+}
+var findingsOf = (v) => v.findings.map((f) => ({ location: f.location, problem: f.problem }));
+function specReviser(o) {
+  return async (problems) => {
+    phase("Advise");
+    const before = await attackFor(o, problems);
+    const spec = await writeSpec(
+      o,
+      `Building showed the spec is wrong. Revise it for these problems, and append them and the advice to RATIONALE.md:
+${list(problems)}
+
+The advisors' views:
+${list(before)}`
+    );
+    await commitSpec(o, "revise the spec", "Spec");
+    const named = (t) => problems.some((p) => [t.id, ...t.files, ...t.criteria].some((x) => p.includes(x)));
+    const rerun = spec.build.tasks.filter((t) => named(t));
+    return { build: spec.build, validate: spec.validate, rerun: rerun.length > 0 ? rerun : spec.build.tasks };
+  };
+}
+async function attackFor(o, problems) {
+  const views = await parallel(
+    HOW_ADVISORS.map(
+      (name) => () => agent(
+        `${o.where}
+${STORY_BLOCK(o)}
+
+${SPEC_FILES(o)} Read all three files.
+
+Building showed the spec is wrong. From your one angle, say what should change. Each finding gives its location and the change. Change nothing.
+
+${list(problems)}`,
+        { agentType: `slopify:${name}`, label: name.replace("advisor-", ""), phase: "Advise", schema: LENS_SCHEMA }
+      )
+    )
+  );
+  return views.flatMap(
+    (v) => findingsOf(must(v, "how", "An advisor's view.")).map((f) => `${f.location}: ${f.problem}`)
+  );
+}
+
+// src/slopify/lib/input.ts
+function isRecord(v) {
+  return typeof v === "object" && v !== null;
+}
+function inputOf(a, primary, numbers = false) {
+  if (typeof a !== "string") return isRecord(a) ? a : {};
+  const text = a.trim();
+  try {
+    const parsed2 = JSON.parse(text);
+    if (isRecord(parsed2)) return parsed2;
+    if (typeof parsed2 === "string" || numbers && typeof parsed2 === "number") {
+      return { [primary]: String(parsed2).trim() };
+    }
+  } catch {
+  }
+  return { [primary]: text };
+}
+var textOf = (v) => typeof v === "string" ? v.trim() : "";
+function answerValue(x) {
+  const text = String(x);
+  return x === null || x === void 0 || typeof x === "string" || typeof x === "number" || typeof x === "boolean" ? x : text;
+}
+function answersOf(v) {
+  return isRecord(v) && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, answerValue(x)])) : {};
+}
+
+// src/slopify/lib/resume.ts
+async function readResume(d, identifies, specDir) {
+  const cp = must(
+    await scout(
+      "scout-checkpoint",
+      `${d.WHERE}
+Report where this run stands. It is the delivery of ${identifies}.
+Report these keys, each as an evidence item with source set to the key; leave out a key that does not exist:
+- worktree, branch, ledger
+- pr: the PR reference
+- done-board-start: the last "done board-start" ledger line
+- done-round: the last "done round" ledger line
+- review-fired: the highest <n> among the ledger's "review <n> fired" lines
+- spec-dir: ${specDir ? `the folder ${specDir}, if it exists in the worktree` : 'the spec folder the PR description names after "Spec:"'}, relative to the worktree root
+- build-json: the exact contents of build.json in that folder
+- validate-json: the exact contents of validate.json in that folder`,
+      { label: "read checkpoints", phase: "Locate" }
+    ),
+    "locate",
+    "The run's checkpoints."
+  );
+  const { state } = d;
+  const worktree2 = shaped("path", val(cp, "worktree"));
+  if (worktree2.startsWith("/")) state.worktree = worktree2.replace(/\/+$/, "");
+  state.branch = shaped("branch", val(cp, "branch"));
+  state.ledger = shaped("path", val(cp, "ledger"));
+  state.pr = shaped("ref", val(cp, "pr"));
+  return {
+    build: parseBuild(fact(cp, "build-json")),
+    validate: parseValidate(fact(cp, "validate-json")),
+    specDir: shaped("rel", val(cp, "spec-dir")) || specDir,
+    reviewFired: Number(/\d+/.exec(val(cp, "review-fired"))?.[0] ?? 0),
+    built: !!val(cp, "done-round"),
+    boardStartDone: !!val(cp, "done-board-start")
+  };
+}
+
+// src/slopify/workflows/review-pr.ts
 async function run() {
-  const input = readInput(args);
-  if (!input.pr) {
+  const input = inputOf(args, "pr");
+  const pr = textOf(input["pr"]);
+  if (!pr) {
     return {
       status: "not-started",
       next: "Ask the user which pull request to review (a number, URL, or path), then invoke again."
     };
   }
-  const { pr, projectRoot, storyText, testPath, excluded, answers, givenFindings } = input;
-  const WHERE = whereOf(projectRoot);
-  const attempts = [];
-  const skipped = [];
-  const completed = [];
-  const rounds = [];
-  let watchFailures = 0;
-  let fixFailures = 0;
-  let specFailures = 0;
-  let validateFailures = 0;
-  let cp = null;
-  let worktree = input.worktree;
-  let specPath = input.spec;
-  let head = "";
-  let baseCommit = "";
-  let dirtyPaths = [];
-  let branch = "";
-  let prDescription = "";
-  function checkpointOf() {
-    const cpBranch = val(cp, "branch");
-    const ledger = val(cp, "ledger");
-    return {
-      ...worktree && { worktree },
-      ...cpBranch && { branch: cpBranch },
-      ...specPath && { spec: specPath },
-      ...ledger && { ledger },
-      pr
-    };
-  }
-  function stop(step, needs) {
-    return blocked("review-pr", step, needs, { completed, checkpoint: checkpointOf(), attempts });
-  }
-  function parseDirty(v) {
-    const t = v.trim();
-    return absent(t) ? [] : t.split(/[\n,]+/).filter((x) => !/^\s*\(/.test(x) && !/^[^/.]*\s\(/.test(x.trim())).flatMap((x) => dirtyEntry(x)).filter((x) => x && !absent(x) && !isTmp(x)).filter((x) => excluded.every((e) => !samePath(x, e)));
-  }
-  function relPath(p) {
-    const t = p.trim();
-    return worktree && t.startsWith(worktree + "/") ? t.slice(worktree.length + 1) : t.replace(/^\.\//, "");
-  }
-  function samePath(a, b) {
-    const x = relPath(a);
-    const y = relPath(b);
-    if (!x || !y) return false;
-    if (x === y) return true;
-    const xAbs = x.startsWith("/");
-    return xAbs !== y.startsWith("/") && (xAbs ? x.endsWith("/" + y) : y.endsWith("/" + x));
-  }
-  const isSpec = (loc) => !!specPath && samePath(loc.replace(/:\d+(?:-\d+)?$/, ""), specPath);
-  const isDoc = (loc) => {
-    const p = loc.replace(/:\d+(?:-\d+)?$/, "");
-    return isSpec(p) || /\.(?:md|mdx|rst|adoc)$/i.test(p) || /\.txt$/i.test(p) && !BUILD_TXT.test(p) || /(?:^|\/)readme$/i.test(p);
-  };
-  async function judgeAll(jobs, rev) {
-    const out = Array.from({ length: jobs.length }, () => null);
-    for (let n = 0; n < MAX_FAILURES; n++) {
-      const todo = jobs.map((job, i) => ({ job, i })).filter(({ i }) => {
-        const v = out[i];
-        return !(v && named(v, rev));
-      });
-      if (todo.length === 0) break;
-      if (n > 0)
-        attempts.push({
-          gate: "validator",
-          approach: `re-run ${todo.length} validator(s) on ${rev}`,
-          failed: "no verdict, or a verdict on another revision"
-        });
-      const res = await parallel(todo.map((t) => t.job));
-      for (const [k, t] of todo.entries()) out[t.i] = res[k] ?? null;
-    }
-    return out;
-  }
-  function checkpointPrompt(keys, note) {
-    return `${WHERE}
-${READ_ONLY}
-
-Report where the review loop on this pull request stands from its durable checkpoints. Return each of these keys that exists as one evidence item whose source is the key and whose excerpt is its value; leave out a key that does not exist: ${keys}.
-- worktree, branch, head, dirty: the story worktree for the pull request's head branch, named as docs/FORGE.md names it. head is its HEAD sha. dirty lists the paths with uncommitted changes, ignoring .tmp/, or is none.
-- base: the pull request's base commit, the merge base of the head branch and the target branch docs/FORGE.md declares.
-- pushed-head: the head commit sha of the pull request's branch as the remote has it, not the worktree's HEAD. unpushed: how many commits the worktree's HEAD holds that the pushed head lacks, or none.
-- ledger: the absolute path of the worktree's .tmp/ledger.md, only when it exists. review-fired and review-ended: the highest review round numbers on its review lines after the last done publish line. fired-head: the sha after "head" on the last review fired line, when it has one. fired-ancestor: yes when fired-head is an ancestor of the worktree's HEAD (git merge-base --is-ancestor), otherwise no; leave it out when there is no fired-head.
-- ledger-exclude: the paths after the word "exclude" on the last ledger line whose text, after its leading timestamp, starts with that word, comma-separated, or none
-- spec: the current spec path and its git hash-object, written <absolute path>@<git hash-object>, when the story has a spec.
-- pr: the pull request's description, read through docs/FORGE.md's read binding when it declares one; leave the key out when it declares none.
-
-Pull request: ${pr}${worktree ? `
-Worktree: ${worktree}` : ""}${note ? `
-${note}` : ""}`;
-  }
-  let card = null;
-  let hasCard = false;
-  let cardLoaded = false;
-  async function loadCard() {
-    if (cardLoaded) return;
-    cardLoaded = true;
-    if (storyText) {
-      skipped.push("card");
-      return;
-    }
-    card = await scout(
-      "scout-card",
-      `${WHERE}
-${READ_ONLY}
-
-Read the one card this pull request delivers, the card its description, title, or branch names, through the read bindings in docs/BOARD.md. Quote the card's content and acceptance criteria exactly in the answer, and report its story revision as the evidence item story-revision. With no board, or no card named, say so in the answer and return no story-revision.
-
-Pull request: ${pr}
-Its description and state:
-${prDescription || "not readable: docs/FORGE.md declares no read binding for it"}`,
-      { label: "card", phase: "Locate" }
-    );
-    hasCard = !!card && !!val(card, "story-revision");
-  }
-  async function recoverWorktree() {
-    const recovered = await agent(
-      `${WHERE}
-${AUTH}
-
-Recover the story worktree for this pull request's head branch, as docs/FORGE.md declares: check the branch out in a worktree named as docs/FORGE.md names it, and change nothing else. Return the worktree's absolute path as the reference of an operation named worktree.
-
-Pull request: ${pr}
-Branch: ${val(cp, "branch") || "the pull request head branch"}`,
-      { agentType: "slopify:pusher", label: "recover worktree", phase: "Locate", schema: PUSHER_SCHEMA }
-    );
-    const op = recovered?.done ? recovered.operations.find((o) => /worktree/i.test(o.op) && o.reference.startsWith("/")) : null;
-    if (!op) {
-      return stop("locate", [
-        need(
-          "locate-3",
-          "prerequisite",
-          "A worktree for the pull request branch.",
-          recovered ? recovered.unmet.join("; ") || "pusher returned no worktree path" : "pusher did not return"
-        )
-      ]);
-    }
-    worktree = op.reference;
-    cp = await scout("scout-checkpoint", checkpointPrompt(CHECKPOINT_KEYS, "The worktree was just recovered."), {
-      label: "checkpoint after recovery",
-      phase: "Locate"
-    }) ?? cp;
-    return null;
-  }
-  function readCheckpoint() {
-    if (!specPath) specPath = val(cp, "spec");
-    const pushedHead = val(cp, "pushed-head");
-    const unpushed = leadingInt(fact(cp, "unpushed").trim()) > 0;
-    const firedHead = val(cp, "fired-head");
-    const pushedAhead = !!firedHead && !!pushedHead && !sameRev(firedHead, pushedHead) && !sameRev(pushedHead, firedHead) && !!val(cp, "head") && sameRev(val(cp, "head"), pushedHead) && /^yes/i.test(val(cp, "fired-ancestor"));
-    head = pushedHead || val(cp, "head");
-    baseCommit = val(cp, "base");
-    for (const x of val(cp, "ledger-exclude").split(/[\n,]+/)) {
-      const p = x.trim();
-      if (p && !absent(p) && !isTmp(p) && excluded.every((e) => !samePath(p, e))) excluded.push(p);
-    }
-    dirtyPaths = parseDirty(fact(cp, "dirty"));
-    branch = val(cp, "branch");
-    prDescription = val(cp, "pr");
-    return { pushedAhead, unpushed, fired: reviewRound(fact(cp, "review-fired")) };
-  }
-  async function locate() {
-    phase("Locate");
-    cp = await scout("scout-checkpoint", checkpointPrompt(CHECKPOINT_KEYS, ""), {
-      label: "checkpoint",
-      phase: "Locate"
-    });
-    if (!cp) {
-      return stop("locate", [
-        need(
-          "locate-1",
-          "prerequisite",
-          "A checkpoint report for the pull request; the scout did not return.",
-          "scout-checkpoint returned nothing"
-        )
-      ]);
-    }
-    if (!worktree) worktree = val(cp, "worktree");
-    if (worktree) {
-      skipped.push("workspace");
-    } else {
-      const stopped = await recoverWorktree();
-      if (stopped) return stopped;
-    }
-    const resume = readCheckpoint();
-    completed.push("locate");
-    return resume;
-  }
-  function acceptance(failFindings) {
-    const parts = [];
-    if (storyText) parts.push(`Story, verbatim, the acceptance source:
-${storyText}`);
-    else if (hasCard && card) parts.push(`The pull request's card, the acceptance source:
-${card.answer}`);
-    if (specPath) parts.push(`Spec: ${specPath}`);
-    if (!storyText && !hasCard && !specPath) {
-      parts.push(
-        `No spec, story, or card exists for this pull request. ` + (prDescription ? `The acceptance source is the pull request's description:
-${prDescription}` : "Its description could not be read, so the acceptance source is the review findings and the behavior the change visibly intends.") + (failFindings.length > 0 ? `
-
-Plus these review findings, classified as present defects:
-${list(failFindings)}
-Judge that the fixes resolve those findings without regressing the behavior the pull request describes.` : "")
-      );
-    }
-    return parts.join("\n\n");
-  }
-  async function awaitReview(r) {
-    phase("Wait");
-    const counts = { start: 0, finish: 0 };
-    let n = 0;
-    let lastWaiting = "";
-    for (; ; ) {
-      n += 1;
-      const res = await agent(
-        `${WHERE}
-${READ_ONLY}
-
-Wait for review ${r} of this pull request, as docs/FORGE.md's review-status binding declares: first for the review to start, then for it to finish. This is dispatch ${n} for review ${r}${lastWaiting ? `; the previous dispatch ended while waiting for the review to ${lastWaiting}` : ""}. Wait at most ${WATCH_MINUTES} minutes in this dispatch, then return pending. The review's trigger and start times are those its status shows. On finished, return each finding with its id, its location (path:line, or empty), and its text.
-
-Pull request: ${pr}
-Worktree: ${worktree}`,
-        { agentType: "slopify:watcher", label: `review ${r} wait ${n}`, phase: "Wait", schema: WATCHER_SCHEMA }
-      );
-      if (!res) {
-        watchFailures += 1;
-        attempts.push({
-          gate: "wait",
-          approach: `watcher dispatch ${n} for review ${r}`,
-          failed: "the watcher did not return"
-        });
-        if (watchFailures >= MAX_FAILURES) return { stopped: true };
-        continue;
-      }
-      if (res.outcome !== "pending") return { review: res };
-      const w = res.waitingFor === "start" ? "start" : "finish";
-      lastWaiting = w;
-      counts[w] += 1;
-      const capped = cappedReview(r, res, w, counts[w]);
-      if (capped) return { review: capped };
-    }
-  }
-  async function sortFindings(r, findings) {
-    await loadCard();
-    phase("Sort");
-    const judge = (f, attempt) => lens(
-      "lens-finding",
-      `${WHERE}
-
-Judge whether the change of this pull request is free of the defect that one review finding describes. The change is the committed one: from the base revision to the candidate commit, read in the worktree ${worktree} with git diff <base> <candidate>. Ignore the worktree's uncommitted changes: an interrupted round can leave a fix there, and an uncommitted fix is not evidence that a finding is handled. Report the candidate revision in evaluated.${attempt > 1 ? " An earlier verdict on this finding was missing or named another revision; judge it afresh." : ""}
-
-Pull request: ${pr}
-Base revision: ${baseCommit || "not reported; use the merge base of the pull request branch and the target branch docs/FORGE.md declares"}
-Candidate revision: ${head || "the pull request head commit"}
-${acceptance([])}
-
-Review ${r}, finding ${f.id}${f.location ? ` at ${f.location}` : ""}:
-${f.text}`,
-      { label: `sort ${f.id}${attempt > 1 ? " again" : ""}`, phase: "Sort" }
-    );
-    const verdicts = await parallel(findings.map((f) => () => judge(f, 1)));
-    const again = findings.map((f, i) => ({ f, i })).filter(({ i }) => !usable(verdicts[i], head));
-    if (again.length > 0) {
-      const second = await parallel(
-        again.map(
-          ({ f }) => () => judge(f, 2)
-        )
-      );
-      for (const [k, { i }] of again.entries()) {
-        verdicts[i] = second[k] ?? verdicts[i] ?? null;
-      }
-    }
-    const out = { defects: [], nonIssues: [], unverified: [] };
-    for (const [i, f] of findings.entries()) sortInto(out, f, verdicts[i], head);
-    return out;
-  }
-  const leftForUser = /* @__PURE__ */ new Set();
-  function stagedPaths(st) {
-    const out = [];
-    const seen = /* @__PURE__ */ new Set();
-    for (const p of [...st.stage, ...st.dirtyAll]) {
-      if (!p || isTmp(p) || isSpec(p) || seen.has(relPath(p))) continue;
-      seen.add(relPath(p));
-      if (excluded.some((e) => samePath(p, e))) {
-        leftForUser.add(relPath(p));
-        continue;
-      }
-      out.push(p);
-    }
-    return out;
-  }
-  const carriedPaths = (st) => [.../* @__PURE__ */ new Set([...st.dirtyAll, ...st.stage])].filter((p) => !isTmp(p));
-  function writerStop(r, w, open, why) {
-    if (w.storyBlockers.length > 0) {
-      return {
-        stop: stop(
-          `fix-r${r}`,
-          w.storyBlockers.map((b, i) => need(`r${r}-story-${i + 1}`, "story", b, why))
-        )
-      };
-    }
-    if (open.length > 0) {
-      return {
-        stop: stop(
-          `fix-r${r}`,
-          open.map((d) => need(d.id, "decision", d.question, why))
-        )
-      };
-    }
-    return null;
-  }
-  function specWriterCall(r, items, mismatch, gateFindings) {
-    return settleDecisions(
-      `r${r}-spec`,
-      answers,
-      (settled) => agent(
-        `${WHERE}
-${NO_FORGE_WRITES}
-
-Revise the spec at ${specPath} (attempt ${specFailures + 1} in round ${r}) so that it covers the review defects below. Change only the spec. Clarify without changing meaning, and keep the original wording of a criterion beside any clarification. ${ASSUMPTIONS} The story is the acceptance source and is never changed: if a defect would change the story's goal, scope, or a criterion's meaning, return it in storyBlockers instead of revising. Return the spec path in produced and its git hash-object as revision.
-
-${acceptance([])}
-${items.length > 0 ? `
-Review defects the spec must cover:
-${workBrief(items)}` : ""}${mismatch ? `
-The coder reports the spec cannot be followed as written:
-${mismatch}` : ""}${gateFindings.length > 0 ? `
-A fresh lens rejected the previous revision for:
-${list(gateFindings)}` : ""}${settledText(settled)}`,
-        { agentType: "slopify:writer", label: `revise spec round ${r}`, phase: "Fix", schema: WRITER_SCHEMA }
-      )
-    );
-  }
-  function specGate(r, items, mismatch, revision) {
-    const gateBrief = `${WHERE}
-
-Judge the spec at ${specPath}, revision ${revision}, revised during the review loop on pull request ${pr}; spec gate attempt ${specFailures + 1}. Report that revision in evaluated.
-
-${acceptance([])}
-
-Review defects the revision was written to cover:
-${workBrief(items)}${mismatch ? `
-The coder's reason for the revision:
-${mismatch}` : ""}`;
-    return judgeAll(
-      [
-        () => lens("lens-scope", gateBrief, { label: `lens-scope round ${r}`, phase: "Fix" }),
-        () => lens("lens-consistency", gateBrief, { label: `lens-consistency round ${r}`, phase: "Fix" })
-      ],
-      revision
-    );
-  }
-  async function reviseSpec(r, items, mismatch, st) {
-    let gateFindings = [];
-    for (; ; ) {
-      phase("Fix");
-      const { res: w, open } = await specWriterCall(r, items, mismatch, gateFindings);
-      if (!w) {
-        specFailures += 1;
-        attempts.push({ gate: "spec", approach: `spec revision in round ${r}`, failed: "the writer did not return" });
-        if (specFailures >= MAX_FAILURES)
-          return {
-            stop: stop(`spec-r${r}`, [
-              need(
-                `r${r}-spec`,
-                "validation",
-                "A spec revision that passes lens-scope and lens-consistency.",
-                "the writer did not return"
-              )
-            ])
-          };
-        continue;
-      }
-      const raised = writerStop(r, w, open, "raised by the writer while revising the spec");
-      if (raised) return raised;
-      const gate = await specGate(r, items, mismatch, w.revision);
-      if (!judged(gate, w.revision)) {
-        return {
-          stop: stop(`spec-r${r}`, [
-            need(
-              `r${r}-spec-verdict`,
-              "validation",
-              `A verdict on spec revision ${w.revision} from lens-scope and lens-consistency.`,
-              "three dispatches returned no verdict or a verdict on another revision"
-            )
-          ])
-        };
-      }
-      if (gate.every((g) => passes(g, w.revision))) return acceptSpec(st, w);
-      specFailures += 1;
-      gateFindings = gate.flatMap((g) => passes(g, w.revision) ? [] : problems(g, w.revision));
-      attempts.push({
-        gate: "spec",
-        approach: `spec revision ${w.revision} in round ${r}`,
-        failed: gateFindings.join("; ")
-      });
-      if (specFailures >= MAX_FAILURES)
-        return {
-          stop: stop(`spec-r${r}`, [
-            need(
-              `r${r}-spec`,
-              "validation",
-              "A spec revision that passes lens-scope and lens-consistency.",
-              gateFindings.join("; ")
-            )
-          ])
-        };
-    }
-  }
-  function coderCall(r, items, st) {
-    const dirty = carriedPaths(st).filter((p) => !isDoc(p));
-    return agent(
-      `${WHERE}
-${NO_FORGE_WRITES}
-
-Fix these defects found in review ${r} of pull request ${pr} (attempt ${st.pass}), in the worktree ${worktree}. Write only code and test files there, and no documentation or spec. Add or update a regression test for each defect where one fits. Run the focused tests as you work. Run git add -N on each new file, then return as the revision a label for the worktree's current state: <HEAD sha>+<git hash-object of the output of git diff HEAD --binary>. The label is not a git object. Put in specMismatch why the spec cannot be followed, or an empty string.
-
-${acceptance([])}
-${specPath ? `
-The spec at ${specPath} is the contract; do not edit it.` : ""}
-
-Defects:
-${workBrief(items)}${dirtyBrief(dirty)}`,
-      { agentType: "slopify:coder", label: `fix code round ${r}`, phase: "Fix", schema: CODER_SCHEMA }
-    );
-  }
-  async function docWriterCall(r, items, st) {
-    const dirty = carriedPaths(st).filter((p) => isDoc(p) && !isSpec(p));
-    const { res, open } = await settleDecisions(
-      `r${r}-docs`,
-      answers,
-      (settled) => agent(
-        `${WHERE}
-${NO_FORGE_WRITES}
-
-Fix these documentation defects found in review ${r} of pull request ${pr} (attempt ${st.pass}), in the worktree ${worktree}. Write only documentation files, not the spec and not code. ${ASSUMPTIONS} Return the paths you changed in produced and the git hash-object of the main one as revision.
-
-${acceptance([])}
-
-Defects:
-${workBrief(items)}${dirtyBrief(dirty)}${settledText(settled)}`,
-        { agentType: "slopify:writer", label: `fix docs round ${r}`, phase: "Fix", schema: WRITER_SCHEMA }
-      )
-    );
-    return res ? { ...res, open } : null;
-  }
-  async function fixSpecItems(r, specItems, st) {
-    if (!specPath) {
-      return {
-        stop: stop(`fix-r${r}`, [
-          need(
-            `r${r}-story-1`,
-            "story",
-            "A story or spec that the defects can be judged against.",
-            specItems.map((i) => i.text).join("; ")
-          )
-        ])
-      };
-    }
-    const res = await reviseSpec(r, specItems, "", st);
-    if (res.stop) return res;
-    st.base = st.base.filter((i) => !isSpec(i.location));
-    st.feedback = st.feedback.filter((i) => !isSpec(i.location));
-    return res;
-  }
-  async function runProducers(r, st, codeItems, docItems) {
-    const [c, w] = await parallel([
-      () => codeItems ? coderCall(r, codeItems, st) : Promise.resolve(null),
-      () => docItems ? docWriterCall(r, docItems, st) : Promise.resolve(null)
-    ]);
-    if (c) {
-      for (const p of [...c.changed, ...c.tests]) st.stage.add(p);
-      st.coder = c;
-    }
-    if (w) {
-      for (const p of w.produced) if (!isSpec(p)) st.stage.add(p);
-      st.docsChanged ||= w.produced.some((p) => !isSpec(p));
-      st.writer = w;
-    }
-    return { coder: c, writer: w };
-  }
-  function docsOutcome(r, w) {
-    if (!w) {
-      fixFailures += 1;
-      attempts.push({
-        gate: "fix",
-        approach: `documentation fix in round ${r}`,
-        failed: "the writer did not return"
-      });
-      if (fixFailures >= MAX_FAILURES)
-        return {
-          stop: stop(`fix-r${r}`, [
-            need(
-              `r${r}-fix`,
-              "validation",
-              "A documentation fix; the writer did not return.",
-              "writer returned nothing"
-            )
-          ])
-        };
-      return { failed: true };
-    }
-    return writerStop(r, w, w.open, "raised by the writer while fixing documentation") ?? { failed: false };
-  }
-  async function settleMismatch(r, codeItems, st, first) {
-    let c = first;
-    while (c?.specMismatch.trim()) {
-      specFailures += 1;
-      attempts.push({ gate: "spec", approach: `coder fix in round ${r}`, failed: c.specMismatch });
-      if (!specPath)
-        return {
-          stop: stop(`fix-r${r}`, [
-            need(
-              `r${r}-story-1`,
-              "story",
-              "The defects cannot be fixed within the behavior the pull request describes.",
-              c.specMismatch
-            )
-          ])
-        };
-      if (specFailures >= MAX_FAILURES)
-        return {
-          stop: stop(`spec-r${r}`, [need(`r${r}-spec`, "validation", "A spec the code can follow.", c.specMismatch)])
-        };
-      const rev = await reviseSpec(r, [], c.specMismatch, st);
-      if (rev.stop) return rev;
-      c = await coderCall(r, codeItems, st);
-      if (!c) continue;
-      for (const p of [...c.changed, ...c.tests]) st.stage.add(p);
-      st.coder = c;
-    }
-    return { coder: c };
-  }
-  async function coderOutcome(r, codeItems, st, coder) {
-    const settled = await settleMismatch(r, codeItems, st, coder);
-    if (settled.stop) return settled;
-    if (settled.coder) return { ok: true };
-    fixFailures += 1;
-    attempts.push({ gate: "fix", approach: `code fix in round ${r}`, failed: "the coder did not return" });
-    if (fixFailures >= MAX_FAILURES)
-      return {
-        stop: stop(`fix-r${r}`, [
-          need(`r${r}-fix`, "validation", "A code fix; the coder did not return.", "coder returned nothing")
-        ])
-      };
-    return null;
-  }
-  async function fixPass(r, st, done, codeItems, docItems) {
-    phase("Fix");
-    const wantCoder = codeItems.length > 0;
-    const wantDocs = docItems.length > 0;
-    const ranCoder = wantCoder && !done.code;
-    const ranDocs = wantDocs && !done.docs;
-    const { coder, writer } = await runProducers(r, st, ranCoder ? codeItems : null, ranDocs ? docItems : null);
-    const docs = ranDocs ? docsOutcome(r, writer) : { failed: false };
-    if (docs.stop) return docs;
-    if (ranDocs && !docs.failed) done.docs = true;
-    if (ranCoder) {
-      const code = await coderOutcome(r, codeItems, st, coder);
-      if (!code || code.stop) return code;
-      done.code = true;
-    }
-    if (docs.failed) return null;
-    st.label = labelOf(st, wantCoder, wantDocs);
-    return { ok: true };
-  }
-  async function produce(r, st) {
-    const done = { code: false, docs: false };
-    for (; ; ) {
-      st.pass += 1;
-      const items = [...st.base, ...st.feedback];
-      const specItems = items.filter((i) => isSpec(i.location));
-      if (specItems.length > 0) {
-        const res2 = await fixSpecItems(r, specItems, st);
-        if (res2.stop) return res2;
-        continue;
-      }
-      const docItems = items.filter((i) => !isSpec(i.location) && isDoc(i.location));
-      const codeItems = items.filter((i) => !isDoc(i.location));
-      const res = await fixPass(r, st, done, codeItems, docItems);
-      if (res) return res;
-    }
-  }
-  function candidateRevision(st) {
-    const parts = [];
-    if (st.coder) parts.push(`the coder reports ${st.coder.revision}`);
-    if (st.writer) parts.push(`the writer reports ${st.writer.revision} for its main document`);
-    if (st.specRevised) parts.push(`the spec was revised to ${st.specRevision}`);
-    const label = st.label || head || "";
-    return {
-      label,
-      text: `${label || "the worktree head"}. This is a label for the current state of the worktree ${worktree} on top of commit ${head || "its head"}, after every producer returned (${parts.join("; ") || "no producer reported a revision"}); it is not a git object. Judge the worktree as it stands now and report this label in evaluated`
-    };
-  }
-  async function validate(r, st, defects) {
-    phase("Validate");
-    const failFindings = defects.map((d) => `${d.finding.id}: ${d.finding.text}`);
-    const cand = candidateRevision(st);
-    const brief = `${WHERE}
-
-Judge the fixes made for the review defects below on pull request ${pr} (validation ${st.validations} of round ${r}).
-Revision: ${cand.text}.
-Changed paths:
-${list(stagedPaths(st))}
-
-${acceptance(failFindings)}
-
-Review defects fixed:
-${list(failFindings)}`;
-    const jobs = [
-      () => agent(
-        `${brief}
-
-Run the tests and checks that apply. Judge that each defect is resolved, that nothing regressed, and that the fixes stay within what the acceptance source covers.`,
-        {
-          agentType: "slopify:qa",
-          label: `qa round ${r} #${st.validations}`,
-          phase: "Validate",
-          schema: LENS_SCHEMA
-        }
-      )
-    ];
-    if (st.docsChanged) {
-      jobs.push(
-        () => lens(
-          "lens-docs",
-          `${brief}
-
-Judge that the documentation claims in the changed paths are true against the code.`,
-          { label: `lens-docs round ${r} #${st.validations}`, phase: "Validate" }
-        )
-      );
-    }
-    const verdicts = await judgeAll(jobs, cand.label);
-    if (!judged(verdicts, cand.label)) {
-      return {
-        stop: stop(`validate-r${r}`, [
-          need(
-            `r${r}-validate-verdict`,
-            "validation",
-            `A verdict on ${cand.label} from qa${st.docsChanged ? " and lens-docs" : ""}.`,
-            "three dispatches returned no verdict or a verdict on another revision"
-          )
-        ])
-      };
-    }
-    const pass = verdicts.every((v) => passes(v, cand.label));
-    const feedback = feedbackOf(verdicts, cand.label, st.validations);
-    const summary = `validation ${st.validations}: ${verdicts.map((v, i) => `${i === 0 ? "qa" : "lens-docs"} ${passes(v, cand.label) ? "pass" : v.verdict === "pass" ? "pass not accepted" : v.verdict}`).join(", ")}`;
-    st.validationLog.push(summary);
-    return { pass, feedback, verdicts, label: cand.label };
-  }
-  const testPart = () => testPath ? ` test ${testPath}` : " and, when that last done spec line ends with test <path>, the same test <path>";
-  function pushBrief(r, st, summary) {
-    const staged = stagedPaths(st);
-    const steps = [
-      `If ${worktree}/.tmp/ledger.md does not exist, create it with the line: <time> run 1: review-pr ${pr} | worktree ${worktree} | branch ${branch || "<branch>"}`
-    ];
-    if (st.specRevised) {
-      steps.push(
-        `Commit ${specPath} alone, first, with a message in the project's commit convention from docs/FORGE.md; if it has no uncommitted change, make no spec commit.`
-      );
-    }
-    steps.push(
-      `Commit exactly these paths, staging each explicitly and never staging anything else, with a message in the project's commit convention from docs/FORGE.md:
-${list(staged)}`,
-      `Push the branch as docs/FORGE.md declares for a verified repair, then update the pull request as its repair binding declares, summarizing the defects fixed: ${summary}`,
-      "Re-fire the review trigger as docs/FORGE.md declares."
-    );
-    const lines = [];
-    if (st.specRevised) {
-      lines.push(
-        `<time> done spec ${specPath}@<its git hash-object> commit <sha of the spec commit> story <the story revision on the ledger's last done spec line>` + testPart()
-      );
-    }
-    lines.push(
-      `only if the ledger already holds a done spec line: <time> done implement commit <sha of the implementation commit> spec <git hash-object of ${specPath || "the spec"}> pushed`,
-      `<time> review ${r} ended finished: ${summary}`,
-      `<time> review ${r + 1} fired <the trigger time> head <sha of the pushed head>`
-    );
-    steps.push(`Append these ledger lines in this order, stamping the time yourself:
-${list(lines)}`);
-    return `${WHERE}
-${AUTH}
-
-Publish the verified fixes of review round ${r} for pull request ${pr}. A fresh qa passed them. Work in the worktree ${worktree}${branch ? ` on branch ${branch}` : ""}, in this order:
-${steps.map((x, i) => `${i + 1}. ${x}`).join("\n")}
-
-Return the implementation commit sha as the reference of an operation named "commit", the spec commit (if any) as "commit-spec", and record every other operation. Put anything docs/BOARD.md or docs/FORGE.md does not bind in unmet.`;
-  }
-  function resumePushBrief(r, pushDone) {
-    const lines = [
-      `only if the last done spec line's spec hash differs from the git hash-object of ${specPath || "the spec"}: <time> done spec ${specPath || "<the spec path>"}@<its git hash-object> commit <sha of the commit that holds that spec> story <the story revision on the ledger's last done spec line>` + testPart(),
-      `only if the ledger already holds a done spec line: <time> done implement commit <sha of HEAD> spec <git hash-object of ${specPath || "the spec"}> pushed`,
-      `<time> review ${r} ended finished: finished the publishing an interrupted run left undone`,
-      `<time> review ${r + 1} fired <the trigger time> head <sha of the pushed head>`
-    ];
-    return `${WHERE}
-${AUTH}
-
-The worktree ${worktree}${branch ? ` on branch ${branch}` : ""} holds a verified fix for review round ${r} of pull request ${pr} that an earlier run did not finish publishing. Commit nothing and stage nothing. Do each step below that the forge does not already show done, in this order:
-1. ${pushDone ? "The branch is already pushed; do not push it again." : "Push the branch as docs/FORGE.md declares for a verified repair."} Then update the pull request as its repair binding declares, saying the fix of round ${r} was finished by a resumed run.
-2. Re-fire the review trigger as docs/FORGE.md declares, unless review ${r + 1} was already fired for the pushed head.
-3. Append these ledger lines in this order, stamping the time yourself:
-${list(lines)}
-
-Return the worktree's HEAD sha as the reference of an operation named "commit", and record every other operation. Put anything docs/BOARD.md or docs/FORGE.md does not bind in unmet.`;
-  }
-  async function refreshHead(r, pushed) {
-    const res = await scout(
-      "scout-checkpoint",
-      checkpointPrompt("head dirty", `Report only head and dirty, after the push of round ${r}.`),
-      { label: "checkpoint after push", phase: "Push" }
-    );
-    const h = res ? val(res, "head") : "";
-    if (h) head = h;
-    else {
-      const ref = fixCommit(pushed);
-      if (ref) head = ref;
-    }
-    dirtyPaths = res ? parseDirty(fact(res, "dirty")) : [];
-  }
-  let review = null;
-  let unfixed = [];
-  async function resumePush(r, unpushed) {
-    phase("Push");
-    const resumed = await agent(resumePushBrief(r, !unpushed), {
-      agentType: "slopify:pusher",
-      label: `push round ${r} (resumed)`,
-      phase: "Push",
-      schema: PUSHER_SCHEMA
-    });
-    if (!resumed?.done) {
-      return stop(`push-r${r}`, [
-        need(
-          `r${r}-push`,
-          "prerequisite",
-          "A pushed fix for the pull request; the worktree holds commits the forge lacks.",
-          resumed ? resumed.unmet.join("; ") || "pusher reported the push not done" : "pusher did not return"
-        )
-      ]);
-    }
-    rounds.push(
-      roundRecord(r, null, "fixed", {
-        note: unpushed ? `pushed the fix an interrupted run had committed` : `finished the steps after the push of a fix that an interrupted run had pushed`,
-        pushed: fixCommit(resumed),
-        ...resumed.unmet.length > 0 && { unmet: resumed.unmet }
-      })
-    );
-    completed.push(`round-${r}`);
-    await refreshHead(r, resumed);
-    return null;
-  }
-  async function roundFindings(r, startRound) {
-    if (r === 1 && startRound === 1 && givenFindings.length > 0) {
-      skipped.push("wait-round-1");
-      return { findings: givenFindings, reviewRef: "" };
-    }
-    const waited = await awaitReview(r);
-    if (waited.stopped) {
-      return stop(`wait-r${r}`, [
-        need(
-          `r${r}-wait`,
-          "prerequisite",
-          `A watcher that can report review ${r}.`,
-          "the watcher did not return three times"
-        )
-      ]);
-    }
-    const res = waited.review;
-    if (res.outcome !== "finished") {
-      review = endedBy(res, r);
-      rounds.push(roundRecord(r, null, res.outcome));
-      return "ended";
-    }
-    return { findings: normFindings(res.findings), reviewRef: res.reference || "" };
-  }
-  async function fixRound(r, sorted) {
-    const st = {
-      base: sorted.defects.map((d) => ({
-        id: d.finding.id,
-        location: d.finding.location,
-        text: d.finding.text,
-        why: d.why
-      })),
-      feedback: [],
-      dirtyAll: [...dirtyPaths],
-      stage: /* @__PURE__ */ new Set(),
-      docsChanged: false,
-      specRevised: false,
-      specRevision: "",
-      coder: null,
-      writer: null,
-      validations: 0,
-      pass: 0,
-      label: "",
-      validationLog: []
-    };
-    for (; ; ) {
-      const made = await produce(r, st);
-      if (made.stop) return made.stop;
-      st.validations += 1;
-      const v = await validate(r, st, sorted.defects);
-      if (v.stop) return v.stop;
-      if (v.pass) return st;
-      validateFailures += 1;
-      const failed = v.verdicts.map((x) => problems(x, v.label).join("; ")).join(" | ");
-      attempts.push({ gate: "validate", approach: `fixes for review ${r}, validation ${st.validations}`, failed });
-      if (validateFailures >= MAX_FAILURES) {
-        return stop(`validate-r${r}`, [need(`r${r}-validate`, "validation", "Fixes a fresh qa will pass.", failed)]);
-      }
-      st.feedback = v.feedback;
-    }
-  }
-  async function pushRound(r, sorted, st) {
-    phase("Push");
-    const summary = `fixed ${sorted.defects.length}, non-issues ${sorted.nonIssues.length}${sorted.unverified.length > 0 ? `, unverified ${sorted.unverified.length}` : ""}`;
-    const pushed = await agent(pushBrief(r, st, summary), {
-      agentType: "slopify:pusher",
-      label: `push round ${r}`,
-      phase: "Push",
-      schema: PUSHER_SCHEMA
-    });
-    if (!pushed?.done) {
-      return stop(`push-r${r}`, [
-        need(
-          `r${r}-push`,
-          "prerequisite",
-          "A pushed, verified fix for the pull request.",
-          pushed ? pushed.unmet.join("; ") || "pusher reported the push not done" : "pusher did not return"
-        )
-      ]);
-    }
-    rounds.push(
-      roundRecord(r, sorted, "fixed", {
-        defectsFixed: sorted.defects.map((d) => `${d.finding.id}: ${d.finding.text}`),
-        validations: st.validationLog,
-        pushed: fixCommit(pushed),
-        ...pushed.unmet.length > 0 && { unmet: pushed.unmet }
-      })
-    );
-    completed.push(`round-${r}`);
-    await refreshHead(r, pushed);
-    return null;
-  }
-  async function playRound(r, startRound) {
-    const got = await roundFindings(r, startRound);
-    if (got === "ended" || "status" in got) return got;
-    const { findings, reviewRef } = got;
-    const sorted = findings.length > 0 ? await sortFindings(r, findings) : { defects: [], nonIssues: [], unverified: [] };
-    if (sorted.defects.length === 0) {
-      review = { outcome: sorted.unverified.length > 0 ? "no-defects" : "clean", round: r, reference: reviewRef };
-      rounds.push(roundRecord(r, sorted, sorted.unverified.length > 0 ? "unverified" : "clean"));
-      return "ended";
-    }
-    const st = await fixRound(r, sorted);
-    return "status" in st ? st : pushRound(r, sorted, st);
-  }
-  async function finalReview() {
-    const waited = await awaitReview(FINAL_ROUND);
-    if (waited.stopped) {
-      return stop("wait-final", [
-        need(
-          "final-wait",
-          "prerequisite",
-          `A watcher that can report review ${FINAL_ROUND}.`,
-          "the watcher did not return three times"
-        )
-      ]);
-    }
-    const res = waited.review;
-    if (res.outcome !== "finished") {
-      review = endedBy(res, FINAL_ROUND);
-      rounds.push(roundRecord(FINAL_ROUND, null, res.outcome));
-      return null;
-    }
-    const found = normFindings(res.findings);
-    const sorted = found.length > 0 ? await sortFindings(FINAL_ROUND, found) : { defects: [], nonIssues: [], unverified: [] };
-    unfixed = sorted.defects.map((d) => ({
-      finding: `${d.finding.id}: ${d.finding.text}`,
-      reason: d.why || "the lens found the defect present"
-    }));
-    review = {
-      outcome: sorted.defects.length > 0 ? "defects-remain" : sorted.unverified.length > 0 ? "no-defects" : "clean",
-      round: FINAL_ROUND,
-      reference: res.reference || ""
-    };
-    rounds.push(roundRecord(FINAL_ROUND, sorted, "final"));
-    return null;
-  }
-  async function playRounds({ pushedAhead, unpushed, fired }) {
-    const startRound = fired >= 1 ? Math.min(fired, FINAL_ROUND) : 1;
-    for (let k = 1; k < startRound; k++) skipped.push(`round-${k}`);
-    if (givenFindings.length > 0 && startRound > 1)
-      log("Findings in args apply to round 1 only; this run resumes at a later round and waits for its review");
-    let ended2 = false;
-    for (let r = startRound; r <= MAX_ROUNDS && !ended2; r++) {
-      const resume = (pushedAhead || unpushed && dirtyPaths.length === 0) && r === startRound && fired >= 1;
-      const outcome = resume ? await resumePush(r, unpushed) : await playRound(r, startRound);
-      if (outcome === "ended") ended2 = true;
-      else if (outcome) return outcome;
-    }
-    return ended2;
-  }
-  const located = await locate();
-  if ("status" in located) return located;
-  const ended = await playRounds(located);
-  if (typeof ended !== "boolean") return ended;
-  if (!ended) {
-    const stopped = await finalReview();
-    if (stopped) return stopped;
-  }
-  return {
-    status: "done",
+  const d = createDeliver({
     workflow: "review-pr",
-    skipped,
-    attempts,
-    pr,
-    rounds,
-    review,
-    unfixed,
-    ...leftForUser.size > 0 && { leftForUser: [...leftForUser] },
-    report: buildReport(pr, rounds, review, unfixed.length, leftForUser)
-  };
+    maxFailures: 3,
+    planPhase: "Build",
+    failures: { spec: 0, implementation: 0 },
+    projectRoot: textOf(input["projectRoot"]),
+    storyArg: pr
+  });
+  try {
+    const answers = answersOf(input["answers"]);
+    const story = textOf(input["story"]);
+    const resume = await readResume(d, `pull request ${pr}`, "");
+    d.state.pr = pr;
+    const stopped = await workspace(d, {
+      cardId: "",
+      boardBranch: d.state.branch,
+      boardStartDone: true,
+      specRel: resume.specDir,
+      worktree: "the pull request's worktree",
+      subject: `pull request ${pr}`
+    });
+    if (stopped) return stopped;
+    const howInput = {
+      d,
+      where: d.WHERE,
+      story,
+      storyRevision: "",
+      cardId: "",
+      specDir: resume.specDir,
+      answers
+    };
+    const result = await runLoop({
+      d,
+      where: d.WHERE,
+      story,
+      cardId: "",
+      build: resume.build,
+      validate: resume.validate,
+      specDir: resume.specDir,
+      answers,
+      startAtReview: Math.max(resume.reviewFired, 1),
+      built: true,
+      ...resume.build && { reviseSpec: specReviser(howInput) }
+    });
+    return {
+      ...result,
+      workflow: "review-pr",
+      report: `review-pr finished: the PR is ${result.status === "ready" ? "ready for review" : "a draft"}. Fix rounds: ${String(result.rounds)}. Review: ${result.review}.${result.draftReasons.length > 0 ? `
+Why it is a draft:
+${result.draftReasons.map((x) => `- ${x.text}`).join("\n")}` : ""}`
+    };
+  } catch (error) {
+    return stopOf(d, must(error, "review", "The review."));
+  }
 }
 
 // src/slopify/workflows/review-pr.entry.ts
