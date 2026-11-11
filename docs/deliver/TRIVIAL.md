@@ -37,7 +37,7 @@ How `deliver-trivial` takes a trivial story from a Linear issue or a prompt to a
 - **`judge` rules only on review findings.** A failing check or validator run goes straight back to `coder`.
 - **No gateway `judge`, and no recurrence rulings.** A finding that comes back stays open and keeps the PR a draft.
 - **A scout finds the affected docs**, because no spec lists them.
-- **`coder` still makes no decisions.** With no spec to send it back to, what the issue or prompt leaves open keeps the PR a draft, listed for you to settle.
+- **`coder` settles only trivial questions**, such as a name or an obvious default, and lists them under Assumptions. With no spec to send it back to, anything else the issue or prompt leaves open keeps the PR a draft, listed for you to settle.
 
 The PR, its sections, the loop limits, test first, and what the run is allowed to do are as in `STORY.md`, except that the criteria table has one row.
 

@@ -43,7 +43,7 @@ export const meta = {
     { title: "Gather", detail: "scout-code, scout-tests, and scout-history" },
     { title: "Reproduce", detail: "coder builds and runs a reproduction in the reproduction directory only" },
     { title: "Validate reproduction", detail: "lens-repro runs the reproduction at least three times" },
-    { title: "Report", detail: "writer drafts the issue beside the reproduction directory, outside it" },
+    { title: "Report", detail: "writer-card drafts the issue beside the reproduction directory, outside it" },
     { title: "Validate report", detail: "lens-bug-report judges the draft revision against the reproduction" },
     { title: "File", detail: "pusher files one Bug card through the board declaration" },
   ],
@@ -468,7 +468,7 @@ async function writeIssue(ctx: Ctx, why: string, label: string): Promise<Stopped
   for (;;) {
     const { res: w, open: settledOpen } = await settleDecisions("issue", ctx.answers, (settled) =>
       agent(reportPrompt(ctx, why, [...settled, ...ctx.settledBlockers]), {
-        agentType: "slopify:writer",
+        agentType: "slopify:writer-card",
         label,
         phase: "Report",
         schema: WRITER_SCHEMA,

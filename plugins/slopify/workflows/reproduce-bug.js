@@ -21,7 +21,7 @@ export const meta = {
     },
     {
       "title": "Report",
-      "detail": "writer drafts the issue beside the reproduction directory, outside it"
+      "detail": "writer-card drafts the issue beside the reproduction directory, outside it"
     },
     {
       "title": "Validate report",
@@ -784,7 +784,7 @@ async function writeIssue(ctx, why, label) {
       "issue",
       ctx.answers,
       (settled) => agent(reportPrompt(ctx, why, [...settled, ...ctx.settledBlockers]), {
-        agentType: "slopify:writer",
+        agentType: "slopify:writer-card",
         label,
         phase: "Report",
         schema: WRITER_SCHEMA

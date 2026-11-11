@@ -13,6 +13,8 @@ export interface Resume {
   /** The ledger shows a finished round, so the spec's tasks are built. */
   built: boolean;
   boardStartDone: boolean;
+  /** A spike's committed findings document, from the ledger; empty when none. */
+  findings: string;
 }
 
 // Read the checkpoints into the run's state. identifies names the run; specDir is empty when only the PR knows it.
@@ -27,6 +29,7 @@ Report these keys, each as an evidence item with source set to the key; leave ou
 - pr: the PR reference
 - done-board-start: the last "done board-start" ledger line
 - done-round: the last "done round" ledger line
+- done-findings: the path in the last "done findings" ledger line
 - review-fired: the highest <n> among the ledger's "review <n> fired" lines
 - spec-dir: ${specDir ? `the folder ${specDir}, if it exists in the worktree` : 'the spec folder the PR description names after "Spec:"'}, relative to the worktree root
 - build-json: the exact contents of build.json in that folder
@@ -50,5 +53,6 @@ Report these keys, each as an evidence item with source set to the key; leave ou
     reviewFired: Number(/\d+/.exec(val(cp, "review-fired"))?.[0] ?? 0),
     built: !!val(cp, "done-round"),
     boardStartDone: !!val(cp, "done-board-start"),
+    findings: shaped("rel", val(cp, "done-findings")),
   };
 }

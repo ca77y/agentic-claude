@@ -277,7 +277,7 @@ function must(value, step, what) {
 }
 var TEST_SCHEMA = {
   type: "object",
-  required: ["tests", "failingOutput", "noTest", "specProblem"],
+  required: ["tests", "failingOutput", "noTest", "specProblem", "assumptions"],
   properties: {
     tests: { ...STRINGS, description: "Test paths written or changed, relative to the worktree root" },
     failingOutput: { type: "string", description: "The test's failing output on the current code" },
@@ -285,12 +285,16 @@ var TEST_SCHEMA = {
     specProblem: {
       type: "string",
       description: "What the brief doesn't settle or can't deliver as written; empty when none"
+    },
+    assumptions: {
+      ...STRINGS,
+      description: "Each trivial question you settled yourself, as the question and your choice"
     }
   }
 };
 var FIX_SCHEMA = {
   type: "object",
-  required: ["changed", "ran", "testProblem", "specProblem"],
+  required: ["changed", "ran", "testProblem", "specProblem", "assumptions"],
   properties: {
     changed: { ...STRINGS, description: "Paths changed, relative to the worktree root" },
     ran: { ...STRINGS, description: "Each command and its result" },
@@ -298,6 +302,10 @@ var FIX_SCHEMA = {
     specProblem: {
       type: "string",
       description: "What the brief doesn't settle or can't deliver as written; empty when none"
+    },
+    assumptions: {
+      ...STRINGS,
+      description: "Each trivial question you settled yourself, as the question and your choice"
     }
   }
 };
@@ -383,7 +391,7 @@ async function runValidation(o) {
       schema: CHECKS_SCHEMA
     }),
     () => (
-      // With no criteria at all, as when review-pr runs on a PR with no spec, there is nothing to drive the app for.
+      // With no criteria at all, as when validate runs on a PR with no spec, there is nothing to drive the app for.
       o.criteria.length === 0 ? Promise.resolve({ results: [], uncategorizedSetting: "" }) : agent(
         `${o.where}
 In the worktree ${o.worktree}, follow TESTING.md's setup and boot, then run each criterion's validation path below, and capture its evidence under .tmp/evidence/. Report what TESTING.md states for its category when it can't be verified, and what it states for uncategorized criteria.${o.changed.length > 0 ? ` Also run every criterion whose code path these changed paths touch, and every criterion if one is a boot or config file:

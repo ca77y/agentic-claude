@@ -100,7 +100,6 @@ const ADVISOR_SCHEMA = {
 export type ScoutResult = Infer<typeof SCOUT_SCHEMA>;
 export type LensResult = Infer<typeof LENS_SCHEMA>;
 export type AdvisorResult = Infer<typeof ADVISOR_SCHEMA>;
-export type Finding = LensResult["findings"][number];
 
 /** Options for a scout, lens, or advisor dispatch; the helper sets the agent type and schema. */
 export type FamilyOptions = Omit<AgentOptions, "agentType">;

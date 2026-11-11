@@ -545,7 +545,9 @@ function renderBody(b) {
   return [
     `Issue: ${b.issue}${b.specDir ? `
 
-Spec: \`${b.specDir}\`` : ""}`,
+Spec: \`${b.specDir}\`` : ""}${b.document ? `
+
+Findings: \`${b.document}\`` : ""}`,
     section("Why this is a draft", items(b.draftReasons)),
     section("Needs confirmation", items(b.needsConfirmation)),
     section("Reproduced", items(b.reproduced ?? [])),
@@ -654,7 +656,7 @@ function stopOf(d, error) {
 }
 var TEST_SCHEMA = {
   type: "object",
-  required: ["tests", "failingOutput", "noTest", "specProblem"],
+  required: ["tests", "failingOutput", "noTest", "specProblem", "assumptions"],
   properties: {
     tests: { ...STRINGS, description: "Test paths written or changed, relative to the worktree root" },
     failingOutput: { type: "string", description: "The test's failing output on the current code" },
@@ -662,12 +664,16 @@ var TEST_SCHEMA = {
     specProblem: {
       type: "string",
       description: "What the brief doesn't settle or can't deliver as written; empty when none"
+    },
+    assumptions: {
+      ...STRINGS,
+      description: "Each trivial question you settled yourself, as the question and your choice"
     }
   }
 };
 var FIX_SCHEMA = {
   type: "object",
-  required: ["changed", "ran", "testProblem", "specProblem"],
+  required: ["changed", "ran", "testProblem", "specProblem", "assumptions"],
   properties: {
     changed: { ...STRINGS, description: "Paths changed, relative to the worktree root" },
     ran: { ...STRINGS, description: "Each command and its result" },
@@ -675,6 +681,10 @@ var FIX_SCHEMA = {
     specProblem: {
       type: "string",
       description: "What the brief doesn't settle or can't deliver as written; empty when none"
+    },
+    assumptions: {
+      ...STRINGS,
+      description: "Each trivial question you settled yourself, as the question and your choice"
     }
   }
 };
@@ -842,7 +852,7 @@ ${criteria}` : "",
 ${c.item.problem.text}
 ${c.item.reason}` : "",
     answersText(l),
-    "Implement what this says, and make no decisions. If it doesn't settle something, or can't be delivered as written, return specProblem and stop.",
+    "Implement what this says. Settle a trivial question yourself, such as a name, local structure, or an obvious default that changes no behavior this describes, and return it in assumptions. If it leaves open anything else, or can't be delivered as written, return specProblem and stop.",
     NO_WRITES
   ].filter(Boolean).join("\n\n");
 }
@@ -861,6 +871,7 @@ An earlier attempt showed the test has to change: ${reason}` : ""}`,
     "build",
     `A test for ${c.id}.`
   );
+  l.assumptions.push(...t.assumptions);
   if (t.specProblem) return { paths: [], commit: "", noTest: "", specProblem: t.specProblem };
   if (t.noTest || t.tests.length === 0) return { paths: [], commit: "", noTest: t.noTest, specProblem: "" };
   l.testChanges.push(...t.tests);
@@ -939,6 +950,7 @@ async function tryFix(l, c, cycle, lastFailure, attempt) {
     "build",
     `A fix for ${c.id}.`
   );
+  l.assumptions.push(...fix.assumptions);
   if (fix.specProblem) return specStopped(l, c, fix.specProblem);
   if (fix.testProblem) return { reason: fix.testProblem, rewriteTest: true };
   if (fix.changed.length > 0) await commit(l, fix.changed, `implement ${c.id}`);
@@ -1066,12 +1078,22 @@ ${list(l.changedThisRound)}`,
   );
   l.docs = must(found, "build", "The documents the change affects.").evidence.map((e) => e.source);
 }
+async function reviseDocument(l, doc, items2) {
+  if (items2.length === 0) return;
+  const changed = await doc.revise(items2.map((i) => `${i.problem.location}: ${i.problem.text}`));
+  l.changedThisRound.push(...changed);
+  if (changed.length > 0) await commit(l, changed, "revise the findings");
+}
 async function buildRound(l) {
   phase("Build");
   const openItems = l.open;
   l.open = [];
   l.changedThisRound = [];
   for (const item of openItems) countFix(l, item);
+  if (l.document) {
+    await reviseDocument(l, l.document, openItems);
+    return;
+  }
   const first = l.round === 0 ? firstChanges(l) : [];
   const fromSpec = await reviseSpec(
     l,
@@ -1099,7 +1121,7 @@ async function runValidation(o) {
       schema: CHECKS_SCHEMA
     }),
     () => (
-      // With no criteria at all, as when review-pr runs on a PR with no spec, there is nothing to drive the app for.
+      // With no criteria at all, as when validate runs on a PR with no spec, there is nothing to drive the app for.
       o.criteria.length === 0 ? Promise.resolve({ results: [], uncategorizedSetting: "" }) : agent(
         `${o.where}
 In the worktree ${o.worktree}, follow TESTING.md's setup and boot, then run each criterion's validation path below, and capture its evidence under .tmp/evidence/. Report what TESTING.md states for its category when it can't be verified, and what it states for uncategorized criteria.${o.changed.length > 0 ? ` Also run every criterion whose code path these changed paths touch, and every criterion if one is a boot or config file:
@@ -1330,6 +1352,7 @@ function body(l) {
   return renderBody({
     issue: l.cardId || "none",
     specDir: l.specDir,
+    ...l.document && { document: l.document.path },
     draftReasons: draftReasons(l),
     needsConfirmation: [
       ...l.confirmations,
@@ -1337,7 +1360,10 @@ function body(l) {
     ],
     ...l.small?.reproduced && { reproduced: l.small.reproduced },
     criteria: rowsOf(l),
-    assumptions: l.decisions.filter((d) => !d.affectsAcceptance).map((d) => `${d.question} ${d.choice}`),
+    assumptions: [
+      ...l.decisions.filter((d) => !d.affectsAcceptance).map((d) => `${d.question} ${d.choice}`),
+      ...unique(l.assumptions)
+    ],
     unverified: l.unverified,
     notValidated: unvalidatedRows(l).map((r) => rowEntry(r)),
     knownDebt: l.knownDebt,
@@ -1462,9 +1488,18 @@ async function validateSmall(l) {
     l.open.push({ problem: p, route: "coder", severity: "blocker", fingerprint: p.text, reason: "" });
   }
 }
+async function validateDocument(l, doc) {
+  const [v, found] = await Promise.all([
+    runValidation({ where: l.where, worktree: worktreeOf(l), criteria: [], focus: [], changed: [] }),
+    doc.check()
+  ]);
+  await judgeProblems(l, [...v.problems, ...found], "Judge");
+}
 async function round(l, last) {
   if (l.round > 0 || !l.built) await buildRound(l);
-  if (l.small) {
+  if (l.document) {
+    await validateDocument(l, l.document);
+  } else if (l.small) {
     await validateSmall(l);
   } else {
     await judgeProblems(l, await validateRound(l), "Judge");
@@ -1486,6 +1521,7 @@ function freshLoop(input) {
     differently: /* @__PURE__ */ new Set(),
     rulings: [],
     decisions: input.build?.decisions ?? [],
+    assumptions: [],
     unverified: [],
     confirmations: [],
     knownDebt: [],
@@ -2059,6 +2095,7 @@ Report these keys, each as an evidence item with source set to the key; leave ou
 - pr: the PR reference
 - done-board-start: the last "done board-start" ledger line
 - done-round: the last "done round" ledger line
+- done-findings: the path in the last "done findings" ledger line
 - review-fired: the highest <n> among the ledger's "review <n> fired" lines
 - spec-dir: ${specDir ? `the folder ${specDir}, if it exists in the worktree` : 'the spec folder the PR description names after "Spec:"'}, relative to the worktree root
 - build-json: the exact contents of build.json in that folder
@@ -2080,7 +2117,8 @@ Report these keys, each as an evidence item with source set to the key; leave ou
     specDir: shaped("rel", val(cp, "spec-dir")) || specDir,
     reviewFired: Number(/\d+/.exec(val(cp, "review-fired"))?.[0] ?? 0),
     built: !!val(cp, "done-round"),
-    boardStartDone: !!val(cp, "done-board-start")
+    boardStartDone: !!val(cp, "done-board-start"),
+    findings: shaped("rel", val(cp, "done-findings"))
   };
 }
 

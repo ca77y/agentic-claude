@@ -7,6 +7,7 @@ Engineering notes for people working on `agentic-slop`. How to use the toolkit i
 - [`deliver/STORY.md`](deliver/STORY.md): how `deliver-story` takes a Linear issue to a clean-reviewed GitHub PR, and what a project's `TESTING.md` must hold
 - [`deliver/TRIVIAL.md`](deliver/TRIVIAL.md): how `deliver-trivial` takes a trivial story to a reviewed PR with no spec
 - [`deliver/BUGFIX.md`](deliver/BUGFIX.md): how `deliver-bugfix` does the same for a bug
+- [`deliver/SPIKE.md`](deliver/SPIKE.md): how `deliver-spike` answers a question with a findings document, delivered as a reviewed PR
 - [`BOARD.md`](BOARD.md): how this repo's board is reached and what may be written to it
 - [`FORGE.md`](FORGE.md): how this repo branches, commits, publishes, and is reviewed
 - `issues/`: known problems with no solution on our side, created when one is recorded

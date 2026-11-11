@@ -1,39 +1,51 @@
 export const meta = {
   "name": "deliver-spike",
-  "description": "Answer a bounded technical question with a cited findings document that makes no recommendation: the library first, then outside scouts, and an optional throwaway prototype on its own unpushed branch that a fresh qa confirms and that is deleted, never merged",
-  "whenToUse": "Run only when the user invokes /slopify:deliver-spike or asks for the slopify deliver-spike workflow, for a bounded technical question that needs findings, measurements, or a throwaway prototype. Open-ended outside research (\"what is the best X\") belongs to /slopify:research. Args: {question, projectRoot?, answers?}, or the question as a plain string; projectRoot defaults to the session project directory; answers maps the need ids of a blocked result to the user's decisions.",
+  "description": "Answer a bounded technical question from a Linear issue or a prompt with a cited findings document, delivered as a pull request: scouts gather evidence, a plan lists the claims, a throwaway prototype measures what evidence can't settle, and the document goes through the delivery loop's checks and review until it is clean",
+  "whenToUse": "Run only when the user invokes /slopify:deliver-spike or asks for the slopify deliver-spike workflow, for a bounded technical question that needs findings, measurements, or a throwaway prototype. Open-ended outside research (\"what is the best X\") belongs to /slopify:research. Args: {question, projectRoot?, answers?}, or the question as a plain string; question is a card identifier or URL, or the question as a prompt; projectRoot defaults to the session project directory; answers maps a decision id from a draft or blocked result to its answer when rerunning.",
   "phases": [
     {
       "title": "Locate",
-      "detail": "scout-checkpoint reports the findings document, prototype branch, and worktree"
+      "detail": "scout-card reads the issue, or pusher files a spike card for a prompt"
     },
     {
-      "title": "Codebase",
-      "detail": "library-reader, scout-feasibility, and scout-code in parallel"
+      "title": "Workspace",
+      "detail": "pusher creates or recovers the worktree and branch"
     },
     {
-      "title": "Outside",
-      "detail": "after library-reader has returned: scout-upstream-docs, scout-known-issues, and scout-prior-art in parallel"
+      "title": "Ground",
+      "detail": "library-reader and five scouts in parallel"
     },
     {
       "title": "Plan",
-      "detail": "writer lists the claims, their evidence status, and the measurements needed"
+      "detail": "writer lists the claims and the measurements that would settle them"
     },
     {
       "title": "Prototype",
-      "detail": "pusher creates the prototype branch and worktree; coder builds the throwaway prototype and runs each measurement"
+      "detail": "coder measures and qa confirms, up to three tries, then pusher deletes it"
     },
     {
       "title": "Findings",
-      "detail": "writer writes the findings document, with no recommendation"
+      "detail": "writer writes the findings document, and pusher commits it"
     },
     {
       "title": "Validate",
-      "detail": "lens-evidence, lens-question, lens-neutrality, and qa on the prototype, each a fresh dispatch on the new revision"
+      "detail": "checks, lens-evidence, lens-question, and lens-neutrality"
     },
     {
-      "title": "Cleanup",
-      "detail": "pusher removes the prototype worktree and deletes its branch"
+      "title": "Judge",
+      "detail": "one judge per problem gives its severity and kind"
+    },
+    {
+      "title": "Build",
+      "detail": "writer revises the document for each open problem"
+    },
+    {
+      "title": "Push",
+      "detail": "pusher pushes, opens or updates the PR, and fires the review"
+    },
+    {
+      "title": "Review",
+      "detail": "watcher reads the review, and one judge rules on each finding"
     }
   ]
 };
@@ -178,16 +190,6 @@ function shaped(kind, v) {
   if (tok && re.test(tok)) return tok;
   return re.test(t) ? t : "";
 }
-function sameRev(briefed, evaluated) {
-  const b = (briefed || "").trim().toLowerCase();
-  const e = (evaluated || "").trim().toLowerCase();
-  if (!b || e.includes(b)) return true;
-  const HEX = /(?<![0-9a-z])[0-9a-f]{7,64}(?![0-9a-z])/g;
-  const bh = b.match(HEX) ?? [];
-  if (bh.length === 0) return false;
-  const eh = e.match(HEX) ?? [];
-  return bh.every((x) => eh.some((y) => x.startsWith(y) || y.startsWith(x))) && b.split(HEX).map((p) => p.trim()).filter((p) => p && !/[a-z]{3}/.test(p)).every((p) => e.includes(p));
-}
 function hashOf(text) {
   let h = 5381;
   for (const ch of text) h = (h * 33 ^ (ch.codePointAt(0) ?? 0)) >>> 0;
@@ -198,128 +200,25 @@ function slugged(text, fallback) {
   const words = norm.split(" ").filter(Boolean).slice(0, 6).join("-");
   return norm ? `${words}-${hashOf(norm)}` : fallback || "item";
 }
-var HASH = "[0-9a-f]{7,64}";
-function parseSpec(v) {
-  const m = new RegExp(String.raw`^(.+)(?:@|\s)(${HASH})$`).exec(
-    unremark("path", ((v || "").split("\n", 1)[0] ?? "").trim())
-  );
-  const path = m?.[1]?.trim() ?? "";
-  const hash = m?.[2] ?? "";
-  return path && (shaped("path", path) === path || shaped("rel", path) === path) ? { path, hash } : null;
-}
-function decisionsOf(prefix, questions) {
-  const out = [];
-  const asked = questions ?? [];
-  for (const q of asked) {
-    const question = q.trim();
-    const norm = question.toLowerCase().replaceAll(/[^a-z0-9]+/g, " ").trim();
-    const id = `${prefix}-${norm.split(" ").slice(0, 4).join("-") || "question"}-${hashOf(norm)}`;
-    if (question && out.every((d) => d.id !== id)) out.push({ id, question });
-  }
-  return out;
-}
-function answerOf(answers, id) {
-  const a = answers?.[id];
-  return a === void 0 || a === null ? "" : String(a).trim();
-}
-function settledText(settled) {
-  return settled.length > 0 ? `
-
-The user has settled these earlier questions; apply each answer and do not ask them again:
-${settled.map((d) => `- Question: ${d.question}
-  Answer: ${d.answer}`).join("\n")}` : "";
-}
-async function settleDecisions(prefix, answers, run2) {
-  const settled = [];
-  let carriedTried = false;
-  for (let round = 0; ; round++) {
-    const res = await run2(settled);
-    if (!res || res.storyBlockers?.length) return { res, open: [] };
-    const decisions = decisionsOf(prefix, res.openDecisions);
-    const open = decisions.filter((d) => !answerOf(answers, d.id));
-    if (open.length > 0) {
-      const carried = Object.keys(answers).filter(
-        (k) => k.startsWith(`${prefix}-`) && !k.startsWith(`${prefix}-blocker-`) && answerOf(answers, k) && decisions.every((d) => d.id !== k) && settled.every((x) => x.id !== k)
-      );
-      if (carried.length === 0 || carriedTried || round >= 2) return { res, open };
-      carriedTried = true;
-      settled.push(
-        ...carried.map((k) => ({
-          id: k,
-          question: `an earlier question whose id was ${k}; its words ran: ${k.replace(`${prefix}-`, "").replace(/-[a-z0-9]{6,7}$/, "").replaceAll("-", " ")}`,
-          answer: answerOf(answers, k)
-        }))
-      );
-      continue;
-    }
-    const fresh = decisions.filter((d) => settled.every((x) => x.id !== d.id));
-    if (fresh.length === 0 || round >= 2) return { res, open: [] };
-    settled.push(...fresh.map((d) => ({ ...d, answer: answerOf(answers, d.id) })));
-  }
-}
 function rerunText(workflow, needs) {
   const cmd = `/slopify:${workflow}`;
-  const list = needs ?? [];
-  const viaArg = list.filter((n) => n.arg);
-  const answerable = list.some((n) => !n.arg && (n.kind === "decision" || n.kind === "input"));
+  const list2 = needs ?? [];
+  const viaArg = list2.filter((n) => n.arg);
+  const answerable = list2.some((n) => !n.arg && (n.kind === "decision" || n.kind === "input"));
   const argText = viaArg.length > 0 ? ` Give ${viaArg.map((n) => `${n.id} in args.${n.arg ?? ""}`).join(" and ")}, not in answers.` : "";
-  return list.length > 0 && list.every((n) => n.kind === "decision") ? `Invoke ${cmd} again with the same args and add answers.<id> for each decision. In this session, pass resumeFromRunId to reuse the steps already completed.` : `Resolve what each need names, then invoke ${cmd} again with the same args${answerable ? " and answers.<id> for each decision or input need" : ""}, without resumeFromRunId, so every step reads the repository afresh.${argText}`;
+  return list2.length > 0 && list2.every((n) => n.kind === "decision") ? `Invoke ${cmd} again with the same args and add answers.<id> for each decision. In this session, pass resumeFromRunId to reuse the steps already completed.` : `Resolve what each need names, then invoke ${cmd} again with the same args${answerable ? " and answers.<id> for each decision or input need" : ""}, without resumeFromRunId, so every step reads the repository afresh.${argText}`;
 }
 function blocked(workflow, step, needs, extra = {}) {
   return { status: "blocked", workflow, step, needs, rerun: rerunText(workflow, needs), ...extra };
-}
-
-// src/slopify/lib/input.ts
-function isRecord(v) {
-  return typeof v === "object" && v !== null;
-}
-function inputOf(a, primary, numbers = false) {
-  if (typeof a !== "string") return isRecord(a) ? a : {};
-  const text = a.trim();
-  try {
-    const parsed = JSON.parse(text);
-    if (isRecord(parsed)) return parsed;
-    if (typeof parsed === "string" || numbers && typeof parsed === "number") {
-      return { [primary]: String(parsed).trim() };
-    }
-  } catch {
-  }
-  return { [primary]: text };
-}
-var textOf = (v) => typeof v === "string" ? v.trim() : "";
-function startInput(a, primary, next) {
-  const input = inputOf(a, primary);
-  const subject = textOf(input[primary]);
-  return subject ? { input, subject } : { status: "not-started", next };
-}
-function answerValue(x) {
-  const text = String(x);
-  return x === null || x === void 0 || typeof x === "string" || typeof x === "number" || typeof x === "boolean" ? x : text;
-}
-function answersOf(v) {
-  return isRecord(v) && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, answerValue(x)])) : {};
-}
-function whereOf(projectRoot) {
-  return projectRoot ? `The project is at ${projectRoot}; address files by absolute path under it.` : "The project is the session project directory; address files by absolute path.";
 }
 
 // src/slopify/lib/schemas.ts
 function described(schema, description) {
   return description === void 0 ? schema : { ...schema, description };
 }
-function arrayOf(items, description) {
-  return description === void 0 ? { type: "array", items } : { type: "array", description, items };
+function arrayOf(items2, description) {
+  return description === void 0 ? { type: "array", items: items2 } : { type: "array", description, items: items2 };
 }
-var TASK = {
-  type: "object",
-  required: ["id", "summary", "paths"],
-  properties: { id: { type: "string" }, summary: { type: "string" }, paths: STRINGS }
-};
-var MEASUREMENT = {
-  type: "object",
-  required: ["claim", "value", "command"],
-  properties: { claim: { type: "string" }, value: { type: "string" }, command: { type: "string" } }
-};
 function libraryReaderSchema(subject) {
   return {
     type: "object",
@@ -328,43 +227,6 @@ function libraryReaderSchema(subject) {
       summary: { type: "string", description: `What the existing library already supports about ${subject}` },
       supported: { ...STRINGS, description: "Supported claims, each with the library file and heading it comes from" },
       gaps: { ...STRINGS, description: "What the library does not cover, stale or contested material included" }
-    }
-  };
-}
-function writerSchema(notes) {
-  return {
-    type: "object",
-    required: ["produced", "revision", "openDecisions", "storyBlockers", "tasks", "docs"],
-    properties: {
-      produced: { ...STRINGS, description: notes.produced },
-      revision: { type: "string", description: notes.revision },
-      openDecisions: described(STRINGS, notes.openDecisions),
-      storyBlockers: described(STRINGS, notes.storyBlockers),
-      tasks: arrayOf(TASK, notes.tasks),
-      docs: described(STRINGS, notes.docs)
-    }
-  };
-}
-var CODER_REQUIRED = ["changed", "tests", "ran", "revision", "open", "specMismatch"];
-function coderProperties(notes) {
-  return {
-    changed: described(STRINGS, notes.changed),
-    tests: described(STRINGS, notes.tests),
-    ran: described(STRINGS, notes.ran),
-    revision: { type: "string", description: notes.revision },
-    open: described(STRINGS, notes.open),
-    specMismatch: { type: "string", description: notes.specMismatch }
-  };
-}
-function measuringCoderSchema(notes) {
-  return {
-    type: "object",
-    required: [...CODER_REQUIRED, "steps", "observed", "measurements"],
-    properties: {
-      ...coderProperties(notes),
-      steps: described(STRINGS, notes.steps),
-      observed: described({ type: "string" }, notes.observed),
-      measurements: arrayOf(MEASUREMENT, notes.measurements)
     }
   };
 }
@@ -388,734 +250,1805 @@ function pusherSchema(notes = {}) {
   };
 }
 
-// src/slopify/lib/text.ts
-var bullets = (items) => items.length > 0 ? items.map((x) => `- ${x}`).join("\n") : "- none";
+// src/slopify/lib/deliver.ts
+var PUSHER_SCHEMA = pusherSchema({ reference: "A commit sha, PR URL or path, card id, or worktree path" });
+var NO_WRITES = "Do not commit, push, branch, or change the board or forge; pusher does that.";
+function need(step, n, kind, what, evidence) {
+  return { id: `${step}-${n}`, kind, what, evidence: evidence || "" };
+}
+var list = (items2) => items2?.length ? items2.map((x) => `- ${x}`).join("\n") : "- none";
+var slugOf = (s) => (s || "").toLowerCase().replaceAll(/[^a-z0-9]+/g, " ").trim().split(/\s+/).slice(0, 6).join("-");
+var clean = (v) => absent(v) ? "" : (v ?? "").trim();
+var val = (res, key) => clean(fact(res, key));
+function unique(items2) {
+  return [...new Set(items2.filter(Boolean))];
+}
+function show(label, r) {
+  if (!r) return `${label}: the scout returned nothing, which is a gap, not an absence`;
+  const ev = r.evidence.map((e) => `  - ${e.source} @ ${e.location}: ${e.excerpt}`).join("\n");
+  const gaps = r.gaps.length > 0 ? `
+  Gaps: ${r.gaps.join("; ")}` : "";
+  return `${label}: ${r.answer}${ev ? `
+${ev}` : ""}${gaps}`;
+}
+var pushOk = (r) => !!r && r.done && r.unmet.length === 0;
+var opRef = (r, name) => {
+  const o = (r?.operations ?? []).find((x) => x.op.toLowerCase() === name);
+  return o ? o.reference.trim() : "";
+};
+function callDocsWriter(prompt, label, phaseTitle, schema) {
+  return agent(prompt, { agentType: "slopify:writer-docs", label, phase: phaseTitle, schema });
+}
+function callCoder(prompt, label, phaseTitle, schema) {
+  return agent(prompt, { agentType: "slopify:coder", label, phase: phaseTitle, schema });
+}
+function callPusher(prompt, label, phaseTitle) {
+  return agent(prompt, { agentType: "slopify:pusher", label, phase: phaseTitle, schema: PUSHER_SCHEMA });
+}
+function createDeliver(config) {
+  const { workflow: WORKFLOW2, projectRoot, storyArg } = config;
+  const WHERE = projectRoot ? `The project is at ${projectRoot}; address files by absolute path under it.` : "The project is the session project directory; address files by absolute path.";
+  const AUTH = `Authorization, from the user's invocation of /slopify:${WORKFLOW2}: the story branch and worktree, attributable commits, the pushes the brief asks for, opening or updating this task's PR as a draft or ready, the declared review trigger, the one issue comment and label the brief asks for when the run ends or halts, and filing the issues the brief lists. It does not authorize merging, releases, any other message, rewriting docs/BOARD.md or docs/FORGE.md, or changing a card's content. Work exactly as docs/BOARD.md and docs/FORGE.md declare; an operation that is not bound is unmet, never improvised. Stage explicit paths only.`;
+  const completed = [];
+  const state = {
+    worktree: "",
+    branch: "",
+    ledger: "",
+    pr: ""
+  };
+  let runLinePending = true;
+  function done(step) {
+    completed.push(step);
+  }
+  function skip(step) {
+    completed.push(step);
+  }
+  function stop(step, needs) {
+    const checkpoint = {};
+    if (state.worktree) checkpoint.worktree = state.worktree;
+    if (state.branch) checkpoint.branch = state.branch;
+    if (state.ledger) checkpoint.ledger = state.ledger;
+    if (state.pr) checkpoint.pr = state.pr;
+    return blocked(WORKFLOW2, step, needs, {
+      completed: [...completed],
+      checkpoint
+    });
+  }
+  function takeLines(lines) {
+    const out = [];
+    if (runLinePending) {
+      out.push(
+        `run <n, one more than the highest run number in the ledger, or 1>: ${WORKFLOW2} ${storyArg.replaceAll(/\s+/g, " ").slice(
+          0,
+          80
+        )} | worktree ${state.worktree || "<the worktree path>"} | branch ${state.branch || "<the branch name>"}`
+      );
+      runLinePending = false;
+    }
+    return [...out, ...lines ?? []];
+  }
+  function pushBrief(instruction, lines, ledgerNote) {
+    const ln = takeLines(lines);
+    return `${WHERE}
+You are the only agent in this workflow that acts on the board and forge. ${AUTH}
+
+Worktree: ${state.worktree || "(not created yet)"}. Ledger: ${ledgerNote || `${state.worktree}/.tmp/ledger.md`}.
+
+${instruction}
+
+${ln.length > 0 ? `Append these lines, in this order, to the ledger (create it, with its directory, if absent). Stamp each with the current time in front and fill every <placeholder> from what you just did:
+${ln.map((l) => `- ${l}`).join("\n")}` : "Append no ledger lines."}
+
+Report each operation you performed as an operations entry, named worktree, branch, delivery-start, commit, push, pr, review-trigger, or ledger, with its reference. Set done only when every operation asked for is complete; list each one that is unbound or failed in unmet.`;
+  }
+  function pushStop(step, r) {
+    return stop(step, [
+      need(
+        step,
+        1,
+        "prerequisite",
+        "An operation that docs/BOARD.md or docs/FORGE.md bind, and the authorization to run it.",
+        r ? r.unmet.join("; ") || "pusher reported the work incomplete" : "pusher did not return"
+      )
+    ]);
+  }
+  return { WHERE, state, done, skip, stop, pushBrief, pushStop };
+}
+
+// src/slopify/lib/input.ts
+function isRecord(v) {
+  return typeof v === "object" && v !== null;
+}
+function inputOf(a, primary, numbers = false) {
+  if (typeof a !== "string") return isRecord(a) ? a : {};
+  const text = a.trim();
+  try {
+    const parsed2 = JSON.parse(text);
+    if (isRecord(parsed2)) return parsed2;
+    if (typeof parsed2 === "string" || numbers && typeof parsed2 === "number") {
+      return { [primary]: String(parsed2).trim() };
+    }
+  } catch {
+  }
+  return { [primary]: text };
+}
+var textOf = (v) => typeof v === "string" ? v.trim() : "";
+function answerValue(x) {
+  const text = String(x);
+  return x === null || x === void 0 || typeof x === "string" || typeof x === "number" || typeof x === "boolean" ? x : text;
+}
+function answersOf(v) {
+  return isRecord(v) && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, answerValue(x)])) : {};
+}
+
+// src/slopify/lib/rules.ts
+var MAX_FIX_ROUNDS = 3;
+var MAX_INNER_TRIES = 3;
+var isBlocking = (r) => r.severity === "blocker" || r.severity === "major";
+function routeOf(r, priorFixes, differentlyUsed, hasSpec) {
+  if (r.verdict === "dismissed") return "dismiss";
+  if (r.verdict === "unverified") return "unverified";
+  if (r.kind === "cannot-verify") return "not-validated";
+  if (r.kind === "decision") return "needs-confirmation";
+  if (r.severity === "pre-existing") return "new-issue";
+  if (!isBlocking(r)) return "suggestion";
+  if (priorFixes > 0) {
+    const recurring = recurrenceRoute(r, differentlyUsed);
+    if (recurring) return recurring;
+  }
+  if (r.kind === "docs") return "writer";
+  if (r.kind === "test") return "correct-test";
+  return r.kind === "spec" && hasSpec ? "revise-spec" : "coder";
+}
+function recurrenceRoute(r, differentlyUsed) {
+  if (r.ruling === "accept-as-debt") return r.severity === "major" ? "known-debt" : "escalate";
+  if (r.ruling === "split-to-issue") return r.severity === "major" ? "split-issue" : "escalate";
+  if (r.ruling === "fix-differently") return differentlyUsed ? "escalate" : null;
+  return "escalate";
+}
+var FIX_ROUTES = ["coder", "correct-test", "writer", "revise-spec"];
+function gate(s) {
+  if (!s.prOpen || !s.reviewClean || s.open > 0) return "fix";
+  return s.held > 0 ? "held" : "clean";
+}
+function noProgress(openByRound) {
+  const [a, b, c] = openByRound.slice(-3);
+  return a !== void 0 && b !== void 0 && c !== void 0 && b >= a && c >= b;
+}
+var allowsReady = (setting) => setting?.trim() === "ready";
+var samePath = (a, b) => a === b || a.startsWith(`${b}/`) || b.startsWith(`${a}/`);
+var filesOverlap = (x, y) => x.files.some((a) => y.files.some((b) => samePath(a, b)));
+function waves(tasks) {
+  const out = [];
+  const finished = /* @__PURE__ */ new Set();
+  let left = [...tasks];
+  while (left.length > 0) {
+    const ready = left.filter((t) => t.dependsOn.every((d) => finished.has(d)));
+    const pool = ready.length > 0 ? ready : left;
+    const group = [];
+    for (const t of pool) {
+      if (group.every((g) => !filesOverlap(g, t))) group.push(t);
+    }
+    out.push(group);
+    for (const t of group) finished.add(t.id);
+    left = left.filter((t) => !group.includes(t));
+  }
+  return out;
+}
+var items = (list2) => list2.map((x) => `- ${x.text}${x.detail ? `
+  ${x.detail}` : ""}`).join("\n");
+var cell = (s) => s.replaceAll("|", String.raw`\|`).replaceAll("\n", " ");
+var section = (title, body2) => body2 ? `## ${title}
+
+${body2}` : "";
+function criteriaTable(rows) {
+  if (rows.length === 0) return "";
+  const lines = rows.map(
+    (c) => `| ${cell(c.wording)} | ${cell(c.category)} | ${cell(c.path)} | ${cell(c.result)} | ${cell(c.evidence.join(", "))} |`
+  );
+  return [
+    "| Criterion | Category | Validation path | Result | Evidence |",
+    "| --- | --- | --- | --- | --- |",
+    ...lines
+  ].join("\n");
+}
+function renderBody(b) {
+  return [
+    `Issue: ${b.issue}${b.specDir ? `
+
+Spec: \`${b.specDir}\`` : ""}${b.document ? `
+
+Findings: \`${b.document}\`` : ""}`,
+    section("Why this is a draft", items(b.draftReasons)),
+    section("Needs confirmation", items(b.needsConfirmation)),
+    section("Reproduced", items(b.reproduced ?? [])),
+    section("Criteria", criteriaTable(b.criteria)),
+    section("Assumptions", b.assumptions.map((a) => `- ${a}`).join("\n")),
+    section("Unverified findings", items(b.unverified)),
+    section("Not validated", items(b.notValidated)),
+    section("Known debt", items(b.knownDebt)),
+    section("Suggestions", items(b.suggestions)),
+    section("Test changes", b.testChanges.map((t) => `- ${t}`).join("\n"))
+  ].filter(Boolean).join("\n\n");
+}
+
+// src/slopify/lib/spec.ts
+var TASK = {
+  type: "object",
+  required: ["id", "dependsOn", "files", "criteria", "todo", "reuse", "create"],
+  properties: {
+    id: { type: "string" },
+    dependsOn: { ...STRINGS, description: "Ids of the tasks this one needs finished first" },
+    files: { ...STRINGS, description: "Files or directories this task may write, relative to the worktree root" },
+    criteria: { ...STRINGS, description: "Ids of the criteria this task delivers" },
+    todo: { type: "string", description: "What to do, including anything only this task needs" },
+    reuse: { ...STRINGS, description: "What already exists and must be used, not rebuilt" },
+    create: { ...STRINGS, description: "What this task creates" }
+  }
+};
+var DECISION = {
+  type: "object",
+  required: ["id", "question", "choice", "rationale", "reversible", "affectsAcceptance"],
+  properties: {
+    id: { type: "string" },
+    question: { type: "string" },
+    choice: { type: "string" },
+    rationale: { type: "string", description: "What grounds the choice" },
+    reversible: { type: "boolean" },
+    affectsAcceptance: { type: "boolean", description: "True when the choice changes behavior a criterion describes" }
+  }
+};
+var BUILD = {
+  type: "object",
+  required: ["shared", "tasks", "docs", "decisions"],
+  properties: {
+    shared: {
+      ...STRINGS,
+      description: "Constraints and interfaces every task of this story must follow; never a repeated project rule"
+    },
+    tasks: { type: "array", items: TASK },
+    docs: { ...STRINGS, description: "Documents making claims about the area the change touches; can be empty" },
+    decisions: { type: "array", items: DECISION }
+  }
+};
+function parsed(text) {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+var isBuild = (v) => typeof v === "object" && v !== null && "tasks" in v;
+var isValidate = (v) => typeof v === "object" && v !== null && "criteria" in v;
+function parseBuild(text) {
+  const v = parsed(text);
+  return isBuild(v) ? v : null;
+}
+function parseValidate(text) {
+  const v = parsed(text);
+  return isValidate(v) ? v : null;
+}
+
+// src/slopify/lib/loop.ts
+var Halt = class extends Error {
+  step;
+  needs;
+  constructor(step, needs, evidence) {
+    super(evidence);
+    this.step = step;
+    this.needs = needs;
+  }
+};
+function must(value, step, what) {
+  if (value === null || value === void 0) throw new Halt(step, what, "the agent did not return");
+  return value;
+}
+function stopOf(d, error) {
+  if (error instanceof Halt)
+    return d.stop(error.step, [need(error.step, 1, "prerequisite", error.needs, error.message)]);
+  throw error;
+}
+var TEST_SCHEMA = {
+  type: "object",
+  required: ["tests", "failingOutput", "noTest", "specProblem", "assumptions"],
+  properties: {
+    tests: { ...STRINGS, description: "Test paths written or changed, relative to the worktree root" },
+    failingOutput: { type: "string", description: "The test's failing output on the current code" },
+    noTest: { type: "string", description: "Why the behavior can't be expressed as a test; empty when it can" },
+    specProblem: {
+      type: "string",
+      description: "What the brief doesn't settle or can't deliver as written; empty when none"
+    },
+    assumptions: {
+      ...STRINGS,
+      description: "Each trivial question you settled yourself, as the question and your choice"
+    }
+  }
+};
+var FIX_SCHEMA = {
+  type: "object",
+  required: ["changed", "ran", "testProblem", "specProblem", "assumptions"],
+  properties: {
+    changed: { ...STRINGS, description: "Paths changed, relative to the worktree root" },
+    ran: { ...STRINGS, description: "Each command and its result" },
+    testProblem: { type: "string", description: "Why the test is wrong; empty when it isn't" },
+    specProblem: {
+      type: "string",
+      description: "What the brief doesn't settle or can't deliver as written; empty when none"
+    },
+    assumptions: {
+      ...STRINGS,
+      description: "Each trivial question you settled yourself, as the question and your choice"
+    }
+  }
+};
+var QA_SCHEMA = {
+  type: "object",
+  required: [...LENS_SCHEMA.required, "testAtFault"],
+  properties: {
+    ...LENS_SCHEMA.properties,
+    testAtFault: { type: "boolean", description: "True when the test itself is what has to change" }
+  }
+};
+var CHECKS_SCHEMA = {
+  type: "object",
+  required: ["commands"],
+  properties: {
+    commands: {
+      type: "array",
+      items: {
+        type: "object",
+        required: ["command", "exitCode", "failingLines"],
+        properties: {
+          command: { type: "string" },
+          exitCode: { type: "number" },
+          failingLines: { type: "string" }
+        }
+      }
+    }
+  }
+};
+var VALIDATOR_SCHEMA = {
+  type: "object",
+  required: ["results", "uncategorizedSetting"],
+  properties: {
+    results: {
+      type: "array",
+      items: {
+        type: "object",
+        required: ["id", "result", "ran", "evidence", "detail", "setting"],
+        properties: {
+          id: { type: "string" },
+          result: { type: "string", enum: ["pass", "fail", "cannot-verify"] },
+          ran: { type: "string", description: "The validation path that ran: its commands, flows, or tests" },
+          evidence: { ...STRINGS, description: "Paths under .tmp/evidence/ or quoted output" },
+          detail: { type: "string", description: "For a fail, the flow step or file and line; else why" },
+          setting: { type: "string", description: "What TESTING.md's category states when it can't be verified" }
+        }
+      }
+    },
+    uncategorizedSetting: { type: "string", description: "What TESTING.md's Uncategorized setting states" }
+  }
+};
+var JUDGE_SCHEMA = {
+  type: "object",
+  required: ["verdict", "severity", "kind", "ruling", "reason", "fingerprint"],
+  properties: {
+    verdict: { type: "string", enum: ["confirmed", "dismissed", "unverified"] },
+    severity: { type: "string", enum: ["blocker", "major", "minor", "nit", "pre-existing", "none"] },
+    kind: { type: "string", enum: ["code", "test", "docs", "spec", "cannot-verify", "decision"] },
+    ruling: { type: "string", enum: ["none", "fix-differently", "accept-as-debt", "split-to-issue", "escalate"] },
+    reason: { type: "string", description: "What the evidence shows" },
+    fingerprint: { type: "string", description: "file|symbol|category, the same whenever this problem comes back" }
+  }
+};
+var GATEWAY_SCHEMA = {
+  type: "object",
+  required: ["missed", "docsToAdd"],
+  properties: {
+    missed: {
+      type: "array",
+      items: {
+        type: "object",
+        required: ["location", "text"],
+        properties: { location: { type: "string" }, text: { type: "string" } }
+      }
+    },
+    docsToAdd: { ...STRINGS, description: "Documents the change affects that aren't on the docs list" }
+  }
+};
+var WATCHER_SCHEMA = {
+  type: "object",
+  required: ["outcome", "waitingFor", "limitMinutes", "reference", "findings"],
+  properties: {
+    outcome: { type: "string", enum: ["finished", "failed", "timed-out", "pending", "not-declared"] },
+    waitingFor: { type: "string", enum: ["start", "finish", ""] },
+    limitMinutes: { type: "number" },
+    reference: { type: "string" },
+    findings: {
+      type: "array",
+      items: {
+        type: "object",
+        required: ["id", "location", "text"],
+        properties: { id: { type: "string" }, location: { type: "string" }, text: { type: "string" } }
+      }
+    }
+  }
+};
+var DOCS_SCHEMA = {
+  type: "object",
+  required: ["changed"],
+  properties: { changed: { ...STRINGS, description: "Documents changed, relative to the worktree root" } }
+};
+var SEVERITY_RUBRIC = `Severity: blocker when a criterion fails, the build or tests are broken, data is lost or corrupted, there is a security hole, or tests were weakened without a recorded reason. major for a correctness bug on a reachable path in changed code, an error swallowed on a path the user sees, or documentation the change made untrue. minor for real but low impact. nit for style, naming, or readability. pre-existing for a defect the change didn't introduce. none when the problem isn't a defect in the change.
+Kind: code when the behavior is wrong. test when the behavior is right but the test or flow is wrong. docs when documentation is untrue or missing. spec when the spec is wrong, or the finding conflicts with its design. cannot-verify when a tool, simulator, or credential stopped working, the check hits a blind spot, or the proof is missing or unusable. decision when only a person can settle what a criterion should mean.
+Never downgrade a confirmed failure. Filter out what a linter would catch, and style. Run a reproduction when you can, rather than only reading the code. An earlier dismissal of the same fingerprint stands.`;
+var RECURRENCE_RUBRIC = `If this problem's fingerprint appears under earlier rulings after a fix attempt, also give a ruling, reading those attempts: fix-differently when another approach could work, accept-as-debt when a major can ship and be paid later, split-to-issue when a major belongs in its own issue, or escalate. Otherwise the ruling is none.`;
+var checksBrief = (where, worktree) => `${where}
+In the worktree ${worktree}, run the Checks commands TESTING.md declares, and return each command's exit code and failing lines. Change nothing.`;
+var worktreeOf = (l) => l.d.state.worktree;
+var rowsOf = (l) => Object.values(l.rows);
+function inOrder(l, step) {
+  const turn = async () => {
+    await l.commits;
+    return step();
+  };
+  const next = turn();
+  l.commits = settled(next);
+  return next;
+}
+async function settled(p) {
+  try {
+    await p;
+  } catch {
+  }
+}
+function pushed(r, what) {
+  const unmet = r?.unmet.join("; ");
+  if (pushOk(r)) return r;
+  throw new Halt("push", what, unmet ?? "pusher didn't return");
+}
+async function commit(l, paths, message) {
+  const r = await inOrder(
+    l,
+    () => callPusher(
+      l.d.pushBrief(
+        `Commit exactly these paths as they stand, staged by explicit path, with a message in the convention docs/FORGE.md declares, saying: ${message}.${l.cardId ? ` Name the issue ${l.cardId} in it.` : ""} Do not push.
+${list(paths)}`
+      ),
+      `commit: ${message}`,
+      "Build"
+    )
+  );
+  return opRef(pushed(r, `A commit of ${paths.join(", ")}.`), "commit");
+}
+var answersText = (l) => Object.keys(l.answers).length > 0 ? `The user answered these earlier questions:
+${JSON.stringify(l.answers)}` : "";
+function changeBrief(l, c) {
+  const criteria = c.criteria.map((x) => `- ${x.id}: ${x.wording}
+  First test: ${x.firstTest}`).join("\n");
+  return [
+    `${l.where}
+Work in the worktree ${worktreeOf(l)}.`,
+    l.build?.shared.length ? `Constraints every task follows:
+${list(l.build.shared)}` : "",
+    c.assignment ?? "",
+    c.task ? `Your task (${c.task.id}): ${c.task.todo}
+Files you may write:
+${list(c.task.files)}
+Reuse, don't rebuild:
+${list(c.task.reuse)}
+Create:
+${list(c.task.create)}` : "",
+    criteria ? `The criteria it delivers:
+${criteria}` : "",
+    c.item ? `The problem to fix, at ${c.item.problem.location}:
+${c.item.problem.text}
+${c.item.reason}` : "",
+    answersText(l),
+    "Implement what this says. Settle a trivial question yourself, such as a name, local structure, or an obvious default that changes no behavior this describes, and return it in assumptions. If it leaves open anything else, or can't be delivered as written, return specProblem and stop.",
+    NO_WRITES
+  ].filter(Boolean).join("\n\n");
+}
+async function writeTest(l, c, reason) {
+  const t = must(
+    await callCoder(
+      `${changeBrief(l, c)}
+
+Write a new test or change an existing one, so that it states the required behavior. Change no production code. It must fail on the current code: run it and return the failing output. When the behavior can't be expressed as a test, return noTest with the reason instead.${reason ? `
+
+An earlier attempt showed the test has to change: ${reason}` : ""}`,
+      `${c.id}: test`,
+      "Build",
+      TEST_SCHEMA
+    ),
+    "build",
+    `A test for ${c.id}.`
+  );
+  l.assumptions.push(...t.assumptions);
+  if (t.specProblem) return { paths: [], commit: "", noTest: "", specProblem: t.specProblem };
+  if (t.noTest || t.tests.length === 0) return { paths: [], commit: "", noTest: t.noTest, specProblem: "" };
+  l.testChanges.push(...t.tests);
+  const sha = await commit(l, t.tests, `add a failing test for ${c.id}`);
+  return { paths: t.tests, commit: sha, noTest: "", specProblem: "" };
+}
+function qaBrief(l, c, test) {
+  const history = test.commit ? `The test commit is ${test.commit}, and its protected paths are:
+${list(test.paths)}
+Check in a temporary copy that the test fails at that commit and passes at HEAD. Check that nothing after that commit touches a protected path, and that nothing skips, weakens, or excludes the test, for example by loosening a tolerance, regenerating a snapshot, or changing the test config.` : `This change has no test, because: ${test.noTest}. Judge that reason.`;
+  return `${changeBrief(l, c)}
+
+Validate one change and its history.
+${history}
+Check that the fix delivers the behavior asked for and doesn't merely satisfy the test, for example by special-casing the test's input. Check that the change stays within its criterion or problem. Any failed check is a blocking finding. Set testAtFault when the test is what has to change.`;
+}
+function fixPrompt(l, c, cycle, lastFailure) {
+  const assignment = cycle.paths.length > 0 ? `Make this test pass. These paths are protected, so change none of them:
+${list(cycle.paths)}
+If the test is wrong, return testProblem with the reason and stop.` : `Make the change. It has no test because: ${cycle.noTest}`;
+  return `${changeBrief(l, c)}
+
+${assignment}${lastFailure ? `
+
+The last attempt failed validation:
+${lastFailure}` : ""}`;
+}
+async function qaOf(l, c, cycle) {
+  return must(
+    await agent(qaBrief(l, c, cycle), {
+      agentType: "slopify:qa",
+      label: `${c.id}: qa`,
+      phase: "Build",
+      schema: QA_SCHEMA
+    }),
+    "build",
+    `A qa verdict on ${c.id}.`
+  );
+}
+async function failingChecks(l) {
+  if (!l.small) return "";
+  const brief = checksBrief(l.where, worktreeOf(l));
+  const ran = must(
+    await agent(brief, {
+      agentType: "slopify:checks",
+      label: "checks",
+      phase: "Build",
+      schema: CHECKS_SCHEMA
+    }),
+    "build",
+    "The project's checks."
+  );
+  const failed = ran.commands.filter((x) => x.exitCode !== 0);
+  const lines = failed.map((x) => `${x.command}: ${x.failingLines}`);
+  return lines.join("\n");
+}
+function specStopped(l, c, problem) {
+  const route = l.reviseSpec ? "revise-spec" : "escalate";
+  listRouted(l, route, {
+    problem: { source: "the coder", location: c.id, text: problem },
+    route,
+    severity: "blocker",
+    fingerprint: `${c.id}|spec`,
+    reason: "The coder can't deliver this without making a decision."
+  });
+  return { reason: "", rewriteTest: false };
+}
+async function tryFix(l, c, cycle, lastFailure, attempt) {
+  const fix = must(
+    await callCoder(
+      fixPrompt(l, c, cycle, lastFailure),
+      `${c.id}: fix${attempt > 1 ? ` (try ${String(attempt)})` : ""}`,
+      "Build",
+      FIX_SCHEMA
+    ),
+    "build",
+    `A fix for ${c.id}.`
+  );
+  l.assumptions.push(...fix.assumptions);
+  if (fix.specProblem) return specStopped(l, c, fix.specProblem);
+  if (fix.testProblem) return { reason: fix.testProblem, rewriteTest: true };
+  if (fix.changed.length > 0) await commit(l, fix.changed, `implement ${c.id}`);
+  l.changedThisRound.push(...fix.changed);
+  const failing = await failingChecks(l);
+  if (failing) return { reason: failing, rewriteTest: false };
+  if (l.small && l.round > 0) return { reason: "", rewriteTest: false };
+  const verdict = await qaOf(l, c, cycle);
+  if (verdict.verdict === "pass") return { reason: "", rewriteTest: false };
+  const reason = verdict.findings.map((f) => `${f.location}: ${f.problem}`).join("\n") || verdict.limits;
+  return { reason, rewriteTest: verdict.testAtFault };
+}
+async function runChange(l, c) {
+  let test = await writeTest(l, c, "");
+  let last = { reason: "", rewriteTest: false };
+  for (let attempt = 1; attempt <= MAX_INNER_TRIES; attempt += 1) {
+    if (last.rewriteTest) test = await writeTest(l, c, last.reason);
+    if (test.specProblem) return specStopped(l, c, test.specProblem).reason;
+    last = await tryFix(l, c, test, last.rewriteTest ? "" : last.reason, attempt);
+    if (!last.reason) return "";
+  }
+  return last.reason;
+}
+function criteriaOf(l, ids) {
+  return (l.validate?.criteria ?? []).filter((c) => ids.includes(c.id));
+}
+function changeOfTask(l, task) {
+  return {
+    id: task.id,
+    files: task.files,
+    task,
+    criteria: criteriaOf(l, task.criteria)
+  };
+}
+function changeOfItem(l, item, index) {
+  const { location, criterion } = item.problem;
+  return {
+    id: `fix-${String(index + 1)}`,
+    files: [location.replace(/:\d+(?:-\d+)?$/, "")],
+    criteria: criteriaOf(l, criterion ? [criterion] : []),
+    item
+  };
+}
+async function changeHoldingHalt(l, c) {
+  try {
+    return await runChange(l, c);
+  } catch (error) {
+    if (!(error instanceof Halt)) throw error;
+    l.halted ??= error;
+    return "";
+  }
+}
+async function runChanges(l, changes) {
+  const asTasks = changes.map((c) => ({ ...c, dependsOn: c.task?.dependsOn ?? [] }));
+  for (const wave of waves(asTasks)) {
+    const left = await parallel(wave.map((c) => () => changeHoldingHalt(l, c)));
+    if (l.halted) throw l.halted;
+    for (const [i, c] of wave.entries()) {
+      const remaining = left[i];
+      if (remaining === "") continue;
+      l.open.push({
+        problem: c.item?.problem ?? { source: "qa", location: c.id, text: remaining ?? "the inner loop didn't return" },
+        route: "coder",
+        severity: "blocker",
+        fingerprint: c.item?.fingerprint ?? c.id,
+        reason: remaining ?? "the inner loop didn't return"
+      });
+    }
+  }
+}
+function countFix(l, item) {
+  const prior = l.fixes.get(item.fingerprint) ?? 0;
+  if (prior > 0) l.differently.add(item.fingerprint);
+  l.fixes.set(item.fingerprint, prior + 1);
+}
+async function reviseSpec(l, items2) {
+  if (items2.length === 0 || !l.reviseSpec) return [];
+  const revised = await l.reviseSpec(items2.map((i) => `${i.problem.location}: ${i.problem.text}`));
+  l.build = revised.build;
+  l.validate = revised.validate;
+  return revised.rerun.map((t) => changeOfTask(l, t));
+}
+async function updateDocs(l, problems) {
+  if (l.docs.length === 0 && problems.length === 0) return;
+  if (l.changedThisRound.length === 0 && problems.length === 0) return;
+  const problemLines = problems.map((i) => `${i.problem.location}: ${i.problem.text}`);
+  const w = must(
+    await callDocsWriter(
+      `${l.where}
+Update these documents in the worktree ${worktreeOf(l)} so they describe the code as built. Every claim must be true against the code.
+${list(l.docs)}
+${problems.length > 0 ? `
+Problems to fix:
+${list(problemLines)}` : ""}
+Paths this round changed:
+${list(l.changedThisRound)}
+${NO_WRITES}`,
+      "update the docs",
+      "Build",
+      DOCS_SCHEMA
+    ),
+    "build",
+    "Updated documentation."
+  );
+  if (w.changed.length > 0) await commit(l, w.changed, "update the docs the change affects");
+}
+function firstChanges(l) {
+  if (!l.small) return (l.build?.tasks ?? []).map((t) => changeOfTask(l, t));
+  const assignment = `Deliver this:
+<<<ISSUE
+${l.story}
+ISSUE>>>
+
+The first test ${l.small.firstTest}`;
+  return [{ id: "change", files: [], criteria: [], assignment }];
+}
+async function findDocs(l) {
+  if (!l.small || l.changedThisRound.length === 0) return;
+  const found = await scout(
+    "scout-docs",
+    `${l.where}
+In the worktree ${worktreeOf(l)}, read the diff of these paths, and find the documents it makes untrue or leaves incomplete. Report one evidence item per document, with source set to its path relative to the worktree root, and none when no document is affected.
+${list(l.changedThisRound)}`,
+    { label: "find affected docs", phase: "Build" }
+  );
+  l.docs = must(found, "build", "The documents the change affects.").evidence.map((e) => e.source);
+}
+async function reviseDocument(l, doc, items2) {
+  if (items2.length === 0) return;
+  const changed = await doc.revise(items2.map((i) => `${i.problem.location}: ${i.problem.text}`));
+  l.changedThisRound.push(...changed);
+  if (changed.length > 0) await commit(l, changed, "revise the findings");
+}
+async function buildRound(l) {
+  phase("Build");
+  const openItems = l.open;
+  l.open = [];
+  l.changedThisRound = [];
+  for (const item of openItems) countFix(l, item);
+  if (l.document) {
+    await reviseDocument(l, l.document, openItems);
+    return;
+  }
+  const first = l.round === 0 ? firstChanges(l) : [];
+  const fromSpec = await reviseSpec(
+    l,
+    openItems.filter((i) => i.route === "revise-spec")
+  );
+  const fixes = openItems.filter((i) => i.route === "coder" || i.route === "correct-test").map((item, i) => changeOfItem(l, item, i));
+  const changes = [...first, ...fromSpec, ...fixes];
+  l.affected = unique(changes.flatMap((c) => c.criteria.map((x) => x.id)));
+  await runChanges(l, changes);
+  await findDocs(l);
+  await updateDocs(
+    l,
+    openItems.filter((i) => i.route === "writer")
+  );
+}
+async function runValidation(o) {
+  phase("Validate");
+  const categorized = o.criteria.filter((c) => c.category !== "uncategorized");
+  const toRun = o.focus.length > 0 ? categorized.filter((c) => o.focus.includes(c.id)) : categorized;
+  const [checks, validated] = await parallel([
+    () => o.checks === false ? Promise.resolve({ commands: [] }) : agent(checksBrief(o.where, o.worktree), {
+      agentType: "slopify:checks",
+      label: "checks",
+      phase: "Validate",
+      schema: CHECKS_SCHEMA
+    }),
+    () => (
+      // With no criteria at all, as when validate runs on a PR with no spec, there is nothing to drive the app for.
+      o.criteria.length === 0 ? Promise.resolve({ results: [], uncategorizedSetting: "" }) : agent(
+        `${o.where}
+In the worktree ${o.worktree}, follow TESTING.md's setup and boot, then run each criterion's validation path below, and capture its evidence under .tmp/evidence/. Report what TESTING.md states for its category when it can't be verified, and what it states for uncategorized criteria.${o.changed.length > 0 ? ` Also run every criterion whose code path these changed paths touch, and every criterion if one is a boot or config file:
+${list(o.changed)}` : ""}
+
+Criteria to run:
+${JSON.stringify(toRun)}${o.focus.length > 0 ? `
+
+The other criteria:
+${JSON.stringify(categorized.filter((c) => !toRun.includes(c)))}` : ""}`,
+        { agentType: "slopify:validator", label: "validator", phase: "Validate", schema: VALIDATOR_SCHEMA }
+      )
+    )
+  ]);
+  const ran = must(checks, "validate", "The project's checks.");
+  const verdicts = must(validated, "validate", "The validator's verdicts.");
+  const byId = new Map(o.criteria.map((c) => [c.id, c]));
+  const rows = verdicts.results.map((v) => {
+    const c = byId.get(v.id);
+    const result = v.result === "pass" && v.evidence.length === 0 ? "cannot-verify" : v.result;
+    return {
+      id: v.id,
+      wording: c?.wording ?? v.id,
+      category: c?.category ?? "uncategorized",
+      path: v.ran,
+      result,
+      evidence: v.evidence,
+      setting: v.setting,
+      detail: v.detail
+    };
+  });
+  const problems = [
+    ...ran.commands.filter((x) => x.exitCode !== 0).map((x) => ({ source: "checks", location: x.command, text: x.failingLines || `exit ${String(x.exitCode)}` })),
+    ...rows.filter((r) => r.result === "fail").map((r) => ({
+      source: "validator",
+      location: r.detail,
+      text: `Criterion ${r.id} fails: ${r.wording}`,
+      criterion: r.id
+    }))
+  ];
+  return { rows, uncategorizedSetting: verdicts.uncategorizedSetting, problems };
+}
+async function checkDocs(l) {
+  if (l.docs.length === 0) return [];
+  const verdicts = await parallel(
+    l.docs.map(
+      (doc) => () => lens(
+        "lens-docs",
+        `${l.where}
+In the worktree ${worktreeOf(l)}, judge this document against the code: ${doc}`,
+        {
+          label: `docs: ${doc}`,
+          phase: "Validate"
+        }
+      )
+    )
+  );
+  return verdicts.flatMap(
+    (v, i) => must(v, "validate", `A verdict on ${l.docs[i] ?? "a document"}.`).findings.map((f) => ({
+      source: "lens-docs",
+      location: f.location,
+      text: f.problem
+    }))
+  );
+}
+async function validateRound(l) {
+  const uncategorized = (l.validate?.criteria ?? []).filter((c) => c.category === "uncategorized");
+  const v = await runValidation({
+    where: l.where,
+    worktree: worktreeOf(l),
+    criteria: l.validate?.criteria ?? [],
+    focus: l.round === 0 ? [] : l.affected,
+    changed: l.round === 0 ? [] : l.changedThisRound
+  });
+  for (const r of v.rows) l.rows[r.id] = r;
+  for (const c of uncategorized) {
+    l.rows[c.id] = {
+      id: c.id,
+      wording: c.wording,
+      category: "uncategorized",
+      path: "none: suggest a category to add to TESTING.md",
+      result: "uncategorized",
+      evidence: [],
+      setting: v.uncategorizedSetting,
+      detail: ""
+    };
+  }
+  return [...v.problems, ...await checkDocs(l)];
+}
+function judgeBrief(l, p) {
+  const criterion = p.criterion ? criteriaOf(l, [p.criterion])[0] : void 0;
+  return `${l.where}
+Rule on one problem in the worktree ${worktreeOf(l)}, against the diff from the target branch docs/FORGE.md declares. ${l.story ? `
+
+The issue:
+<<<ISSUE
+${l.story}
+ISSUE>>>` : ""}
+
+Reported by ${p.source} at ${p.location}:
+${p.text}
+${criterion ? `
+The criterion: ${criterion.wording}` : ""}
+
+${SEVERITY_RUBRIC}
+${l.small ? "The ruling is none." : RECURRENCE_RUBRIC}
+
+Earlier rulings:
+${list(l.rulings)}
+
+${answersText(l)}`;
+}
+function listRouted(l, route, item) {
+  const entry = { text: `${item.problem.location}: ${item.problem.text}`, detail: item.reason };
+  const lists = {
+    unverified: l.unverified,
+    "needs-confirmation": l.confirmations,
+    suggestion: l.suggestions,
+    "known-debt": l.knownDebt,
+    "new-issue": l.newIssues,
+    "split-issue": l.newIssues
+  };
+  lists[route]?.push(entry);
+  if (route === "not-validated" && !item.problem.criterion) l.unverified.push(entry);
+  if (route === "escalate") l.escalated.push(item);
+  if (FIX_ROUTES.includes(route)) l.open.push(item);
+}
+function applyToRow(l, p, route, reason) {
+  const row = p.criterion ? l.rows[p.criterion] : void 0;
+  if (!row) return;
+  if (route === "dismiss") {
+    row.result = `pass (the judge overturned a fail: ${reason})`;
+    return;
+  }
+  if (route !== "not-validated") return;
+  row.result = "cannot-verify";
+  row.detail = reason;
+}
+async function judgeProblems(l, problems, phaseTitle) {
+  if (problems.length === 0) return;
+  const hasSpec = !!l.reviseSpec;
+  const verdicts = await parallel(
+    problems.map(
+      (p, i) => () => agent(judgeBrief(l, p), {
+        agentType: "slopify:judge",
+        label: `rule ${String(i + 1)}`,
+        phase: phaseTitle,
+        schema: JUDGE_SCHEMA
+      })
+    )
+  );
+  for (const [i, p] of problems.entries()) {
+    const v = must(verdicts[i], "judge", `A ruling on ${p.location}.`);
+    const route = routeOf(v, l.fixes.get(v.fingerprint) ?? 0, l.differently.has(v.fingerprint), hasSpec);
+    applyToRow(l, p, route, v.reason);
+    l.rulings.push(`${v.fingerprint}: ${v.verdict}, ${v.severity}, ${v.kind}, ${route}. ${v.reason}`);
+    listRouted(l, route, {
+      problem: p,
+      route,
+      severity: v.severity,
+      fingerprint: v.fingerprint,
+      reason: v.reason
+    });
+  }
+}
+async function gateway(l) {
+  phase("Gateway");
+  const results = JSON.stringify(rowsOf(l));
+  const g = must(
+    await agent(
+      `${l.where}
+Check this round before it is pushed, in the worktree ${worktreeOf(l)}: was anything missed? Read the round's diff, and judge it against the spec below and the evidence.
+${l.build ? `
+Build spec:
+${JSON.stringify(l.build)}` : ""}
+${l.validate ? `
+Validation spec:
+${JSON.stringify(l.validate)}` : ""}
+
+Criterion results:
+${results}
+
+Rulings so far:
+${list(l.rulings)}
+
+Return each thing missed. Don't repeat a ruling. Return any document the change affects that isn't on this list:
+${list(l.docs)}`,
+      { agentType: "slopify:judge", label: "gateway", phase: "Gateway", schema: GATEWAY_SCHEMA }
+    ),
+    "gateway",
+    "The gateway judge's verdict."
+  );
+  l.docs = unique([...l.docs, ...g.docsToAdd]);
+  await judgeProblems(
+    l,
+    g.missed.map((m) => ({ source: "gateway judge", location: m.location, text: m.text })),
+    "Gateway"
+  );
+}
+var countOpen = (l) => l.open.length + l.escalated.length;
+function heldRows(l) {
+  return rowsOf(l).filter(
+    (r) => (r.result === "cannot-verify" || r.result === "uncategorized") && !allowsReady(r.setting)
+  );
+}
+function unvalidatedRows(l) {
+  return rowsOf(l).filter(
+    (r) => (r.result === "cannot-verify" || r.result === "uncategorized") && allowsReady(r.setting)
+  );
+}
+var rowEntry = (r) => ({
+  text: `${r.wording} (${r.result})`,
+  detail: r.result === "uncategorized" ? "Suggest a category to add to TESTING.md." : r.detail
+});
+function draftReasons(l) {
+  const item = (i) => ({
+    text: `${i.severity}: ${i.problem.location}: ${i.problem.text}`,
+    detail: `${i.reason} Fix attempts: ${String(l.fixes.get(i.fingerprint) ?? 0)}.`
+  });
+  return [
+    ...l.escalated.map((i) => item(i)),
+    ...l.open.map((i) => item(i)),
+    ...heldRows(l).map((r) => rowEntry(r)),
+    ...l.review.clean ? [] : [{ text: l.review.note || "The review hasn't come back clean yet." }]
+  ];
+}
+function body(l) {
+  return renderBody({
+    issue: l.cardId || "none",
+    specDir: l.specDir,
+    ...l.document && { document: l.document.path },
+    draftReasons: draftReasons(l),
+    needsConfirmation: [
+      ...l.confirmations,
+      ...l.decisions.filter((d) => d.affectsAcceptance).map((d) => ({ text: d.question, detail: `Chose: ${d.choice}. Why: ${d.rationale}` }))
+    ],
+    ...l.small?.reproduced && { reproduced: l.small.reproduced },
+    criteria: rowsOf(l),
+    assumptions: [
+      ...l.decisions.filter((d) => !d.affectsAcceptance).map((d) => `${d.question} ${d.choice}`),
+      ...unique(l.assumptions)
+    ],
+    unverified: l.unverified,
+    notValidated: unvalidatedRows(l).map((r) => rowEntry(r)),
+    knownDebt: l.knownDebt,
+    suggestions: l.suggestions,
+    testChanges: unique(l.testChanges)
+  });
+}
+var bodyInstruction = (l) => `Write this PR description to ${worktreeOf(l)}/.tmp/pr-body.md, exactly as it stands, and use that file for the body:
+<<<BODY
+${body(l)}
+BODY>>>`;
+async function pushRound(l, last) {
+  phase("Push");
+  const { state } = l.d;
+  const open = !state.pr && (countOpen(l) === 0 || last);
+  const number = l.reviewNumber + 1;
+  const steps = state.pr ? `Push the branch even if something is still flagged. Then update the PR ${state.pr}. ${bodyInstruction(l)}
+Then fire the review trigger as docs/FORGE.md declares, if it declares one.` : open ? `Push the branch even if something is still flagged. Then open the branch's PR as a draft as docs/FORGE.md declares. ${bodyInstruction(l)}
+Fire the review trigger only if docs/FORGE.md says opening doesn't fire it. ${l.cardId ? `Then attach the PR to card ${l.cardId} as docs/BOARD.md declares.` : ""} Report the PR reference as the operation named pr.` : "Push the branch even if something is still flagged. Open no PR yet.";
+  const lines = [
+    ...open ? ["done publish <the PR reference>"] : [],
+    ...state.pr || open ? [`review ${String(number)} fired <the trigger time>`] : [],
+    `done round ${String(l.round)}`
+  ];
+  const r = pushed(
+    await inOrder(l, () => callPusher(l.d.pushBrief(steps, lines), "push the round", "Push")),
+    "A push of the story branch, and its PR."
+  );
+  if (open) state.pr = opRef(r, "pr");
+  if (state.pr) l.reviewNumber = number;
+}
+var WATCH_MINUTES = 9;
+var WATCH_DISPATCHES = 40;
+async function waitForReview(l) {
+  const { state } = l.d;
+  for (let n = 1; n <= WATCH_DISPATCHES; n += 1) {
+    const w = must(
+      await agent(
+        `${l.where}
+Wait for review ${String(l.reviewNumber)} of this pull request, as docs/FORGE.md's review-status binding declares: first for the review to start, then for it to finish. Wait at most ${String(WATCH_MINUTES)} minutes in this dispatch, then return pending. On finished, return each finding with its id, its location (path:line, or empty), and its text. Change nothing.
+
+Pull request: ${state.pr}
+Worktree: ${worktreeOf(l)}`,
+        {
+          agentType: "slopify:watcher",
+          label: `review ${String(l.reviewNumber)} wait ${String(n)}`,
+          phase: "Review",
+          schema: WATCHER_SCHEMA
+        }
+      ),
+      "review",
+      "The review's status."
+    );
+    if (w.outcome !== "pending") return w;
+  }
+  return null;
+}
+async function reviewRound(l) {
+  phase("Review");
+  const w = await waitForReview(l);
+  const outcome = w?.outcome ?? "timed-out";
+  await inOrder(
+    l,
+    () => callPusher(
+      l.d.pushBrief("Do nothing except append the ledger line.", [
+        `review ${String(l.reviewNumber)} ended ${outcome}: ${String(w?.findings.length ?? 0)} finding(s)`
+      ]),
+      "record the review",
+      "Review"
+    )
+  );
+  l.review = {
+    clean: outcome === "finished" || outcome === "not-declared",
+    note: outcome === "finished" || outcome === "not-declared" ? "" : `Review ${String(l.reviewNumber)} ${outcome}.`
+  };
+  await judgeProblems(
+    l,
+    (w?.findings ?? []).map((f) => ({ source: "the review", location: f.location, text: f.text })),
+    "Review"
+  );
+}
+async function finish(l, ready) {
+  const { state } = l.d;
+  const issues = l.newIssues.length > 0 ? `File one Linear issue for each of these, as docs/BOARD.md declares:
+${list(l.newIssues.map((i) => `${i.text} ${i.detail ?? ""}`))}
+` : "";
+  const questions = [
+    ...l.decisions.filter((d) => d.affectsAcceptance).map((d) => `${d.question} We chose: ${d.choice}.`),
+    ...draftReasons(l).map((x) => x.text)
+  ];
+  const card = l.cardId ? ready ? `Perform the operations docs/BOARD.md declares for when the PR's review is clean on card ${l.cardId} (for example moving it to In Review), and comment on the card with the evidence and assumptions:
+${list(questions)}` : `Comment on card ${l.cardId} with what is open:
+${list(questions)}` : "";
+  pushed(
+    await inOrder(
+      l,
+      () => callPusher(
+        l.d.pushBrief(
+          `Update the PR ${state.pr}. ${bodyInstruction(l)}
+${ready ? "Mark the PR ready for review, as docs/FORGE.md declares.\n" : "Leave it a draft.\n"}${issues}${card}`,
+          [`delivery ${ready ? "ready" : "draft"}`]
+        ),
+        ready ? "mark the PR ready" : "report the draft",
+        "Push"
+      )
+    ),
+    "The final PR update."
+  );
+}
+async function validateSmall(l) {
+  if (l.round > 0 && l.affected.length === 0) return;
+  const v = await runValidation({
+    where: l.where,
+    worktree: worktreeOf(l),
+    criteria: l.validate?.criteria ?? [],
+    focus: [],
+    changed: [],
+    checks: false
+  });
+  for (const r of v.rows) l.rows[r.id] = r;
+  for (const p of v.problems) {
+    l.open.push({ problem: p, route: "coder", severity: "blocker", fingerprint: p.text, reason: "" });
+  }
+}
+async function validateDocument(l, doc) {
+  const [v, found] = await Promise.all([
+    runValidation({ where: l.where, worktree: worktreeOf(l), criteria: [], focus: [], changed: [] }),
+    doc.check()
+  ]);
+  await judgeProblems(l, [...v.problems, ...found], "Judge");
+}
+async function round(l, last) {
+  if (l.round > 0 || !l.built) await buildRound(l);
+  if (l.document) {
+    await validateDocument(l, l.document);
+  } else if (l.small) {
+    await validateSmall(l);
+  } else {
+    await judgeProblems(l, await validateRound(l), "Judge");
+    await gateway(l);
+  }
+  await pushRound(l, last);
+}
+function freshLoop(input) {
+  return {
+    ...input,
+    docs: input.build?.docs ?? [],
+    round: 0,
+    reviewNumber: input.startAtReview > 0 ? input.startAtReview - 1 : 0,
+    open: [],
+    escalated: [],
+    rows: {},
+    affected: [],
+    fixes: /* @__PURE__ */ new Map(),
+    differently: /* @__PURE__ */ new Set(),
+    rulings: [],
+    decisions: input.build?.decisions ?? [],
+    assumptions: [],
+    unverified: [],
+    confirmations: [],
+    knownDebt: [],
+    suggestions: [],
+    newIssues: [],
+    testChanges: [],
+    review: { clean: false, note: "" },
+    changedThisRound: [],
+    openByRound: [],
+    commits: Promise.resolve(),
+    halted: null
+  };
+}
+function nextStep(l) {
+  const g = gate({
+    prOpen: !!l.d.state.pr,
+    reviewClean: l.review.clean,
+    open: countOpen(l),
+    held: heldRows(l).length
+  });
+  if (g !== "fix") return g;
+  if (l.round >= MAX_FIX_ROUNDS || noProgress(l.openByRound)) return "end";
+  return l.open.length > 0 || !l.d.state.pr ? "fix" : "end";
+}
+async function runLoop(input) {
+  const l = freshLoop(input);
+  if (input.startAtReview > 0) {
+    l.reviewNumber = input.startAtReview;
+    await reviewRound(l);
+  } else {
+    await round(l, false);
+    if (l.d.state.pr) await reviewRound(l);
+  }
+  l.openByRound.push(countOpen(l));
+  for (let step = nextStep(l); step === "fix"; step = nextStep(l)) {
+    l.round += 1;
+    await round(l, l.round >= MAX_FIX_ROUNDS || noProgress([...l.openByRound, countOpen(l)]));
+    if (l.d.state.pr) await reviewRound(l);
+    l.openByRound.push(countOpen(l));
+  }
+  return endLoop(l, nextStep(l) === "clean");
+}
+async function endLoop(l, ready) {
+  if (!l.d.state.pr) await pushRound(l, true);
+  await finish(l, ready);
+  return {
+    status: ready ? "ready" : "draft",
+    rounds: l.round,
+    pr: l.d.state.pr,
+    review: l.review.note || "clean",
+    draftReasons: ready ? [] : draftReasons(l),
+    decisions: l.decisions.filter((d) => d.affectsAcceptance).map((d) => d.id)
+  };
+}
+function reportOf(workflowName, r, specDir = "") {
+  return [
+    `${workflowName} finished: the PR is ${r.status === "ready" ? "ready for review" : "a draft"}.`,
+    `PR: ${r.pr}.`,
+    specDir ? `Spec: ${specDir}.` : "",
+    `Fix rounds: ${String(r.rounds)}. Review: ${r.review}.`,
+    r.draftReasons.length > 0 ? `Why it is a draft:
+${r.draftReasons.map((x) => `- ${x.text}`).join("\n")}` : "",
+    r.decisions.length > 0 ? `Decisions to confirm: ${r.decisions.join(", ")}.` : ""
+  ].filter(Boolean).join("\n");
+}
+
+// src/slopify/lib/deliver-steps.ts
+function readStory(cardRes, storyArg, ask) {
+  const storySource = (/^\s*(card|text|none)\b/i.exec(fact(cardRes, "story-source"))?.[1] || "").toLowerCase();
+  const story = storySource === "text" ? storyArg : fact(cardRes, "story");
+  const storyRevision = shaped("sha", fact(cardRes, "story-revision"));
+  if (!story || storySource === "none") {
+    return {
+      need: {
+        ...need("locate", 1, "input", ask.input, cardRes.gaps.join("; ") || cardRes.answer),
+        arg: ask.arg
+      }
+    };
+  }
+  if (!storyRevision) {
+    return { need: need("locate", 1, "prerequisite", "The story revision digest from scout-card.", cardRes.answer) };
+  }
+  if (ask.criteria) {
+    const criteria = fact(cardRes, "criteria");
+    if (absent(criteria, true) && !criteria.trim().includes("\n")) {
+      return {
+        need: need(
+          "locate",
+          1,
+          "story",
+          "The story states no acceptance criteria; it needs observable ones from shape.",
+          cardRes.answer
+        )
+      };
+    }
+  }
+  return { storySource, story, storyRevision };
+}
+function specRelOf(cardRes, cardId, storySource, story, slug) {
+  const titleSlug = (storySource === "card" ? (story.split("\n", 1)[0] ?? "").replace(/^#+\s*/, "") : "").toLowerCase().replaceAll(/[^a-z0-9]+/g, "-").replaceAll(/^-+|-+$/g, "").slice(0, 60).replace(/-+$/, "");
+  return [shaped("rel", val(cardRes, "spec-path"))].find((p) => p.endsWith(".md")) || `docs/specs/${[
+    cardId.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-").replaceAll(/^-+|-+$/g, ""),
+    titleSlug
+  ].filter(Boolean).join("-") || slug}.md`;
+}
+function locate(d, cardRes, storyArg, fallbackSlug, ask) {
+  if (!cardRes) {
+    return {
+      stop: d.stop("locate", [need("locate", 1, "prerequisite", ask.readable, "scout-card did not return")])
+    };
+  }
+  const read = readStory(cardRes, storyArg, ask);
+  if ("need" in read) return { stop: d.stop("locate", [read.need]) };
+  const cardId = shaped("id", val(cardRes, "card"));
+  const boardBranch = shaped("branch", val(cardRes, "branch"));
+  const slug = slugOf(cardId) || fallbackSlug;
+  const specRel = specRelOf(cardRes, cardId, read.storySource, read.story, slug);
+  return { ...read, cardId, boardBranch, slug, specRel };
+}
+async function createWorktree(d, o) {
+  const { state, stop, done, pushBrief, pushStop } = d;
+  const { cardId, boardBranch } = o;
+  const r = await callPusher(
+    pushBrief(
+      `Create or recover ${o.worktree} and branch that docs/FORGE.md declares for ${o.subject}${boardBranch ? ` (the board gives the branch name ${boardBranch})` : ""}. ${cardId ? "Then perform the delivery-start operation docs/BOARD.md declares for the card (for example its status transition), only as bound." : "There is no card, so perform no board operation."} Change no card content. Append the board-start line only once the delivery-start operation is done.`,
+      cardId ? [`done board-start ${cardId}`] : [],
+      "<worktree>/.tmp/ledger.md at the root of the worktree you create or recover"
+    ),
+    "create the worktree",
+    "Workspace"
+  );
+  if (!pushOk(r)) return pushStop("workspace", r);
+  const wt = opRef(r, "worktree");
+  if (!wt.startsWith("/")) {
+    return stop("workspace", [
+      need("workspace", 1, "prerequisite", `The absolute path of ${o.worktree}.`, JSON.stringify(r.operations))
+    ]);
+  }
+  state.worktree = wt.replace(/\/+$/, "");
+  state.branch = opRef(r, "branch") || state.branch;
+  done("workspace");
+  return null;
+}
+async function workspace(d, o) {
+  const { state, done, skip, pushBrief, pushStop } = d;
+  const { cardId } = o;
+  phase("Workspace");
+  let boardStartRecorded = false;
+  if (state.worktree) {
+    skip("workspace");
+  } else {
+    const created = await createWorktree(d, o);
+    if (created) return created;
+    boardStartRecorded = !!cardId;
+  }
+  if (!o.boardStartDone && !boardStartRecorded) {
+    const b = await callPusher(
+      pushBrief(
+        `Perform the delivery-start operation docs/BOARD.md declares for card ${cardId} (for example its status transition), only as bound and only if the card does not already show it. Do nothing else, and change no card content.`,
+        [`done board-start ${cardId}`]
+      ),
+      "start the card",
+      "Workspace"
+    );
+    if (!pushOk(b)) return pushStop("workspace", b);
+    done("board-start");
+  }
+  if (!state.ledger) state.ledger = `${state.worktree}/.tmp/ledger.md`;
+  return null;
+}
+
+// src/slopify/lib/resume.ts
+async function readResume(d, identifies, specDir) {
+  const cp = must(
+    await scout(
+      "scout-checkpoint",
+      `${d.WHERE}
+Report where this run stands. It is the delivery of ${identifies}.
+Report these keys, each as an evidence item with source set to the key; leave out a key that does not exist:
+- worktree, branch, ledger
+- pr: the PR reference
+- done-board-start: the last "done board-start" ledger line
+- done-round: the last "done round" ledger line
+- done-findings: the path in the last "done findings" ledger line
+- review-fired: the highest <n> among the ledger's "review <n> fired" lines
+- spec-dir: ${specDir ? `the folder ${specDir}, if it exists in the worktree` : 'the spec folder the PR description names after "Spec:"'}, relative to the worktree root
+- build-json: the exact contents of build.json in that folder
+- validate-json: the exact contents of validate.json in that folder`,
+      { label: "read checkpoints", phase: "Locate" }
+    ),
+    "locate",
+    "The run's checkpoints."
+  );
+  const { state } = d;
+  const worktree = shaped("path", val(cp, "worktree"));
+  if (worktree.startsWith("/")) state.worktree = worktree.replace(/\/+$/, "");
+  state.branch = shaped("branch", val(cp, "branch"));
+  state.ledger = shaped("path", val(cp, "ledger"));
+  state.pr = shaped("ref", val(cp, "pr"));
+  return {
+    build: parseBuild(fact(cp, "build-json")),
+    validate: parseValidate(fact(cp, "validate-json")),
+    specDir: shaped("rel", val(cp, "spec-dir")) || specDir,
+    reviewFired: Number(/\d+/.exec(val(cp, "review-fired"))?.[0] ?? 0),
+    built: !!val(cp, "done-round"),
+    boardStartDone: !!val(cp, "done-board-start"),
+    findings: shaped("rel", val(cp, "done-findings"))
+  };
+}
+
+// src/slopify/lib/small.ts
+async function fileCard(d, story, slug, cardType) {
+  const marker = `<!-- deliver-small ${slug} -->`;
+  const r = await callPusher(
+    d.pushBrief(
+      `Create a ${cardType} card from this text, as docs/BOARD.md declares, with one trailing line in its body: ${marker}. First search the board for a card whose body holds that line, and use that card instead of creating another. If docs/BOARD.md declares no board, do nothing. Report the card's identifier as the operation named card.
+<<<TEXT
+${story}
+TEXT>>>`
+    ),
+    "file the card",
+    "Locate"
+  );
+  if (!pushOk(r)) throw new Halt("locate", "A card for this work.", "pusher didn't file one");
+  return opRef(r, "card");
+}
+async function readWork(d, arg) {
+  phase("Locate");
+  const cardRes = await scout(
+    "scout-card",
+    `${d.WHERE}
+The argument below names one card on the board, or is the work itself as a prompt. Read a named card through the read bindings in docs/BOARD.md, or take a prompt as the story. Report these evidence items, each with source set to the item name and excerpt set to its value; leave out an item that does not exist:
+- card: the card identifier, or none for a prompt
+- story-source: card or text
+- story: the story text exactly as you wrote it for hashing, or the argument verbatim for a prompt
+- story-revision: the story revision digest
+- field-re: the field regex you used for it
+- branch: the branch name the board gives the card, or the single word none
+Change nothing on the board or forge.
+
+Argument:
+<<<ARG
+${arg}
+ARG>>>`,
+    { label: "read the work", phase: "Locate" }
+  );
+  return locate(d, cardRes, arg, slugged(arg, "change"), {
+    readable: "A readable Linear issue, or a prompt.",
+    input: "A Linear issue or a prompt saying what to change.",
+    arg: "story",
+    criteria: false
+  });
+}
+async function startWork(d, arg, cardType) {
+  let located = await readWork(d, arg);
+  if ("stop" in located) return { status: "not-started", next: located.stop.needs.map((n) => n.what).join(" ") };
+  if (!located.cardId) {
+    const filed = await fileCard(d, located.story, located.slug, cardType);
+    if (filed) located = await readWork(d, filed);
+    if ("stop" in located) return { status: "not-started", next: located.stop.needs.map((n) => n.what).join(" ") };
+  }
+  const { story, cardId, boardBranch, slug, specRel } = located;
+  const resume = await readResume(d, cardId ? `card ${cardId}` : `the ${cardType} "${slug}"`, "");
+  const stopped = await workspace(d, {
+    cardId,
+    boardBranch,
+    boardStartDone: resume.boardStartDone,
+    worktree: "the worktree",
+    subject: `this ${cardType}`
+  });
+  const name = (specRel.split("/").pop() ?? slug).replace(/\.md$/, "");
+  return stopped ?? { story, cardId, slug, name, resume };
+}
 
 // src/slopify/workflows/deliver-spike.ts
 var WORKFLOW = "deliver-spike";
-var MAX_FAILURES = 3;
-var NO_OPS = "Do not commit, push, create or remove branches or worktrees, open pull requests, or touch cards: pusher alone does that.";
-var MEASURED_RULE = "Every measured value in the document must come from a prototype command recorded in the document together with its output. Do not report figures from scouts, from runs that were not saved, or from a validator's reruns: drop such a figure rather than cite it. When a validator flags a figure that has no recorded command, remove it or add the recorded command and its output; never add a new unrecorded figure.";
-var DOC_REVISION = "The document revision is the file's own git hash-object (git hash-object <path>); the file may be untracked, so verify it that way and do not look for a commit.";
 var LIBRARY_SCHEMA = libraryReaderSchema("the question");
-var WRITER_SCHEMA = writerSchema({
-  produced: "Absolute paths written",
-  revision: "git hash-object of the main artifact"
-});
 var PLAN_SCHEMA = {
   type: "object",
-  required: ["claims", "openDecisions"],
+  required: ["claims", "assumptions"],
   properties: {
     claims: {
       type: "array",
       items: {
         type: "object",
-        required: ["id", "claim", "status", "needsMeasurement", "measurement"],
+        required: ["id", "claim", "status", "measurement"],
         properties: {
-          id: { type: "string", description: "A short stable id such as c1" },
+          id: { type: "string", description: "A short stable id: c1, c2, ..." },
           claim: { type: "string" },
           status: { type: "string", enum: ["supported", "contested", "unknown"] },
-          needsMeasurement: { type: "boolean" },
           measurement: {
             type: "string",
-            description: "What to measure and how; an empty string when no measurement is needed"
+            description: "What to measure and how, when a throwaway prototype could settle the claim; empty otherwise"
           }
         }
       }
     },
-    openDecisions: { ...STRINGS, description: "Questions only the user can settle before the spike can proceed" }
+    assumptions: { ...STRINGS, description: "Each question the plan settled itself, as the question and the choice" }
   }
 };
-var CODER_SCHEMA = measuringCoderSchema({
-  ran: "command -> result",
-  revision: "Label <HEAD sha>+<digest> naming the worktree's current state; not a git object",
-  specMismatch: "Why the approach cannot work as assigned; an empty string when it can"
-});
-var PUSHER_SCHEMA = pusherSchema();
-var auth = (s) => `The user invoked the deliver-spike workflow. That invocation itself authorizes you to create, and later delete, this spike's own prototype branch and worktree, which are local only, never pushed, and never merged. Name them only as docs/FORGE.md's "Spike prototypes" binding names them:
-${s.binding}
-Follow docs/FORGE.md for everything else it binds, such as the target branch to branch from. The user's invocation of deliver-spike is the user's request for creating and deleting this prototype branch and worktree, so it lifts any restriction in docs/FORGE.md against them. The invocation authorizes nothing else: no commit, push, pull request, board operation, ledger line, merge, or message.`;
-function need(id, kind, what, evidence) {
-  return { id, kind, what, evidence };
-}
-function stop(s, step, needs) {
-  return blocked(WORKFLOW, step, needs, { completed: s.completed, checkpoint: s.checkpoint, attempts: s.attempts });
-}
-function opRef(result, op) {
-  const hit = result.operations.find((o) => o.op === op);
-  return hit ? hit.reference.trim() : "";
-}
-function show(title, r) {
-  if (!r) return `### ${title}
-No result: the dispatch did not return, so this is a gap, not an absence.`;
-  const ev = r.evidence.map((e) => `- ${e.source} (${e.location}): ${e.excerpt}`);
-  return `### ${title}
-${r.answer}
-Evidence:
-${bullets(ev)}
-Gaps:
-${bullets(r.gaps)}`;
-}
-function showLibrary(r) {
-  return r ? `### library-reader
-${r.summary}
-Supported:
-${bullets(r.supported)}
-Gaps:
-${bullets(r.gaps)}` : "### library-reader\nNo result: the library-reader did not return, so what the library supports is unknown, not empty.";
-}
-function showMeasurements(ms) {
-  return ms.length > 0 ? ms.map((m) => `- ${m.claim}: ${m.value} (command: ${m.command})`).join("\n") : "- none reported";
-}
-function covers(measurements, id) {
-  const re = new RegExp(String.raw`(^|[^\w-])${id.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`)}([^\w-]|$)`);
-  return measurements.some((m) => re.test(m.claim));
-}
-function passed(r) {
-  return !!r && r.verdict === "pass" && r.findings.every((f) => !f.blocking);
-}
-function onRevision(r, revision) {
-  return !!r && (revision ? sameRev(revision, r.evaluated) : r.evaluated.trim() !== "");
-}
-function passedOn(r, revision) {
-  if (!passed(r)) return false;
-  return revision ? sameRev(revision, r.evaluated) : r.evaluated.trim() !== "";
-}
-function describe(name, r, revision) {
-  if (!r) return `${name}: the dispatch did not return`;
-  const items = r.findings.map((f) => `${f.location}: ${f.problem}${f.blocking ? "" : " (non-blocking)"}`);
-  if (r.verdict === "pass" && items.length === 0 && !passedOn(r, revision)) {
-    items.push(`judged "${r.evaluated}", not the briefed revision ${revision || "(none named)"}`);
+var MEASUREMENT = {
+  type: "object",
+  required: ["claim", "command", "output", "value"],
+  properties: {
+    claim: { type: "string", description: "The claim id" },
+    command: { type: "string", description: "The exact command, run from the prototype worktree" },
+    output: { type: "string", description: "Its output, verbatim" },
+    value: { type: "string" }
   }
-  const limits = r.limits && !absent(r.limits, true) ? `; limits: ${r.limits}` : "";
-  return `${name}: ${r.verdict}${items.length > 0 ? ` (${items.join("; ")})` : ""}${limits}`;
-}
-async function attempt(s, gate, label, run2, check, fatal) {
-  let last = "";
-  for (let i = 0; i < MAX_FAILURES; i++) {
-    const res = await run2(last);
-    const problem = res ? check(res) : "the agent did not return";
-    if (!problem) return { res, last };
-    s.attempts.push({ gate, approach: label, failed: problem });
-    last = problem;
-    if (res && fatal?.(res)) break;
+};
+var PROTOTYPE_SCHEMA = {
+  type: "object",
+  required: ["measurements", "assumptions", "problem"],
+  properties: {
+    measurements: { type: "array", items: MEASUREMENT },
+    assumptions: {
+      ...STRINGS,
+      description: "Each trivial question you settled yourself, as the question and your choice"
+    },
+    problem: { type: "string", description: "Why these claims can't be measured as asked; empty when they can" }
   }
-  return { res: null, last };
-}
-var retryNote = (last) => last ? `
-The previous attempt failed: ${last}
-` : "";
-async function locate(s) {
-  phase("Locate");
-  let cp = null;
-  for (let i = 0; i < MAX_FAILURES && !cp; i++) {
-    cp = await scout(
-      "scout-checkpoint",
-      `${s.where}
-
-Report where this spike stands from its durable checkpoints. Return each key below that exists as an evidence item whose source is the key; leave out a key that does not exist. A spike has no card: read no board.
-
-Spike slug: ${s.slug}
-Question: ${s.question}
-
-Keys:
-- spike-binding: the "Spike prototypes" binding in docs/FORGE.md: its local branch pattern, its worktree pattern, and whether it permits deleting a never-pushed prototype, quoted. Leave the key out when docs/FORGE.md does not exist or has no such binding; invent no names.
-- findings-doc: the findings document for this spike, a Markdown file in the main checkout (ignore .git and .worktrees) whose first line under its title is "Spike: ${s.slug}". Location: its absolute path. Excerpt: "<absolute path> <git hash-object of the file>".
-- prototype-branch: the local prototype branch that binding names for the slug above, if it exists. Location and excerpt: the branch name alone. Leave the key out when there is no binding.
-- worktree: the prototype worktree that binding names for the slug above, if it exists. Location and excerpt: its absolute path alone. Leave the key out when there is no binding.`,
-      { label: "checkpoint", phase: "Locate" }
-    );
-    if (!cp) s.attempts.push({ gate: "locate", approach: "scout-checkpoint", failed: "the scout did not return" });
+};
+var CONFIRM_SCHEMA = {
+  type: "object",
+  required: ["results"],
+  properties: {
+    results: {
+      type: "array",
+      items: {
+        type: "object",
+        required: ["claim", "confirmed", "reason"],
+        properties: {
+          claim: { type: "string", description: "The claim id" },
+          confirmed: { type: "boolean", description: "True when your rerun reproduced the value" },
+          reason: { type: "string", description: "What differed or stopped the rerun; empty when confirmed" }
+        }
+      }
+    }
   }
-  if (!cp) {
-    return stop(s, "locate", [
-      need(
-        "locate-1",
-        "prerequisite",
-        "A scout-checkpoint result for this spike, so a rerun knows what is already done.",
-        "scout-checkpoint did not return in three dispatches"
-      )
-    ]);
-  }
-  s.completed.push("locate");
-  const bindingFact = fact(cp, "spike-binding");
-  const bindingBody = bindingFact.replace(/^[\s>*-]*spike prototypes\s*[:—-]?\s*/i, "");
-  s.binding = !absent(bindingBody) && /<slug>/i.test(bindingBody) ? bindingFact : "";
-  const docSpec = parseSpec(fact(cp, "findings-doc"));
-  s.doc.path = docSpec ? shaped("path", docSpec.path) : "";
-  s.doc.revision = docSpec ? shaped("sha", docSpec.hash) : "";
-  s.prototypeBranch = shaped("branch", fact(cp, "prototype-branch"));
-  s.prototypeWorktree = shaped("path", fact(cp, "worktree"));
-  if (s.doc.path) s.checkpoint.findingsDoc = s.doc.path;
-  if (s.prototypeBranch) s.checkpoint.branch = s.prototypeBranch;
-  if (s.prototypeWorktree) s.checkpoint.worktree = s.prototypeWorktree;
-  return void 0;
-}
-async function gather(s) {
-  phase("Codebase");
-  const [library, feasibility, code] = await parallel([
-    () => agent(
-      `${s.where}
-
-Report what the project library already supports about this spike's question, so supported work is not repeated. Read library/_meta/librarian.md, then the relevant index and wiki pages and the raw notes behind them. Cite each supported claim to its file and heading, and name gaps, stale material, and contested pages. Make no internet requests and no writes.
-
-Question: ${s.question}`,
-      { agentType: "slopify:library-reader", label: "library context", phase: "Codebase", schema: LIBRARY_SCHEMA }
-    ),
-    () => scout(
-      "scout-feasibility",
-      `${s.where}
-
-The candidate is whatever approach the spike's question asks about. Find where it fits in this codebase, what it would touch, and what blocks it.
-
-Question: ${s.question}`,
-      { label: "feasibility", phase: "Codebase" }
-    ),
-    () => scout(
-      "scout-code",
-      `${s.where}
-
-The described change is whatever the spike's question would require of this codebase. Find the code locations and call paths relevant to it, with path:line evidence.
-
-Question: ${s.question}`,
-      { label: "code", phase: "Codebase" }
-    )
-  ]);
-  if (!library)
-    s.attempts.push({
-      gate: "codebase",
-      approach: "library-reader",
-      failed: "the reader did not return; recorded as a gap"
-    });
-  s.completed.push("codebase");
-  phase("Outside");
-  const libraryText = showLibrary(library);
-  const outsideBrief = (task) => `${s.where}
-
+};
+var DOC_SCHEMA = {
+  type: "object",
+  required: ["changed"],
+  properties: { changed: { ...STRINGS, description: "Paths written, relative to the worktree root" } }
+};
+var quoted = (story) => `<<<QUESTION
+${story}
+QUESTION>>>`;
+async function ground(d, story) {
+  phase("Ground");
+  const brief = (task) => `${d.WHERE}
 ${task}
+Change nothing.
 
-Question: ${s.question}
-
-What the project library already supports (look only for what is missing from it, and do not repeat it):
-${libraryText}
-
-Codebase evidence so far:
-${show("scout-feasibility", feasibility)}
-${show("scout-code", code)}`;
-  const [upstream, known, prior] = await parallel([
-    () => scout(
+${quoted(story)}`;
+  const scouts = [
+    ["scout-code", "Find the code locations and call paths this question concerns, with path:line evidence."],
+    [
+      "scout-feasibility",
+      "Find where the approach this question asks about fits in this codebase, what it would touch, and what blocks it."
+    ],
+    [
       "scout-upstream-docs",
-      outsideBrief(
-        "Find official docs and API references for the one library or service the question turns on, naming it from the question or the codebase evidence below: versions, limits, deprecations. If none is named, report that as a gap."
-      ),
-      { label: "upstream docs", phase: "Outside" }
-    ),
-    () => scout(
+      "Find the official docs for the library or service this question turns on: versions, limits, and deprecations."
+    ],
+    [
       "scout-known-issues",
-      outsideBrief("Find pitfalls and open bugs relevant to the question in upstream trackers and changelogs."),
-      { label: "known issues", phase: "Outside" }
+      "Find pitfalls and open bugs relevant to this question in upstream trackers and changelogs."
+    ],
+    ["scout-prior-art", "Find repos, issues, discussions, and write-ups where others answered the same question."]
+  ];
+  const [library, ...found] = await parallel([
+    () => agent(
+      brief(
+        "Report what the project library already supports about this question, citing each claim to its file and heading, and name its gaps. Make no internet requests."
+      ),
+      { agentType: "slopify:library-reader", label: "library", phase: "Ground", schema: LIBRARY_SCHEMA }
     ),
-    () => scout(
-      "scout-prior-art",
-      outsideBrief("Find GitHub repos, issues, PRs, discussions, and write-ups where others did the same thing."),
-      { label: "prior art", phase: "Outside" }
+    ...scouts.map(
+      ([name, task]) => () => scout(name, brief(task), { label: name, phase: "Ground" })
     )
   ]);
-  s.completed.push("outside");
+  const lib = must(library, "ground", "What the library supports.");
   return [
-    showLibrary(library),
-    show("scout-feasibility", feasibility),
-    show("scout-code", code),
-    show("scout-upstream-docs", upstream),
-    show("scout-known-issues", known),
-    show("scout-prior-art", prior)
+    `library-reader: ${lib.summary}
+${list(lib.supported)}
+  Gaps: ${lib.gaps.join("; ") || "none"}`,
+    ...scouts.map(([name], i) => show(name, must(found[i], "ground", `Evidence from ${name}.`)))
   ].join("\n\n");
 }
-function planProblem(r) {
-  if (!Array.isArray(r.claims)) return "the plan has no claims list";
-  const ids = r.claims.map((c) => c.id);
-  if (new Set(ids).size !== ids.length) return "claim ids are not unique";
-  const bad = r.claims.find((c) => c.needsMeasurement && !c.measurement.trim());
-  return bad ? `claim ${bad.id} needs a measurement but names none` : "";
-}
-async function planClaims(s, evidenceText) {
+async function plan(d, story, evidence) {
   phase("Plan");
-  let planFailure = "";
-  const sd = await settleDecisions("plan", s.answers, async (settled) => {
-    const planned = await attempt(
-      s,
-      "plan",
-      settled.length > 0 ? "writer claim plan with answers" : "writer claim plan",
-      (last) => agent(
-        `${s.where}
-${NO_OPS}
-Write no files: return the plan.
-${retryNote(last)}
-List the claims the answer to this spike's question rests on. For each, give a short stable id (c1, c2, ...), the claim, its evidence status from the evidence below (supported, contested, or unknown), and whether it needs a measurement from a throwaway prototype. A claim needs a measurement only when the evidence leaves it contested or unknown and a prototype could settle it; then say what to measure and how. Leave measurement empty otherwise. Settle measurement details yourself (environment, interpreter or tool versions, method, scope, what is included in a timing) and record each as a labelled assumption: put it in the claim's measurement text as "Assumption: ...", so the findings document can state it too. Raise a question in openDecisions only when the spike's question itself is ambiguous in a way no reasonable assumption resolves; never for how to measure. Otherwise leave openDecisions empty.${settledText(
-          settled
-        )}
+  return must(
+    await agent(
+      `${d.WHERE}
+Plan the answer to this spike's question from the evidence below, and return each assumption you make.
 
-Question: ${s.question}
+${quoted(story)}
 
 Evidence:
-${evidenceText}`,
-        { agentType: "slopify:writer", label: "plan claims", phase: "Plan", schema: PLAN_SCHEMA }
-      ),
-      planProblem
-    );
-    planFailure = planned.last;
-    return planned.res;
-  });
-  if (!sd.res) {
-    return stop(s, "plan", [
-      need("plan-1", "validation", "A claim plan the writer can produce for this question.", planFailure)
-    ]);
-  }
-  if (sd.open.length > 0) {
-    return stop(
-      s,
-      "plan",
-      sd.open.map((d) => need(d.id, "decision", d.question, "raised by the claim plan"))
-    );
-  }
-  s.completed.push("plan");
-  return { plan: sd.res };
+${evidence}`,
+      { agentType: "slopify:writer-findings", label: "plan", phase: "Plan", schema: PLAN_SCHEMA }
+    ),
+    "plan",
+    "The spike's plan."
+  );
 }
-function pusherProblem(r) {
-  return r.unmet.length > 0 ? `unmet: ${r.unmet.join("; ")}` : r.done ? "" : "the operation did not complete";
+var PROTOTYPE_AUTH = "The user's invocation of deliver-spike authorizes creating and then deleting this spike's local prototype branch and worktree. They are never pushed.";
+function measureBrief(d, worktree, claims, last) {
+  return `${d.WHERE}
+Build a throwaway prototype in the worktree ${worktree}, only as much as these measurements need, and run each one. Record each command exactly as run from that worktree, with its output verbatim.
+${list(claims.map((c) => `${c.id}: ${c.claim} Measure: ${c.measurement}`))}${last ? `
+
+The last attempt wasn't confirmed:
+${last}` : ""}
+
+Write only inside that worktree. If a claim can't be measured as asked, return problem with why and stop. ${NO_WRITES}`;
 }
-var pusherUnmet = (r) => r.unmet.length > 0;
-async function makeWorkspace(s) {
-  const made = await attempt(
-    s,
+async function confirm(d, worktree, measurements) {
+  return must(
+    await agent(
+      `${d.WHERE}
+In the worktree ${worktree}, rerun each measurement below and say whether you reproduce its value. A value that depends on the machine is confirmed when your rerun agrees within the variation the claim allows. Change nothing.
+${JSON.stringify(measurements)}`,
+      { agentType: "slopify:qa", label: "confirm measurements", phase: "Prototype", schema: CONFIRM_SCHEMA }
+    ),
     "prototype",
-    "pusher prototype workspace",
-    (last) => agent(
-      `${s.where}
-${auth(s)}
-${retryNote(last)}
-Create the spike's prototype branch and worktree for the slug "${s.slug}", named as docs/FORGE.md's "Spike prototypes" binding names them. Branch from the target branch docs/FORGE.md declares. Both are local only, never pushed, never merged; confirm neither was pushed before reusing an existing one. If they already exist from an interrupted run, reuse them. Report the operations \`branch-create\` (reference: the branch name) and \`worktree-add\` (reference: the absolute worktree path). Commit nothing, push nothing, open no pull request, and append no ledger line. Report an operation as unmet only if it fails or the request above does not cover it.`,
-      { agentType: "slopify:pusher", label: "prototype workspace", phase: "Prototype", schema: PUSHER_SCHEMA }
-    ),
-    (r) => pusherProblem(r) || (opRef(r, "worktree-add") ? "" : "no worktree path was reported"),
-    pusherUnmet
+    "A rerun of the measurements."
   );
-  if (!made.res) {
-    return stop(s, "prototype", [
-      need(
-        "prototype-1",
-        "prerequisite",
-        "A prototype branch and worktree the spike may create (docs/FORGE.md must not prohibit them), so it can measure its claims.",
-        made.last
-      )
-    ]);
-  }
-  s.prototypeWorktree = opRef(made.res, "worktree-add");
-  s.prototypeBranch = opRef(made.res, "branch-create") || s.prototypeBranch;
-  s.checkpoint.worktree = s.prototypeWorktree;
-  if (s.prototypeBranch) s.checkpoint.branch = s.prototypeBranch;
-  return void 0;
 }
-async function buildPrototype(s, toMeasure, evidenceText) {
-  const claimLines = toMeasure.map((c) => `- ${c.id}: ${c.claim} (measure: ${c.measurement})`).join("\n");
-  const built = await attempt(
-    s,
+async function measureOnce(d, worktree, pending, t, attempt) {
+  const last = list(pending.filter((c) => t.why.has(c.id)).map((c) => `${c.id}: ${t.why.get(c.id) ?? ""}`));
+  const built = must(
+    await callCoder(
+      measureBrief(d, worktree, pending, attempt > 1 ? last : ""),
+      `prototype${attempt > 1 ? ` (try ${String(attempt)})` : ""}`,
+      "Prototype",
+      PROTOTYPE_SCHEMA
+    ),
     "prototype",
-    "coder throwaway prototype",
-    (last) => agent(
-      `${s.where}
-${NO_OPS}
-${retryNote(last)}
-Build a throwaway prototype in the worktree ${s.prototypeWorktree} and write only inside it. It measures the claims below to answer the spike's question. It is deleted afterwards and never merged, so keep it as small as the measurements allow. If the worktree already holds prototype work from an interrupted run, inspect it, keep what serves this assignment, and continue from it.
-
-Run every measurement yourself, the way its claim states. Return one measurements entry per claim: claim set to "<claim id>: <claim>", value set to what you observed, and command set to the exact command that produced it. Return in steps what you ran and in observed what you saw. Return in revision the label <HEAD sha>+<digest> for the worktree's current state, where the digest is git hash-object of the output of git -C ${s.prototypeWorktree} diff HEAD --binary, taken after git add -N on your new files. The revision is a label for the worktree's current state, not a git object: do not look it up in git. If the approach cannot measure a claim, say why in specMismatch.
-
-Question: ${s.question}
-
-Claims to measure:
-${claimLines}
-
-Evidence:
-${evidenceText}`,
-      { agentType: "slopify:coder", label: "build prototype", phase: "Prototype", schema: CODER_SCHEMA }
-    ),
-    (r) => {
-      if (r.specMismatch.trim()) return `unworkable: ${r.specMismatch.trim()}`;
-      if (!r.revision.trim()) return "no prototype revision was returned";
-      const missing = toMeasure.filter((c) => !covers(r.measurements, c.id)).map((c) => c.id);
-      return missing.length > 0 ? `no measurement was returned for ${missing.join(", ")}` : "";
-    }
+    "A prototype and its measurements."
   );
-  if (!built.res) {
-    return stop(s, "prototype", [
-      need(
-        "prototype-2",
-        "validation",
-        `A prototype that measures every claim that needs it (${toMeasure.map((c) => c.id).join(", ")}).`,
-        built.last
-      )
-    ]);
-  }
-  s.measurements = built.res.measurements;
-  s.protoRevision = built.res.revision.trim();
-  s.completed.push("prototype");
-  return void 0;
-}
-async function prototype(s, plan, evidenceText) {
-  const toMeasure = plan.claims.filter((c) => c.needsMeasurement);
-  if (toMeasure.length === 0) {
-    log("No claim needs a measurement; no prototype");
-    s.skipped.push("prototype");
-    return void 0;
-  }
-  if (!s.binding && !s.prototypeWorktree) {
-    s.prototypeGap = `No prototype was built: docs/FORGE.md declares no "Spike prototypes" naming, so these claims were not measured: ${toMeasure.map((c) => c.id).join(", ")}`;
-    log(s.prototypeGap);
-    s.skipped.push("prototype");
-    return void 0;
-  }
-  phase("Prototype");
-  if (!s.prototypeWorktree) {
-    const stopped = await makeWorkspace(s);
-    if (stopped) return stopped;
-  }
-  return buildPrototype(s, toMeasure, evidenceText);
-}
-async function findings(s, plan, evidenceText) {
-  phase("Findings");
-  const written = await attempt(
-    s,
-    "findings",
-    "writer findings document",
-    (last) => agent(
-      `${s.where}
-${NO_OPS}
-${retryNote(last)}
-Write the spike's findings document. Place it in the main checkout where it best fits the project's documentation, as a new entry, and leave it uncommitted. Its first line under its title is "Spike: ${s.slug}". Directly after the title block, open with a one-paragraph direct answer to the question that states its conditions (the stated assumptions and what it holds for). Then the question, the findings, the measurements, and the open unknowns. It makes no recommendation and does not rank options. Every claim cites a path:line, library evidence (file and heading), an outside source (URL), or a measurement (its claim id and command). State the plan's labelled assumptions ("Assumption: ...") in the measurements section, next to the measurements they qualify. ${MEASURED_RULE} Write only that one document: produced holds exactly its absolute path, and revision is its git hash-object. Return the open unknowns, one per entry, in openDecisions.
-
-Question: ${s.question}
-
-Claims and their evidence status:
-${plan.claims.map((c) => `- ${c.id} [${c.status}]: ${c.claim}${c.measurement ? ` (measurement: ${c.measurement})` : ""}`).join("\n")}
-
-Measurements from the prototype:
-${showMeasurements(s.measurements)}${s.prototypeGap ? `
-
-${s.prototypeGap}. State each of those claims as unmeasured in the document, and list the missing prototype naming among the open unknowns.` : ""}
-
-Evidence:
-${evidenceText}`,
-      { agentType: "slopify:writer", label: "findings document", phase: "Findings", schema: WRITER_SCHEMA }
-    ),
-    (r) => {
-      if (!r.produced[0]?.startsWith("/")) return "no absolute document path was returned";
-      return r.revision.trim() ? "" : "no document revision was returned";
-    }
-  );
-  if (!written.res) {
-    return stop(s, "findings", [
-      need("findings-1", "validation", "A findings document the writer can produce.", written.last)
-    ]);
-  }
-  s.doc.path = written.res.produced[0] ?? "";
-  s.doc.revision = written.res.revision.trim();
-  s.unknowns = written.res.openDecisions;
-  if (s.prototypeGap && s.unknowns.every((u) => !/prototype/i.test(u))) s.unknowns = [...s.unknowns, s.prototypeGap];
-  s.checkpoint.findingsDoc = s.doc.path;
-  s.completed.push("findings");
-  return void 0;
-}
-async function produce(s) {
-  const evidenceText = await gather(s);
-  const planned = await planClaims(s, evidenceText);
-  if (!("plan" in planned)) return planned;
-  const { plan } = planned;
-  return await prototype(s, plan, evidenceText) ?? findings(s, plan, evidenceText);
-}
-function judges(s) {
-  const docBrief = (task) => `${s.where}
-
-${task}
-
-Question: ${s.question}
-Findings document: ${s.doc.path}
-Revision judged: ${s.doc.revision || "the document as it is now (report its git hash-object in evaluated)"}
-${DOC_REVISION}${s.measurements.length > 0 ? `
-
-Measurements the prototype reported:
-${showMeasurements(s.measurements)}` : ""}`;
-  const judged = [
-    {
-      name: "lens-evidence",
-      doc: true,
-      call: () => lens(
-        "lens-evidence",
-        docBrief("Judge whether every claim in the findings document cites a reachable source or measurement."),
-        { label: "evidence", phase: "Validate" }
-      )
-    },
-    {
-      name: "lens-question",
-      doc: true,
-      call: () => lens(
-        "lens-question",
-        docBrief("Judge whether the findings answer the spike's question and name what remains unknown."),
-        { label: "question", phase: "Validate" }
-      )
-    },
-    {
-      name: "lens-neutrality",
-      doc: true,
-      call: () => lens("lens-neutrality", docBrief("Judge whether the findings make no recommendation."), {
-        label: "neutrality",
-        phase: "Validate"
-      })
-    }
-  ];
-  if (s.prototypeWorktree) {
-    judged.push({
-      name: "qa",
-      doc: false,
-      call: () => agent(
-        `${s.where}
-
-Judge whether the throwaway prototype measures what the findings document says. The acceptance source is the document's measurement claims, and each measurement's claim, value, and command. For each, re-run the command in a temporary copy of the prototype worktree and check that the prototype exercises what the claim says (not a stub), and that the document's stated value agrees with what you observe, allowing for ordinary run-to-run variance. Change nothing in the worktree or the document.
-
-Question: ${s.question}
-Prototype worktree: ${s.prototypeWorktree}
-Prototype revision judged: ${s.protoRevision ? `${s.protoRevision} (a label for the worktree's current state, not a git object)` : "the worktree's current state. Name it in evaluated as <HEAD sha>+<digest>, a label and not a git object, computed in a temporary copy: git add -N on new files, then git hash-object of git diff HEAD --binary"}
-Findings document: ${s.doc.path}
-Document revision: ${s.doc.revision || "the document as it is now"}
-${DOC_REVISION}
-
-Measurements the prototype reported:
-${showMeasurements(s.measurements)}`,
-        { agentType: "slopify:qa", label: "confirm prototype", phase: "Validate", schema: LENS_SCHEMA }
-      )
-    });
-  }
-  return judged.map((j) => ({ ...j, revision: j.doc ? s.doc.revision : s.protoRevision, r: void 0 }));
-}
-async function judge(s, judged) {
-  let todo = judged;
-  for (let n = 0; n < MAX_FAILURES && todo.length > 0; n++) {
-    if (n > 0)
-      s.attempts.push({
-        gate: "validator",
-        approach: `re-run ${todo.map((j) => j.name).join(", ")}`,
-        failed: "no verdict, or a verdict on another revision"
-      });
-    const res = await parallel(todo.map((j) => j.call));
-    for (const [i, j] of todo.entries()) j.r = res[i];
-    todo = judged.filter((j) => !onRevision(j.r, j.revision));
-  }
-  if (todo.length > 0) {
-    return stop(s, "validate", [
-      need(
-        "validate-2",
-        "validation",
-        `A verdict on the briefed revision from ${todo.map((j) => j.name).join(", ")}.`,
-        "three dispatches returned no verdict or a verdict on another revision"
-      )
-    ]);
-  }
-  return void 0;
-}
-async function fixPrototype(s, protoFail, failures) {
-  const fixed = await agent(
-    `${s.where}
-${NO_OPS}
-
-A fresh qa did not confirm that the throwaway prototype in ${s.prototypeWorktree} measures what the findings document says. Fix the prototype so it measures what each claim states, or, where the claim as written cannot be measured, report the measurement as it actually is; write only inside that worktree, and supply any prerequisite a finding names as missing if you can. Re-run every measurement and return them as before, claim set to "<claim id>: <claim>", with steps, observed, and the new revision: the label <HEAD sha>+<digest> for the worktree's current state, the digest being git hash-object of git -C ${s.prototypeWorktree} diff HEAD --binary after git add -N on new files. The revision is a label for the worktree's current state, not a git object: do not look it up in git.
-
-Question: ${s.question}
-Findings document: ${s.doc.path}
-
-qa findings:
-${describe("qa", protoFail.r, s.protoRevision)}
-
-Measurements so far:
-${showMeasurements(s.measurements)}`,
-    { agentType: "slopify:coder", label: `fix prototype ${failures}`, phase: "Validate", schema: CODER_SCHEMA }
-  );
-  if (!fixed || fixed.specMismatch.trim()) {
-    s.attempts.push({
-      gate: "validate",
-      approach: "coder prototype fix",
-      failed: fixed ? `unworkable: ${fixed.specMismatch.trim()}` : "the coder did not return"
-    });
-  } else {
-    if (fixed.measurements.length > 0) s.measurements = fixed.measurements;
-    if (fixed.revision.trim()) s.protoRevision = fixed.revision.trim();
-  }
-}
-async function reviseFindings(s, failing, failures) {
-  const revised = await agent(
-    `${s.where}
-${NO_OPS}
-
-Revise the findings document at ${s.doc.path}, and write only that file. Resolve each finding below without adding a recommendation, and make every measurement claim in it agree with the measurements as they now stand. Keep the first line under its title as "Spike: ${s.slug}", the opening one-paragraph direct answer with its conditions (updated to agree with the revision), every claim cited, and the open unknowns listed. ${MEASURED_RULE} produced holds exactly its absolute path, revision is its git hash-object, and openDecisions holds the open unknowns, one per entry.
-
-Question: ${s.question}
-
-Findings from fresh validators:
-${failing.map((j) => describe(j.name, j.r, j.revision)).join("\n")}
-
-Measurements:
-${showMeasurements(s.measurements)}`,
-    { agentType: "slopify:writer", label: `revise findings ${failures}`, phase: "Validate", schema: WRITER_SCHEMA }
-  );
-  if (revised?.revision.trim()) {
-    s.doc.revision = revised.revision.trim();
-    const produced = revised.produced[0];
-    if (produced?.startsWith("/")) s.doc.path = produced;
-    s.unknowns = revised.openDecisions;
-    s.checkpoint.findingsDoc = s.doc.path;
-  } else {
-    s.attempts.push({
-      gate: "validate",
-      approach: "writer findings revision",
-      failed: "the writer did not return a revision"
-    });
-  }
-}
-async function validate(s) {
-  phase("Validate");
-  let failures = 0;
-  for (; ; ) {
-    const hasPrototype = !!s.prototypeWorktree;
-    const judged = judges(s);
-    const stopped = await judge(s, judged);
-    if (stopped) return stopped;
-    const failing = judged.filter((j) => !passedOn(j.r, j.revision));
-    const verdicts = judged.map((j) => ({
-      verdict: j.name,
-      result: j.r ? j.r.verdict : "no-verdict",
-      evaluated: j.r ? j.r.evaluated : "",
-      findings: j.r ? j.r.findings : [],
-      limits: j.r ? j.r.limits : "the dispatch did not return"
-    }));
-    if (failing.length === 0) return verdicts;
-    failures += 1;
-    const summary = failing.map((j) => describe(j.name, j.r, j.revision)).join(" | ");
-    s.attempts.push({
-      gate: "validate",
-      approach: `document ${s.doc.revision || s.doc.path}${s.protoRevision ? `, prototype ${s.protoRevision}` : ""}`,
-      failed: summary
-    });
-    if (failures >= MAX_FAILURES) {
-      return stop(s, "validate", [
-        need(
-          "validate-1",
-          "validation",
-          `Findings that pass lens-evidence, lens-question, lens-neutrality${hasPrototype ? ", and a qa confirmation of the prototype" : ""}.`,
-          summary
-        )
-      ]);
-    }
-    const protoFail = failing.find((j) => j.name === "qa");
-    if (protoFail) await fixPrototype(s, protoFail, failures);
-    await reviseFindings(s, failing, failures);
-  }
-}
-async function cleanup(s) {
-  if (!s.prototypeBranch && !s.prototypeWorktree) {
-    s.skipped.push("cleanup");
+  t.assumptions.push(...built.assumptions);
+  if (built.problem) {
+    for (const c of pending) t.why.set(c.id, built.problem);
     return false;
   }
-  phase("Cleanup");
-  const cleaned = await attempt(
-    s,
-    "cleanup",
-    "pusher prototype removal",
-    (last) => agent(
-      `${s.where}
-${auth(s)}
-${retryNote(last)}
-Remove this spike's prototype: ${s.prototypeWorktree ? `the worktree at ${s.prototypeWorktree}` : "its worktree, if one exists"} and ${s.prototypeBranch ? `its local branch ${s.prototypeBranch}` : "its local branch, if one exists"} (named by docs/FORGE.md's "Spike prototypes" binding for the slug "${s.slug}"; find them from the worktree list and the branch list). Both are local only, never pushed, never merged. The branch was never pushed or merged and the prototype is throwaway, so delete the worktree and branch even though they are unmerged and the worktree holds uncommitted files. Touch no other branch or worktree, and push nothing. Report the operations \`worktree-remove\` and \`branch-delete\`, then confirm that git worktree list and git branch --list show neither.`,
-      { agentType: "slopify:pusher", label: "remove prototype", phase: "Cleanup", schema: PUSHER_SCHEMA }
-    ),
-    pusherProblem,
-    pusherUnmet
-  );
-  if (!cleaned.res) {
-    return stop(s, "cleanup", [
-      need(
-        "cleanup-1",
-        "prerequisite",
-        "The prototype worktree and branch removed, as the deliver-spike invocation authorizes for its own local, unpushed prototype.",
-        cleaned.last
-      )
-    ]);
+  const rerun = await confirm(d, worktree, built.measurements);
+  for (const c of pending) t.why.set(c.id, "the prototype didn't measure it");
+  for (const m of built.measurements) {
+    const r = rerun.results.find((x) => x.claim === m.claim);
+    if (r?.confirmed) t.confirmed.push(m);
+    else t.why.set(m.claim, r?.reason || "qa didn't rerun it");
   }
-  s.completed.push("cleanup");
   return true;
 }
-function done(s, verdicts, prototypeDeleted) {
-  const verdictLine = (v) => `${v.verdict}: ${v.result}, evaluated ${v.evaluated || "unnamed"}`;
-  const protoVerdict = verdicts.find((v) => v.verdict === "qa");
-  const report = [
-    `Spike done. Findings document: ${s.doc.path} (revision ${s.doc.revision || "unnamed"}); it makes no recommendation.`,
-    `Lens verdicts: ${verdicts.filter((v) => v.verdict !== "qa").map((v) => verdictLine(v)).join("; ")}.`,
-    protoVerdict ? `The measurements come from a throwaway prototype and were independently confirmed by a fresh qa: ${verdictLine(protoVerdict)}.` : "No prototype was needed, so no qa ran.",
-    `Measurements: ${s.measurements.length > 0 ? s.measurements.map((m) => `${m.claim} = ${m.value} (${m.command})`).join("; ") : "none this run (see the document)"}.`,
-    `Open unknowns: ${s.unknowns.length > 0 ? s.unknowns.join("; ") : "none reported this run (see the document)"}.`,
-    prototypeDeleted ? `The prototype worktree${s.prototypeBranch ? ` and branch ${s.prototypeBranch}` : ""} were deleted without merging anything; nothing was pushed.` : s.prototypeGap ? `${s.prototypeGap}; nothing was pushed or merged.` : "No prototype branch existed, so none was deleted; nothing was pushed or merged."
-  ].join("\n");
+async function measureAll(d, worktree, claims) {
+  const t = { confirmed: [], assumptions: [], why: /* @__PURE__ */ new Map() };
+  const isPending = (c) => t.confirmed.every((m) => m.claim !== c.id);
+  for (let attempt = 1; attempt <= MAX_INNER_TRIES; attempt += 1) {
+    const pending = claims.filter((c) => isPending(c));
+    if (pending.length === 0 || !await measureOnce(d, worktree, pending, t, attempt)) break;
+  }
   return {
-    status: "done",
-    workflow: WORKFLOW,
-    report,
-    skipped: s.skipped,
-    attempts: s.attempts,
-    document: s.doc.path,
-    revision: s.doc.revision,
-    verdicts,
-    measurements: s.measurements,
-    unknowns: s.unknowns,
-    prototypeDeleted
+    measurements: t.confirmed,
+    unknowns: claims.filter((c) => isPending(c)).map((c) => `${c.claim} Not measured: ${t.why.get(c.id) ?? ""}`),
+    assumptions: t.assumptions
   };
 }
-async function run() {
-  const started = startInput(
-    args,
-    "question",
-    "Ask the user for the spike question, then invoke /slopify:deliver-spike again."
+async function prototype(d, slug, claims) {
+  const toMeasure = claims.filter((c) => c.measurement);
+  if (toMeasure.length === 0) return { measurements: [], unknowns: [], assumptions: [] };
+  phase("Prototype");
+  const made = pushed(
+    await callPusher(
+      d.pushBrief(
+        `${PROTOTYPE_AUTH} Create the prototype branch and worktree that docs/FORGE.md's "Spike prototypes" line names for the slug ${slug}, from the target branch. If that line says none, create nothing and report the operation worktree with the reference none.`
+      ),
+      "create the prototype",
+      "Prototype"
+    ),
+    "The prototype worktree."
   );
-  if ("status" in started) return started;
-  const { input, subject: question } = started;
-  const s = {
-    question,
-    answers: answersOf(input["answers"]),
-    where: whereOf(textOf(input["projectRoot"])),
-    slug: slugged(question, "spike"),
-    binding: "",
-    attempts: [],
-    completed: [],
-    skipped: [],
-    checkpoint: {},
-    doc: { path: "", revision: "" },
-    prototypeBranch: "",
-    prototypeWorktree: "",
-    measurements: [],
-    unknowns: [],
-    protoRevision: "",
-    prototypeGap: ""
-  };
-  const notLocated = await locate(s);
-  if (notLocated) return notLocated;
-  if (s.doc.path) {
-    log(`Findings document ${s.doc.path} exists; skipping codebase, outside, plan, prototype, and findings`);
-    s.skipped.push("codebase", "outside", "plan", "prototype", "findings");
-  } else {
-    const stopped = await produce(s);
-    if (stopped) return stopped;
+  const worktree = opRef(made, "worktree");
+  if (worktree === "none") {
+    return {
+      measurements: [],
+      unknowns: toMeasure.map((c) => `${c.claim} Not measured: the project declares no spike prototypes.`),
+      assumptions: []
+    };
   }
-  const verdicts = await validate(s);
-  if ("status" in verdicts) return verdicts;
-  s.completed.push("validate");
-  const deleted = await cleanup(s);
-  return typeof deleted === "boolean" ? done(s, verdicts, deleted) : deleted;
+  const measured = await measureAll(d, worktree, toMeasure);
+  pushed(
+    await callPusher(
+      d.pushBrief(`${PROTOTYPE_AUTH} Remove the prototype worktree ${worktree} and delete its local branch.`),
+      "delete the prototype",
+      "Prototype"
+    ),
+    "The prototype's deletion."
+  );
+  return measured;
+}
+async function writeFindings(d, story, docRel, evidence, notes) {
+  phase("Findings");
+  const w = must(
+    await agent(
+      `${d.WHERE}
+In the worktree ${d.state.worktree}, write the spike's findings document at ${docRel}.
+
+${quoted(story)}
+
+${notes}
+
+Evidence:
+${evidence}
+
+${NO_WRITES}`,
+      { agentType: "slopify:writer-findings", label: "findings", phase: "Findings", schema: DOC_SCHEMA }
+    ),
+    "findings",
+    "The findings document."
+  );
+  const paths = list(w.changed);
+  pushed(
+    await callPusher(
+      d.pushBrief(
+        `Commit exactly these paths as they stand, staged by explicit path, with a message in the convention docs/FORGE.md declares, saying: add the spike's findings. Do not push.
+${paths}`,
+        [`done findings ${docRel}`]
+      ),
+      "commit: add the spike's findings",
+      "Findings"
+    ),
+    "A commit of the findings document."
+  );
+}
+function planNotes(claims, measured, planAssumptions) {
+  return `The plan's claims:
+${list(claims.map((c) => `${c.id} (${c.status}): ${c.claim}`))}
+
+Confirmed measurements, each to be recorded with its command and output:
+${JSON.stringify(measured.measurements)}
+
+Unknowns from the prototype:
+${list(measured.unknowns)}
+
+Assumptions:
+${list([...planAssumptions, ...measured.assumptions])}`;
+}
+async function checkDocument(d, story, docRel) {
+  const doc = `${d.state.worktree}/${docRel}`;
+  const lenses = [
+    [
+      "lens-evidence",
+      `The findings document is ${doc}. Its prototype is deleted, so each measurement is checked against the command and output the document records.`
+    ],
+    ["lens-question", `The findings document is ${doc}.
+
+${quoted(story)}`],
+    [
+      "lens-neutrality",
+      `The findings document is ${doc}. Its Options and trade-offs section lists options with their costs and conditions; only ranking or advising one is a recommendation.`
+    ]
+  ];
+  const verdicts = await parallel(
+    lenses.map(
+      ([name, brief]) => () => lens(name, `${d.WHERE}
+${brief}`, { label: name, phase: "Validate" })
+    )
+  );
+  return lenses.flatMap(([name], i) => {
+    const v = must(verdicts[i], "validate", `A verdict from ${name}.`);
+    const problems = v.findings.map((f) => ({ source: name, location: f.location, text: f.problem }));
+    if (v.verdict === "unverified" && problems.length === 0) {
+      problems.push({ source: name, location: docRel, text: `The check couldn't run: ${v.limits}` });
+    }
+    return problems;
+  });
+}
+async function reviseDocument2(d, docRel, problems) {
+  const w = must(
+    await agent(
+      `${d.WHERE}
+In the worktree ${d.state.worktree}, revise the spike's findings document at ${docRel} to fix these problems.
+${list(problems)}
+
+${NO_WRITES}`,
+      { agentType: "slopify:writer-findings", label: "revise the findings", phase: "Build", schema: DOC_SCHEMA }
+    ),
+    "build",
+    "A revised findings document."
+  );
+  return w.changed;
+}
+async function run() {
+  const input = inputOf(args, "question");
+  const arg = textOf(input["question"]);
+  if (!arg) {
+    return { status: "not-started", next: "Ask the user for the Linear issue or the question, then invoke again." };
+  }
+  const d = createDeliver({ workflow: WORKFLOW, projectRoot: textOf(input["projectRoot"]), storyArg: arg });
+  try {
+    const started = await startWork(d, arg, "spike");
+    if ("status" in started) return started;
+    const { story, cardId, slug, name, resume } = started;
+    const docRel = resume.findings || `docs/spikes/${name}.md`;
+    if (!resume.findings) {
+      const evidence = await ground(d, story);
+      const planned = await plan(d, story, evidence);
+      const measured = await prototype(d, slug, planned.claims);
+      await writeFindings(d, story, docRel, evidence, planNotes(planned.claims, measured, planned.assumptions));
+    }
+    const result = await runLoop({
+      d,
+      where: d.WHERE,
+      story,
+      cardId,
+      build: null,
+      validate: null,
+      specDir: "",
+      answers: answersOf(input["answers"]),
+      startAtReview: d.state.pr ? Math.max(resume.reviewFired, 1) : 0,
+      built: true,
+      document: {
+        path: docRel,
+        check: () => checkDocument(d, story, docRel),
+        revise: (problems) => reviseDocument2(d, docRel, problems)
+      }
+    });
+    return { ...result, workflow: WORKFLOW, report: reportOf(WORKFLOW, result) };
+  } catch (error) {
+    return stopOf(d, error);
+  }
 }
 
 // src/slopify/workflows/deliver-spike.entry.ts

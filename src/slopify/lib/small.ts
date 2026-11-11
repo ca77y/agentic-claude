@@ -4,7 +4,7 @@ import { callPusher, createDeliver, opRef, pushOk, type Stopped } from "./delive
 import { locate, workspace } from "./deliver-steps.ts";
 import { answersOf, inputOf, textOf, type NotStarted } from "./input.ts";
 import { Halt, reportOf, runLoop, stopOf, type LoopResult, type Run } from "./loop.ts";
-import { readResume } from "./resume.ts";
+import { readResume, type Resume } from "./resume.ts";
 import type { Listed } from "./rules.ts";
 
 export type SmallResult = NotStarted | Stopped | (LoopResult & { workflow: string; report: string });
@@ -79,24 +79,41 @@ ARG>>>`,
   });
 }
 
-export async function deliverSmall(d: Run, arg: string, input: SmallFlow): Promise<SmallResult> {
+export interface Started {
+  story: string;
+  cardId: string;
+  slug: string;
+  /** The card's identifier and title slug, as a spec folder would be named. */
+  name: string;
+  resume: Resume;
+}
+
+/** Read the card, or file one for a prompt, then read the checkpoints and create or recover the worktree. */
+export async function startWork(d: Run, arg: string, cardType: string): Promise<Started | NotStarted | Stopped> {
   let located = await readWork(d, arg);
   if ("stop" in located) return { status: "not-started", next: located.stop.needs.map((n) => n.what).join(" ") };
   if (!located.cardId) {
-    const filed = await fileCard(d, located.story, located.slug, input.cardType);
+    const filed = await fileCard(d, located.story, located.slug, cardType);
     if (filed) located = await readWork(d, filed);
     if ("stop" in located) return { status: "not-started", next: located.stop.needs.map((n) => n.what).join(" ") };
   }
-  const { story, cardId, boardBranch, slug } = located;
-  const resume = await readResume(d, cardId ? `card ${cardId}` : `the change "${slug}"`, "");
+  const { story, cardId, boardBranch, slug, specRel } = located;
+  const resume = await readResume(d, cardId ? `card ${cardId}` : `the ${cardType} "${slug}"`, "");
   const stopped = await workspace(d, {
     cardId,
     boardBranch,
     boardStartDone: resume.boardStartDone,
     worktree: "the worktree",
-    subject: "this change",
+    subject: `this ${cardType}`,
   });
-  if (stopped) return stopped;
+  const name = (specRel.split("/").pop() ?? slug).replace(/\.md$/, "");
+  return stopped ?? { story, cardId, slug, name, resume };
+}
+
+export async function deliverSmall(d: Run, arg: string, input: SmallFlow): Promise<SmallResult> {
+  const started = await startWork(d, arg, input.cardType);
+  if ("status" in started) return started;
+  const { story, cardId, resume } = started;
   const result = await runLoop({
     d,
     where: d.WHERE,

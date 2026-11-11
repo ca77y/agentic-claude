@@ -17,7 +17,7 @@ export const meta = {
     },
     {
       "title": "Draft",
-      "detail": "writer drafts the story in the draft file, or resolves its marked open decisions"
+      "detail": "writer-card drafts the story in the draft file, or resolves its marked open decisions"
     },
     {
       "title": "Validate",
@@ -667,7 +667,7 @@ Resolve the open decisions in the story draft at ${ctx.draftPath}, and write onl
 Answers:
 ${given}${settledText(ctx.settledBlockers)}`,
       {
-        agentType: "slopify:writer",
+        agentType: "slopify:writer-card",
         label: `resolve ${ctx.openIds.join(" ")}`,
         phase: "Draft",
         schema: WRITER_SCHEMA
@@ -703,7 +703,7 @@ Idea: ${ctx.idea}
 Evidence:
 ${evidenceText}${settledText(ctx.settledBlockers)}`,
       {
-        agentType: "slopify:writer",
+        agentType: "slopify:writer-card",
         label: draftFailures ? `draft story (attempt ${draftFailures + 1})` : "draft story",
         phase: "Draft",
         schema: WRITER_SCHEMA
@@ -778,7 +778,7 @@ Revise the story draft at ${ctx.draftPath} (revision ${ctx.rev}) to resolve the 
 Findings:
 ${bad.join("\n\n")}${settledText(ctx.settledBlockers)}`,
       {
-        agentType: "slopify:writer",
+        agentType: "slopify:writer-card",
         label: `revise story (round ${round})`,
         phase: "Validate",
         schema: WRITER_SCHEMA

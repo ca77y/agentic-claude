@@ -140,6 +140,8 @@ export interface Listed {
 export interface PrBody {
   issue: string;
   specDir: string;
+  /** A spike's findings document. */
+  document?: string;
   draftReasons: readonly Listed[];
   needsConfirmation: readonly Listed[];
   /** A bug's reproduction, as it behaved before the fix; the criteria table shows it after. */
@@ -174,7 +176,7 @@ function criteriaTable(rows: readonly CriterionRow[]): string {
 // The PR description, rendered from the run state and written again after every round.
 export function renderBody(b: PrBody): string {
   return [
-    `Issue: ${b.issue}${b.specDir ? `\n\nSpec: \`${b.specDir}\`` : ""}`,
+    `Issue: ${b.issue}${b.specDir ? `\n\nSpec: \`${b.specDir}\`` : ""}${b.document ? `\n\nFindings: \`${b.document}\`` : ""}`,
     section("Why this is a draft", items(b.draftReasons)),
     section("Needs confirmation", items(b.needsConfirmation)),
     section("Reproduced", items(b.reproduced ?? [])),

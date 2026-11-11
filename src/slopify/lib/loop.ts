@@ -1,4 +1,4 @@
-// The build and validate loop deliver-story and review-pr share: an outer loop over the whole story, with one coder and
+// The build and validate loop every delivery shares: an outer loop over the whole story, with one coder and
 // qa inner loop per change. docs/deliver/STORY.md describes it. All of its control flow comes from rules.ts.
 import { LENS_SCHEMA, lens, scout, STRINGS, type Answers, type LensResult } from "./family.ts";
 import {
@@ -59,7 +59,7 @@ export function stopOf(d: Run, error: unknown): Stopped {
 
 const TEST_SCHEMA = {
   type: "object",
-  required: ["tests", "failingOutput", "noTest", "specProblem"],
+  required: ["tests", "failingOutput", "noTest", "specProblem", "assumptions"],
   properties: {
     tests: { ...STRINGS, description: "Test paths written or changed, relative to the worktree root" },
     failingOutput: { type: "string", description: "The test's failing output on the current code" },
@@ -68,12 +68,16 @@ const TEST_SCHEMA = {
       type: "string",
       description: "What the brief doesn't settle or can't deliver as written; empty when none",
     },
+    assumptions: {
+      ...STRINGS,
+      description: "Each trivial question you settled yourself, as the question and your choice",
+    },
   },
 } as const;
 
 const FIX_SCHEMA = {
   type: "object",
-  required: ["changed", "ran", "testProblem", "specProblem"],
+  required: ["changed", "ran", "testProblem", "specProblem", "assumptions"],
   properties: {
     changed: { ...STRINGS, description: "Paths changed, relative to the worktree root" },
     ran: { ...STRINGS, description: "Each command and its result" },
@@ -81,6 +85,10 @@ const FIX_SCHEMA = {
     specProblem: {
       type: "string",
       description: "What the brief doesn't settle or can't deliver as written; empty when none",
+    },
+    assumptions: {
+      ...STRINGS,
+      description: "Each trivial question you settled yourself, as the question and your choice",
     },
   },
 } as const;
@@ -198,7 +206,7 @@ const RECURRENCE_RUBRIC = `If this problem's fingerprint appears under earlier r
 
 // ---- State ------------------------------------------------------------------
 
-interface Problem {
+export interface Problem {
   source: string;
   location: string;
   text: string;
@@ -230,6 +238,14 @@ interface ReviewOutcome {
   note: string;
 }
 
+interface LoopDocument {
+  path: string;
+  /** The document's checks, as problems for the judge. */
+  check: () => Promise<Problem[]>;
+  /** Revise the document to fix these problems, and return the paths changed. */
+  revise: (problems: readonly string[]) => Promise<string[]>;
+}
+
 export interface LoopInput {
   d: Run;
   where: string;
@@ -246,6 +262,8 @@ export interface LoopInput {
   built: boolean;
   /** The short flow for a trivial story or a bug: no spec, and what the first test has to state. */
   small?: { firstTest: string; reproduced?: readonly Listed[] };
+  /** A spike's flow: the PR changes one document, which its own checks validate and its own writer revises. */
+  document?: LoopDocument;
   /** Advisors and the writer revise the spec for these problems, and return the tasks to run again. */
   reviseSpec?: (problems: readonly string[]) => Promise<{ build: Build; validate: Validate; rerun: Task[] }>;
 }
@@ -274,6 +292,8 @@ interface Loop extends LoopInput {
   differently: Set<string>;
   rulings: string[];
   decisions: RecordedDecision[];
+  /** Trivial questions the coder settled itself. */
+  assumptions: string[];
   unverified: Listed[];
   confirmations: Listed[];
   knownDebt: Listed[];
@@ -311,7 +331,7 @@ async function settled(p: Promise<unknown>): Promise<void> {
   }
 }
 
-function pushed(r: PusherResult | null, what: string): PusherResult {
+export function pushed(r: PusherResult | null, what: string): PusherResult {
   const unmet = r?.unmet.join("; ");
   if (pushOk(r)) return r;
   throw new Halt("push", what, unmet ?? "pusher didn't return");
@@ -347,7 +367,7 @@ function changeBrief(l: Loop, c: Change): string {
     criteria ? `The criteria it delivers:\n${criteria}` : "",
     c.item ? `The problem to fix, at ${c.item.problem.location}:\n${c.item.problem.text}\n${c.item.reason}` : "",
     answersText(l),
-    "Implement what this says, and make no decisions. If it doesn't settle something, or can't be delivered as written, return specProblem and stop.",
+    "Implement what this says. Settle a trivial question yourself, such as a name, local structure, or an obvious default that changes no behavior this describes, and return it in assumptions. If it leaves open anything else, or can't be delivered as written, return specProblem and stop.",
     NO_WRITES,
   ]
     .filter(Boolean)
@@ -374,6 +394,7 @@ Write a new test or change an existing one, so that it states the required behav
     "build",
     `A test for ${c.id}.`,
   );
+  l.assumptions.push(...t.assumptions);
   if (t.specProblem) return { paths: [], commit: "", noTest: "", specProblem: t.specProblem };
   if (t.noTest || t.tests.length === 0) return { paths: [], commit: "", noTest: t.noTest, specProblem: "" };
   l.testChanges.push(...t.tests);
@@ -439,7 +460,7 @@ interface TryResult {
   rewriteTest: boolean;
 }
 
-// A coder decides nothing, so what its brief leaves open goes back to whoever writes the brief: the spec's writer, or,
+// A coder settles only trivial questions, so anything else its brief leaves open goes back to whoever writes the brief: the spec's writer, or,
 // with no spec, the person reading the draft.
 function specStopped(l: Loop, c: Change, problem: string): TryResult {
   const route: Route = l.reviseSpec ? "revise-spec" : "escalate";
@@ -465,6 +486,7 @@ async function tryFix(l: Loop, c: Change, cycle: CycleTest, lastFailure: string,
     "build",
     `A fix for ${c.id}.`,
   );
+  l.assumptions.push(...fix.assumptions);
   if (fix.specProblem) return specStopped(l, c, fix.specProblem);
   if (fix.testProblem) return { reason: fix.testProblem, rewriteTest: true };
   if (fix.changed.length > 0) await commit(l, fix.changed, `implement ${c.id}`);
@@ -599,12 +621,24 @@ async function findDocs(l: Loop): Promise<void> {
   l.docs = must(found, "build", "The documents the change affects.").evidence.map((e) => e.source);
 }
 
+// The document is all the PR changes, so whatever kind of fix a problem needs, the document's writer makes it.
+async function reviseDocument(l: Loop, doc: LoopDocument, items: readonly OpenItem[]): Promise<void> {
+  if (items.length === 0) return;
+  const changed = await doc.revise(items.map((i) => `${i.problem.location}: ${i.problem.text}`));
+  l.changedThisRound.push(...changed);
+  if (changed.length > 0) await commit(l, changed, "revise the findings");
+}
+
 async function buildRound(l: Loop): Promise<void> {
   phase("Build");
   const openItems = l.open;
   l.open = [];
   l.changedThisRound = [];
   for (const item of openItems) countFix(l, item);
+  if (l.document) {
+    await reviseDocument(l, l.document, openItems);
+    return;
+  }
   const first = l.round === 0 ? firstChanges(l) : [];
   const fromSpec = await reviseSpec(
     l,
@@ -656,7 +690,7 @@ export async function runValidation(o: {
             schema: CHECKS_SCHEMA,
           }),
     () =>
-      // With no criteria at all, as when review-pr runs on a PR with no spec, there is nothing to drive the app for.
+      // With no criteria at all, as when validate runs on a PR with no spec, there is nothing to drive the app for.
       o.criteria.length === 0
         ? Promise.resolve({ results: [], uncategorizedSetting: "" })
         : agent(
@@ -894,6 +928,7 @@ function body(l: Loop): string {
   return renderBody({
     issue: l.cardId || "none",
     specDir: l.specDir,
+    ...(l.document && { document: l.document.path }),
     draftReasons: draftReasons(l),
     needsConfirmation: [
       ...l.confirmations,
@@ -903,7 +938,10 @@ function body(l: Loop): string {
     ],
     ...(l.small?.reproduced && { reproduced: l.small.reproduced }),
     criteria: rowsOf(l),
-    assumptions: l.decisions.filter((d) => !d.affectsAcceptance).map((d) => `${d.question} ${d.choice}`),
+    assumptions: [
+      ...l.decisions.filter((d) => !d.affectsAcceptance).map((d) => `${d.question} ${d.choice}`),
+      ...unique(l.assumptions),
+    ],
     unverified: l.unverified,
     notValidated: unvalidatedRows(l).map((r) => rowEntry(r)),
     knownDebt: l.knownDebt,
@@ -1043,9 +1081,20 @@ async function validateSmall(l: Loop): Promise<void> {
   }
 }
 
+// No app runs for a document: the project's checks and the document's own checks validate it.
+async function validateDocument(l: Loop, doc: LoopDocument): Promise<void> {
+  const [v, found] = await Promise.all([
+    runValidation({ where: l.where, worktree: worktreeOf(l), criteria: [], focus: [], changed: [] }),
+    doc.check(),
+  ]);
+  await judgeProblems(l, [...v.problems, ...found], "Judge");
+}
+
 async function round(l: Loop, last: boolean): Promise<void> {
   if (l.round > 0 || !l.built) await buildRound(l);
-  if (l.small) {
+  if (l.document) {
+    await validateDocument(l, l.document);
+  } else if (l.small) {
     await validateSmall(l);
   } else {
     await judgeProblems(l, await validateRound(l), "Judge");
@@ -1068,6 +1117,7 @@ function freshLoop(input: LoopInput): Loop {
     differently: new Set(),
     rulings: [],
     decisions: input.build?.decisions ?? [],
+    assumptions: [],
     unverified: [],
     confirmations: [],
     knownDebt: [],

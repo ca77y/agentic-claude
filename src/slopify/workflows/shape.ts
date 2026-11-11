@@ -43,7 +43,7 @@ export const meta = {
     { title: "Locate", detail: "scout-card and scout-related-cards, then scout-checkpoint" },
     { title: "Gather", detail: "library-reader, scout-docs, and scout-code" },
     { title: "Advise", detail: "advisor-value, advisor-scope, advisor-alternatives, and advisor-fit in parallel" },
-    { title: "Draft", detail: "writer drafts the story in the draft file, or resolves its marked open decisions" },
+    { title: "Draft", detail: "writer-card drafts the story in the draft file, or resolves its marked open decisions" },
     { title: "Validate", detail: "lens-criteria and lens-solution-free judge the draft revision" },
     { title: "File", detail: "pusher files or updates the story card, only when file is true" },
   ],
@@ -435,7 +435,7 @@ Resolve the open decisions in the story draft at ${ctx.draftPath}, and write onl
 Answers:
 ${given}${settledText(ctx.settledBlockers)}`,
       {
-        agentType: "slopify:writer",
+        agentType: "slopify:writer-card",
         label: `resolve ${ctx.openIds.join(" ")}`,
         phase: "Draft",
         schema: WRITER_SCHEMA,
@@ -456,7 +456,7 @@ ${given}${settledText(ctx.settledBlockers)}`,
   return null;
 }
 
-// The writer drafts the story; a blocked result when it cannot, null once the draft is written.
+// writer-card drafts the story; a blocked result when it cannot, null once the draft is written.
 async function draftStory(ctx: Ctx, evidenceText: string): Promise<BlockedRun | null> {
   let draftFailures = 0;
   for (;;) {
@@ -473,7 +473,7 @@ Idea: ${ctx.idea}
 Evidence:
 ${evidenceText}${settledText(ctx.settledBlockers)}`,
       {
-        agentType: "slopify:writer",
+        agentType: "slopify:writer-card",
         label: draftFailures ? `draft story (attempt ${draftFailures + 1})` : "draft story",
         phase: "Draft",
         schema: WRITER_SCHEMA,
@@ -562,7 +562,7 @@ Revise the story draft at ${ctx.draftPath} (revision ${ctx.rev}) to resolve the 
 Findings:
 ${bad.join("\n\n")}${settledText(ctx.settledBlockers)}`,
       {
-        agentType: "slopify:writer",
+        agentType: "slopify:writer-card",
         label: `revise story (round ${round})`,
         phase: "Validate",
         schema: WRITER_SCHEMA,

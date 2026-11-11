@@ -50,8 +50,8 @@ const VALIDATE: Validate = {
 };
 
 const OK_PUSH = { done: true, unmet: [], operations: [{ op: "commit", reference: "abc" }] };
-const OK_TEST = { tests: ["a.test.ts"], failingOutput: "red", noTest: "", specProblem: "" };
-const OK_FIX = { changed: ["src/a.ts"], ran: [], testProblem: "", specProblem: "" };
+const OK_TEST = { tests: ["a.test.ts"], failingOutput: "red", noTest: "", specProblem: "", assumptions: [] };
+const OK_FIX = { changed: ["src/a.ts"], ran: [], testProblem: "", specProblem: "", assumptions: [] };
 const QA_PASS = { verdict: "pass", evaluated: "x", findings: [], limits: "none", testAtFault: false };
 const QA_FAIL = {
   verdict: "fail",
@@ -254,14 +254,14 @@ describe("the inner loop", () => {
   });
 });
 
-describe("a coder decides nothing", () => {
+describe("a coder settles only trivial questions", () => {
   const OPEN = "the spec doesn't say which store to use";
 
-  test("tells the coder to make no decisions", async () => {
+  test("tells the coder to settle only trivial questions", async () => {
     use(happy());
     await statusOf();
     const fix = calls.find((c) => c.label === "t1: fix");
-    assert.ok(fix?.prompt.includes("make no decisions"));
+    assert.ok(fix?.prompt.includes("Settle a trivial question yourself"));
   });
 
   test("sends what the brief leaves open to the spec's writer, then builds the revised task", async () => {
@@ -296,6 +296,14 @@ describe("a coder decides nothing", () => {
     assert.ok(r.draftReasons.some((x) => x.text.includes(OPEN)));
     assert.equal(count("coder", ": fix"), 1);
     assert.equal(count("qa"), 0);
+  });
+
+  test("a trivial question the coder settles goes ready, listed under Assumptions", async () => {
+    const NAMED = "What to call the helper? retryUpload.";
+    use(happy({ coder: (_t, label) => (label.endsWith(": test") ? OK_TEST : { ...OK_FIX, assumptions: [NAMED] }) }));
+    const r = await runLoop(inputFor(freshRun()));
+    assert.equal(r.status, "ready");
+    assert.match(finalPrompt(), /Assumptions[\s\S]*What to call the helper\? retryUpload\./);
   });
 
   test("a test dispatch can stop the same way", async () => {
@@ -614,32 +622,13 @@ describe("the review's outcome", () => {
 });
 
 describe("starting points", () => {
-  test("review-pr starts at the review and builds nothing when it's clean", async () => {
+  test("a rerun after the PR opened starts at the review and builds nothing when it's clean", async () => {
     use(happy());
     const d = freshRun();
     d.state.pr = "PR-9";
-    const r = await runLoop(inputFor(d, { build: null, validate: null, specDir: "", startAtReview: 1, built: true }));
+    const r = await runLoop(inputFor(d, { startAtReview: 1, built: true }));
     assert.equal(r.status, "ready");
     assert.equal(count("coder"), 0);
-    assert.equal(count("validator"), 0);
-  });
-
-  test("review-pr without a spec fixes a finding, runs the checks, and skips the validator", async () => {
-    let n = 0;
-    use(
-      happy({
-        watcher: () => {
-          n += 1;
-          return n === 1 ? finding("bug") : CLEAN_REVIEW;
-        },
-      }),
-    );
-    const d = freshRun();
-    d.state.pr = "PR-9";
-    const r = await runLoop(inputFor(d, { build: null, validate: null, specDir: "", startAtReview: 1, built: true }));
-    assert.equal(r.status, "ready");
-    assert.equal(count("coder", "fix-1: fix"), 1);
-    assert.equal(count("checks"), 1);
     assert.equal(count("validator"), 0);
   });
 
@@ -790,5 +779,65 @@ describe("parallel inner loops", () => {
       assert.ok(JSON.stringify(stopped.needs).includes("push denied"));
       return error instanceof Halt;
     });
+  });
+});
+
+describe("the document flow", () => {
+  const revisions: (readonly string[])[] = [];
+  const DOC = (problems: { source: string; location: string; text: string }[][] = []) => {
+    let checked = 0;
+    revisions.length = 0;
+    return {
+      build: null,
+      validate: null,
+      specDir: "",
+      built: true,
+      document: {
+        path: "docs/spikes/smr-1.md",
+        check: () => {
+          checked += 1;
+          return Promise.resolve(problems[checked - 1] ?? []);
+        },
+        revise: (p: readonly string[]) => {
+          revisions.push(p);
+          return Promise.resolve(["docs/spikes/smr-1.md"]);
+        },
+      },
+    };
+  };
+  const UNCITED = { source: "lens-evidence", location: "docs/spikes/smr-1.md:4", text: "uncited claim" };
+
+  test("validates the document, opens the PR, and goes ready with no coder, qa, or validator", async () => {
+    use(happy());
+    assert.equal(await statusOf(DOC()), "ready");
+    assert.equal(count("coder"), 0);
+    assert.equal(count("qa"), 0);
+    assert.equal(count("validator"), 0);
+    assert.equal(count("checks"), 1);
+    assert.match(pushPrompts()[0] ?? "", /Findings: `docs\/spikes\/smr-1\.md`/);
+  });
+
+  test("sends a confirmed problem from the document's checks to its writer, whatever its kind", async () => {
+    use(happy({ judge: (_t, label) => (label === "gateway" ? GATEWAY_OK : ruling({ kind: "code" })) }));
+    assert.equal(await statusOf(DOC([[UNCITED]])), "ready");
+    assert.deepEqual(revisions, [[`${UNCITED.location}: ${UNCITED.text}`]]);
+    assert.equal(count("coder"), 0);
+    assert.ok(calls.some((c) => c.label === "commit: revise the findings"));
+  });
+
+  test("sends a review finding to the writer and checks the document again", async () => {
+    let review = 0;
+    use(
+      happy({
+        watcher: () => {
+          review += 1;
+          return review === 1 ? finding("the answer skips part two") : CLEAN_REVIEW;
+        },
+      }),
+    );
+    assert.equal(await statusOf(DOC()), "ready");
+    assert.equal(revisions.length, 1);
+    assert.equal(count("checks"), 2);
+    assert.equal(count("judge", "gateway"), 0);
   });
 });

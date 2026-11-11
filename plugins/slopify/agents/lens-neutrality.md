@@ -12,7 +12,7 @@ Check one property: the findings make no recommendation.
 
 The brief carries the findings document's path and revision. A file revision named in the brief is the file's `git hash-object` digest, and the file may be untracked; confirm it with `git hash-object <path>` before judging. A story revision is different: a digest of the story text that the workflow has already checked, so take it as given.
 
-A recommendation advises a choice: "should", "we recommend", "the best option", a ranking of options as preferred, next steps that commit to one path, or wording that steers the reader toward one option. Measured facts, trade-offs, and the conditions under which each option holds are neutral.
+A recommendation advises a choice: "should", "we recommend", "the best option", a ranking of options as preferred, next steps that commit to one path, or wording that steers the reader toward one option. Measured facts, trade-offs, and the conditions under which each option holds are neutral, so an Options and trade-offs section that lists options this way passes.
 
 Quote each recommending passage with its line.
 

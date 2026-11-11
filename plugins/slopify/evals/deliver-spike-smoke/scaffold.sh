@@ -29,6 +29,35 @@ if __name__ == "__main__":
     unittest.main()
 PY
 mkdir -p docs
+cat > TESTING.md <<'MD'
+# Testing
+
+## Platform
+
+cli
+
+## Tools
+
+Python 3, already installed.
+
+## Setup
+
+Nothing to install.
+
+## Boot
+
+Nothing to boot: `calc.py` is a module.
+
+## Checks
+
+- Unit tests: `python3 -m unittest`
+
+## Categories
+
+### Uncategorized
+
+When a criterion fits no category, the pull request is `ready` or stays `draft`: draft
+MD
 cat > docs/BOARD.md <<'MD'
 # Board declaration
 

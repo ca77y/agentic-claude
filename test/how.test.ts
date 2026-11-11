@@ -264,8 +264,8 @@ describe("deliver-story's intake", () => {
 const SMALL_AGENTS: Record<string, Script> = {
   coder: (_t, label) =>
     label.endsWith(": test")
-      ? { tests: ["t.py"], failingOutput: "red", noTest: "", specProblem: "" }
-      : { changed: ["calc.py"], ran: [], testProblem: "", specProblem: "" },
+      ? { tests: ["t.py"], failingOutput: "red", noTest: "", specProblem: "", assumptions: [] }
+      : { changed: ["calc.py"], ran: [], testProblem: "", specProblem: "", assumptions: [] },
   checks: () => ({ commands: [{ command: "unit", exitCode: 0, failingLines: "" }] }),
   qa: () => ({ ...LENS_PASS, testAtFault: false }),
   validator: () => ({
