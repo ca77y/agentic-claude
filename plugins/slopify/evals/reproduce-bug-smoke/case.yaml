@@ -1,4 +1,0 @@
-schema_version: "1.1"
-name: reproduce-bug-smoke
-context:
-  scaffold_script: scaffold.sh

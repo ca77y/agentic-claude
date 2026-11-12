@@ -1,4 +1,4 @@
-// What shape and reproduce-bug share to run their gates: the record of each run's steps and attempts, the
+// What shape uses to run its gates: the record of each run's steps and attempts, the
 // blocked result built from it, and the lens dispatch and reading that every validate gate uses.
 import {
   lens,

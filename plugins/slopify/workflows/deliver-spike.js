@@ -471,6 +471,17 @@ Findings: \`${b.document}\`` : ""}`,
     section("Test changes", b.testChanges.map((t) => `- ${t}`).join("\n"))
   ].filter(Boolean).join("\n\n");
 }
+var isReproduction = (v) => typeof v === "object" && v !== null && "steps" in v && Array.isArray(v.steps) && "observed" in v;
+function parseReproduction(line) {
+  const at = line.indexOf("{");
+  if (at === -1) return null;
+  try {
+    const v = JSON.parse(line.slice(at));
+    return isReproduction(v) ? v : null;
+  } catch {
+    return null;
+  }
+}
 
 // src/slopify/lib/spec.ts
 var TASK = {
@@ -1541,7 +1552,7 @@ async function createWorktree(d, o) {
   const r = await callPusher(
     pushBrief(
       `Create or recover ${o.worktree} and branch that docs/FORGE.md declares for ${o.subject}${boardBranch ? ` (the board gives the branch name ${boardBranch})` : ""}. ${cardId ? "Then perform the delivery-start operation docs/BOARD.md declares for the card (for example its status transition), only as bound." : "There is no card, so perform no board operation."} Change no card content. Append the board-start line only once the delivery-start operation is done.`,
-      cardId ? [`done board-start ${cardId}`] : [],
+      [...o.lines ?? [], ...cardId ? [`done board-start ${cardId}`] : []],
       "<worktree>/.tmp/ledger.md at the root of the worktree you create or recover"
     ),
     "create the worktree",
@@ -1600,6 +1611,7 @@ Report these keys, each as an evidence item with source set to the key; leave ou
 - done-board-start: the last "done board-start" ledger line
 - done-round: the last "done round" ledger line
 - done-findings: the path in the last "done findings" ledger line
+- reproduced: the last ledger line that contains "reproduced {"
 - review-fired: the highest <n> among the ledger's "review <n> fired" lines
 - spec-dir: ${specDir ? `the folder ${specDir}, if it exists in the worktree` : 'the spec folder the PR description names after "Spec:"'}, relative to the worktree root
 - build-json: the exact contents of build.json in that folder
@@ -1622,7 +1634,8 @@ Report these keys, each as an evidence item with source set to the key; leave ou
     reviewFired: Number(/\d+/.exec(val(cp, "review-fired"))?.[0] ?? 0),
     built: !!val(cp, "done-round"),
     boardStartDone: !!val(cp, "done-board-start"),
-    findings: shaped("rel", val(cp, "done-findings"))
+    findings: shaped("rel", val(cp, "done-findings")),
+    reproduced: parseReproduction(fact(cp, "reproduced"))
   };
 }
 
@@ -1669,7 +1682,7 @@ ARG>>>`,
     criteria: false
   });
 }
-async function startWork(d, arg, cardType) {
+async function findCard(d, arg, cardType) {
   let located = await readWork(d, arg);
   if ("stop" in located) return { status: "not-started", next: located.stop.needs.map((n) => n.what).join(" ") };
   if (!located.cardId) {
@@ -1678,16 +1691,25 @@ async function startWork(d, arg, cardType) {
     if ("stop" in located) return { status: "not-started", next: located.stop.needs.map((n) => n.what).join(" ") };
   }
   const { story, cardId, boardBranch, slug, specRel } = located;
-  const resume = await readResume(d, cardId ? `card ${cardId}` : `the ${cardType} "${slug}"`, "");
-  const stopped = await workspace(d, {
-    cardId,
-    boardBranch,
+  const name = (specRel.split("/").pop() ?? slug).replace(/\.md$/, "");
+  return { story, cardId, boardBranch, slug, name, cardType };
+}
+var resumeOf = (d, f) => readResume(d, f.cardId ? `card ${f.cardId}` : `the ${f.cardType} "${f.slug}"`, "");
+function openWork(d, f, resume, lines = []) {
+  return workspace(d, {
+    cardId: f.cardId,
+    boardBranch: f.boardBranch,
     boardStartDone: resume.boardStartDone,
     worktree: "the worktree",
-    subject: `this ${cardType}`
+    subject: `this ${f.cardType}`,
+    lines
   });
-  const name = (specRel.split("/").pop() ?? slug).replace(/\.md$/, "");
-  return stopped ?? { story, cardId, slug, name, resume };
+}
+async function startWork(d, arg, cardType) {
+  const found = await findCard(d, arg, cardType);
+  if ("status" in found) return found;
+  const resume = await resumeOf(d, found);
+  return await openWork(d, found, resume) ?? { ...found, resume };
 }
 
 // src/slopify/workflows/deliver-spike.ts

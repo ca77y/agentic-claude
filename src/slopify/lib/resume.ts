@@ -2,6 +2,7 @@
 import { fact, scout, shaped } from "./family.ts";
 import { val } from "./deliver.ts";
 import { must, type Run } from "./loop.ts";
+import { parseReproduction, type Reproduction } from "./rules.ts";
 import { parseBuild, parseValidate, type Build, type Validate } from "./spec.ts";
 
 export interface Resume {
@@ -15,6 +16,8 @@ export interface Resume {
   boardStartDone: boolean;
   /** A spike's committed findings document, from the ledger; empty when none. */
   findings: string;
+  /** A bug's confirmed reproduction, from the ledger. */
+  reproduced: Reproduction | null;
 }
 
 // Read the checkpoints into the run's state. identifies names the run; specDir is empty when only the PR knows it.
@@ -30,6 +33,7 @@ Report these keys, each as an evidence item with source set to the key; leave ou
 - done-board-start: the last "done board-start" ledger line
 - done-round: the last "done round" ledger line
 - done-findings: the path in the last "done findings" ledger line
+- reproduced: the last ledger line that contains "reproduced {"
 - review-fired: the highest <n> among the ledger's "review <n> fired" lines
 - spec-dir: ${specDir ? `the folder ${specDir}, if it exists in the worktree` : 'the spec folder the PR description names after "Spec:"'}, relative to the worktree root
 - build-json: the exact contents of build.json in that folder
@@ -54,5 +58,6 @@ Report these keys, each as an evidence item with source set to the key; leave ou
     built: !!val(cp, "done-round"),
     boardStartDone: !!val(cp, "done-board-start"),
     findings: shaped("rel", val(cp, "done-findings")),
+    reproduced: parseReproduction(fact(cp, "reproduced")),
   };
 }

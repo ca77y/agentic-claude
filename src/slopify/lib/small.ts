@@ -30,8 +30,6 @@ interface SmallFlow {
   answers: ReturnType<typeof answersOf>;
   firstTest: string;
   workflowName: string;
-  /** The type of card to file for work that has none. */
-  cardType: string;
   /** What proves the change in the running app; a bug's reproduction, or the covering category's path. */
   validationPath?: string;
   reproduced?: readonly Listed[];
@@ -79,17 +77,21 @@ ARG>>>`,
   });
 }
 
-export interface Started {
+export interface Found {
   story: string;
   cardId: string;
+  boardBranch: string;
   slug: string;
   /** The card's identifier and title slug, as a spec folder would be named. */
   name: string;
+  cardType: string;
+}
+export interface Started extends Found {
   resume: Resume;
 }
 
-/** Read the card, or file one for a prompt, then read the checkpoints and create or recover the worktree. */
-export async function startWork(d: Run, arg: string, cardType: string): Promise<Started | NotStarted | Stopped> {
+/** Read the card, or file one for a prompt, so all work is on the board. */
+export async function findCard(d: Run, arg: string, cardType: string): Promise<Found | NotStarted> {
   let located = await readWork(d, arg);
   if ("stop" in located) return { status: "not-started", next: located.stop.needs.map((n) => n.what).join(" ") };
   if (!located.cardId) {
@@ -98,21 +100,34 @@ export async function startWork(d: Run, arg: string, cardType: string): Promise<
     if ("stop" in located) return { status: "not-started", next: located.stop.needs.map((n) => n.what).join(" ") };
   }
   const { story, cardId, boardBranch, slug, specRel } = located;
-  const resume = await readResume(d, cardId ? `card ${cardId}` : `the ${cardType} "${slug}"`, "");
-  const stopped = await workspace(d, {
-    cardId,
-    boardBranch,
-    boardStartDone: resume.boardStartDone,
-    worktree: "the worktree",
-    subject: `this ${cardType}`,
-  });
   const name = (specRel.split("/").pop() ?? slug).replace(/\.md$/, "");
-  return stopped ?? { story, cardId, slug, name, resume };
+  return { story, cardId, boardBranch, slug, name, cardType };
 }
 
-export async function deliverSmall(d: Run, arg: string, input: SmallFlow): Promise<SmallResult> {
-  const started = await startWork(d, arg, input.cardType);
-  if ("status" in started) return started;
+export const resumeOf = (d: Run, f: Found): Promise<Resume> =>
+  readResume(d, f.cardId ? `card ${f.cardId}` : `the ${f.cardType} "${f.slug}"`, "");
+
+/** Create or recover the worktree and start the card; lines go on the ledger the worktree's creation starts. */
+export function openWork(d: Run, f: Found, resume: Resume, lines: readonly string[] = []): Promise<Stopped | null> {
+  return workspace(d, {
+    cardId: f.cardId,
+    boardBranch: f.boardBranch,
+    boardStartDone: resume.boardStartDone,
+    worktree: "the worktree",
+    subject: `this ${f.cardType}`,
+    lines,
+  });
+}
+
+/** Find the card, read the checkpoints, and create or recover the worktree. */
+export async function startWork(d: Run, arg: string, cardType: string): Promise<Started | NotStarted | Stopped> {
+  const found = await findCard(d, arg, cardType);
+  if ("status" in found) return found;
+  const resume = await resumeOf(d, found);
+  return (await openWork(d, found, resume)) ?? { ...found, resume };
+}
+
+export async function deliverSmall(d: Run, started: Started, input: SmallFlow): Promise<SmallResult> {
   const { story, cardId, resume } = started;
   const result = await runLoop({
     d,
@@ -144,12 +159,10 @@ export async function runSmall(workflowArgs: unknown, workflowName: string, firs
     storyArg: arg,
   });
   try {
-    return await deliverSmall(d, arg, {
-      answers: answersOf(input["answers"]),
-      firstTest,
-      workflowName,
-      cardType: "story",
-    });
+    const started = await startWork(d, arg, "story");
+    return "status" in started
+      ? started
+      : await deliverSmall(d, started, { answers: answersOf(input["answers"]), firstTest, workflowName });
   } catch (error) {
     return stopOf(d, error);
   }

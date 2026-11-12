@@ -22,12 +22,6 @@ const TASK = {
   properties: { id: { type: "string" }, summary: { type: "string" }, paths: STRINGS },
 } as const;
 
-const MEASUREMENT = {
-  type: "object",
-  required: ["claim", "value", "command"],
-  properties: { claim: { type: "string" }, value: { type: "string" }, command: { type: "string" } },
-} as const;
-
 // What the library-reader reports about the subject of a run.
 export function libraryReaderSchema(subject: string) {
   return {
@@ -61,48 +55,6 @@ export function writerSchema(notes: WriterNotes) {
       storyBlockers: described(STRINGS, notes.storyBlockers),
       tasks: arrayOf(TASK, notes.tasks),
       docs: described(STRINGS, notes.docs),
-    },
-  } as const;
-}
-
-interface CoderNotes {
-  changed?: string;
-  tests?: string;
-  ran?: string;
-  revision: string;
-  open?: string;
-  specMismatch: string;
-}
-
-const CODER_REQUIRED = ["changed", "tests", "ran", "revision", "open", "specMismatch"] as const;
-
-function coderProperties(notes: CoderNotes) {
-  return {
-    changed: described(STRINGS, notes.changed),
-    tests: described(STRINGS, notes.tests),
-    ran: described(STRINGS, notes.ran),
-    revision: { type: "string", description: notes.revision },
-    open: described(STRINGS, notes.open),
-    specMismatch: { type: "string", description: notes.specMismatch },
-  } as const;
-}
-
-interface MeasuringCoderNotes extends CoderNotes {
-  steps?: string;
-  observed?: string;
-  measurements?: string;
-}
-
-// A coder that also reports the steps it ran, what it observed, and what it measured.
-export function measuringCoderSchema(notes: MeasuringCoderNotes) {
-  return {
-    type: "object",
-    required: [...CODER_REQUIRED, "steps", "observed", "measurements"],
-    properties: {
-      ...coderProperties(notes),
-      steps: described(STRINGS, notes.steps),
-      observed: described({ type: "string" }, notes.observed),
-      measurements: arrayOf(MEASUREMENT, notes.measurements),
     },
   } as const;
 }

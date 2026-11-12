@@ -7,25 +7,34 @@ How `deliver-bugfix` fixes a bug on its own, from a Linear issue or a prompt to 
 ```text
  /slopify:deliver-bugfix SMR-13      or a plain report
  │
- 1 REPRODUCE ─── reproduce-bug, as a child workflow, hands-free
- │               scouts gather evidence
- │               coder builds a reproduction, touching no production code
- │               lens-repro runs it at least 3 times
- │               writer writes the report, lens-bug-report checks it → pusher files the Bug card
- │               (a card that already reports the bug is kept, and only reproduced)
- │               can't reproduce → label the card Unreproducible, comment, and stop, no PR   ⛔
+ 1 READ ──────── scout-card (haiku) reads the issue
+ │               a prompt gets a new Bug card from pusher, so every bug is on the board      ⛔ H1
+ 2 GROUND ────── in parallel: scout-code, scout-tests, scout-history (haiku)
+ 3 REPRODUCE ─── coder (opus) reproduces it in .tmp/repro/<slug>, touching no production code
+ │   ▲ ≤3 tries  lens-repro (haiku) runs it at least 3 times: the same symptom every time
+ │   └────────── a try that fails passes its reason to the next one
+ │               can't reproduce → the card gets the Unreproducible label and a comment
+ │               saying why, and the run stops: no worktree, no PR
+ 4 WORKSPACE ─── pusher creates the worktree and branch, starts the issue, and records
+ │               the reproduction on the ledger
  ▼
- 2 DELIVER ───── the flow in TRIVIAL.md, except:
+ 5 DELIVER ───── the flow in TRIVIAL.md, except:
                  the first test is the reproduction as a regression test
                  validator runs the reproduction's steps again in the app
                  the PR has a Reproduced section: the steps and the behavior before the fix
                  the criteria table shows the same steps after it
 ```
 
-`reproduce-bug` writes a report that says what it decided rather than asking, because no human is available. Run alone, `/slopify:reproduce-bug` still asks.
-
 Everything else, including the review and its fixes, is as in [`TRIVIAL.md`](TRIVIAL.md).
+
+## Decisions
+
+- **The reproduction settles what the report leaves open.** `coder` decides from the evidence and never asks, because no human is available.
+- **Why it couldn't reproduce goes on the card.** Either `coder` couldn't make the failure happen, or `lens-repro` saw it come and go. The comment says which, with what was tried.
+- **A check that can't run is not an unreproducible bug.** When `lens-repro` can't run the reproduction at all, for example because a tool is missing, the run halts and labels nothing.
+- **The card isn't started before the bug is reproduced.** An unreproducible bug leaves no branch or worktree behind.
+- **A rerun reads the reproduction back from the ledger** and goes straight to the delivery.
 
 ## Halt conditions
 
-As in [`TRIVIAL.md`](TRIVIAL.md), plus one: the bug can't be reproduced. The run returns `blocked`, and no PR is opened, because there would be no way to check a fix. The card gets the `Unreproducible` label and a comment with what was tried. When no card reports the bug, the run creates one from the report first, so a failed reproduction always ends on a card.
+As in [`TRIVIAL.md`](TRIVIAL.md). An unreproducible bug isn't a halt: the run returns `unreproducible`, and the card says why.

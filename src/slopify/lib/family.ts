@@ -270,59 +270,6 @@ export function settledText(settled: readonly Settled[]): string {
     : "";
 }
 
-/** A producer result that may raise questions or blockers. */
-export interface Questioning {
-  openDecisions?: readonly string[];
-  storyBlockers?: readonly string[];
-}
-
-// Run a producer (run(settled) returns its result, with openDecisions, or null) until it raises
-// no question the user has not answered. A question the user answered is put back to the next
-// dispatch with its answer. Answers to this prefix that no question matched (a rerun in a new
-// session can word a question differently) go back once as well; answers to its blockers are not
-// decisions and stay out. Returns the last result and the
-// questions still open; the result's own openDecisions are not to be read after this.
-export async function settleDecisions<R extends Questioning>(
-  prefix: string,
-  answers: Answers,
-  run: (settled: readonly Settled[]) => Promise<R | null>,
-): Promise<{ res: R | null; open: Decision[] }> {
-  const settled: Settled[] = [];
-  let carriedTried = false;
-  for (let round = 0; ; round++) {
-    const res = await run(settled);
-    if (!res || res.storyBlockers?.length) return { res, open: [] };
-    const decisions = decisionsOf(prefix, res.openDecisions);
-    const open = decisions.filter((d) => !answerOf(answers, d.id));
-    if (open.length > 0) {
-      const carried = Object.keys(answers).filter(
-        (k) =>
-          k.startsWith(`${prefix}-`) &&
-          !k.startsWith(`${prefix}-blocker-`) &&
-          answerOf(answers, k) &&
-          decisions.every((d) => d.id !== k) &&
-          settled.every((x) => x.id !== k),
-      );
-      if (carried.length === 0 || carriedTried || round >= 2) return { res, open };
-      carriedTried = true;
-      settled.push(
-        ...carried.map((k) => ({
-          id: k,
-          question: `an earlier question whose id was ${k}; its words ran: ${k
-            .replace(`${prefix}-`, "")
-            .replace(/-[a-z0-9]{6,7}$/, "")
-            .replaceAll("-", " ")}`,
-          answer: answerOf(answers, k),
-        })),
-      );
-      continue;
-    }
-    const fresh = decisions.filter((d) => settled.every((x) => x.id !== d.id));
-    if (fresh.length === 0 || round >= 2) return { res, open: [] };
-    settled.push(...fresh.map((d) => ({ ...d, answer: answerOf(answers, d.id) })));
-  }
-}
-
 export type NeedKind = "story" | "decision" | "prerequisite" | "validation" | "input";
 /** Something a blocked run needs before a rerun can pass the step. `arg` names the arg that answers an input need. */
 export interface Need {

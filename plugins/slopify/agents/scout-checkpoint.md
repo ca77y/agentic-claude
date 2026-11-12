@@ -28,8 +28,6 @@ The brief carries the project root, the keys to report, and what identifies the 
 - `base`: the merge-base commit sha of the branch and the PR's target branch.
 - `pushed-head`: the head commit sha of the PR's branch as the remote has it, not the worktree's `HEAD`. `unpushed`: how many commits the worktree's `HEAD` holds that the pushed head lacks, or `none`.
 - `draft`: the draft path and its `git hash-object`. `draft-open` and `draft-filed` come from `grep -oE '<!-- (open-decision [a-z0-9-]+|filed [^ ]+)' <draft>`: `draft-open` is the open-decision ids still marked, comma-separated, or `none`; `draft-filed` is the filed card id.
-- `repro-dir`: the reproduction directory and whether it holds a reproduction.
-- `bug-card`: the existing `Bug` card for the report, as the brief describes it.
 
 ## Doing it well
 

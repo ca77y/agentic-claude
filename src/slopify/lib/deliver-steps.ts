@@ -120,6 +120,8 @@ interface WorkspaceOpts {
   worktree: string;
   /** What the worktree is declared for. */
   subject: string;
+  /** More ledger lines for the dispatch that creates the worktree. */
+  lines?: readonly string[];
 }
 
 // Create or recover the worktree; the same dispatch starts the card.
@@ -129,7 +131,7 @@ async function createWorktree(d: Run, o: WorkspaceOpts): Promise<Stopped | null>
   const r = await callPusher(
     pushBrief(
       `Create or recover ${o.worktree} and branch that docs/FORGE.md declares for ${o.subject}${boardBranch ? ` (the board gives the branch name ${boardBranch})` : ""}. ${cardId ? "Then perform the delivery-start operation docs/BOARD.md declares for the card (for example its status transition), only as bound." : "There is no card, so perform no board operation."} Change no card content. Append the board-start line only once the delivery-start operation is done.`,
-      cardId ? [`done board-start ${cardId}`] : [],
+      [...(o.lines ?? []), ...(cardId ? [`done board-start ${cardId}`] : [])],
       "<worktree>/.tmp/ledger.md at the root of the worktree you create or recover",
     ),
     "create the worktree",

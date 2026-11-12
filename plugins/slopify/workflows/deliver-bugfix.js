@@ -1,11 +1,19 @@
 export const meta = {
   "name": "deliver-bugfix",
-  "description": "Fix a bug autonomously, from a Linear issue or a prompt to a pull request: reproduce it, turn the reproduction into a failing test, fix it, run the reproduction again in the app, and show the before and after in a PR that goes ready once its review is clean. A bug that can't be reproduced stops the run with no PR",
+  "description": "Fix a bug autonomously, from a Linear issue or a prompt to a pull request: reproduce it, turn the reproduction into a failing test, fix it, run the reproduction again in the app, and show the before and after in a PR that goes ready once its review is clean. A bug that can't be reproduced is labelled Unreproducible on its card, with no PR",
   "whenToUse": "Run only when the user invokes /slopify:deliver-bugfix or asks for the slopify deliver-bugfix workflow. Args: {story, projectRoot?, answers?}, or the bug as a plain string; story is a card identifier or URL, or the report; projectRoot defaults to the session project directory; answers maps a decision id from a draft or blocked result to its answer when rerunning.",
   "phases": [
     {
       "title": "Locate",
-      "detail": "scout-card reads the Bug card reproduce-bug filed, or the report as written"
+      "detail": "scout-card reads the issue, or pusher files a Bug card for a report"
+    },
+    {
+      "title": "Ground",
+      "detail": "scout-code, scout-tests, and scout-history"
+    },
+    {
+      "title": "Reproduce",
+      "detail": "coder reproduces the bug outside the production code, and lens-repro checks it"
     },
     {
       "title": "Workspace",
@@ -180,16 +188,16 @@ function slugged(text, fallback) {
   const words = norm.split(" ").filter(Boolean).slice(0, 6).join("-");
   return norm ? `${words}-${hashOf(norm)}` : fallback || "item";
 }
-function rerunText(workflow2, needs) {
-  const cmd = `/slopify:${workflow2}`;
+function rerunText(workflow, needs) {
+  const cmd = `/slopify:${workflow}`;
   const list2 = needs ?? [];
   const viaArg = list2.filter((n) => n.arg);
   const answerable = list2.some((n) => !n.arg && (n.kind === "decision" || n.kind === "input"));
   const argText = viaArg.length > 0 ? ` Give ${viaArg.map((n) => `${n.id} in args.${n.arg ?? ""}`).join(" and ")}, not in answers.` : "";
   return list2.length > 0 && list2.every((n) => n.kind === "decision") ? `Invoke ${cmd} again with the same args and add answers.<id> for each decision. In this session, pass resumeFromRunId to reuse the steps already completed.` : `Resolve what each need names, then invoke ${cmd} again with the same args${answerable ? " and answers.<id> for each decision or input need" : ""}, without resumeFromRunId, so every step reads the repository afresh.${argText}`;
 }
-function blocked(workflow2, step, needs, extra = {}) {
-  return { status: "blocked", workflow: workflow2, step, needs, rerun: rerunText(workflow2, needs), ...extra };
+function blocked(workflow, step, needs, extra = {}) {
+  return { status: "blocked", workflow, step, needs, rerun: rerunText(workflow, needs), ...extra };
 }
 
 // src/slopify/lib/schemas.ts
@@ -232,6 +240,14 @@ var val = (res, key) => clean(fact(res, key));
 function unique(items2) {
   return [...new Set(items2.filter(Boolean))];
 }
+function show(label, r) {
+  if (!r) return `${label}: the scout returned nothing, which is a gap, not an absence`;
+  const ev = r.evidence.map((e) => `  - ${e.source} @ ${e.location}: ${e.excerpt}`).join("\n");
+  const gaps = r.gaps.length > 0 ? `
+  Gaps: ${r.gaps.join("; ")}` : "";
+  return `${label}: ${r.answer}${ev ? `
+${ev}` : ""}${gaps}`;
+}
 var pushOk = (r) => !!r && r.done && r.unmet.length === 0;
 var opRef = (r, name) => {
   const o = (r?.operations ?? []).find((x) => x.op.toLowerCase() === name);
@@ -247,9 +263,9 @@ function callPusher(prompt, label, phaseTitle) {
   return agent(prompt, { agentType: "slopify:pusher", label, phase: phaseTitle, schema: PUSHER_SCHEMA });
 }
 function createDeliver(config) {
-  const { workflow: WORKFLOW, projectRoot, storyArg } = config;
+  const { workflow: WORKFLOW2, projectRoot, storyArg } = config;
   const WHERE = projectRoot ? `The project is at ${projectRoot}; address files by absolute path under it.` : "The project is the session project directory; address files by absolute path.";
-  const AUTH = `Authorization, from the user's invocation of /slopify:${WORKFLOW}: the story branch and worktree, attributable commits, the pushes the brief asks for, opening or updating this task's PR as a draft or ready, the declared review trigger, the one issue comment and label the brief asks for when the run ends or halts, and filing the issues the brief lists. It does not authorize merging, releases, any other message, rewriting docs/BOARD.md or docs/FORGE.md, or changing a card's content. Work exactly as docs/BOARD.md and docs/FORGE.md declare; an operation that is not bound is unmet, never improvised. Stage explicit paths only.`;
+  const AUTH = `Authorization, from the user's invocation of /slopify:${WORKFLOW2}: the story branch and worktree, attributable commits, the pushes the brief asks for, opening or updating this task's PR as a draft or ready, the declared review trigger, the one issue comment and label the brief asks for when the run ends or halts, and filing the issues the brief lists. It does not authorize merging, releases, any other message, rewriting docs/BOARD.md or docs/FORGE.md, or changing a card's content. Work exactly as docs/BOARD.md and docs/FORGE.md declare; an operation that is not bound is unmet, never improvised. Stage explicit paths only.`;
   const completed = [];
   const state = {
     worktree: "",
@@ -270,7 +286,7 @@ function createDeliver(config) {
     if (state.branch) checkpoint.branch = state.branch;
     if (state.ledger) checkpoint.ledger = state.ledger;
     if (state.pr) checkpoint.pr = state.pr;
-    return blocked(WORKFLOW, step, needs, {
+    return blocked(WORKFLOW2, step, needs, {
       completed: [...completed],
       checkpoint
     });
@@ -279,7 +295,7 @@ function createDeliver(config) {
     const out = [];
     if (runLinePending) {
       out.push(
-        `run <n, one more than the highest run number in the ledger, or 1>: ${WORKFLOW} ${storyArg.replaceAll(/\s+/g, " ").slice(
+        `run <n, one more than the highest run number in the ledger, or 1>: ${WORKFLOW2} ${storyArg.replaceAll(/\s+/g, " ").slice(
           0,
           80
         )} | worktree ${state.worktree || "<the worktree path>"} | branch ${state.branch || "<the branch name>"}`
@@ -431,6 +447,18 @@ Findings: \`${b.document}\`` : ""}`,
     section("Suggestions", items(b.suggestions)),
     section("Test changes", b.testChanges.map((t) => `- ${t}`).join("\n"))
   ].filter(Boolean).join("\n\n");
+}
+var reproductionLine = (r) => `reproduced ${JSON.stringify(r)}`;
+var isReproduction = (v) => typeof v === "object" && v !== null && "steps" in v && Array.isArray(v.steps) && "observed" in v;
+function parseReproduction(line) {
+  const at = line.indexOf("{");
+  if (at === -1) return null;
+  try {
+    const v = JSON.parse(line.slice(at));
+    return isReproduction(v) ? v : null;
+  } catch {
+    return null;
+  }
 }
 
 // src/slopify/lib/spec.ts
@@ -1443,6 +1471,96 @@ ${r.draftReasons.map((x) => `- ${x.text}`).join("\n")}` : "",
   ].filter(Boolean).join("\n");
 }
 
+// src/slopify/lib/reproduce.ts
+var REPRO_SCHEMA = {
+  type: "object",
+  required: ["reproduced", "steps", "observed", "reason"],
+  properties: {
+    reproduced: { type: "boolean", description: "True when the reproduction shows the reported failure" },
+    steps: { ...STRINGS, description: "The steps that reproduce the failure, in order" },
+    observed: { type: "string", description: "What the reproduction showed" },
+    reason: { type: "string", description: "Why it doesn't reproduce; empty when it does" }
+  }
+};
+async function gather(d, report) {
+  phase("Ground");
+  const brief = (task) => `${d.WHERE}
+${task}
+Change nothing.
+
+Report:
+${report}`;
+  const scouts = [
+    ["scout-code", "Find the code locations and call paths this bug report concerns."],
+    ["scout-tests", "Find the existing tests that cover the area this bug report concerns, and how to run them."],
+    ["scout-history", "Find from git history and blame when and why behavior in this area changed."]
+  ];
+  const found = await parallel(
+    scouts.map(
+      ([name, task]) => () => scout(name, brief(task), { label: name, phase: "Ground" })
+    )
+  );
+  return scouts.map(([name], i) => show(name, must(found[i], "reproduce", `Evidence from ${name}.`))).join("\n\n");
+}
+function reproBrief(d, report, dir, evidence, last) {
+  return `${d.WHERE}
+Reproduce this bug. Write and run a script or test in the directory ${dir} under the project root, which git ignores, and change nothing outside it: no production code and no existing test. Settle anything the report leaves open yourself, from the evidence. Return the steps that reproduce the failure and what you observed. If it doesn't reproduce, set reproduced to false and say why.${last ? `
+
+An earlier attempt failed:
+${last}
+Try another way.` : ""}
+
+Report:
+${report}
+
+Evidence:
+${evidence}
+
+${NO_WRITES}`;
+}
+async function reproduce(d, report, slug) {
+  const evidence = await gather(d, report);
+  phase("Reproduce");
+  const dir = `.tmp/repro/${slug}`;
+  let why = "";
+  for (let attempt = 1; attempt <= MAX_INNER_TRIES; attempt += 1) {
+    const r = must(
+      await callCoder(
+        reproBrief(d, report, dir, evidence, why),
+        `reproduce${attempt > 1 ? ` (try ${String(attempt)})` : ""}`,
+        "Reproduce",
+        REPRO_SCHEMA
+      ),
+      "reproduce",
+      "A reproduction."
+    );
+    if (!r.reproduced) {
+      why = `It didn't reproduce: ${r.reason}`;
+      continue;
+    }
+    const v = must(
+      await lens(
+        "lens-repro",
+        `${d.WHERE}
+The reproduction is in ${dir} under the project root. Its steps:
+${list(r.steps)}
+It observed: ${r.observed}
+
+Report:
+${report}`,
+        { label: "check the reproduction", phase: "Reproduce" }
+      ),
+      "reproduce",
+      "A check of the reproduction."
+    );
+    if (v.verdict === "pass") return { reproduced: true, steps: r.steps, observed: r.observed };
+    if (v.verdict === "unverified") throw new Halt("reproduce", "A check of the reproduction.", v.limits);
+    why = `It didn't reproduce reliably:
+${list(v.findings.map((f) => f.problem))}`;
+  }
+  return { reproduced: false, why };
+}
+
 // src/slopify/lib/deliver-steps.ts
 function readStory(cardRes, storyArg, ask) {
   const storySource = (/^\s*(card|text|none)\b/i.exec(fact(cardRes, "story-source"))?.[1] || "").toLowerCase();
@@ -1502,7 +1620,7 @@ async function createWorktree(d, o) {
   const r = await callPusher(
     pushBrief(
       `Create or recover ${o.worktree} and branch that docs/FORGE.md declares for ${o.subject}${boardBranch ? ` (the board gives the branch name ${boardBranch})` : ""}. ${cardId ? "Then perform the delivery-start operation docs/BOARD.md declares for the card (for example its status transition), only as bound." : "There is no card, so perform no board operation."} Change no card content. Append the board-start line only once the delivery-start operation is done.`,
-      cardId ? [`done board-start ${cardId}`] : [],
+      [...o.lines ?? [], ...cardId ? [`done board-start ${cardId}`] : []],
       "<worktree>/.tmp/ledger.md at the root of the worktree you create or recover"
     ),
     "create the worktree",
@@ -1561,6 +1679,7 @@ Report these keys, each as an evidence item with source set to the key; leave ou
 - done-board-start: the last "done board-start" ledger line
 - done-round: the last "done round" ledger line
 - done-findings: the path in the last "done findings" ledger line
+- reproduced: the last ledger line that contains "reproduced {"
 - review-fired: the highest <n> among the ledger's "review <n> fired" lines
 - spec-dir: ${specDir ? `the folder ${specDir}, if it exists in the worktree` : 'the spec folder the PR description names after "Spec:"'}, relative to the worktree root
 - build-json: the exact contents of build.json in that folder
@@ -1583,7 +1702,8 @@ Report these keys, each as an evidence item with source set to the key; leave ou
     reviewFired: Number(/\d+/.exec(val(cp, "review-fired"))?.[0] ?? 0),
     built: !!val(cp, "done-round"),
     boardStartDone: !!val(cp, "done-board-start"),
-    findings: shaped("rel", val(cp, "done-findings"))
+    findings: shaped("rel", val(cp, "done-findings")),
+    reproduced: parseReproduction(fact(cp, "reproduced"))
   };
 }
 
@@ -1643,7 +1763,7 @@ ARG>>>`,
     criteria: false
   });
 }
-async function startWork(d, arg, cardType) {
+async function findCard(d, arg, cardType) {
   let located = await readWork(d, arg);
   if ("stop" in located) return { status: "not-started", next: located.stop.needs.map((n) => n.what).join(" ") };
   if (!located.cardId) {
@@ -1652,20 +1772,21 @@ async function startWork(d, arg, cardType) {
     if ("stop" in located) return { status: "not-started", next: located.stop.needs.map((n) => n.what).join(" ") };
   }
   const { story, cardId, boardBranch, slug, specRel } = located;
-  const resume = await readResume(d, cardId ? `card ${cardId}` : `the ${cardType} "${slug}"`, "");
-  const stopped = await workspace(d, {
-    cardId,
-    boardBranch,
+  const name = (specRel.split("/").pop() ?? slug).replace(/\.md$/, "");
+  return { story, cardId, boardBranch, slug, name, cardType };
+}
+var resumeOf = (d, f) => readResume(d, f.cardId ? `card ${f.cardId}` : `the ${f.cardType} "${f.slug}"`, "");
+function openWork(d, f, resume, lines = []) {
+  return workspace(d, {
+    cardId: f.cardId,
+    boardBranch: f.boardBranch,
     boardStartDone: resume.boardStartDone,
     worktree: "the worktree",
-    subject: `this ${cardType}`
+    subject: `this ${f.cardType}`,
+    lines
   });
-  const name = (specRel.split("/").pop() ?? slug).replace(/\.md$/, "");
-  return stopped ?? { story, cardId, slug, name, resume };
 }
-async function deliverSmall(d, arg, input) {
-  const started = await startWork(d, arg, input.cardType);
-  if ("status" in started) return started;
+async function deliverSmall(d, started, input) {
   const { story, cardId, resume } = started;
   const result = await runLoop({
     d,
@@ -1685,60 +1806,69 @@ async function deliverSmall(d, arg, input) {
 }
 
 // src/slopify/workflows/deliver-bugfix.ts
+var WORKFLOW = "deliver-bugfix";
 var UNREPRODUCIBLE_LABEL = "Unreproducible";
-async function reportNotReproduced(d, arg, bug) {
-  const cardId = shaped("id", arg) || shaped("id", bug.checkpoint.bugCard);
-  const tried = bug.needs.map((n) => `${n.what} ${n.evidence}`).join("\n");
-  const comment = `This bug could not be reproduced, so no fix was attempted.
-${tried}`;
-  const target = cardId ? `On card ${cardId}` : `No card reports this bug, so create a Bug card from this report, word for word, and on it:
-<<<REPORT
-${arg}
-REPORT>>>
-`;
-  await callPusher(
-    d.pushBrief(
-      `${target} add the label ${UNREPRODUCIBLE_LABEL} and comment, as docs/BOARD.md declares. If it declares no board, do nothing.
-The comment: ${comment}`
+async function markUnreproducible(d, cardId, why) {
+  pushed(
+    await callPusher(
+      d.pushBrief(
+        `On card ${cardId}, add the label ${UNREPRODUCIBLE_LABEL} and comment, as docs/BOARD.md declares. If it declares no board, do nothing.
+The comment: This bug could not be reproduced, so no fix was attempted.
+${why}`
+      ),
+      "report the failed reproduction",
+      "Reproduce"
     ),
-    "report the failed reproduction",
-    "Push"
+    "The Unreproducible label and comment on the card."
   );
-  return bug;
+  return {
+    status: "unreproducible",
+    workflow: WORKFLOW,
+    card: cardId,
+    report: `${WORKFLOW} stopped: the bug could not be reproduced, so no PR was opened.
+${why}`
+  };
+}
+function fixFrom(r) {
+  const steps = r.steps.join("\n");
+  return {
+    firstTest: `turns this reproduction into a regression test: it fails now the way the reproduction shows, and passes once the bug is fixed.
+Steps:
+${steps}
+Observed: ${r.observed}`,
+    validationPath: `Run the reproduction's steps again in the running app, as TESTING.md says to run it. It passes when the observed failure is gone.
+Steps:
+${steps}
+Observed before the fix: ${r.observed}`,
+    reproduced: [{ text: steps, detail: `Before the fix: ${r.observed}` }]
+  };
 }
 async function run() {
   const input = inputOf(args, "story");
   const arg = textOf(input["story"]);
   if (!arg) return { status: "not-started", next: "Ask the user for the bug: a Linear issue or a report." };
-  const projectRoot = textOf(input["projectRoot"]);
-  const answers = answersOf(input["answers"]);
-  const d = createDeliver({ workflow: "deliver-bugfix", projectRoot, storyArg: arg });
+  const d = createDeliver({ workflow: WORKFLOW, projectRoot: textOf(input["projectRoot"]), storyArg: arg });
   try {
-    const bug = await workflow("slopify:reproduce-bug", {
-      report: arg,
-      projectRoot: projectRoot || void 0,
-      answers,
-      autonomous: true
-    });
-    if (bug.status === "not-started") return bug;
-    if (bug.status !== "done") return await reportNotReproduced(d, arg, bug);
-    const steps = bug.steps.join("\n");
-    return await deliverSmall(d, shaped("id", bug.card) || arg, {
-      answers,
-      workflowName: "deliver-bugfix",
-      cardType: "Bug",
-      firstTest: `turns this reproduction into a regression test: it fails now the way the reproduction shows, and passes once the bug is fixed.
-Steps:
-${steps}
-Observed: ${bug.observed}`,
-      validationPath: `Run the reproduction's steps again in the running app, as TESTING.md says to run it. It passes when the observed failure is gone.
-Steps:
-${steps}
-Observed before the fix: ${bug.observed}`,
-      reproduced: [
-        { text: steps || "See the reproduction steps on the issue.", detail: `Before the fix: ${bug.observed}` }
-      ]
-    });
+    const found = await findCard(d, arg, "Bug");
+    if ("status" in found) return found;
+    const resume = await resumeOf(d, found);
+    let repro = resume.reproduced;
+    if (!repro) {
+      const r = await reproduce(d, found.story, found.slug);
+      if (!r.reproduced) return await markUnreproducible(d, found.cardId, r.why);
+      repro = { steps: r.steps, observed: r.observed };
+    }
+    const stopped = await openWork(d, found, resume, [reproductionLine(repro)]);
+    if (stopped) return stopped;
+    return await deliverSmall(
+      d,
+      { ...found, resume },
+      {
+        answers: answersOf(input["answers"]),
+        workflowName: WORKFLOW,
+        ...fixFrom(repro)
+      }
+    );
   } catch (error) {
     return stopOf(d, error);
   }
