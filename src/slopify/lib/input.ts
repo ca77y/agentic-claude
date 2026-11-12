@@ -34,13 +34,6 @@ export function inputOf(a: unknown, primary: string, numbers = false): Input {
 /** A string field trimmed; '' for anything else. */
 export const textOf = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
 
-// The input and its primary field, or the not-started result that asks the user for it.
-export function startInput(a: unknown, primary: string, next: string): NotStarted | { input: Input; subject: string } {
-  const input = inputOf(a, primary);
-  const subject = textOf(input[primary]);
-  return subject ? { input, subject } : { status: "not-started", next };
-}
-
 // An answer as answerOf reads it: a primitive as given, anything else as its string form.
 function answerValue(x: unknown): Answers[string] {
   const text = String(x);

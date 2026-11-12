@@ -16,12 +16,6 @@ function arrayOf<const S extends Schema>(
   return description === undefined ? { type: "array", items } : { type: "array", description, items };
 }
 
-const TASK = {
-  type: "object",
-  required: ["id", "summary", "paths"],
-  properties: { id: { type: "string" }, summary: { type: "string" }, paths: STRINGS },
-} as const;
-
 // What the library-reader reports about the subject of a run.
 export function libraryReaderSchema(subject: string) {
   return {
@@ -31,30 +25,6 @@ export function libraryReaderSchema(subject: string) {
       summary: { type: "string", description: `What the existing library already supports about ${subject}` },
       supported: { ...STRINGS, description: "Supported claims, each with the library file and heading it comes from" },
       gaps: { ...STRINGS, description: "What the library does not cover, stale or contested material included" },
-    },
-  } as const;
-}
-
-interface WriterNotes {
-  produced: string;
-  revision: string;
-  openDecisions?: string;
-  storyBlockers?: string;
-  tasks?: string;
-  docs?: string;
-}
-
-export function writerSchema(notes: WriterNotes) {
-  return {
-    type: "object",
-    required: ["produced", "revision", "openDecisions", "storyBlockers", "tasks", "docs"],
-    properties: {
-      produced: { ...STRINGS, description: notes.produced },
-      revision: { type: "string", description: notes.revision },
-      openDecisions: described(STRINGS, notes.openDecisions),
-      storyBlockers: described(STRINGS, notes.storyBlockers),
-      tasks: arrayOf(TASK, notes.tasks),
-      docs: described(STRINGS, notes.docs),
     },
   } as const;
 }
@@ -78,3 +48,14 @@ export function pusherSchema(notes: { reference?: string; unmet?: string } = {})
     },
   } as const;
 }
+
+// A judge's ruling on one problem reported against a spec or a card draft.
+export const RULING_SCHEMA = {
+  type: "object",
+  required: ["verdict", "severity", "reason"],
+  properties: {
+    verdict: { type: "string", enum: ["confirmed", "dismissed"] },
+    severity: { type: "string", enum: ["blocker", "major", "minor"] },
+    reason: { type: "string" },
+  },
+} as const;

@@ -1,31 +1,31 @@
 export const meta = {
   "name": "shape",
-  "description": "Turn an idea into a durable story with observable acceptance criteria: scouts and the library gather evidence, the what-and-why advisors judge it, a writer drafts the story, and fresh lenses validate it; no spec is written",
-  "whenToUse": "Run only when the user invokes /slopify:shape or asks for the slopify shape workflow. Args: {idea, card?, file?: boolean, projectRoot?, answers?}, or the idea as a plain string; card names an existing card to start from, file: true files or updates the story card, projectRoot defaults to the session project directory, and answers maps an open-decision id to its answer when rerunning.",
+  "description": "Turn an idea into a Linear issue of the kind the user asks for, story, bug, or spike, written from the plugin's card template: scouts and advisors ground it, writer-card drafts it, cheap checks and a judge refine it, and pusher files it, labelled Deliverable when a story has no open question",
+  "whenToUse": "Run only when the user invokes /slopify:shape or asks for the slopify shape workflow. Args: {idea?, card?, kind?, projectRoot?}, or the idea as a plain string; card names an existing card to start from, such as one whose open questions are now answered; kind is story, bug, or spike, and story when not given; projectRoot defaults to the session project directory.",
   "phases": [
     {
-      "title": "Locate",
-      "detail": "scout-card and scout-related-cards, then scout-checkpoint"
+      "title": "Read",
+      "detail": "scout-card reads the named card and its comments; scout-related-cards searches the board"
     },
     {
-      "title": "Gather",
-      "detail": "library-reader, scout-docs, and scout-code"
+      "title": "Ground",
+      "detail": "library-reader and scouts, by kind"
     },
     {
       "title": "Advise",
-      "detail": "advisor-value, advisor-scope, advisor-alternatives, and advisor-fit in parallel"
+      "detail": "advisors, by kind"
     },
     {
       "title": "Draft",
-      "detail": "writer-card drafts the story in the draft file, or resolves its marked open decisions"
+      "detail": "writer-card writes the card from its kind's template"
     },
     {
-      "title": "Validate",
-      "detail": "lens-criteria and lens-solution-free judge the draft revision"
+      "title": "Check",
+      "detail": "lenses by kind, then one judge per finding; writer-card revises, up to three rounds"
     },
     {
       "title": "File",
-      "detail": "pusher files or updates the story card, only when file is true"
+      "detail": "pusher creates or updates the card, and its Deliverable label"
     }
   ]
 };
@@ -130,57 +130,6 @@ function familyAgent(prefix, schema, name, prompt, opts) {
 var scout = (name, prompt, opts) => familyAgent("scout-", SCOUT_SCHEMA, name, prompt, opts);
 var lens = (name, prompt, opts) => familyAgent("lens-", LENS_SCHEMA, name, prompt, opts);
 var advise = (name, prompt, opts) => familyAgent("advisor-", ADVISOR_SCHEMA, name, prompt, opts);
-function fact(result, key) {
-  const hit = result?.evidence.find((e) => e.source === key);
-  return hit ? (hit.excerpt || hit.location || "").trim() : "";
-}
-function absent(v, whole) {
-  const t = (v ?? "").trim();
-  if (!t) return true;
-  const word = String.raw`(?:none|absent|missing|n\/a|not found)`;
-  const re = new RegExp(whole ? String.raw`^${word}\s*(?:\([^)]*\))?[.:]?$` : String.raw`^${word}(?![\w/-]|\.\w)`, "i");
-  return re.test(t);
-}
-var SHAPES = {
-  path: /^\/(?:[^\n]*[^\s.,;:])?$/,
-  rel: /^[\w@.+[\]-][\w@.+()[\]/-]*$/,
-  sha: /^[0-9a-f]{7,64}$/i,
-  branch: /^\w[\w./-]*$/,
-  // eslint-disable-next-line sonarjs/super-linear-regex, sonarjs/regex-complexity, regexp/no-super-linear-backtracking -- matched against one short line from a scout
-  ref: /^(?:https?:\/\/\S+|(?:PR ?)?#?\d+|[\w@.+/#-]+(?: ?\d+)?)$/i,
-  rev: /^[\w@.+/-]+@[0-9a-f]{7,64}$/i,
-  id: /^#?[A-Z0-9][^\s()<>]{0,199}$/i
-};
-var TRAILING_STOP = /* @__PURE__ */ new Set([".", ",", ";", ":"]);
-function unremark(kind, text) {
-  const remark = kind === "path" ? /\s+[([][^)\]]*[)\]]$/ : /\s+[([].*$/;
-  let t = text;
-  let prev;
-  do {
-    prev = t;
-    t = t.replace(remark, "");
-    while (TRAILING_STOP.has(t.at(-1) ?? "")) t = t.slice(0, -1);
-  } while (t !== prev);
-  return t;
-}
-function shaped(kind, v) {
-  const re = SHAPES[kind];
-  const t = ((v ?? "").split("\n", 1)[0] ?? "").trim();
-  if (absent(t)) return "";
-  const tok = unremark(kind, t);
-  if (tok && re.test(tok)) return tok;
-  return re.test(t) ? t : "";
-}
-function sameRev(briefed, evaluated) {
-  const b = (briefed || "").trim().toLowerCase();
-  const e = (evaluated || "").trim().toLowerCase();
-  if (!b || e.includes(b)) return true;
-  const HEX = /(?<![0-9a-z])[0-9a-f]{7,64}(?![0-9a-z])/g;
-  const bh = b.match(HEX) ?? [];
-  if (bh.length === 0) return false;
-  const eh = e.match(HEX) ?? [];
-  return bh.every((x) => eh.some((y) => x.startsWith(y) || y.startsWith(x))) && b.split(HEX).map((p) => p.trim()).filter((p) => p && !/[a-z]{3}/.test(p)).every((p) => e.includes(p));
-}
 function hashOf(text) {
   let h = 5381;
   for (const ch of text) h = (h * 33 ^ (ch.codePointAt(0) ?? 0)) >>> 0;
@@ -191,128 +140,16 @@ function slugged(text, fallback) {
   const words = norm.split(" ").filter(Boolean).slice(0, 6).join("-");
   return norm ? `${words}-${hashOf(norm)}` : fallback || "item";
 }
-var HASH = "[0-9a-f]{7,64}";
-function parseSpec(v) {
-  const m = new RegExp(String.raw`^(.+)(?:@|\s)(${HASH})$`).exec(
-    unremark("path", ((v || "").split("\n", 1)[0] ?? "").trim())
-  );
-  const path = m?.[1]?.trim() ?? "";
-  const hash = m?.[2] ?? "";
-  return path && (shaped("path", path) === path || shaped("rel", path) === path) ? { path, hash } : null;
-}
-function decisionsOf(prefix, questions) {
-  const out = [];
-  const asked = questions ?? [];
-  for (const q of asked) {
-    const question = q.trim();
-    const norm = question.toLowerCase().replaceAll(/[^a-z0-9]+/g, " ").trim();
-    const id = `${prefix}-${norm.split(" ").slice(0, 4).join("-") || "question"}-${hashOf(norm)}`;
-    if (question && out.every((d) => d.id !== id)) out.push({ id, question });
-  }
-  return out;
-}
-function answerOf(answers, id) {
-  const a = answers?.[id];
-  return a === void 0 || a === null ? "" : String(a).trim();
-}
-function settledText(settled) {
-  return settled.length > 0 ? `
-
-The user has settled these earlier questions; apply each answer and do not ask them again:
-${settled.map((d) => `- Question: ${d.question}
-  Answer: ${d.answer}`).join("\n")}` : "";
-}
 function rerunText(workflow, needs) {
   const cmd = `/slopify:${workflow}`;
-  const list = needs ?? [];
-  const viaArg = list.filter((n) => n.arg);
-  const answerable = list.some((n) => !n.arg && (n.kind === "decision" || n.kind === "input"));
+  const list2 = needs ?? [];
+  const viaArg = list2.filter((n) => n.arg);
+  const answerable = list2.some((n) => !n.arg && (n.kind === "decision" || n.kind === "input"));
   const argText = viaArg.length > 0 ? ` Give ${viaArg.map((n) => `${n.id} in args.${n.arg ?? ""}`).join(" and ")}, not in answers.` : "";
-  return list.length > 0 && list.every((n) => n.kind === "decision") ? `Invoke ${cmd} again with the same args and add answers.<id> for each decision. In this session, pass resumeFromRunId to reuse the steps already completed.` : `Resolve what each need names, then invoke ${cmd} again with the same args${answerable ? " and answers.<id> for each decision or input need" : ""}, without resumeFromRunId, so every step reads the repository afresh.${argText}`;
+  return list2.length > 0 && list2.every((n) => n.kind === "decision") ? `Invoke ${cmd} again with the same args and add answers.<id> for each decision. In this session, pass resumeFromRunId to reuse the steps already completed.` : `Resolve what each need names, then invoke ${cmd} again with the same args${answerable ? " and answers.<id> for each decision or input need" : ""}, without resumeFromRunId, so every step reads the repository afresh.${argText}`;
 }
 function blocked(workflow, step, needs, extra = {}) {
   return { status: "blocked", workflow, step, needs, rerun: rerunText(workflow, needs), ...extra };
-}
-
-// src/slopify/lib/gates.ts
-var MAX_FAILURES = 3;
-function halt(workflow, run2, step, needs) {
-  return blocked(workflow, step, needs, {
-    completed: [...run2.completed],
-    checkpoint: { ...run2.checkpoint },
-    attempts: run2.attempts
-  });
-}
-function done(run2, step) {
-  if (!run2.completed.includes(step)) run2.completed.push(step);
-}
-function skip(run2, step) {
-  if (!run2.skipped.includes(step)) run2.skipped.push(step);
-  done(run2, step);
-}
-function findingsText(v) {
-  const list = v.findings.map((f) => `- ${f.blocking ? "[blocking] " : ""}${f.location}: ${f.problem}`);
-  return list.length > 0 ? list.join("\n") : "- none";
-}
-async function lensOn(run2, name, brief, revision, opts) {
-  for (let i = 1; i <= MAX_FAILURES; i++) {
-    const v = await lens(name, brief, opts);
-    if (v && sameRev(revision, v.evaluated)) return v;
-    run2.attempts.push({
-      gate: "validator",
-      approach: `${name} on revision ${revision}`,
-      failed: v ? `judged "${v.evaluated}", not the briefed revision` : "the lens did not return a verdict"
-    });
-  }
-  return null;
-}
-function problems(name, v) {
-  if (v.verdict !== "pass") return [`${name} ${v.verdict}
-${findingsText(v)}
-Limits: ${v.limits}`];
-  return v.findings.some((f) => f.blocking) ? [`${name} passed with blocking findings
-${findingsText(v)}`] : [];
-}
-function answeredBlockers(prefix, answers) {
-  return Object.keys(answers).filter((k) => k.startsWith(`${prefix}-`) && answerOf(answers, k)).map((k) => ({
-    id: k,
-    question: `an earlier blocker whose id was ${k}; its words ran: ${k.replace(`${prefix}-`, "").replace(/-[a-z0-9]{6,7}$/, "").replaceAll("-", " ")}`,
-    answer: answerOf(answers, k)
-  }));
-}
-
-// src/slopify/lib/input.ts
-function isRecord(v) {
-  return typeof v === "object" && v !== null;
-}
-function inputOf(a, primary, numbers = false) {
-  if (typeof a !== "string") return isRecord(a) ? a : {};
-  const text = a.trim();
-  try {
-    const parsed = JSON.parse(text);
-    if (isRecord(parsed)) return parsed;
-    if (typeof parsed === "string" || numbers && typeof parsed === "number") {
-      return { [primary]: String(parsed).trim() };
-    }
-  } catch {
-  }
-  return { [primary]: text };
-}
-var textOf = (v) => typeof v === "string" ? v.trim() : "";
-function startInput(a, primary, next) {
-  const input = inputOf(a, primary);
-  const subject = textOf(input[primary]);
-  return subject ? { input, subject } : { status: "not-started", next };
-}
-function answerValue(x) {
-  const text = String(x);
-  return x === null || x === void 0 || typeof x === "string" || typeof x === "number" || typeof x === "boolean" ? x : text;
-}
-function answersOf(v) {
-  return isRecord(v) && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, answerValue(x)])) : {};
-}
-function whereOf(projectRoot) {
-  return projectRoot ? `The project is at ${projectRoot}; address files by absolute path under it.` : "The project is the session project directory; address files by absolute path.";
 }
 
 // src/slopify/lib/schemas.ts
@@ -322,33 +159,14 @@ function described(schema, description) {
 function arrayOf(items, description) {
   return description === void 0 ? { type: "array", items } : { type: "array", description, items };
 }
-var TASK = {
-  type: "object",
-  required: ["id", "summary", "paths"],
-  properties: { id: { type: "string" }, summary: { type: "string" }, paths: STRINGS }
-};
-function libraryReaderSchema(subject) {
+function libraryReaderSchema(subject2) {
   return {
     type: "object",
     required: ["summary", "supported", "gaps"],
     properties: {
-      summary: { type: "string", description: `What the existing library already supports about ${subject}` },
+      summary: { type: "string", description: `What the existing library already supports about ${subject2}` },
       supported: { ...STRINGS, description: "Supported claims, each with the library file and heading it comes from" },
       gaps: { ...STRINGS, description: "What the library does not cover, stale or contested material included" }
-    }
-  };
-}
-function writerSchema(notes) {
-  return {
-    type: "object",
-    required: ["produced", "revision", "openDecisions", "storyBlockers", "tasks", "docs"],
-    properties: {
-      produced: { ...STRINGS, description: notes.produced },
-      revision: { type: "string", description: notes.revision },
-      openDecisions: described(STRINGS, notes.openDecisions),
-      storyBlockers: described(STRINGS, notes.storyBlockers),
-      tasks: arrayOf(TASK, notes.tasks),
-      docs: described(STRINGS, notes.docs)
     }
   };
 }
@@ -371,671 +189,563 @@ function pusherSchema(notes = {}) {
     }
   };
 }
+var RULING_SCHEMA = {
+  type: "object",
+  required: ["verdict", "severity", "reason"],
+  properties: {
+    verdict: { type: "string", enum: ["confirmed", "dismissed"] },
+    severity: { type: "string", enum: ["blocker", "major", "minor"] },
+    reason: { type: "string" }
+  }
+};
 
-// src/slopify/lib/text.ts
-function withoutLeading(text, chars) {
-  let t = text;
-  while (t.length > 0 && chars.includes(t.charAt(0))) t = t.slice(1);
-  return t;
+// src/slopify/lib/deliver.ts
+var PUSHER_SCHEMA = pusherSchema({ reference: "A commit sha, PR URL or path, card id, or worktree path" });
+function need(step, n, kind, what, evidence) {
+  return { id: `${step}-${n}`, kind, what, evidence: evidence || "" };
 }
-function withoutTrailing(text, chars) {
-  let t = text;
-  while (t.length > 0 && chars.includes(t.slice(-1))) t = t.slice(0, -1);
-  return t;
+var list = (items) => items?.length ? items.map((x) => `- ${x}`).join("\n") : "- none";
+var slugOf = (s) => (s || "").toLowerCase().replaceAll(/[^a-z0-9]+/g, " ").trim().split(/\s+/).slice(0, 6).join("-");
+function show(label, r) {
+  if (!r) return `${label}: the scout returned nothing, which is a gap, not an absence`;
+  const ev = r.evidence.map((e) => `  - ${e.source} @ ${e.location}: ${e.excerpt}`).join("\n");
+  const gaps = r.gaps.length > 0 ? `
+  Gaps: ${r.gaps.join("; ")}` : "";
+  return `${label}: ${r.answer}${ev ? `
+${ev}` : ""}${gaps}`;
 }
-function slugify(text) {
-  return withoutTrailing(withoutLeading(text.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-"), "-"), "-");
+var pushOk = (r) => !!r && r.done && r.unmet.length === 0;
+var opRef = (r, name) => {
+  const o = (r?.operations ?? []).find((x) => x.op.toLowerCase() === name);
+  return o ? o.reference.trim() : "";
+};
+function callPusher(prompt, label, phaseTitle) {
+  return agent(prompt, { agentType: "slopify:pusher", label, phase: phaseTitle, schema: PUSHER_SCHEMA });
 }
-var bullets = (items) => items.length > 0 ? items.map((x) => `- ${x}`).join("\n") : "- none";
-function show(label, r, missing = "The scout did not return: treat this as a gap, not an absence.") {
-  if (!r) return `### ${label}
-${missing}`;
-  const ev = bullets(r.evidence.map((e) => `${e.source} (${e.location}): ${e.excerpt}`));
-  return `### ${label}
-${r.answer}
-Evidence:
-${ev}
-Gaps:
-${bullets(r.gaps)}`;
+function createDeliver(config) {
+  const { workflow: WORKFLOW2, projectRoot, storyArg } = config;
+  const WHERE = projectRoot ? `The project is at ${projectRoot}; address files by absolute path under it.` : "The project is the session project directory; address files by absolute path.";
+  const AUTH = `Authorization, from the user's invocation of /slopify:${WORKFLOW2}: the story branch and worktree, attributable commits, the pushes the brief asks for, opening or updating this task's PR as a draft or ready, the declared review trigger, the one issue comment and label the brief asks for when the run ends or halts, and filing the issues the brief lists. It does not authorize merging, releases, any other message, rewriting docs/BOARD.md or docs/FORGE.md, or changing a card's content. Work exactly as docs/BOARD.md and docs/FORGE.md declare; an operation that is not bound is unmet, never improvised. Stage explicit paths only.`;
+  const completed = [];
+  const state = {
+    worktree: "",
+    branch: "",
+    ledger: "",
+    pr: ""
+  };
+  let runLinePending = true;
+  function done(step) {
+    completed.push(step);
+  }
+  function skip(step) {
+    completed.push(step);
+  }
+  function stop(step, needs) {
+    const checkpoint = {};
+    if (state.worktree) checkpoint.worktree = state.worktree;
+    if (state.branch) checkpoint.branch = state.branch;
+    if (state.ledger) checkpoint.ledger = state.ledger;
+    if (state.pr) checkpoint.pr = state.pr;
+    return blocked(WORKFLOW2, step, needs, {
+      completed: [...completed],
+      checkpoint
+    });
+  }
+  function takeLines(lines) {
+    const out = [];
+    if (runLinePending) {
+      out.push(
+        `run <n, one more than the highest run number in the ledger, or 1>: ${WORKFLOW2} ${storyArg.replaceAll(/\s+/g, " ").slice(
+          0,
+          80
+        )} | worktree ${state.worktree || "<the worktree path>"} | branch ${state.branch || "<the branch name>"}`
+      );
+      runLinePending = false;
+    }
+    return [...out, ...lines ?? []];
+  }
+  function pushBrief(instruction, lines, ledgerNote) {
+    const ln = takeLines(lines);
+    return `${WHERE}
+You are the only agent in this workflow that acts on the board and forge. ${AUTH}
+
+Worktree: ${state.worktree || "(not created yet)"}. Ledger: ${ledgerNote || `${state.worktree}/.tmp/ledger.md`}.
+
+${instruction}
+
+${ln.length > 0 ? `Append these lines, in this order, to the ledger (create it, with its directory, if absent). Stamp each with the current time in front and fill every <placeholder> from what you just did:
+${ln.map((l) => `- ${l}`).join("\n")}` : "Append no ledger lines."}
+
+Report each operation you performed as an operations entry, named worktree, branch, delivery-start, commit, push, pr, review-trigger, or ledger, with its reference. Set done only when every operation asked for is complete; list each one that is unbound or failed in unmet.`;
+  }
+  function pushStop(step, r) {
+    return stop(step, [
+      need(
+        step,
+        1,
+        "prerequisite",
+        "An operation that docs/BOARD.md or docs/FORGE.md bind, and the authorization to run it.",
+        r ? r.unmet.join("; ") || "pusher reported the work incomplete" : "pusher did not return"
+      )
+    ]);
+  }
+  return { WHERE, state, done, skip, stop, pushBrief, pushStop };
+}
+
+// src/slopify/lib/input.ts
+function isRecord(v) {
+  return typeof v === "object" && v !== null;
+}
+function inputOf(a, primary, numbers = false) {
+  if (typeof a !== "string") return isRecord(a) ? a : {};
+  const text = a.trim();
+  try {
+    const parsed = JSON.parse(text);
+    if (isRecord(parsed)) return parsed;
+    if (typeof parsed === "string" || numbers && typeof parsed === "number") {
+      return { [primary]: String(parsed).trim() };
+    }
+  } catch {
+  }
+  return { [primary]: text };
+}
+var textOf = (v) => typeof v === "string" ? v.trim() : "";
+
+// src/slopify/lib/rules.ts
+var MAX_FIX_ROUNDS = 3;
+
+// src/slopify/lib/spec.ts
+var TASK = {
+  type: "object",
+  required: ["id", "dependsOn", "files", "criteria", "todo", "reuse", "create"],
+  properties: {
+    id: { type: "string" },
+    dependsOn: { ...STRINGS, description: "Ids of the tasks this one needs finished first" },
+    files: { ...STRINGS, description: "Files or directories this task may write, relative to the worktree root" },
+    criteria: { ...STRINGS, description: "Ids of the criteria this task delivers" },
+    todo: { type: "string", description: "What to do, including anything only this task needs" },
+    reuse: { ...STRINGS, description: "What already exists and must be used, not rebuilt" },
+    create: { ...STRINGS, description: "What this task creates" }
+  }
+};
+var DECISION = {
+  type: "object",
+  required: ["id", "question", "choice", "rationale", "reversible", "permission", "affectsAcceptance"],
+  properties: {
+    id: { type: "string" },
+    question: { type: "string" },
+    choice: { type: "string" },
+    rationale: { type: "string", description: "What grounds the choice" },
+    reversible: { type: "boolean" },
+    permission: {
+      type: "string",
+      description: "The issue's words that explicitly permit an irreversible choice, quoted; empty when there are none"
+    },
+    affectsAcceptance: { type: "boolean", description: "True when the choice changes behavior a criterion describes" }
+  }
+};
+var BUILD = {
+  type: "object",
+  required: ["shared", "tasks", "docs", "decisions", "manualActions"],
+  properties: {
+    shared: {
+      ...STRINGS,
+      description: "Constraints and interfaces every task of this story must follow; never a repeated project rule"
+    },
+    tasks: { type: "array", items: TASK },
+    docs: { ...STRINGS, description: "Documents making claims about the area the change touches; can be empty" },
+    decisions: { type: "array", items: DECISION },
+    manualActions: {
+      ...STRINGS,
+      description: "Each irreversible step the issue doesn't explicitly permit, left for a person to do; never in a task"
+    }
+  }
+};
+
+// src/slopify/lib/loop.ts
+var Halt = class extends Error {
+  step;
+  needs;
+  constructor(step, needs, evidence) {
+    super(evidence);
+    this.step = step;
+    this.needs = needs;
+  }
+};
+function must(value, step, what) {
+  if (value === null || value === void 0) throw new Halt(step, what, "the agent did not return");
+  return value;
+}
+function stopOf(d, error) {
+  if (error instanceof Halt)
+    return d.stop(error.step, [need(error.step, 1, "prerequisite", error.needs, error.message)]);
+  throw error;
+}
+var TEST_SCHEMA = {
+  type: "object",
+  required: ["tests", "failingOutput", "noTest", "specProblem", "assumptions", "manualActions"],
+  properties: {
+    tests: { ...STRINGS, description: "Test paths written or changed, relative to the worktree root" },
+    failingOutput: { type: "string", description: "The test's failing output on the current code" },
+    noTest: { type: "string", description: "Why the behavior can't be expressed as a test; empty when it can" },
+    specProblem: {
+      type: "string",
+      description: "What the brief doesn't settle or can't deliver as written; empty when none"
+    },
+    assumptions: {
+      ...STRINGS,
+      description: "Each trivial question you settled yourself, as the question and your choice"
+    },
+    manualActions: {
+      ...STRINGS,
+      description: "Each irreversible step you left undone because nothing explicitly permits it"
+    }
+  }
+};
+var FIX_SCHEMA = {
+  type: "object",
+  required: ["changed", "ran", "testProblem", "specProblem", "assumptions", "manualActions"],
+  properties: {
+    changed: { ...STRINGS, description: "Paths changed, relative to the worktree root" },
+    ran: { ...STRINGS, description: "Each command and its result" },
+    testProblem: { type: "string", description: "Why the test is wrong; empty when it isn't" },
+    specProblem: {
+      type: "string",
+      description: "What the brief doesn't settle or can't deliver as written; empty when none"
+    },
+    assumptions: {
+      ...STRINGS,
+      description: "Each trivial question you settled yourself, as the question and your choice"
+    },
+    manualActions: {
+      ...STRINGS,
+      description: "Each irreversible step you left undone because nothing explicitly permits it"
+    }
+  }
+};
+var QA_SCHEMA = {
+  type: "object",
+  required: [...LENS_SCHEMA.required, "testAtFault"],
+  properties: {
+    ...LENS_SCHEMA.properties,
+    testAtFault: { type: "boolean", description: "True when the test itself is what has to change" }
+  }
+};
+var VALIDATOR_SCHEMA = {
+  type: "object",
+  required: ["results", "uncategorizedSetting"],
+  properties: {
+    results: {
+      type: "array",
+      items: {
+        type: "object",
+        required: ["id", "result", "ran", "evidence", "detail", "setting"],
+        properties: {
+          id: { type: "string" },
+          result: { type: "string", enum: ["pass", "fail", "cannot-verify"] },
+          ran: { type: "string", description: "The validation path that ran: its commands, flows, or tests" },
+          evidence: { ...STRINGS, description: "Paths under .tmp/evidence/ or quoted output" },
+          detail: { type: "string", description: "For a fail, the flow step or file and line; else why" },
+          setting: { type: "string", description: "What TESTING.md's category states when it can't be verified" }
+        }
+      }
+    },
+    uncategorizedSetting: { type: "string", description: "What TESTING.md's Uncategorized setting states" }
+  }
+};
+var GATEWAY_SCHEMA = {
+  type: "object",
+  required: ["missed", "docsToAdd"],
+  properties: {
+    missed: {
+      type: "array",
+      items: {
+        type: "object",
+        required: ["location", "text"],
+        properties: { location: { type: "string" }, text: { type: "string" } }
+      }
+    },
+    docsToAdd: { ...STRINGS, description: "Documents the change affects that aren't on the docs list" }
+  }
+};
+var DOCS_SCHEMA = {
+  type: "object",
+  required: ["changed"],
+  properties: { changed: { ...STRINGS, description: "Documents changed, relative to the worktree root" } }
+};
+function pushed(r, what) {
+  const unmet = r?.unmet.join("; ");
+  if (pushOk(r)) return r;
+  throw new Halt("push", what, unmet ?? "pusher didn't return");
 }
 
 // src/slopify/workflows/shape.ts
-var NAME = "shape";
-var READ_ONLY = "Report only: change nothing, and perform no board or forge operation.";
-var PRODUCER_BOUNDS = "Do not commit, push, or perform any board or forge operation; another agent does that.";
-var CONTEXT_SCHEMA = libraryReaderSchema("the idea");
-var WRITER_SCHEMA = writerSchema({
-  produced: "Absolute paths written",
-  revision: "git hash-object of the main artifact",
-  openDecisions: "Ids of the open decisions still marked in the artifact",
-  storyBlockers: "What prevents the artifact from being written",
-  tasks: "Always an empty array here",
-  docs: "Always an empty array here"
-});
-var PUSHER_SCHEMA = pusherSchema({
-  reference: "A card id, commit sha, PR URL or path, or worktree path",
-  unmet: "Each operation that could not be performed as declared, and why"
-});
-var idOf = (v) => shaped("id", v);
-function stop(ctx, step, needs) {
-  return halt(NAME, ctx, step, needs);
+var WORKFLOW = "shape";
+var DELIVERABLE = "Deliverable";
+var KINDS = {
+  story: {
+    scouts: [
+      ["scout-code", "Find where the product already does or touches what this idea is about."],
+      ["scout-docs", "Find the documentation that makes claims about what this idea is about."]
+    ],
+    advisors: ["advisor-value", "advisor-scope", "advisor-alternatives", "advisor-fit"],
+    lenses: ["lens-template", "lens-criteria", "lens-solution-free"]
+  },
+  bug: {
+    scouts: [["scout-code", "Find where the product does what this report describes."]],
+    advisors: ["advisor-fit"],
+    lenses: ["lens-template"]
+  },
+  spike: {
+    scouts: [["scout-code", "Find where the product touches what this question is about."]],
+    advisors: ["advisor-scope"],
+    lenses: ["lens-template"]
+  }
+};
+var LIBRARY_SCHEMA = libraryReaderSchema("the idea");
+var WRITER_SCHEMA = {
+  type: "object",
+  required: ["openQuestions"],
+  properties: {
+    openQuestions: { ...STRINGS, description: "Each question left under Open questions on the card; empty when none" }
+  }
+};
+var kindOf = (v) => v === "bug" || v === "spike" ? v : "story";
+function subject(c) {
+  return [
+    c.idea ? `The idea:
+<<<IDEA
+${c.idea}
+IDEA>>>` : "",
+    c.current ? `The card ${c.cardId}, with its comments:
+<<<CARD
+${c.current}
+CARD>>>` : ""
+  ].filter(Boolean).join("\n\n");
 }
-function hasAnswer(ctx, id) {
-  return Object.hasOwn(ctx.answers, id) && String(ctx.answers[id]).trim() !== "";
-}
-function showLibrary(r) {
-  return r ? `### Library
-${r.summary}
-Supported:
-${bullets(r.supported)}
-Gaps:
-${bullets(r.gaps)}` : "### Library\nThe library-reader did not return: treat this as a gap, not an absence.";
-}
-async function locate(ctx) {
-  phase("Locate");
-  const readCard = (retry) => scout(
-    "scout-card",
-    `${ctx.where}
-${READ_ONLY}
-
-Read the one card this idea starts from: ${ctx.cardArg}. If the project has no board or the card does not exist, report that. The story revision is not needed for this run.
-
-Idea: ${ctx.idea}`,
-    { label: retry ? "read card (again)" : "read card", phase: "Locate" }
-  );
-  const [firstCardR, relatedR] = await parallel([
-    () => ctx.cardArg ? readCard(false) : Promise.resolve(null),
+async function read(d, cardArg, idea) {
+  phase("Read");
+  const [card, related] = await parallel([
+    () => cardArg ? scout(
+      "scout-card",
+      `${d.WHERE}
+Read card ${cardArg} through the read bindings in docs/BOARD.md. Report its identifier as the evidence item card, and its title, body, and every comment, verbatim, as the evidence item text. Change nothing.`,
+      { label: "read the card", phase: "Read" }
+    ) : Promise.resolve(null),
     () => scout(
       "scout-related-cards",
-      `${ctx.where}
-${READ_ONLY}
+      `${d.WHERE}
+Search the board for cards that duplicate, overlap, conflict with, or depend on this. Change nothing.
 
-Search the board for cards that duplicate, overlap, conflict with, or depend on this outcome. If the project has no board, report that.
-
-Idea: ${ctx.idea}`,
-      { label: "related cards", phase: "Locate" }
+${idea || cardArg}`,
+      { label: "related cards", phase: "Read" }
     )
   ]);
-  const cardR = !firstCardR && ctx.cardArg ? await readCard(true) : firstCardR;
-  return { cardR, relatedR };
+  if (cardArg) must(card, "read", `Card ${cardArg}.`);
+  return { card, related: must(related, "read", "The related cards.") };
 }
-async function readCheckpoint(ctx) {
-  let cp = null;
-  for (let i = 1; i <= MAX_FAILURES && !cp; i++) {
-    cp = await scout(
-      "scout-checkpoint",
-      `${ctx.where}
-${READ_ONLY}
+async function ground(d, c, related) {
+  phase("Ground");
+  const brief = (task) => `${d.WHERE}
+${task}
+Change nothing.
 
-Report where a shape run stands from its durable checkpoints. The run's draft file is ${ctx.draftPath} (under the project's ignored .tmp/ folder). Return one evidence item per key that exists, with source set to the key and excerpt set to its value; omit a key that does not exist.
-
-Keys:
-- draft: present only when the draft file exists; its value is its absolute path, then "@", then its git hash-object digest.
-- draft-open: the ids of the open decisions still marked in the draft, comma-separated, or "none". Find them with: grep -oE '<!-- (open-decision [a-z0-9-]+|filed [^ ]+)' ${ctx.draftPath}
-- draft-filed: the card id from a "filed" marker in the draft, from the same grep; omit when there is no such marker.
-
-Idea: ${ctx.idea}`,
-      { label: `checkpoint${i > 1 ? ` (attempt ${i})` : ""}`, phase: "Locate" }
-    );
-    if (!cp) ctx.attempts.push({ gate: "locate", approach: "scout-checkpoint", failed: "the scout did not return" });
-  }
-  return cp;
-}
-function draftState(ctx, cp) {
-  const draftValue = fact(cp, "draft");
-  const draftMatch = parseSpec(draftValue);
-  const exists = !!draftMatch && draftMatch.path.endsWith(ctx.draftRel);
-  const openItem = cp.evidence.find((e) => e.source === "draft-open");
-  const openValue = openItem ? openItem.excerpt.trim() : "";
-  const openFromCheckpoint = exists && !absent(openValue) ? openValue.split(",").map((x) => x.trim()).filter((id) => /^[a-z0-9-]+$/.test(id)) : [];
-  const filedValue = fact(cp, "draft-filed");
-  const filed = exists ? idOf(filedValue) : "";
-  if (exists) ctx.checkpoint.draft = ctx.draftPath;
-  if (filed) ctx.checkpoint.filed = filed;
-  ctx.rev = exists ? draftMatch.hash : "";
-  ctx.openIds = openFromCheckpoint;
-  return { exists, openFromCheckpoint, filed };
-}
-async function gather(ctx, cardR, relatedR) {
-  phase("Gather");
-  const [lib, docs, code] = await parallel([
+${subject(c)}`;
+  const { scouts } = KINDS[c.kind];
+  const [library, ...found] = await parallel([
     () => agent(
-      `${ctx.where}
-
-Report what the project library already supports about this idea, so supported work isn't repeated. Read library/_meta/librarian.md, then the relevant index and wiki pages and the raw notes behind them. Cite each supported claim to its file and heading, and name gaps, stale material, and contested pages. Make no internet requests and no writes. If the project has no library, say so as a gap.
-
-Idea: ${ctx.idea}`,
-      { agentType: "slopify:library-reader", label: "library context", phase: "Gather", schema: CONTEXT_SCHEMA }
+      brief(
+        "Report what the project library already supports about this, citing each claim to its file and heading."
+      ),
+      {
+        agentType: "slopify:library-reader",
+        label: "library",
+        phase: "Ground",
+        schema: LIBRARY_SCHEMA
+      }
     ),
-    () => scout(
-      "scout-docs",
-      `${ctx.where}
-${READ_ONLY}
-
-Find the documentation and specs that make claims about what this idea covers.
-
-Idea: ${ctx.idea}`,
-      { label: "docs", phase: "Gather" }
-    ),
-    () => scout(
-      "scout-code",
-      `${ctx.where}
-${READ_ONLY}
-
-Find where the product already does or touches this idea: the code locations and call paths.
-
-Idea: ${ctx.idea}`,
-      { label: "code", phase: "Gather" }
+    ...scouts.map(
+      ([name, task]) => () => scout(name, brief(task), { label: name, phase: "Ground" })
     )
   ]);
-  const evidenceText = [
-    ctx.cardArg ? show("Card", cardR) : "### Card\nNo card was named: this idea starts a new card.",
-    show("Related cards", relatedR),
-    showLibrary(lib),
-    show("Docs", docs),
-    show("Code", code)
+  const lib = must(library, "ground", "What the library supports.");
+  return [
+    show("scout-related-cards", related),
+    `library-reader: ${lib.summary}
+${list(lib.supported)}
+  Gaps: ${lib.gaps.join("; ") || "none"}`,
+    ...scouts.map(([name], i) => show(name, must(found[i], "ground", `Evidence from ${name}.`)))
   ].join("\n\n");
-  done(ctx, "gather");
-  return evidenceText;
 }
-var ADVISORS = [
-  { name: "advisor-value", run: (p, o) => advise("advisor-value", p, o) },
-  { name: "advisor-scope", run: (p, o) => advise("advisor-scope", p, o) },
-  { name: "advisor-alternatives", run: (p, o) => advise("advisor-alternatives", p, o) },
-  { name: "advisor-fit", run: (p, o) => advise("advisor-fit", p, o) }
-];
-async function adviseAll(ctx, evidenceText) {
+async function adviseAll(d, c, evidence) {
   phase("Advise");
-  const advice = {};
-  let waiting = ADVISORS;
-  let adviseFailures = 0;
-  while (waiting.length > 0) {
-    const results = await parallel(
-      waiting.map(
-        (a) => () => a.run(
-          `${ctx.where}
-${READ_ONLY}
+  const { advisors } = KINDS[c.kind];
+  const views = await parallel(
+    advisors.map(
+      (name) => () => advise(
+        name,
+        `${d.WHERE}
+Judge this ${c.kind} from your one angle.
 
-Judge this idea from your one angle, from the evidence below plus reading the repository. You judge; you do not decide.
-
-Idea: ${ctx.idea}
+${subject(c)}
 
 Evidence:
-${evidenceText}`,
-          { label: a.name.replace("advisor-", ""), phase: "Advise" }
-        )
+${evidence}`,
+        {
+          label: name,
+          phase: "Advise"
+        }
       )
-    );
-    const missing = [];
-    for (const [i, a] of waiting.entries()) {
-      const r = results[i];
-      if (r) advice[a.name] = r;
-      else missing.push(a);
-    }
-    waiting = missing;
-    if (missing.length === 0) {
-      continue;
-    }
-    adviseFailures += 1;
-    ctx.attempts.push({
-      gate: "advise",
-      approach: "what-and-why advisors",
-      failed: `${missing.map((a) => a.name).join(", ")} did not return`
-    });
-    if (adviseFailures >= MAX_FAILURES) {
-      return stop(ctx, "advise", [
-        {
-          id: "advise-1",
-          kind: "prerequisite",
-          what: `A judgement from ${missing.map((a) => a.name).join(", ")}`,
-          evidence: "the advisor did not return in three dispatches"
-        }
-      ]);
-    }
-  }
-  return { advice };
-}
-function draftOk(ctx, w) {
-  return w.produced.length > 0 && w.produced.every((p) => p.endsWith(ctx.draftRel)) && textOf(w.revision) !== "";
-}
-function decisionNeeds(ctx, ids) {
-  return ids.map((id) => ({
-    id,
-    kind: "decision",
-    what: `Answer open decision ${id}; its question is in the marker in the draft`,
-    evidence: `<!-- open-decision ${id}: \u2026 --> in ${ctx.draftPath}`
-  }));
-}
-function earlyStop(ctx, w, step) {
-  if (!w) return null;
-  const blockers = decisionsOf("draft-blocker", w.storyBlockers);
-  const open = blockers.filter((d) => !answerOf(ctx.answers, d.id));
-  if (open.length > 0) {
-    return stop(
-      ctx,
-      step,
-      open.map((d) => ({
-        id: d.id,
-        kind: "input",
-        what: d.question,
-        evidence: "reported by the writer while working on the story"
-      }))
-    );
-  }
-  if (draftOk(ctx, w)) return null;
-  const unanswered = w.openDecisions.map((x) => x.trim()).filter((id) => id && !hasAnswer(ctx, id));
-  const needs = [
-    ...blockers.map((d) => ({
-      id: d.id,
-      kind: "input",
-      what: d.question,
-      evidence: `raised again after the writer was given the answer "${answerOf(ctx.answers, d.id)}"; give an answer that resolves it`
-    })),
-    ...unanswered.length > 0 ? decisionNeeds(ctx, unanswered) : []
-  ];
-  return needs.length > 0 ? stop(ctx, step, needs) : null;
-}
-function accept(ctx, w) {
-  ctx.rev = textOf(w.revision);
-  ctx.openIds = w.openDecisions.map((s) => s.trim()).filter(Boolean);
-}
-async function settle(ctx) {
-  let resolves = 0;
-  while (ctx.openIds.length > 0) {
-    const unanswered = ctx.openIds.filter((id) => !hasAnswer(ctx, id));
-    if (unanswered.length > 0) {
-      return stop(ctx, "draft", decisionNeeds(ctx, unanswered));
-    }
-    if (resolves >= MAX_FAILURES) {
-      return stop(ctx, "draft", [
-        {
-          id: "draft-resolve",
-          kind: "validation",
-          what: `The writer to apply the answers for ${ctx.openIds.join(", ")} in the draft`,
-          evidence: "the markers were still open after three resolving dispatches"
-        }
-      ]);
-    }
-    resolves += 1;
-    const given = ctx.openIds.map((id) => `- ${id}: ${String(ctx.answers[id])}`).join("\n");
-    const w = await agent(
-      `Address files by absolute path.
-${PRODUCER_BOUNDS}
-
-Resolve the open decisions in the story draft at ${ctx.draftPath}, and write only that file. Apply each answer below in the draft, remove that decision's marker line, and report in openDecisions the ids that are still marked. Return in revision the git hash-object digest of the draft, and in produced its absolute path. Return tasks and docs as empty arrays.
-
-Answers:
-${given}${settledText(ctx.settledBlockers)}`,
-      {
-        agentType: "slopify:writer-card",
-        label: `resolve ${ctx.openIds.join(" ")}`,
-        phase: "Draft",
-        schema: WRITER_SCHEMA
-      }
-    );
-    const earlyResolve = earlyStop(ctx, w, "draft");
-    if (earlyResolve) return earlyResolve;
-    if (!w || !draftOk(ctx, w)) {
-      ctx.attempts.push({
-        gate: "draft",
-        approach: `resolve ${ctx.openIds.join(", ")}`,
-        failed: "the writer did not return a draft revision at the draft path"
-      });
-      continue;
-    }
-    accept(ctx, w);
-  }
-  return null;
-}
-async function draftStory(ctx, evidenceText) {
-  let draftFailures = 0;
-  for (; ; ) {
-    const w = await agent(
-      `Address files by absolute path.
-${PRODUCER_BOUNDS}
-
-Write the story for this idea at ${ctx.draftPath}, and write only that file (create its folder if needed). Use the card shape the project's board declaration gives: problem and outcome, scope and exclusions, observable acceptance criteria, dependencies, and evidence. State the problem, outcome, scope, and criteria, never how to build them. Write no spec and no approach. Synthesize the advisors' views: say in the story what you adopted and why, and what you set aside and why.
-
-Decide anything that does not change the story's outcome (naming, types, edge cases with an obvious default) yourself, and record it in the draft as a labelled assumption (a line starting "Assumption:"). Mark an open decision only for a choice that changes what the story delivers or whom it serves and that the evidence cannot settle: one line in the draft, <!-- open-decision <id>: <question> -->, with id matching [a-z0-9-]+, and return the same ids in openDecisions. Put anything that stops a story from being written in storyBlockers. Return in revision the git hash-object digest of the draft, and in produced its absolute path. Return tasks and docs as empty arrays.
-
-Idea: ${ctx.idea}
-
-Evidence:
-${evidenceText}${settledText(ctx.settledBlockers)}`,
-      {
-        agentType: "slopify:writer-card",
-        label: draftFailures ? `draft story (attempt ${draftFailures + 1})` : "draft story",
-        phase: "Draft",
-        schema: WRITER_SCHEMA
-      }
-    );
-    const early = earlyStop(ctx, w, "draft");
-    if (early) return early;
-    if (w && draftOk(ctx, w)) {
-      accept(ctx, w);
-      ctx.checkpoint.draft = ctx.draftPath;
-      return null;
-    }
-    draftFailures += 1;
-    ctx.attempts.push({
-      gate: "draft",
-      approach: "writer story draft",
-      failed: w ? "the writer wrote outside the draft path or returned no revision" : "the writer did not return"
-    });
-    if (draftFailures >= MAX_FAILURES) {
-      return stop(ctx, "draft", [
-        {
-          id: "draft-1",
-          kind: "validation",
-          what: `A story draft written at ${ctx.draftPath} with a revision`,
-          evidence: "the writer did not produce one in three dispatches"
-        }
-      ]);
-    }
-  }
-}
-async function judge(ctx, round) {
-  const [crit, free] = await parallel([
-    () => lensOn(
-      ctx,
-      "lens-criteria",
-      `${ctx.where}
-
-Judge the story draft at ${ctx.draftPath}, revision ${ctx.rev}. Judge that exact revision only, and name it as evaluated.`,
-      ctx.rev,
-      { label: `criteria (round ${round})`, phase: "Validate" }
-    ),
-    () => lensOn(
-      ctx,
-      "lens-solution-free",
-      `${ctx.where}
-
-Judge the story draft at ${ctx.draftPath}, revision ${ctx.rev}. Judge that exact revision only, and name it as evaluated.`,
-      ctx.rev,
-      { label: `solution-free (round ${round})`, phase: "Validate" }
     )
-  ]);
-  if (!crit || !free) {
-    return stop(ctx, "validate", [
-      {
-        id: "validate-1",
-        kind: "validation",
-        what: `A verdict on revision ${ctx.rev} from ${[!crit && "lens-criteria", !free && "lens-solution-free"].filter(Boolean).join(" and ")}`,
-        evidence: "three dispatches returned no verdict or a verdict on another revision"
-      }
-    ]);
-  }
-  return [crit, free];
+  );
+  return advisors.map((name, i) => `${name}: ${JSON.stringify(must(views[i], "advise", `A view from ${name}.`))}`).join("\n\n");
 }
-async function revise(ctx, bad, round, gate) {
-  for (; ; ) {
-    const w = await agent(
-      `Address files by absolute path.
-${PRODUCER_BOUNDS}
+async function write(d, c, task, label, phaseTitle) {
+  const w = must(
+    await agent(
+      `${d.WHERE}
+The card is a ${c.kind}. Write it at ${c.draft}, and only there. ${task}
 
-Revise the story draft at ${ctx.draftPath} (revision ${ctx.rev}) to resolve the findings below, and write only that file. Keep the problem, outcome, and scope the story already states; state no implementation. Keep any open-decision marker you do not settle, and decide anything that does not change the story's outcome yourself as a labelled assumption. Return in revision the git hash-object digest of the revised draft, in produced its absolute path, and in openDecisions the ids still marked. Return tasks and docs as empty arrays.
+${subject(c)}
 
-Findings:
-${bad.join("\n\n")}${settledText(ctx.settledBlockers)}`,
-      {
-        agentType: "slopify:writer-card",
-        label: `revise story (round ${round})`,
-        phase: "Validate",
-        schema: WRITER_SCHEMA
-      }
+Do not file it, commit, or change the board; pusher does that.`,
+      { agentType: "slopify:writer-card", label, phase: phaseTitle, schema: WRITER_SCHEMA }
+    ),
+    "draft",
+    "A card draft."
+  );
+  return w.openQuestions;
+}
+async function checkDraft(d, c) {
+  const { lenses } = KINDS[c.kind];
+  const verdicts = await parallel(
+    lenses.map(
+      (name) => () => lens(name, `${d.WHERE}
+The card draft is ${c.draft}, a ${c.kind}.`, { label: name, phase: "Check" })
+    )
+  );
+  return lenses.flatMap((name, i) => {
+    const v = must(verdicts[i], "check", `A verdict from ${name}.`);
+    const found = v.findings.map((f) => ({ source: name, location: f.location, text: f.problem }));
+    if (v.verdict === "unverified" && found.length === 0) {
+      found.push({ source: name, location: c.draft, text: `The check couldn't run: ${v.limits}` });
+    }
+    return found;
+  });
+}
+async function rule(d, c, problems) {
+  const rulings = await parallel(
+    problems.map(
+      (p, i) => () => agent(
+        `${d.WHERE}
+Rule on one problem ${p.source} reported in the card draft ${c.draft}, a ${c.kind}, checking it against the draft and the card template. blocker: a delivery can't take the card as it is. major: a real flaw that should be fixed before filing. minor: real but low impact.
+
+At ${p.location}:
+${p.text}`,
+        { agentType: "slopify:judge", label: `rule ${String(i + 1)}`, phase: "Check", schema: RULING_SCHEMA }
+      )
+    )
+  );
+  const confirmed = [];
+  for (const [i, p] of problems.entries()) {
+    const r = must(rulings[i], "check", `A ruling on ${p.location}.`);
+    if (r.verdict === "confirmed" && r.severity !== "minor") confirmed.push(`${p.location}: ${p.text} (${r.reason})`);
+  }
+  return confirmed;
+}
+async function refine(d, c, firstOpen) {
+  let open = [...firstOpen];
+  for (let round = 1; round <= MAX_FIX_ROUNDS; round += 1) {
+    phase("Check");
+    const confirmed = await rule(d, c, await checkDraft(d, c));
+    if (confirmed.length === 0) return open;
+    open = round === MAX_FIX_ROUNDS ? await write(
+      d,
+      c,
+      `Record each of these problems under Open questions, changing nothing else:
+${list(confirmed)}`,
+      "record what is open",
+      "Check"
+    ) : await write(
+      d,
+      c,
+      `Revise the draft to fix these problems:
+${list(confirmed)}`,
+      `revise ${String(round)}`,
+      "Check"
     );
-    const earlyRevise = earlyStop(ctx, w, "validate");
-    if (earlyRevise) return earlyRevise;
-    if (w && draftOk(ctx, w)) {
-      accept(ctx, w);
-      return null;
-    }
-    gate.failures += 1;
-    ctx.attempts.push({
-      gate: "validate",
-      approach: "writer revision of the story draft",
-      failed: w ? "the writer wrote outside the draft path or returned no revision" : "the writer did not return"
-    });
-    if (gate.failures >= MAX_FAILURES) {
-      return stop(ctx, "validate", [
-        {
-          id: "validate-1",
-          kind: "validation",
-          what: "A revised story draft for the lenses to judge",
-          evidence: bad.join("\n")
-        }
-      ]);
-    }
   }
+  return open;
 }
-async function validate(ctx) {
-  phase("Validate");
-  const gate = { failures: 0 };
-  for (let round = 1; ; round++) {
-    const judged = await judge(ctx, round);
-    if (!Array.isArray(judged)) return judged;
-    const [crit, free] = judged;
-    const verdicts = [
-      { lens: "lens-criteria", result: crit },
-      { lens: "lens-solution-free", result: free }
-    ];
-    const bad = [...problems("lens-criteria", crit), ...problems("lens-solution-free", free)];
-    if (bad.length === 0) return verdicts;
-    gate.failures += 1;
-    ctx.attempts.push({ gate: "validate", approach: `story draft revision ${ctx.rev}`, failed: bad.join("; ") });
-    if (gate.failures >= MAX_FAILURES) {
-      return stop(ctx, "validate", [
-        {
-          id: "validate-1",
-          kind: "validation",
-          what: "A story draft that lens-criteria and lens-solution-free both pass",
-          evidence: bad.join("\n")
-        }
-      ]);
-    }
-    const revised = await revise(ctx, bad, round, gate);
-    if (revised) return revised;
-    const blockedOnDecision = await settle(ctx);
-    if (blockedOnDecision) return blockedOnDecision;
-  }
-}
-function unmetStop(ctx, p) {
-  ctx.attempts.push({ gate: "file", approach: "pusher card filing", failed: p.unmet.join("; ") });
-  const made = p.operations.find((o) => o.reference && o.reference !== ctx.draftPath);
-  if (made) {
-    ctx.checkpoint.filed = made.reference;
-    return stop(ctx, "file", [
-      {
-        id: "file-1",
-        kind: "prerequisite",
-        what: `The "filed" marker appended to ${ctx.draftPath}: card ${made.reference} was filed, but a step after it failed`,
-        evidence: p.unmet.join("; ")
-      }
-    ]);
-  }
-  return stop(ctx, "file", [
-    {
-      id: "file-1",
-      kind: "prerequisite",
-      what: "A board declaration that binds creating or updating a story card",
-      evidence: p.unmet.join("; ")
-    }
-  ]);
-}
-function filePrompt(ctx) {
-  const cardLine = ctx.cardId ? `The idea came from the existing card ${ctx.cardId}: update that card with the story.` : "The idea came from no existing card: create a card for the story.";
-  return `${ctx.where}
-
-Authorization: the user invoked the shape workflow with file: true, which authorizes exactly this: file the story below as a card, through the project's board declaration (docs/BOARD.md), then append the filed marker to the draft. Perform no other operation: no commit, branch, worktree, push, pull request, review trigger, merge, or message, and no change to any other card. Work exactly as the board declaration binds it; report an operation that is not bound, or a project with no board, in unmet, and improvise nothing.
-
-File the story at ${ctx.draftPath}, revision ${ctx.rev}, exactly as written; change no word of it, and give the card the Deliverable label. Add one trailing line to the card body, <!-- shape-draft ${ctx.slug} -->, which is not part of the story and lets a rerun find this card. ${ctx.cardId ? "" : `Before creating, search the board for a card whose body holds that line; if one exists, it is this story's card: update it instead of creating another. `}${cardLine}
-
-The moment the card operation succeeds, and before anything else that can fail (a read-back, a label, a status), append the line <!-- filed <card id> --> to the end of the draft. Return the card operation first in operations, with the card id as its reference. When there is no board, perform nothing and return the draft path in unmet.`;
-}
-async function fileCard(ctx) {
+async function file(d, c, slug, deliverable) {
   phase("File");
-  let pusherFailures = 0;
-  for (; ; ) {
-    const p = await agent(filePrompt(ctx), {
-      agentType: "slopify:pusher",
-      label: pusherFailures ? `file story card (attempt ${pusherFailures + 1})` : "file story card",
-      phase: "File",
-      schema: PUSHER_SCHEMA
-    });
-    if (p && p.unmet.length > 0) return unmetStop(ctx, p);
-    if (p?.done && p.operations.length > 0) {
-      const op = p.operations.find((o) => o.reference) ?? p.operations[0];
-      const filed = op?.reference || "filed";
-      ctx.checkpoint.filed = filed;
-      return { filed };
-    }
-    pusherFailures += 1;
-    ctx.attempts.push({
-      gate: "file",
-      approach: "pusher card filing",
-      failed: p ? "the pusher reported the filing as not done" : "the pusher did not return"
-    });
-    if (pusherFailures >= MAX_FAILURES) {
-      return stop(ctx, "file", [
-        {
-          id: "file-1",
-          kind: "prerequisite",
-          what: "The story card filed through the board declaration",
-          evidence: "the pusher did not complete it in three dispatches"
-        }
-      ]);
-    }
-  }
-}
-function shapedResult(ctx, verdicts, advisorViews, filed) {
-  const criteriaVerdict = verdicts.find((v) => v.lens === "lens-criteria")?.result;
-  const report = [
-    `Advisors: ${advisorViews.length > 0 ? advisorViews.map((a) => `${a.name.replace("advisor-", "")} ${a.judgement}`).join("; ") : "not run (a draft already existed)"}`,
-    criteriaVerdict ? `lens-criteria: ${criteriaVerdict.verdict} at revision ${ctx.rev}` : `lens-criteria: not run (the draft was already filed at revision ${ctx.rev})`,
-    `Story draft: ${ctx.draftPath}`,
-    filed ? `Filed: ${filed}` : "Filed: no (file was not requested)"
-  ].join("\n");
-  return {
-    status: "done",
-    workflow: NAME,
-    skipped: ctx.skipped,
-    attempts: ctx.attempts,
-    report,
-    story: ctx.draftPath,
-    revision: ctx.rev,
-    verdicts: verdicts.map((v) => ({
-      lens: v.lens,
-      verdict: v.result.verdict,
-      evaluated: v.result.evaluated,
-      findings: v.result.findings,
-      limits: v.result.limits
-    })),
-    advisors: advisorViews,
-    filed
-  };
-}
-function contextOf(input, idea) {
-  const cardArg = textOf(input["card"]);
-  const projectRoot = withoutTrailing(textOf(input["projectRoot"]), "/");
-  const answers = answersOf(input["answers"]);
-  const cardId = idOf(cardArg);
-  const slug = slugify(cardId) || slugged(idea, "idea");
-  const draftRel = `.tmp/shape/${slug}.md`;
-  return {
-    idea,
-    cardArg,
-    cardId,
-    slug,
-    wantFile: input["file"] === true,
-    answers,
-    where: whereOf(projectRoot),
-    draftRel,
-    draftPath: projectRoot ? `${projectRoot}/${draftRel}` : draftRel,
-    settledBlockers: answeredBlockers("draft-blocker", answers),
-    completed: [],
-    skipped: [],
-    attempts: [],
-    checkpoint: {},
-    rev: "",
-    openIds: []
-  };
-}
-async function evidenceFor(ctx, draftExists, located) {
-  const advisorViews = [];
-  if (draftExists) {
-    skip(ctx, "gather");
-    skip(ctx, "advise");
-    return { evidenceText: "", advisorViews };
-  }
-  const evidenceText = await gather(ctx, located.cardR, located.relatedR);
-  const advised = await adviseAll(ctx, evidenceText);
-  if ("status" in advised) return advised;
-  const { advice } = advised;
-  for (const a of ADVISORS) {
-    const r = advice[a.name];
-    if (r) advisorViews.push({ name: a.name, judgement: r.judgement, conditions: r.conditions });
-  }
-  done(ctx, "advise");
-  return { evidenceText: `${evidenceText}
+  const marker = `<!-- shape ${slug} -->`;
+  const target = c.cardId ? `Update card ${c.cardId} with it.` : `Search the board for a card whose body holds the line ${marker}, and update that card with it; create a card only when there is none.`;
+  const label = c.kind === "story" ? deliverable ? `Make sure the card has the label ${DELIVERABLE}.` : `Make sure the card doesn't have the label ${DELIVERABLE}.` : "";
+  const r = pushed(
+    await callPusher(
+      `${d.WHERE}
+The user's invocation of shape authorizes exactly this: write the card draft below to one card on the board, as docs/BOARD.md declares, and set its ${DELIVERABLE} label as asked. Nothing else: no commit, branch, push, PR, or other card. Work exactly as docs/BOARD.md binds it.
 
-### Advisors
-${JSON.stringify(advice, null, 2)}`, advisorViews };
-}
-async function writeDraft(ctx, draft, evidenceText) {
-  phase("Draft");
-  if (!draft.exists) {
-    const unwritten = await draftStory(ctx, evidenceText);
-    if (unwritten) return unwritten;
-  }
-  const blockedOnDecision = await settle(ctx);
-  if (blockedOnDecision) return blockedOnDecision;
-  if (draft.exists && draft.openFromCheckpoint.length === 0) skip(ctx, "draft");
-  else done(ctx, "draft");
-  return null;
+The draft is ${c.draft}. Use its text exactly as written, with one trailing line, ${marker}, which lets a rerun find this card. ${target} ${label} Keep every label the card already has otherwise. Report the card's identifier as the operation named card. If docs/BOARD.md declares no board, do nothing and report done.`,
+      c.cardId ? "update the card" : "file the card",
+      "File"
+    ),
+    "The card on the board."
+  );
+  return opRef(r, "card") || c.cardId;
 }
 async function run() {
-  const started = startInput(
-    args,
-    "idea",
-    "Ask the user for the idea, problem, or evidence to shape, then invoke again."
-  );
-  if ("status" in started) return started;
-  const ctx = contextOf(started.input, started.subject);
-  const located = await locate(ctx);
-  const cp = await readCheckpoint(ctx);
-  if (!cp) {
-    return stop(ctx, "locate", [
-      {
-        id: "locate-1",
-        kind: "prerequisite",
-        what: "A scout-checkpoint report of the draft file, so a rerun never overwrites an existing draft",
-        evidence: "scout-checkpoint did not return in three dispatches"
-      }
-    ]);
+  const input = inputOf(args, "idea");
+  const idea = textOf(input["idea"]);
+  const cardArg = textOf(input["card"]);
+  if (!idea && !cardArg) return { status: "not-started", next: "Ask the user for the idea, or the card to shape." };
+  const d = createDeliver({ workflow: WORKFLOW, projectRoot: textOf(input["projectRoot"]), storyArg: idea || cardArg });
+  try {
+    const { card, related } = await read(d, cardArg, idea);
+    const cardId = (card?.evidence.find((e) => e.source === "card")?.excerpt ?? "").trim();
+    const slug = slugOf(cardId) || slugged(idea, "idea");
+    const c = {
+      kind: kindOf(input["kind"]),
+      idea,
+      cardId,
+      current: card?.evidence.find((e) => e.source === "text")?.excerpt ?? "",
+      draft: `.tmp/shape/${slug}.md`
+    };
+    const evidence = await ground(d, c, related);
+    const views = await adviseAll(d, c, evidence);
+    phase("Draft");
+    const drafted = await write(
+      d,
+      c,
+      `Write the card from its kind's template, starting from the card's current text when there is one.
+
+Evidence:
+${evidence}
+
+Advisors:
+${views}`,
+      "draft",
+      "Draft"
+    );
+    const openQuestions = await refine(d, c, drafted);
+    const deliverable = c.kind === "story" && openQuestions.length === 0;
+    const filed = await file(d, c, slug, deliverable);
+    return {
+      status: "done",
+      workflow: WORKFLOW,
+      card: filed,
+      deliverable,
+      openQuestions,
+      report: [
+        `shape filed ${filed || "the card"} as a ${c.kind}${deliverable ? `, labelled ${DELIVERABLE}` : ""}.`,
+        openQuestions.length > 0 ? `Open questions, to answer on the card before running shape on it again:
+${list(openQuestions)}` : ""
+      ].filter(Boolean).join("\n")
+    };
+  } catch (error) {
+    return stopOf(d, error);
   }
-  done(ctx, "locate");
-  const draft = draftState(ctx, cp);
-  const gathered = await evidenceFor(ctx, draft.exists, located);
-  if ("status" in gathered) return gathered;
-  const unwritten = await writeDraft(ctx, draft, gathered.evidenceText);
-  if (unwritten) return unwritten;
-  let verdicts = [];
-  if (draft.filed) skip(ctx, "validate");
-  else {
-    const validated = await validate(ctx);
-    if (!Array.isArray(validated)) return validated;
-    verdicts = validated;
-    done(ctx, "validate");
-  }
-  let filed = draft.filed || null;
-  if (draft.filed) skip(ctx, "file");
-  else if (ctx.wantFile) {
-    const card = await fileCard(ctx);
-    if ("status" in card) return card;
-    filed = card.filed;
-    done(ctx, "file");
-  }
-  return shapedResult(ctx, verdicts, gathered.advisorViews, filed);
 }
 
 // src/slopify/workflows/shape.entry.ts

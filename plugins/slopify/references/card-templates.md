@@ -13,6 +13,7 @@ A card holds intent, never the state of the code: no code locations, and no desc
 - **Out of scope**: what it must not touch.
 - **Acceptance criteria**: one behavior each, stated so that it passes or fails with nothing in between. Each is checkable the way `TESTING.md` says to check its category, within what that category permits: a category with a relaxed process, such as one for a physical device, allows a criterion that only that process can check.
 - **Assumptions**, when any: what was settled without asking.
+- **Open questions**, when any: what only a person can settle, because it changes what the card delivers or whom it serves. A person answers them on the card.
 - **References**, when any: links and prior cards.
 
 ## Bug
@@ -22,6 +23,7 @@ A card holds intent, never the state of the code: no code locations, and no desc
 - **Expected**: what should happen instead.
 - **Steps or input**: what shows it, as a user meets it, as far as known.
 - **Assumptions**, when any.
+- **Open questions**, when any.
 - **References**, when any.
 
 ## Spike
@@ -31,4 +33,5 @@ A card holds intent, never the state of the code: no code locations, and no desc
 - **What counts as an answer**: a yes or no, a value or range, or the conditions under which something holds.
 - **Conditions**, when they matter: the environment, versions, or scale an answer must hold for.
 - **Assumptions**, when any.
+- **Open questions**, when any.
 - **References**, when any.

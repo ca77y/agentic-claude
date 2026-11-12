@@ -238,10 +238,6 @@ export interface Decision {
   id: string;
   question: string;
 }
-export interface Settled extends Decision {
-  answer: string;
-}
-
 // An open decision's id comes from its question, so an answer stays with its question whatever else
 // a producer asks. The prefix names the producer that raised it.
 export function decisionsOf(prefix: string, questions: readonly string[] | null | undefined): Decision[] {
@@ -262,14 +258,6 @@ export function answerOf(answers: Answers | null | undefined, id: string): strin
   const a = answers?.[id];
   return a === undefined || a === null ? "" : String(a).trim();
 }
-// The settled questions as a brief paragraph: each answer beside its question, for the producer
-// that raised it and no other.
-export function settledText(settled: readonly Settled[]): string {
-  return settled.length > 0
-    ? `\n\nThe user has settled these earlier questions; apply each answer and do not ask them again:\n${settled.map((d) => `- Question: ${d.question}\n  Answer: ${d.answer}`).join("\n")}`
-    : "";
-}
-
 export type NeedKind = "story" | "decision" | "prerequisite" | "validation" | "input";
 /** Something a blocked run needs before a rerun can pass the step. `arg` names the arg that answers an input need. */
 export interface Need {

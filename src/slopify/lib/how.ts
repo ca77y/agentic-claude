@@ -4,6 +4,7 @@ import { LENS_SCHEMA, STRINGS, lens, scout, type Answers, type LensResult, type 
 import { NO_WRITES, callPusher, callSpecWriter, list, opRef, pushOk, show, unique } from "./deliver.ts";
 import { Halt, must, type Run } from "./loop.ts";
 import { MAX_CHALLENGE_ROUNDS, MAX_DESIGN_TRIES } from "./rules.ts";
+import { RULING_SCHEMA } from "./schemas.ts";
 import { BUILD, VALIDATE, type Build, type Task, type Validate } from "./spec.ts";
 
 const STANCES = [
@@ -110,16 +111,6 @@ const CHECK_SCHEMA = {
     holds: { type: "boolean" },
     location: { type: "string", description: "path:line or the item checked" },
     problem: { type: "string", description: "What is wrong; empty when it holds" },
-  },
-} as const;
-
-const RULING_SCHEMA = {
-  type: "object",
-  required: ["verdict", "severity", "reason"],
-  properties: {
-    verdict: { type: "string", enum: ["confirmed", "dismissed"] },
-    severity: { type: "string", enum: ["blocker", "major", "minor"] },
-    reason: { type: "string" },
   },
 } as const;
 

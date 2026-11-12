@@ -33,9 +33,9 @@ The kind comes from the user, and is `story` when they don't say. It picks the t
 | ----- | ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------- |
 | story | summary and why, scope, out of scope, acceptance criteria, assumptions, references | `advisor-value`, `advisor-scope`, `advisor-alternatives`, `advisor-fit` | `lens-template`, `lens-criteria` (with `TESTING.md`), `lens-solution-free` |
 | bug   | observed, expected, where or how, assumptions, references                          | `advisor-fit`, for duplicates and related cards                         | `lens-template`                                                            |
-| spike | the question, what counts as an answer, conditions, assumptions, references        | `advisor-scope`, for whether the question is bounded                    | `lens-template`, `lens-question`                                           |
+| spike | the question, what counts as an answer, conditions, assumptions, references        | `advisor-scope`, for whether the question is bounded                    | `lens-template`                                                            |
 
-`lens-template` checks that every required part of the kind is there, and that nothing outside the template is. `lens-criteria` checks that each criterion is one observable behavior that a `TESTING.md` category can check, following its guidance. `lens-question` checks that the question can be answered as bounded.
+`lens-template` checks that every required part of the kind is there, and that nothing outside the template is. `lens-criteria` checks that each criterion passes or fails by a check `TESTING.md` declares for its category.
 
 ## Decisions
 

@@ -250,6 +250,15 @@ function pusherSchema(notes = {}) {
     }
   };
 }
+var RULING_SCHEMA = {
+  type: "object",
+  required: ["verdict", "severity", "reason"],
+  properties: {
+    verdict: { type: "string", enum: ["confirmed", "dismissed"] },
+    severity: { type: "string", enum: ["blocker", "major", "minor"] },
+    reason: { type: "string" }
+  }
+};
 
 // src/slopify/lib/deliver.ts
 var PUSHER_SCHEMA = pusherSchema({ reference: "A commit sha, PR URL or path, card id, or worktree path" });
@@ -1719,15 +1728,6 @@ var CHECK_SCHEMA = {
     holds: { type: "boolean" },
     location: { type: "string", description: "path:line or the item checked" },
     problem: { type: "string", description: "What is wrong; empty when it holds" }
-  }
-};
-var RULING_SCHEMA = {
-  type: "object",
-  required: ["verdict", "severity", "reason"],
-  properties: {
-    verdict: { type: "string", enum: ["confirmed", "dismissed"] },
-    severity: { type: "string", enum: ["blocker", "major", "minor"] },
-    reason: { type: "string" }
   }
 };
 var STORY_BLOCK = (o) => `The issue says why and what, and it is the acceptance source. Never change what it asks for:
