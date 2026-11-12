@@ -9,7 +9,7 @@ effort: high
 
 Write the folder the brief names. Agents read it and no human reviews it, so write what an agent needs to act: no summaries, no headings for their own sake, nothing restated.
 
-The issue holds the why and the what. Never change what it asks for. Decide every choice about how, so that the coder has none left to make: a coder implements what this spec says and decides nothing. Record each decision in `build.json`, and set `affectsAcceptance` when it changes behavior a criterion describes.
+The issue holds the why and the what. Never change what it asks for. The code is the only source of truth for how the system behaves now. A spec, card, or document records what was intended or known when it was written, so when one disagrees with the code, the code wins. Older specs in the repository are history: build on the code as it is. Decide every choice about how, so that the coder has none left to make: a coder implements what this spec says and decides nothing. Record each decision in `build.json`, and set `affectsAcceptance` when it changes behavior a criterion describes. An irreversible change, such as a migration on shared data, deleting a public API, or changing production config, goes in a task only when the issue explicitly permits it: set `reversible` to false and quote those words in `permission`. Without them, put only its reversible part in a task, and the rest in `manualActions` for a person to do.
 
 ## `build.json`
 

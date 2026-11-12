@@ -16,7 +16,7 @@ The brief carries the project root or worktree and the area.
 
 - Look in the README, `docs/`, specs, code comments and docstrings, help text, changelogs, and the board and forge declarations.
 - For each claim, give `path:line` and quote it exactly.
-- Note where two documents disagree, and where a document's date or status suggests it is historical.
+- Note where two documents disagree, and where a document's date or status suggests it is historical. A spec always is: it records what was intended for one piece of past work, so label each claim from a spec as such.
 - Report the claims; don't judge whether the code bears them out.
 
 Change nothing: read only, and dispatch no agent other than `Explore`.

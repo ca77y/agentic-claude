@@ -4,10 +4,15 @@ How the plugins are built. When the code changes a decision below, update it her
 
 ## Workflows and skills
 
-- A multi-step process is a workflow under `plugins/<plugin>/workflows/`. Examples are shaping a story, delivering a change, reviewing a PR, and researching. A task that fits in one session turn is a skill, for example setup, answering from the library, or linting.
+- A multi-step process is a workflow under `plugins/<plugin>/workflows/`. Examples are shaping a story, delivering a change, and researching. A task that fits in one session turn is a skill, for example setup, answering from the library, or linting.
 - A workflow or skill runs only when the user invokes it; skills set `disable-model-invocation`. The invocation is the user's request, and each workflow states what that request authorizes.
 - The script holds all control flow. Whether to continue, retry, or stop is decided by a predicate over typed agent output, never by a prompt. An agent reports what it found and doesn't choose what runs next, and its brief carries no loop state, such as which round this is.
 - A step used by more than one workflow, such as validation or the review loop, is shared library code. It can also be exposed as a workflow of its own. A workflow doesn't start another workflow that would itself need a child.
+
+## Source of truth
+
+- The codebase is the only source of truth for how the system behaves now. Cards, specs, ledgers, and findings documents record intent or what was known when they were written. None is kept current, and no workflow trusts one for the state of the code.
+- Every workflow works out current behavior from the code, through its scouts, when it starts work. So a card holds only the why and the what: no code locations, and no description of how the code behaves today.
 
 ## Sources and build
 
@@ -65,7 +70,7 @@ An `unverified` finding doesn't block and goes in its own PR section. Whether a 
 
 - An agent that designs or writes a spec, and would ask a question, instead picks the most reasonable option, cites what grounds the choice, and continues. Each choice becomes a decision with these fields: `id`, `question`, `choice`, `rationale`, `reversible`, and `affectsAcceptance`.
 - A decision that changes behavior a criterion describes is listed as **Needs confirmation** in the PR and in the issue comment. It doesn't stop the run or keep the PR a draft. The human confirms it when reviewing the PR, and a wrong choice is corrected by a rerun with `answers`.
-- An irreversible action outside the story's scope is never taken on an assumption. Examples are a migration on shared data, deleting a public API, or changing production config. Only its reversible part is built, and the rest is recorded as deferred.
+- An irreversible change, such as a migration on shared data, deleting a public API, or changing production config, is built only when the card or prompt explicitly permits it. Otherwise only its reversible part is built, and the rest goes under **Manual actions** in the PR for a person to do. In a spec, each decision's `reversible` and `permission` fields record this, and the script sends an irreversible decision with no permission back to `writer-spec`.
 - Producers have no field that halts the run. Only the halt conditions a workflow lists stop it.
 
 ## Loops and results

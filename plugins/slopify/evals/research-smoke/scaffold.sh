@@ -34,7 +34,6 @@ Configuration does not authorize execution; the user's request does.
 
 - Branch name: `research/<slug>`.
 - Story worktree path and its ignore rule: `.worktrees/<slug>`, ignored by `.gitignore`.
-- Temp folder: `.tmp/` at the root of each checkout, ignored.
 - Cleanup after merge: the user.
 
 ## Commits and push

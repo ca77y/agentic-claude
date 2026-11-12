@@ -421,6 +421,19 @@ ${p.problem}`,
 const problemLines = (problems: readonly RuledSpecProblem[]): string[] =>
   problems.map((p) => `${p.severity}: ${p.location}: ${p.problem} (${p.reason})`);
 
+// An irreversible choice needs the issue's explicit permission. Without it, only its reversible part is built, and the
+// rest is left to a person, so the rule needs no judge.
+function unpermitted(build: Build): RuledSpecProblem[] {
+  return build.decisions
+    .filter((d) => !d.reversible && !d.permission.trim())
+    .map((d) => ({
+      location: `decision ${d.id}`,
+      problem: `"${d.choice}" can't be undone, and the issue doesn't explicitly permit it. Build only its reversible part, and move the rest to manualActions.`,
+      severity: "blocker",
+      reason: "An irreversible change needs explicit permission in the issue.",
+    }));
+}
+
 // Returns the challenged spec, or the blockers still open after the last round.
 async function challenge(o: HowInput, first: SpecResult): Promise<{ spec: SpecResult; blockers: string[] }> {
   let spec = first;
@@ -428,10 +441,13 @@ async function challenge(o: HowInput, first: SpecResult): Promise<{ spec: SpecRe
   for (let n = 1; n <= MAX_CHALLENGE_ROUNDS; n += 1) {
     phase("Challenge");
     const [checked, attacked] = await parallel([() => runChecks(o, spec), () => runAttack(o)]);
-    open = await ruleOn(o, [
-      ...must(checked, "how", "The spec's checks."),
-      ...must(attacked, "how", "The advisors' attack on the spec."),
-    ]);
+    open = [
+      ...unpermitted(spec.build),
+      ...(await ruleOn(o, [
+        ...must(checked, "how", "The spec's checks."),
+        ...must(attacked, "how", "The advisors' attack on the spec."),
+      ])),
+    ];
     const toFix = open.filter((p) => p.severity !== "minor");
     if (toFix.length === 0) return { spec, blockers: [] };
     if (n === MAX_CHALLENGE_ROUNDS) break;

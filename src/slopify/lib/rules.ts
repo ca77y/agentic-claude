@@ -144,6 +144,8 @@ export interface PrBody {
   document?: string;
   draftReasons: readonly Listed[];
   needsConfirmation: readonly Listed[];
+  /** Irreversible steps nothing explicitly permits, left for a person to do. */
+  manualActions: readonly string[];
   /** A bug's reproduction, as it behaved before the fix; the criteria table shows it after. */
   reproduced?: readonly Listed[];
   criteria: readonly CriterionRow[];
@@ -179,6 +181,7 @@ export function renderBody(b: PrBody): string {
     `Issue: ${b.issue}${b.specDir ? `\n\nSpec: \`${b.specDir}\`` : ""}${b.document ? `\n\nFindings: \`${b.document}\`` : ""}`,
     section("Why this is a draft", items(b.draftReasons)),
     section("Needs confirmation", items(b.needsConfirmation)),
+    section("Manual actions", b.manualActions.map((a) => `- ${a}`).join("\n")),
     section("Reproduced", items(b.reproduced ?? [])),
     section("Criteria", criteriaTable(b.criteria)),
     section("Assumptions", b.assumptions.map((a) => `- ${a}`).join("\n")),

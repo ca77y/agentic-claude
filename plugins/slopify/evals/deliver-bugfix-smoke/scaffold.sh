@@ -91,7 +91,6 @@ Configuration does not authorize execution; the user's request does.
 ## Workspace
 
 - Branch name: `fix/smoke`. Story worktree: `.worktrees/smoke`, created with `git worktree add .worktrees/smoke -b fix/smoke main`, or `git worktree add .worktrees/smoke fix/smoke` when the branch exists.
-- Temp folder: `.tmp/` at the root of each checkout, ignored.
 
 ## Commits and push
 

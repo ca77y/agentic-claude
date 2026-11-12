@@ -79,7 +79,6 @@ Configuration does not authorize execution; the user's request does.
 
 - Branch name: `story/smoke`. Story worktree: `.worktrees/smoke`, created with `git worktree add .worktrees/smoke -b story/smoke main`, or `git worktree add .worktrees/smoke story/smoke` when the branch exists.
 - Spike prototypes: the local branch `spike/<slug>` and the worktree `.worktrees/spike-<slug>`, from the spike's slug; the prototype is never pushed, and deleting a never-pushed prototype is allowed.
-- Temp folder: `.tmp/` at the root of each checkout, ignored.
 
 ## Commits and push
 

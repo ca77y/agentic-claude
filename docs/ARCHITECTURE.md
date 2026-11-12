@@ -9,7 +9,7 @@ Rules that hold for every plugin in this repo, whatever its current design.
   - `docs/FORGE.md`: remote, branch naming, commit convention, and PR format;
   - `TESTING.md`: how to boot, check, and validate the app.
 
-  A plugin hardcodes none of these.
+  A plugin may also rely on fixed locations of its own, such as `docs/specs/`, `docs/spikes/`, and the ignored `.tmp/`. `bootstrap` sets the project up so that each exists and is reachable.
 
 - Configuration doesn't authorize anything; the user's request does. An operation that the declarations don't bind is not performed.
 - One agent role performs every write to git, the board, and the forge: commits, pushes, branches, worktrees, issues, PRs, and comments. No other agent does any of these.

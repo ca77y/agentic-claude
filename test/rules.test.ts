@@ -159,6 +159,7 @@ describe("renderBody", () => {
     specDir: "docs/specs/smr-1-x",
     draftReasons: [],
     needsConfirmation: [],
+    manualActions: [],
     criteria: [],
     assumptions: [],
     unverified: [],

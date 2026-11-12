@@ -225,19 +225,23 @@ var TASK = {
 };
 var DECISION = {
   type: "object",
-  required: ["id", "question", "choice", "rationale", "reversible", "affectsAcceptance"],
+  required: ["id", "question", "choice", "rationale", "reversible", "permission", "affectsAcceptance"],
   properties: {
     id: { type: "string" },
     question: { type: "string" },
     choice: { type: "string" },
     rationale: { type: "string", description: "What grounds the choice" },
     reversible: { type: "boolean" },
+    permission: {
+      type: "string",
+      description: "The issue's words that explicitly permit an irreversible choice, quoted; empty when there are none"
+    },
     affectsAcceptance: { type: "boolean", description: "True when the choice changes behavior a criterion describes" }
   }
 };
 var BUILD = {
   type: "object",
-  required: ["shared", "tasks", "docs", "decisions"],
+  required: ["shared", "tasks", "docs", "decisions", "manualActions"],
   properties: {
     shared: {
       ...STRINGS,
@@ -245,7 +249,11 @@ var BUILD = {
     },
     tasks: { type: "array", items: TASK },
     docs: { ...STRINGS, description: "Documents making claims about the area the change touches; can be empty" },
-    decisions: { type: "array", items: DECISION }
+    decisions: { type: "array", items: DECISION },
+    manualActions: {
+      ...STRINGS,
+      description: "Each irreversible step the issue doesn't explicitly permit, left for a person to do; never in a task"
+    }
   }
 };
 function parsed(text) {
@@ -277,7 +285,7 @@ function must(value, step, what) {
 }
 var TEST_SCHEMA = {
   type: "object",
-  required: ["tests", "failingOutput", "noTest", "specProblem", "assumptions"],
+  required: ["tests", "failingOutput", "noTest", "specProblem", "assumptions", "manualActions"],
   properties: {
     tests: { ...STRINGS, description: "Test paths written or changed, relative to the worktree root" },
     failingOutput: { type: "string", description: "The test's failing output on the current code" },
@@ -289,12 +297,16 @@ var TEST_SCHEMA = {
     assumptions: {
       ...STRINGS,
       description: "Each trivial question you settled yourself, as the question and your choice"
+    },
+    manualActions: {
+      ...STRINGS,
+      description: "Each irreversible step you left undone because nothing explicitly permits it"
     }
   }
 };
 var FIX_SCHEMA = {
   type: "object",
-  required: ["changed", "ran", "testProblem", "specProblem", "assumptions"],
+  required: ["changed", "ran", "testProblem", "specProblem", "assumptions", "manualActions"],
   properties: {
     changed: { ...STRINGS, description: "Paths changed, relative to the worktree root" },
     ran: { ...STRINGS, description: "Each command and its result" },
@@ -306,6 +318,10 @@ var FIX_SCHEMA = {
     assumptions: {
       ...STRINGS,
       description: "Each trivial question you settled yourself, as the question and your choice"
+    },
+    manualActions: {
+      ...STRINGS,
+      description: "Each irreversible step you left undone because nothing explicitly permits it"
     }
   }
 };

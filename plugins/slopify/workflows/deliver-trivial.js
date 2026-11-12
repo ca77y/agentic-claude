@@ -527,6 +527,7 @@ Spec: \`${b.specDir}\`` : ""}${b.document ? `
 Findings: \`${b.document}\`` : ""}`,
     section("Why this is a draft", items(b.draftReasons)),
     section("Needs confirmation", items(b.needsConfirmation)),
+    section("Manual actions", b.manualActions.map((a) => `- ${a}`).join("\n")),
     section("Reproduced", items(b.reproduced ?? [])),
     section("Criteria", criteriaTable(b.criteria)),
     section("Assumptions", b.assumptions.map((a) => `- ${a}`).join("\n")),
@@ -565,19 +566,23 @@ var TASK = {
 };
 var DECISION = {
   type: "object",
-  required: ["id", "question", "choice", "rationale", "reversible", "affectsAcceptance"],
+  required: ["id", "question", "choice", "rationale", "reversible", "permission", "affectsAcceptance"],
   properties: {
     id: { type: "string" },
     question: { type: "string" },
     choice: { type: "string" },
     rationale: { type: "string", description: "What grounds the choice" },
     reversible: { type: "boolean" },
+    permission: {
+      type: "string",
+      description: "The issue's words that explicitly permit an irreversible choice, quoted; empty when there are none"
+    },
     affectsAcceptance: { type: "boolean", description: "True when the choice changes behavior a criterion describes" }
   }
 };
 var BUILD = {
   type: "object",
-  required: ["shared", "tasks", "docs", "decisions"],
+  required: ["shared", "tasks", "docs", "decisions", "manualActions"],
   properties: {
     shared: {
       ...STRINGS,
@@ -585,7 +590,11 @@ var BUILD = {
     },
     tasks: { type: "array", items: TASK },
     docs: { ...STRINGS, description: "Documents making claims about the area the change touches; can be empty" },
-    decisions: { type: "array", items: DECISION }
+    decisions: { type: "array", items: DECISION },
+    manualActions: {
+      ...STRINGS,
+      description: "Each irreversible step the issue doesn't explicitly permit, left for a person to do; never in a task"
+    }
   }
 };
 function parsed(text) {
@@ -627,7 +636,7 @@ function stopOf(d, error) {
 }
 var TEST_SCHEMA = {
   type: "object",
-  required: ["tests", "failingOutput", "noTest", "specProblem", "assumptions"],
+  required: ["tests", "failingOutput", "noTest", "specProblem", "assumptions", "manualActions"],
   properties: {
     tests: { ...STRINGS, description: "Test paths written or changed, relative to the worktree root" },
     failingOutput: { type: "string", description: "The test's failing output on the current code" },
@@ -639,12 +648,16 @@ var TEST_SCHEMA = {
     assumptions: {
       ...STRINGS,
       description: "Each trivial question you settled yourself, as the question and your choice"
+    },
+    manualActions: {
+      ...STRINGS,
+      description: "Each irreversible step you left undone because nothing explicitly permits it"
     }
   }
 };
 var FIX_SCHEMA = {
   type: "object",
-  required: ["changed", "ran", "testProblem", "specProblem", "assumptions"],
+  required: ["changed", "ran", "testProblem", "specProblem", "assumptions", "manualActions"],
   properties: {
     changed: { ...STRINGS, description: "Paths changed, relative to the worktree root" },
     ran: { ...STRINGS, description: "Each command and its result" },
@@ -656,6 +669,10 @@ var FIX_SCHEMA = {
     assumptions: {
       ...STRINGS,
       description: "Each trivial question you settled yourself, as the question and your choice"
+    },
+    manualActions: {
+      ...STRINGS,
+      description: "Each irreversible step you left undone because nothing explicitly permits it"
     }
   }
 };
@@ -823,7 +840,7 @@ ${criteria}` : "",
 ${c.item.problem.text}
 ${c.item.reason}` : "",
     answersText(l),
-    "Implement what this says. Settle a trivial question yourself, such as a name, local structure, or an obvious default that changes no behavior this describes, and return it in assumptions. If it leaves open anything else, or can't be delivered as written, return specProblem and stop.",
+    "Make no irreversible change, such as a migration on shared data, deleting a public API, or changing production config, unless this explicitly permits it: build its reversible part, and return the rest in manualActions. Implement what this says. Settle a trivial question yourself, such as a name, local structure, or an obvious default that changes no behavior this describes, and return it in assumptions. If it leaves open anything else, or can't be delivered as written, return specProblem and stop.",
     NO_WRITES
   ].filter(Boolean).join("\n\n");
 }
@@ -843,6 +860,7 @@ An earlier attempt showed the test has to change: ${reason}` : ""}`,
     `A test for ${c.id}.`
   );
   l.assumptions.push(...t.assumptions);
+  l.manualActions.push(...t.manualActions);
   if (t.specProblem) return { paths: [], commit: "", noTest: "", specProblem: t.specProblem };
   if (t.noTest || t.tests.length === 0) return { paths: [], commit: "", noTest: t.noTest, specProblem: "" };
   l.testChanges.push(...t.tests);
@@ -922,6 +940,7 @@ async function tryFix(l, c, cycle, lastFailure, attempt) {
     `A fix for ${c.id}.`
   );
   l.assumptions.push(...fix.assumptions);
+  l.manualActions.push(...fix.manualActions);
   if (fix.specProblem) return specStopped(l, c, fix.specProblem);
   if (fix.testProblem) return { reason: fix.testProblem, rewriteTest: true };
   if (fix.changed.length > 0) await commit(l, fix.changed, `implement ${c.id}`);
@@ -1329,6 +1348,7 @@ function body(l) {
       ...l.confirmations,
       ...l.decisions.filter((d) => d.affectsAcceptance).map((d) => ({ text: d.question, detail: `Chose: ${d.choice}. Why: ${d.rationale}` }))
     ],
+    manualActions: unique(l.manualActions),
     ...l.small?.reproduced && { reproduced: l.small.reproduced },
     criteria: rowsOf(l),
     assumptions: [
@@ -1422,6 +1442,7 @@ async function finish(l, ready) {
 ${list(l.newIssues.map((i) => `${i.text} ${i.detail ?? ""}`))}
 ` : "";
   const questions = [
+    ...unique(l.manualActions).map((a) => `Manual action: ${a}`),
     ...l.decisions.filter((d) => d.affectsAcceptance).map((d) => `${d.question} We chose: ${d.choice}.`),
     ...draftReasons(l).map((x) => x.text)
   ];
@@ -1493,6 +1514,7 @@ function freshLoop(input) {
     rulings: [],
     decisions: input.build?.decisions ?? [],
     assumptions: [],
+    manualActions: [...input.build?.manualActions ?? []],
     unverified: [],
     confirmations: [],
     knownDebt: [],

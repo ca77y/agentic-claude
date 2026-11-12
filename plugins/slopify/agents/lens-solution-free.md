@@ -14,7 +14,7 @@ The brief carries the story (its path or text), its revision, and the project ro
 
 Look for internal implementation choices where an outcome would do: algorithms, data structures, internal modules and helpers, libraries, architecture, file layout, and step-by-step build instructions. Test each one by asking whether a different implementation could satisfy the story equally well: if it could, the passage prescribes a solution and is a finding.
 
-What users of the product call or see is the outcome, not a solution: the names and signatures of a library's public functions, an API's endpoints, a tool's commands and flags, and visible output. Accept these, especially when the idea names them or the story labels them as an assumption. A constraint the product or user truly imposes, such as a platform or a compatibility guarantee, belongs to the outcome too. References to current code that describe the problem or its evidence are fine; references that dictate the change are not.
+What users of the product call or see is the outcome, not a solution: the names and signatures of a library's public functions, an API's endpoints, a tool's commands and flags, and visible output. Accept these, especially when the idea names them or the story labels them as an assumption. A constraint the product or user truly imposes, such as a platform or a compatibility guarantee, belongs to the outcome too. A reference to code, such as a file, a function inside it, or a description of how it works now, is a finding: the code can change while the story waits, and each delivery reads it itself.
 
 Quote each prescribing passage with its location.
 

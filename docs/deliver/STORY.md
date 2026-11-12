@@ -4,7 +4,7 @@ How `deliver-story` takes a Linear issue to a GitHub pull request (PR) whose rev
 
 ## Invariants
 
-1. Work starts from a Linear issue that `shape` marked `Deliverable`. The issue holds the why and the what, never the how.
+1. Work starts from a Linear issue that `shape` marked `Deliverable`. The issue holds the why and the what, never the how; [`CARDS.md`](CARDS.md) lists what it must hold.
 2. The spec holds the how. Agents write it and agents read it. Humans validate the issue and review the PR.
 3. Work ends in a GitHub PR.
 4. The PR is reviewed. It is marked ready only when the review is clean.
@@ -186,6 +186,7 @@ The description is rendered from the run state and updated after every round. It
   - an open `blocker` or `major`, with any ruling `judge` gave it;
   - a `cannot-verify` or `uncategorized` criterion that `TESTING.md` sets to `draft`.
 - **Needs confirmation**, near the top so that a ready PR shows what it assumed
+- **Manual actions**: irreversible steps the issue didn't explicitly permit, left for a person to do. They don't keep the PR a draft.
 - the criteria table, one row per criterion:
   - the criterion;
   - its category, or `uncategorized`;

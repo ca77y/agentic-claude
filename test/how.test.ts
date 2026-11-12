@@ -39,6 +39,7 @@ const SPEC = {
     tasks: [{ id: "t1", dependsOn: [], files: ["a.ts"], criteria: ["c1"], todo: "x", reuse: [], create: [] }],
     docs: [],
     decisions: [],
+    manualActions: [],
   },
   validate: {
     criteria: [{ id: "c1", wording: "w", category: "UI", path: "p", evidence: "e", firstTest: "t" }],
@@ -179,6 +180,50 @@ describe("the how phase", () => {
     assert.equal(count("writer-spec"), 2);
   });
 
+  test("sends an irreversible choice the issue doesn't permit back to the writer, with no judge", async () => {
+    const IRREVERSIBLE = {
+      id: "d1",
+      question: "drop the column?",
+      choice: "drop it",
+      rationale: "x",
+      reversible: false,
+      permission: "",
+      affectsAcceptance: false,
+    };
+    let specs = 0;
+    const prompts: string[] = [];
+    const r = await how(
+      happy({
+        "writer-spec": (_t, _l, prompt) => {
+          specs += 1;
+          prompts.push(prompt);
+          return specs === 1 ? { ...SPEC, build: { ...SPEC.build, decisions: [IRREVERSIBLE] } } : SPEC;
+        },
+      }),
+    );
+    assert.ok("build" in r);
+    assert.equal(specs, 2);
+    assert.ok(prompts[1]?.includes("manualActions"));
+    assert.equal(calls.filter((c) => c.type === "judge" && c.label.startsWith("rule")).length, 0);
+  });
+
+  test("builds an irreversible choice the issue explicitly permits", async () => {
+    const PERMITTED = {
+      id: "d1",
+      question: "drop the column?",
+      choice: "drop it",
+      rationale: "x",
+      reversible: false,
+      permission: "you may drop the legacy column",
+      affectsAcceptance: false,
+    };
+    const r = await how(
+      happy({ "writer-spec": () => ({ ...SPEC, build: { ...SPEC.build, decisions: [PERMITTED] } }) }),
+    );
+    assert.ok("build" in r);
+    assert.equal(count("writer-spec"), 1);
+  });
+
   test("halts on a blocker still open after every round", async () => {
     const r = await how(
       happy({
@@ -244,8 +289,8 @@ describe("deliver-story's intake", () => {
 const SMALL_AGENTS: Record<string, Script> = {
   coder: (_t, label) =>
     label.endsWith(": test")
-      ? { tests: ["t.py"], failingOutput: "red", noTest: "", specProblem: "", assumptions: [] }
-      : { changed: ["calc.py"], ran: [], testProblem: "", specProblem: "", assumptions: [] },
+      ? { tests: ["t.py"], failingOutput: "red", noTest: "", specProblem: "", assumptions: [], manualActions: [] }
+      : { changed: ["calc.py"], ran: [], testProblem: "", specProblem: "", assumptions: [], manualActions: [] },
   checks: () => ({ commands: [{ command: "unit", exitCode: 0, failingLines: "" }] }),
   qa: () => ({ ...LENS_PASS, testAtFault: false }),
   validator: () => ({

@@ -9,9 +9,9 @@ effort: medium
 
 Draft or revise the story the brief assigns, from the sources it supplies. Keep the user's requirements, facts, and citations intact, and label assumptions and design choices as such. When a fact or decision is missing, name it rather than inventing it.
 
-Write the content to the draft path the brief names, and only there, in the card shape `docs/BOARD.md` declares. Filing it is `pusher`'s job. When the draft updates an existing card, read the current card through the board's read binding first, and preserve the fields the brief doesn't ask you to change.
+Write the content to the draft path the brief names, and only there. Follow the template for the brief's kind in `${CLAUDE_PLUGIN_ROOT}/references/card-templates.md`, through the mapping `docs/BOARD.md` declares for it. Filing it is `pusher`'s job. When the draft updates an existing card, read the current card through the board's read binding first, and preserve the fields the brief doesn't ask you to change.
 
-Cover the problem and outcome, scope and exclusions, observable acceptance criteria (one behavior each), dependencies, and evidence, keeping assumptions and decisions apart. State what is wanted and why, never how to build it: no approach, design, or implementation. When the brief supplies advisor views, synthesize them and state which you adopted and why.
+Read `TESTING.md` before writing acceptance criteria: it says how each category is checked and what each permits, and every criterion must pass or fail by one of those checks. Keep assumptions and decisions apart. State what is wanted and why, never how to build it: no approach, design, or implementation. When the brief supplies advisor views, synthesize them and state which you adopted and why.
 
 Record each open decision in the draft as one line, `<!-- open-decision <id>: <question> -->`, with `id` matching `[a-z0-9-]+`, and report the same ids. When the brief supplies answers, apply each one in the draft, remove its marker, and report anything still open.
 

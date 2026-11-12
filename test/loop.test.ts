@@ -44,14 +44,22 @@ const BUILD: Build = {
   tasks: [{ id: "t1", dependsOn: [], files: ["src/a.ts"], criteria: ["c1"], todo: "do it", reuse: [], create: [] }],
   docs: [],
   decisions: [],
+  manualActions: [],
 };
 const VALIDATE: Validate = {
   criteria: [{ id: "c1", wording: "it works", category: "UI", path: "flow", evidence: "shot", firstTest: "t" }],
 };
 
 const OK_PUSH = { done: true, unmet: [], operations: [{ op: "commit", reference: "abc" }] };
-const OK_TEST = { tests: ["a.test.ts"], failingOutput: "red", noTest: "", specProblem: "", assumptions: [] };
-const OK_FIX = { changed: ["src/a.ts"], ran: [], testProblem: "", specProblem: "", assumptions: [] };
+const OK_TEST = {
+  tests: ["a.test.ts"],
+  failingOutput: "red",
+  noTest: "",
+  specProblem: "",
+  assumptions: [],
+  manualActions: [],
+};
+const OK_FIX = { changed: ["src/a.ts"], ran: [], testProblem: "", specProblem: "", assumptions: [], manualActions: [] };
 const QA_PASS = { verdict: "pass", evaluated: "x", findings: [], limits: "none", testAtFault: false };
 const QA_FAIL = {
   verdict: "fail",
@@ -558,6 +566,7 @@ describe("the PR's other sections", () => {
       choice: "yes",
       rationale: "x",
       reversible: true,
+      permission: "",
       affectsAcceptance: true,
     };
     use(happy());
@@ -565,6 +574,18 @@ describe("the PR's other sections", () => {
     assert.equal(r.status, "ready");
     assert.deepEqual(r.decisions, ["d1"]);
     assert.ok(finalPrompt().includes("## Needs confirmation"));
+  });
+
+  test("lists the spec's and the coder's manual actions, and still goes ready", async () => {
+    use(
+      happy({
+        coder: (_t, label) =>
+          label.endsWith(": test") ? OK_TEST : { ...OK_FIX, manualActions: ["drop the old table"] },
+      }),
+    );
+    const r = await runLoop(inputFor(freshRun(), { build: { ...BUILD, manualActions: ["run the backfill"] } }));
+    assert.equal(r.status, "ready");
+    assert.match(finalPrompt(), /## Manual actions[\s\S]*run the backfill[\s\S]*drop the old table/);
   });
 
   test("lists a finding only a person can settle under Needs confirmation", async () => {
@@ -761,6 +782,7 @@ describe("parallel inner loops", () => {
     ],
     docs: [],
     decisions: [],
+    manualActions: [],
   };
 
   test("runs a dependent task after the one it needs", async () => {

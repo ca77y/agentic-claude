@@ -21,7 +21,9 @@ Configuration does not authorize execution; the user's request does. An operatio
 - Identity and spec naming: {{IDENTITY}}
 - Type and priority: {{TYPE_AND_PRIORITY}}
 - Dependencies: {{DEPENDENCIES}}
-- Body and acceptance criteria format: {{BODY_AND_ACCEPTANCE}}
+- Story format: {{STORY_TEMPLATE_MAPPING}}
+- Bug format: {{BUG_TEMPLATE_MAPPING}}
+- Spike format: {{SPIKE_TEMPLATE_MAPPING}}
 - Deliverable: the label `Deliverable` marks a card as written by the shaping process, and is added when that process files or updates it. Only a card with this label can go through a full story delivery.
 - Unreproducible: the label `Unreproducible` marks a Bug card whose bug an automated fix could not reproduce.
 
