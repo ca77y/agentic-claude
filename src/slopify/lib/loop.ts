@@ -247,7 +247,8 @@ interface ReviewOutcome {
 }
 
 interface LoopDocument {
-  path: string;
+  /** The documents the PR adds, which its description names. */
+  paths: readonly string[];
   /** The document's checks, as problems for the judge. */
   check: () => Promise<Problem[]>;
   /** Revise the document to fix these problems, and return the paths changed. */
@@ -270,7 +271,7 @@ export interface LoopInput {
   built: boolean;
   /** The short flow for a trivial story or a bug: no spec, and what the first test has to state. */
   small?: { firstTest: string; reproduced?: readonly Listed[] };
-  /** A spike's flow: the PR changes one document, which its own checks validate and its own writer revises. */
+  /** A spike's or a research run's flow: the PR changes documents, which their own checks validate and their own writer revises. */
   document?: LoopDocument;
   /** Advisors and the writer revise the spec for these problems, and return the tasks to run again. */
   reviseSpec?: (problems: readonly string[]) => Promise<{ build: Build; validate: Validate; rerun: Task[] }>;
@@ -633,7 +634,7 @@ async function findDocs(l: Loop): Promise<void> {
   l.docs = must(found, "build", "The documents the change affects.").evidence.map((e) => e.source);
 }
 
-// The document is all the PR changes, so whatever kind of fix a problem needs, the document's writer makes it.
+// The documents are all the PR changes, so whatever kind of fix a problem needs, their writer makes it.
 async function reviseDocument(l: Loop, doc: LoopDocument, items: readonly OpenItem[]): Promise<void> {
   if (items.length === 0) return;
   const changed = await doc.revise(items.map((i) => `${i.problem.location}: ${i.problem.text}`));
@@ -940,7 +941,7 @@ function body(l: Loop): string {
   return renderBody({
     issue: l.cardId || "none",
     specDir: l.specDir,
-    ...(l.document && { document: l.document.path }),
+    ...(l.document && { documents: l.document.paths }),
     draftReasons: draftReasons(l),
     needsConfirmation: [
       ...l.confirmations,

@@ -554,9 +554,9 @@ function renderBody(b) {
   return [
     `Issue: ${b.issue}${b.specDir ? `
 
-Spec: \`${b.specDir}\`` : ""}${b.document ? `
+Spec: \`${b.specDir}\`` : ""}${b.documents?.length ? `
 
-Findings: \`${b.document}\`` : ""}`,
+Findings: ${b.documents.map((p) => `\`${p}\``).join(", ")}` : ""}`,
     section("Why this is a draft", items(b.draftReasons)),
     section("Needs confirmation", items(b.needsConfirmation)),
     section("Manual actions", b.manualActions.map((a) => `- ${a}`).join("\n")),
@@ -1391,7 +1391,7 @@ function body(l) {
   return renderBody({
     issue: l.cardId || "none",
     specDir: l.specDir,
-    ...l.document && { document: l.document.path },
+    ...l.document && { documents: l.document.paths },
     draftReasons: draftReasons(l),
     needsConfirmation: [
       ...l.confirmations,
@@ -2139,7 +2139,7 @@ Report these keys, each as an evidence item with source set to the key; leave ou
 - pr: the PR reference
 - done-board-start: the last "done board-start" ledger line
 - done-round: the last "done round" ledger line
-- done-findings: the path in the last "done findings" ledger line
+- done-findings: the paths in the last "done findings" ledger line, space-separated
 - reproduced: the last ledger line that contains "reproduced {"
 - review-fired: the highest <n> among the ledger's "review <n> fired" lines
 - spec-dir: ${specDir ? `the folder ${specDir}, if it exists in the worktree` : 'the spec folder the PR description names after "Spec:"'}, relative to the worktree root
@@ -2163,7 +2163,7 @@ Report these keys, each as an evidence item with source set to the key; leave ou
     reviewFired: Number(/\d+/.exec(val(cp, "review-fired"))?.[0] ?? 0),
     built: !!val(cp, "done-round"),
     boardStartDone: !!val(cp, "done-board-start"),
-    findings: shaped("rel", val(cp, "done-findings")),
+    findings: val(cp, "done-findings").split(/\s+/).map((p) => shaped("rel", p)).filter(Boolean),
     reproduced: parseReproduction(fact(cp, "reproduced"))
   };
 }

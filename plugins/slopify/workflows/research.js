@@ -1,15 +1,23 @@
 export const meta = {
   "name": "research",
-  "description": "Investigate a question from new sources and persist the evidence and a cited synthesis in the project library, which a fresh library-clerk must pass before the workflow reports done",
-  "whenToUse": "Run only when the user invokes /slopify:research or asks for the slopify research workflow. Answers from the existing library belong to the ask skill. Args: {question, projectRoot?}, or the question as a plain string; projectRoot defaults to the session project directory.",
+  "description": "Answer a question from new sources in the project library, from a Linear issue or a prompt, delivered as a pull request: a checked plan, one researcher per sub-question, one raw note per source, and wiki pages that answer the question, which go through the delivery loop's checks and review until they are clean",
+  "whenToUse": "Run only when the user invokes /slopify:research or asks for the slopify research workflow. Answers from the existing library belong to the ask skill. Args: {question, projectRoot?, answers?}, or the question as a plain string; question is a card identifier or URL, or the question as a prompt; projectRoot defaults to the session project directory.",
   "phases": [
     {
-      "title": "Context",
+      "title": "Locate",
+      "detail": "scout-card reads the issue, or pusher files a card for a prompt"
+    },
+    {
+      "title": "Workspace",
+      "detail": "pusher creates or recovers the worktree and branch"
+    },
+    {
+      "title": "Ground",
       "detail": "library-reader reports what the library already supports"
     },
     {
-      "title": "Spec",
-      "detail": "library-scribe writes the research spec; a fresh library-clerk must pass it"
+      "title": "Plan",
+      "detail": "library-scribe writes the plan; library-clerk checks it and a judge rules, up to three rounds"
     },
     {
       "title": "Retrieve",
@@ -17,11 +25,27 @@ export const meta = {
     },
     {
       "title": "Persist",
-      "detail": "library-scribe raw notes, then one integrator for synthesis and metadata"
+      "detail": "one library-scribe per source writes its raw note, then one integrates the wiki pages"
     },
     {
       "title": "Validate",
-      "detail": "a fresh library-clerk judges the persisted research"
+      "detail": "checks and library-clerk on the changed files"
+    },
+    {
+      "title": "Judge",
+      "detail": "one judge per problem gives its severity and kind"
+    },
+    {
+      "title": "Build",
+      "detail": "library-scribe repairs the pages for each open problem"
+    },
+    {
+      "title": "Push",
+      "detail": "pusher pushes, opens or updates the PR, and fires the review"
+    },
+    {
+      "title": "Review",
+      "detail": "watcher reads the review, and one judge rules on each finding"
     }
   ]
 };
@@ -63,6 +87,33 @@ var SCOUT_SCHEMA = {
     }
   }
 };
+var LENS_SCHEMA = {
+  type: "object",
+  required: ["verdict", "evaluated", "findings", "limits"],
+  properties: {
+    verdict: { type: "string", enum: ["pass", "fail", "unverified"] },
+    evaluated: { type: "string", description: "The exact revision judged" },
+    findings: {
+      type: "array",
+      items: {
+        type: "object",
+        required: ["location", "problem", "blocking"],
+        properties: {
+          location: {
+            type: "string",
+            description: "path:line or the item judged"
+          },
+          problem: { type: "string" },
+          blocking: { type: "boolean" }
+        }
+      }
+    },
+    limits: {
+      type: "string",
+      description: 'Checks that could not run and the missing prerequisite, or "none"'
+    }
+  }
+};
 var ADVISOR_SCHEMA = {
   type: "object",
   required: ["judgement", "reasons", "risks", "conditions"],
@@ -92,30 +143,82 @@ var ADVISOR_SCHEMA = {
     }
   }
 };
-
-// src/slopify/lib/input.ts
-function isRecord(v) {
-  return typeof v === "object" && v !== null;
+function familyAgent(prefix, schema, name, prompt, opts) {
+  if (!name.startsWith(prefix)) throw new Error(`${name} is not a ${prefix}* agent`);
+  return agent(prompt, { ...opts, agentType: `slopify:${name}`, schema });
 }
-function inputOf(a, primary, numbers = false) {
-  if (typeof a !== "string") return isRecord(a) ? a : {};
-  const text = a.trim();
-  try {
-    const parsed = JSON.parse(text);
-    if (isRecord(parsed)) return parsed;
-    if (typeof parsed === "string" || numbers && typeof parsed === "number") {
-      return { [primary]: String(parsed).trim() };
-    }
-  } catch {
-  }
-  return { [primary]: text };
+var scout = (name, prompt, opts) => familyAgent("scout-", SCOUT_SCHEMA, name, prompt, opts);
+var lens = (name, prompt, opts) => familyAgent("lens-", LENS_SCHEMA, name, prompt, opts);
+function fact(result, key) {
+  const hit = result?.evidence.find((e) => e.source === key);
+  return hit ? (hit.excerpt || hit.location || "").trim() : "";
 }
-var textOf = (v) => typeof v === "string" ? v.trim() : "";
-function whereOf(projectRoot) {
-  return projectRoot ? `The project is at ${projectRoot}; address files by absolute path under it.` : "The project is the session project directory; address files by absolute path.";
+function absent(v, whole) {
+  const t = (v ?? "").trim();
+  if (!t) return true;
+  const word = String.raw`(?:none|absent|missing|n\/a|not found)`;
+  const re = new RegExp(whole ? String.raw`^${word}\s*(?:\([^)]*\))?[.:]?$` : String.raw`^${word}(?![\w/-]|\.\w)`, "i");
+  return re.test(t);
+}
+var SHAPES = {
+  path: /^\/(?:[^\n]*[^\s.,;:])?$/,
+  rel: /^[\w@.+[\]-][\w@.+()[\]/-]*$/,
+  sha: /^[0-9a-f]{7,64}$/i,
+  branch: /^\w[\w./-]*$/,
+  // eslint-disable-next-line sonarjs/super-linear-regex, sonarjs/regex-complexity, regexp/no-super-linear-backtracking -- matched against one short line from a scout
+  ref: /^(?:https?:\/\/\S+|(?:PR ?)?#?\d+|[\w@.+/#-]+(?: ?\d+)?)$/i,
+  rev: /^[\w@.+/-]+@[0-9a-f]{7,64}$/i,
+  id: /^#?[A-Z0-9][^\s()<>]{0,199}$/i
+};
+var TRAILING_STOP = /* @__PURE__ */ new Set([".", ",", ";", ":"]);
+function unremark(kind, text) {
+  const remark = kind === "path" ? /\s+[([][^)\]]*[)\]]$/ : /\s+[([].*$/;
+  let t = text;
+  let prev;
+  do {
+    prev = t;
+    t = t.replace(remark, "");
+    while (TRAILING_STOP.has(t.at(-1) ?? "")) t = t.slice(0, -1);
+  } while (t !== prev);
+  return t;
+}
+function shaped(kind, v) {
+  const re = SHAPES[kind];
+  const t = ((v ?? "").split("\n", 1)[0] ?? "").trim();
+  if (absent(t)) return "";
+  const tok = unremark(kind, t);
+  if (tok && re.test(tok)) return tok;
+  return re.test(t) ? t : "";
+}
+function hashOf(text) {
+  let h = 5381;
+  for (const ch of text) h = (h * 33 ^ (ch.codePointAt(0) ?? 0)) >>> 0;
+  return h.toString(36).padStart(6, "0");
+}
+function slugged(text, fallback) {
+  const norm = (text || "").toLowerCase().replaceAll(/[^a-z0-9]+/g, " ").trim();
+  const words = norm.split(" ").filter(Boolean).slice(0, 6).join("-");
+  return norm ? `${words}-${hashOf(norm)}` : fallback || "item";
+}
+function rerunText(workflow, needs) {
+  const cmd = `/slopify:${workflow}`;
+  const list2 = needs ?? [];
+  const viaArg = list2.filter((n) => n.arg);
+  const answerable = list2.some((n) => !n.arg && (n.kind === "decision" || n.kind === "input"));
+  const argText = viaArg.length > 0 ? ` Give ${viaArg.map((n) => `${n.id} in args.${n.arg ?? ""}`).join(" and ")}, not in answers.` : "";
+  return list2.length > 0 && list2.every((n) => n.kind === "decision") ? `Invoke ${cmd} again with the same args and add answers.<id> for each decision. In this session, pass resumeFromRunId to reuse the steps already completed.` : `Resolve what each need names, then invoke ${cmd} again with the same args${answerable ? " and answers.<id> for each decision or input need" : ""}, without resumeFromRunId, so every step reads the repository afresh.${argText}`;
+}
+function blocked(workflow, step, needs, extra = {}) {
+  return { status: "blocked", workflow, step, needs, rerun: rerunText(workflow, needs), ...extra };
 }
 
 // src/slopify/lib/schemas.ts
+function described(schema, description) {
+  return description === void 0 ? schema : { ...schema, description };
+}
+function arrayOf(items2, description) {
+  return description === void 0 ? { type: "array", items: items2 } : { type: "array", description, items: items2 };
+}
 function libraryReaderSchema(subject) {
   return {
     type: "object",
@@ -127,849 +230,1865 @@ function libraryReaderSchema(subject) {
     }
   };
 }
-
-// src/slopify/lib/text.ts
-function withoutTrailing(text, chars) {
-  let t = text;
-  while (t.length > 0 && chars.includes(t.slice(-1))) t = t.slice(0, -1);
-  return t;
-}
-
-// src/slopify/workflows/research.ts
-var BOUNDS = "Research informs decisions: make no product decisions, file no tickets, implement nothing, and publish nothing.";
-var MAX_FAILURES = 3;
-var MAX_RETRIEVAL_TRIES = 2;
-var CONTEXT_SCHEMA = libraryReaderSchema("the question");
-var SPEC_SCHEMA = {
-  type: "object",
-  required: ["path", "revision", "date", "subQuestions", "changedSubQuestions", "plannedRawNotes"],
-  properties: {
-    path: { type: "string", description: "Absolute path of the spec" },
-    date: { type: "string", description: "Today's date as YYYY-MM-DD, the one the spec and the raw-note names use" },
-    plannedRawNotes: {
-      type: "array",
-      description: "The raw notes the research will produce: one note per canonical source, as the library conventions require, at the path the conventions name for raw notes. The same plan is written in the spec as its planned artifacts",
-      items: {
-        type: "object",
-        required: ["path", "source", "subQuestions"],
-        properties: {
-          path: {
-            type: "string",
-            description: "Absolute path of the raw note, derived from the source (never from a sub-question id)"
-          },
-          source: {
-            type: "string",
-            description: "The canonical source the note records: a URL, or a project file path"
-          },
-          subQuestions: { ...STRINGS, description: "Ids of the sub-questions whose evidence belongs in this note" }
-        }
-      }
-    },
-    revision: {
-      type: "string",
-      description: "A digest of the exact revision written, such as a content hash or line count with the last heading"
-    },
-    subQuestions: {
-      type: "array",
-      description: "The bounded sub-questions to retrieve, each with a short stable id",
-      items: {
-        type: "object",
-        required: ["id", "question"],
-        properties: { id: { type: "string" }, question: { type: "string" } }
-      }
-    },
-    changedSubQuestions: {
-      ...STRINGS,
-      description: "Ids of sub-questions that are new or whose retrieval must be redone after a revision; all ids for the first draft"
-    }
-  }
-};
-function SPEC_ISSUE_SCHEMA(doing) {
+function pusherSchema(notes = {}) {
   return {
     type: "object",
-    required: ["material", "change"],
+    required: ["done", "operations", "unmet"],
     properties: {
-      material: {
-        type: "boolean",
-        description: `true only if, while ${doing}, you found that the spec's question, scope, evidence standards, or planned artifacts must change for the research to be sound; false for anything else, including minor notes`
-      },
-      change: {
-        type: "string",
-        description: "When material is true, the change needed and which of question, scope, evidence standards, or planned artifacts it moves; otherwise an empty string"
-      }
+      done: { type: "boolean" },
+      operations: arrayOf({
+        type: "object",
+        required: ["op", "result", "reference"],
+        properties: {
+          op: { type: "string" },
+          result: { type: "string" },
+          reference: described({ type: "string" }, notes.reference)
+        }
+      }),
+      unmet: described(STRINGS, notes.unmet)
     }
   };
 }
-var VERDICT_SCHEMA = {
+var RULING_SCHEMA = {
   type: "object",
-  required: ["verdict", "findings", "evidence", "specIssue"],
+  required: ["verdict", "severity", "reason"],
+  properties: {
+    verdict: { type: "string", enum: ["confirmed", "dismissed"] },
+    severity: { type: "string", enum: ["blocker", "major", "minor"] },
+    reason: { type: "string" }
+  }
+};
+
+// src/slopify/lib/deliver.ts
+var PUSHER_SCHEMA = pusherSchema({ reference: "A commit sha, PR URL or path, card id, or worktree path" });
+var NO_WRITES = "Do not commit, push, branch, or change the board or forge; pusher does that.";
+function need(step, n, kind, what, evidence) {
+  return { id: `${step}-${n}`, kind, what, evidence: evidence || "" };
+}
+var list = (items2) => items2?.length ? items2.map((x) => `- ${x}`).join("\n") : "- none";
+var slugOf = (s) => (s || "").toLowerCase().replaceAll(/[^a-z0-9]+/g, " ").trim().split(/\s+/).slice(0, 6).join("-");
+var clean = (v) => absent(v) ? "" : (v ?? "").trim();
+var val = (res, key) => clean(fact(res, key));
+function unique(items2) {
+  return [...new Set(items2.filter(Boolean))];
+}
+var pushOk = (r) => !!r && r.done && r.unmet.length === 0;
+var opRef = (r, name) => {
+  const o = (r?.operations ?? []).find((x) => x.op.toLowerCase() === name);
+  return o ? o.reference.trim() : "";
+};
+function callDocsWriter(prompt, label, phaseTitle, schema) {
+  return agent(prompt, { agentType: "slopify:writer-docs", label, phase: phaseTitle, schema });
+}
+function callCoder(prompt, label, phaseTitle, schema) {
+  return agent(prompt, { agentType: "slopify:coder", label, phase: phaseTitle, schema });
+}
+function callPusher(prompt, label, phaseTitle) {
+  return agent(prompt, { agentType: "slopify:pusher", label, phase: phaseTitle, schema: PUSHER_SCHEMA });
+}
+function createDeliver(config) {
+  const { workflow: WORKFLOW2, projectRoot, storyArg } = config;
+  const WHERE = projectRoot ? `The project is at ${projectRoot}; address files by absolute path under it.` : "The project is the session project directory; address files by absolute path.";
+  const AUTH = `Authorization, from the user's invocation of /slopify:${WORKFLOW2}: the story branch and worktree, attributable commits, the pushes the brief asks for, opening or updating this task's PR as a draft or ready, the declared review trigger, the one issue comment and label the brief asks for when the run ends or halts, and filing the issues the brief lists. It does not authorize merging, releases, any other message, rewriting docs/BOARD.md or docs/FORGE.md, or changing a card's content. Work exactly as docs/BOARD.md and docs/FORGE.md declare; an operation that is not bound is unmet, never improvised. Stage explicit paths only.`;
+  const completed = [];
+  const state = {
+    worktree: "",
+    branch: "",
+    ledger: "",
+    pr: ""
+  };
+  let runLinePending = true;
+  function done(step) {
+    completed.push(step);
+  }
+  function skip(step) {
+    completed.push(step);
+  }
+  function stop(step, needs) {
+    const checkpoint = {};
+    if (state.worktree) checkpoint.worktree = state.worktree;
+    if (state.branch) checkpoint.branch = state.branch;
+    if (state.ledger) checkpoint.ledger = state.ledger;
+    if (state.pr) checkpoint.pr = state.pr;
+    return blocked(WORKFLOW2, step, needs, {
+      completed: [...completed],
+      checkpoint
+    });
+  }
+  function takeLines(lines) {
+    const out = [];
+    if (runLinePending) {
+      out.push(
+        `run <n, one more than the highest run number in the ledger, or 1>: ${WORKFLOW2} ${storyArg.replaceAll(/\s+/g, " ").slice(
+          0,
+          80
+        )} | worktree ${state.worktree || "<the worktree path>"} | branch ${state.branch || "<the branch name>"}`
+      );
+      runLinePending = false;
+    }
+    return [...out, ...lines ?? []];
+  }
+  function pushBrief(instruction, lines, ledgerNote) {
+    const ln = takeLines(lines);
+    return `${WHERE}
+You are the only agent in this workflow that acts on the board and forge. ${AUTH}
+
+Worktree: ${state.worktree || "(not created yet)"}. Ledger: ${ledgerNote || `${state.worktree}/.tmp/ledger.md`}.
+
+${instruction}
+
+${ln.length > 0 ? `Append these lines, in this order, to the ledger (create it, with its directory, if absent). Stamp each with the current time in front and fill every <placeholder> from what you just did:
+${ln.map((l) => `- ${l}`).join("\n")}` : "Append no ledger lines."}
+
+Report each operation you performed as an operations entry, named worktree, branch, delivery-start, commit, push, pr, review-trigger, or ledger, with its reference. Set done only when every operation asked for is complete; list each one that is unbound or failed in unmet.`;
+  }
+  function pushStop(step, r) {
+    return stop(step, [
+      need(
+        step,
+        1,
+        "prerequisite",
+        "An operation that docs/BOARD.md or docs/FORGE.md bind, and the authorization to run it.",
+        r ? r.unmet.join("; ") || "pusher reported the work incomplete" : "pusher did not return"
+      )
+    ]);
+  }
+  return { WHERE, state, done, skip, stop, pushBrief, pushStop };
+}
+
+// src/slopify/lib/input.ts
+function isRecord(v) {
+  return typeof v === "object" && v !== null;
+}
+function inputOf(a, primary, numbers = false) {
+  if (typeof a !== "string") return isRecord(a) ? a : {};
+  const text = a.trim();
+  try {
+    const parsed2 = JSON.parse(text);
+    if (isRecord(parsed2)) return parsed2;
+    if (typeof parsed2 === "string" || numbers && typeof parsed2 === "number") {
+      return { [primary]: String(parsed2).trim() };
+    }
+  } catch {
+  }
+  return { [primary]: text };
+}
+var textOf = (v) => typeof v === "string" ? v.trim() : "";
+function answerValue(x) {
+  const text = String(x);
+  return x === null || x === void 0 || typeof x === "string" || typeof x === "number" || typeof x === "boolean" ? x : text;
+}
+function answersOf(v) {
+  return isRecord(v) && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, answerValue(x)])) : {};
+}
+
+// src/slopify/lib/rules.ts
+var MAX_FIX_ROUNDS = 3;
+var MAX_INNER_TRIES = 3;
+var isBlocking = (r) => r.severity === "blocker" || r.severity === "major";
+function routeOf(r, priorFixes, differentlyUsed, hasSpec) {
+  if (r.verdict === "dismissed") return "dismiss";
+  if (r.verdict === "unverified") return "unverified";
+  if (r.kind === "cannot-verify") return "not-validated";
+  if (r.kind === "decision") return "needs-confirmation";
+  if (r.severity === "pre-existing") return "new-issue";
+  if (!isBlocking(r)) return "suggestion";
+  if (priorFixes > 0) {
+    const recurring = recurrenceRoute(r, differentlyUsed);
+    if (recurring) return recurring;
+  }
+  if (r.kind === "docs") return "writer";
+  if (r.kind === "test") return "correct-test";
+  return r.kind === "spec" && hasSpec ? "revise-spec" : "coder";
+}
+function recurrenceRoute(r, differentlyUsed) {
+  if (r.ruling === "accept-as-debt") return r.severity === "major" ? "known-debt" : "escalate";
+  if (r.ruling === "split-to-issue") return r.severity === "major" ? "split-issue" : "escalate";
+  if (r.ruling === "fix-differently") return differentlyUsed ? "escalate" : null;
+  return "escalate";
+}
+var FIX_ROUTES = ["coder", "correct-test", "writer", "revise-spec"];
+function gate(s) {
+  if (!s.prOpen || !s.reviewClean || s.open > 0) return "fix";
+  return s.held > 0 ? "held" : "clean";
+}
+function noProgress(openByRound) {
+  const [a, b, c] = openByRound.slice(-3);
+  return a !== void 0 && b !== void 0 && c !== void 0 && b >= a && c >= b;
+}
+var allowsReady = (setting) => setting?.trim() === "ready";
+var samePath = (a, b) => a === b || a.startsWith(`${b}/`) || b.startsWith(`${a}/`);
+var filesOverlap = (x, y) => x.files.some((a) => y.files.some((b) => samePath(a, b)));
+function waves(tasks) {
+  const out = [];
+  const finished = /* @__PURE__ */ new Set();
+  let left = [...tasks];
+  while (left.length > 0) {
+    const ready = left.filter((t) => t.dependsOn.every((d) => finished.has(d)));
+    const pool = ready.length > 0 ? ready : left;
+    const group = [];
+    for (const t of pool) {
+      if (group.every((g) => !filesOverlap(g, t))) group.push(t);
+    }
+    out.push(group);
+    for (const t of group) finished.add(t.id);
+    left = left.filter((t) => !group.includes(t));
+  }
+  return out;
+}
+var items = (list2) => list2.map((x) => `- ${x.text}${x.detail ? `
+  ${x.detail}` : ""}`).join("\n");
+var cell = (s) => s.replaceAll("|", String.raw`\|`).replaceAll("\n", " ");
+var section = (title, body2) => body2 ? `## ${title}
+
+${body2}` : "";
+function criteriaTable(rows) {
+  if (rows.length === 0) return "";
+  const lines = rows.map(
+    (c) => `| ${cell(c.wording)} | ${cell(c.category)} | ${cell(c.path)} | ${cell(c.result)} | ${cell(c.evidence.join(", "))} |`
+  );
+  return [
+    "| Criterion | Category | Validation path | Result | Evidence |",
+    "| --- | --- | --- | --- | --- |",
+    ...lines
+  ].join("\n");
+}
+function renderBody(b) {
+  return [
+    `Issue: ${b.issue}${b.specDir ? `
+
+Spec: \`${b.specDir}\`` : ""}${b.documents?.length ? `
+
+Findings: ${b.documents.map((p) => `\`${p}\``).join(", ")}` : ""}`,
+    section("Why this is a draft", items(b.draftReasons)),
+    section("Needs confirmation", items(b.needsConfirmation)),
+    section("Manual actions", b.manualActions.map((a) => `- ${a}`).join("\n")),
+    section("Reproduced", items(b.reproduced ?? [])),
+    section("Criteria", criteriaTable(b.criteria)),
+    section("Assumptions", b.assumptions.map((a) => `- ${a}`).join("\n")),
+    section("Unverified findings", items(b.unverified)),
+    section("Not validated", items(b.notValidated)),
+    section("Known debt", items(b.knownDebt)),
+    section("Suggestions", items(b.suggestions)),
+    section("Test changes", b.testChanges.map((t) => `- ${t}`).join("\n"))
+  ].filter(Boolean).join("\n\n");
+}
+var isReproduction = (v) => typeof v === "object" && v !== null && "steps" in v && Array.isArray(v.steps) && "observed" in v;
+function parseReproduction(line) {
+  const at = line.indexOf("{");
+  if (at === -1) return null;
+  try {
+    const v = JSON.parse(line.slice(at));
+    return isReproduction(v) ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+// src/slopify/lib/spec.ts
+var TASK = {
+  type: "object",
+  required: ["id", "dependsOn", "files", "criteria", "todo", "reuse", "create"],
+  properties: {
+    id: { type: "string" },
+    dependsOn: { ...STRINGS, description: "Ids of the tasks this one needs finished first" },
+    files: { ...STRINGS, description: "Files or directories this task may write, relative to the worktree root" },
+    criteria: { ...STRINGS, description: "Ids of the criteria this task delivers" },
+    todo: { type: "string", description: "What to do, including anything only this task needs" },
+    reuse: { ...STRINGS, description: "What already exists and must be used, not rebuilt" },
+    create: { ...STRINGS, description: "What this task creates" }
+  }
+};
+var DECISION = {
+  type: "object",
+  required: ["id", "question", "choice", "rationale", "reversible", "permission", "affectsAcceptance"],
+  properties: {
+    id: { type: "string" },
+    question: { type: "string" },
+    choice: { type: "string" },
+    rationale: { type: "string", description: "What grounds the choice" },
+    reversible: { type: "boolean" },
+    permission: {
+      type: "string",
+      description: "The issue's words that explicitly permit an irreversible choice, quoted; empty when there are none"
+    },
+    affectsAcceptance: { type: "boolean", description: "True when the choice changes behavior a criterion describes" }
+  }
+};
+var BUILD = {
+  type: "object",
+  required: ["shared", "tasks", "docs", "decisions", "manualActions"],
+  properties: {
+    shared: {
+      ...STRINGS,
+      description: "Constraints and interfaces every task of this story must follow; never a repeated project rule"
+    },
+    tasks: { type: "array", items: TASK },
+    docs: { ...STRINGS, description: "Documents making claims about the area the change touches; can be empty" },
+    decisions: { type: "array", items: DECISION },
+    manualActions: {
+      ...STRINGS,
+      description: "Each irreversible step the issue doesn't explicitly permit, left for a person to do; never in a task"
+    }
+  }
+};
+function parsed(text) {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+var isBuild = (v) => typeof v === "object" && v !== null && "tasks" in v;
+var isValidate = (v) => typeof v === "object" && v !== null && "criteria" in v;
+function parseBuild(text) {
+  const v = parsed(text);
+  return isBuild(v) ? v : null;
+}
+function parseValidate(text) {
+  const v = parsed(text);
+  return isValidate(v) ? v : null;
+}
+
+// src/slopify/lib/loop.ts
+var Halt = class extends Error {
+  step;
+  needs;
+  constructor(step, needs, evidence) {
+    super(evidence);
+    this.step = step;
+    this.needs = needs;
+  }
+};
+function must(value, step, what) {
+  if (value === null || value === void 0) throw new Halt(step, what, "the agent did not return");
+  return value;
+}
+function stopOf(d, error) {
+  if (error instanceof Halt)
+    return d.stop(error.step, [need(error.step, 1, "prerequisite", error.needs, error.message)]);
+  throw error;
+}
+var TEST_SCHEMA = {
+  type: "object",
+  required: ["tests", "failingOutput", "noTest", "specProblem", "assumptions", "manualActions"],
+  properties: {
+    tests: { ...STRINGS, description: "Test paths written or changed, relative to the worktree root" },
+    failingOutput: { type: "string", description: "The test's failing output on the current code" },
+    noTest: { type: "string", description: "Why the behavior can't be expressed as a test; empty when it can" },
+    specProblem: {
+      type: "string",
+      description: "What the brief doesn't settle or can't deliver as written; empty when none"
+    },
+    assumptions: {
+      ...STRINGS,
+      description: "Each trivial question you settled yourself, as the question and your choice"
+    },
+    manualActions: {
+      ...STRINGS,
+      description: "Each irreversible step you left undone because nothing explicitly permits it"
+    }
+  }
+};
+var FIX_SCHEMA = {
+  type: "object",
+  required: ["changed", "ran", "testProblem", "specProblem", "assumptions", "manualActions"],
+  properties: {
+    changed: { ...STRINGS, description: "Paths changed, relative to the worktree root" },
+    ran: { ...STRINGS, description: "Each command and its result" },
+    testProblem: { type: "string", description: "Why the test is wrong; empty when it isn't" },
+    specProblem: {
+      type: "string",
+      description: "What the brief doesn't settle or can't deliver as written; empty when none"
+    },
+    assumptions: {
+      ...STRINGS,
+      description: "Each trivial question you settled yourself, as the question and your choice"
+    },
+    manualActions: {
+      ...STRINGS,
+      description: "Each irreversible step you left undone because nothing explicitly permits it"
+    }
+  }
+};
+var QA_SCHEMA = {
+  type: "object",
+  required: [...LENS_SCHEMA.required, "testAtFault"],
+  properties: {
+    ...LENS_SCHEMA.properties,
+    testAtFault: { type: "boolean", description: "True when the test itself is what has to change" }
+  }
+};
+var CHECKS_SCHEMA = {
+  type: "object",
+  required: ["commands"],
+  properties: {
+    commands: {
+      type: "array",
+      items: {
+        type: "object",
+        required: ["command", "exitCode", "failingLines"],
+        properties: {
+          command: { type: "string" },
+          exitCode: { type: "number" },
+          failingLines: { type: "string" }
+        }
+      }
+    }
+  }
+};
+var VALIDATOR_SCHEMA = {
+  type: "object",
+  required: ["results", "uncategorizedSetting"],
+  properties: {
+    results: {
+      type: "array",
+      items: {
+        type: "object",
+        required: ["id", "result", "ran", "evidence", "detail", "setting"],
+        properties: {
+          id: { type: "string" },
+          result: { type: "string", enum: ["pass", "fail", "cannot-verify"] },
+          ran: { type: "string", description: "The validation path that ran: its commands, flows, or tests" },
+          evidence: { ...STRINGS, description: "Paths under .tmp/evidence/ or quoted output" },
+          detail: { type: "string", description: "For a fail, the flow step or file and line; else why" },
+          setting: { type: "string", description: "What TESTING.md's category states when it can't be verified" }
+        }
+      }
+    },
+    uncategorizedSetting: { type: "string", description: "What TESTING.md's Uncategorized setting states" }
+  }
+};
+var JUDGE_SCHEMA = {
+  type: "object",
+  required: ["verdict", "severity", "kind", "ruling", "reason", "fingerprint"],
+  properties: {
+    verdict: { type: "string", enum: ["confirmed", "dismissed", "unverified"] },
+    severity: { type: "string", enum: ["blocker", "major", "minor", "nit", "pre-existing", "none"] },
+    kind: { type: "string", enum: ["code", "test", "docs", "spec", "cannot-verify", "decision"] },
+    ruling: { type: "string", enum: ["none", "fix-differently", "accept-as-debt", "split-to-issue", "escalate"] },
+    reason: { type: "string", description: "What the evidence shows" },
+    fingerprint: { type: "string", description: "file|symbol|category, the same whenever this problem comes back" }
+  }
+};
+var GATEWAY_SCHEMA = {
+  type: "object",
+  required: ["missed", "docsToAdd"],
+  properties: {
+    missed: {
+      type: "array",
+      items: {
+        type: "object",
+        required: ["location", "text"],
+        properties: { location: { type: "string" }, text: { type: "string" } }
+      }
+    },
+    docsToAdd: { ...STRINGS, description: "Documents the change affects that aren't on the docs list" }
+  }
+};
+var WATCHER_SCHEMA = {
+  type: "object",
+  required: ["outcome", "waitingFor", "limitMinutes", "reference", "findings"],
+  properties: {
+    outcome: { type: "string", enum: ["finished", "failed", "timed-out", "pending", "not-declared"] },
+    waitingFor: { type: "string", enum: ["start", "finish", ""] },
+    limitMinutes: { type: "number" },
+    reference: { type: "string" },
+    findings: {
+      type: "array",
+      items: {
+        type: "object",
+        required: ["id", "location", "text"],
+        properties: { id: { type: "string" }, location: { type: "string" }, text: { type: "string" } }
+      }
+    }
+  }
+};
+var DOCS_SCHEMA = {
+  type: "object",
+  required: ["changed"],
+  properties: { changed: { ...STRINGS, description: "Documents changed, relative to the worktree root" } }
+};
+var SEVERITY_RUBRIC = `Severity: blocker when a criterion fails, the build or tests are broken, data is lost or corrupted, there is a security hole, or tests were weakened without a recorded reason. major for a correctness bug on a reachable path in changed code, an error swallowed on a path the user sees, or documentation the change made untrue. minor for real but low impact. nit for style, naming, or readability. pre-existing for a defect the change didn't introduce. none when the problem isn't a defect in the change.
+Kind: code when the behavior is wrong. test when the behavior is right but the test or flow is wrong. docs when documentation is untrue or missing. spec when the spec is wrong, or the finding conflicts with its design. cannot-verify when a tool, simulator, or credential stopped working, the check hits a blind spot, or the proof is missing or unusable. decision when only a person can settle what a criterion should mean.
+Never downgrade a confirmed failure. Filter out what a linter would catch, and style. Run a reproduction when you can, rather than only reading the code. An earlier dismissal of the same fingerprint stands.`;
+var RECURRENCE_RUBRIC = `If this problem's fingerprint appears under earlier rulings after a fix attempt, also give a ruling, reading those attempts: fix-differently when another approach could work, accept-as-debt when a major can ship and be paid later, split-to-issue when a major belongs in its own issue, or escalate. Otherwise the ruling is none.`;
+var checksBrief = (where, worktree) => `${where}
+In the worktree ${worktree}, run the Checks commands TESTING.md declares, and return each command's exit code and failing lines. Change nothing.`;
+var worktreeOf = (l) => l.d.state.worktree;
+var rowsOf = (l) => Object.values(l.rows);
+function inOrder(l, step) {
+  const turn = async () => {
+    await l.commits;
+    return step();
+  };
+  const next = turn();
+  l.commits = settled(next);
+  return next;
+}
+async function settled(p) {
+  try {
+    await p;
+  } catch {
+  }
+}
+function pushed(r, what) {
+  const unmet = r?.unmet.join("; ");
+  if (pushOk(r)) return r;
+  throw new Halt("push", what, unmet ?? "pusher didn't return");
+}
+async function commit(l, paths, message) {
+  const r = await inOrder(
+    l,
+    () => callPusher(
+      l.d.pushBrief(
+        `Commit exactly these paths as they stand, staged by explicit path, with a message in the convention docs/FORGE.md declares, saying: ${message}.${l.cardId ? ` Name the issue ${l.cardId} in it.` : ""} Do not push.
+${list(paths)}`
+      ),
+      `commit: ${message}`,
+      "Build"
+    )
+  );
+  return opRef(pushed(r, `A commit of ${paths.join(", ")}.`), "commit");
+}
+var answersText = (l) => Object.keys(l.answers).length > 0 ? `The user answered these earlier questions:
+${JSON.stringify(l.answers)}` : "";
+function changeBrief(l, c) {
+  const criteria = c.criteria.map((x) => `- ${x.id}: ${x.wording}
+  First test: ${x.firstTest}`).join("\n");
+  return [
+    `${l.where}
+Work in the worktree ${worktreeOf(l)}.`,
+    l.build?.shared.length ? `Constraints every task follows:
+${list(l.build.shared)}` : "",
+    c.assignment ?? "",
+    c.task ? `Your task (${c.task.id}): ${c.task.todo}
+Files you may write:
+${list(c.task.files)}
+Reuse, don't rebuild:
+${list(c.task.reuse)}
+Create:
+${list(c.task.create)}` : "",
+    criteria ? `The criteria it delivers:
+${criteria}` : "",
+    c.item ? `The problem to fix, at ${c.item.problem.location}:
+${c.item.problem.text}
+${c.item.reason}` : "",
+    answersText(l),
+    "Make no irreversible change, such as a migration on shared data, deleting a public API, or changing production config, unless this explicitly permits it: build its reversible part, and return the rest in manualActions. Implement what this says. Settle a trivial question yourself, such as a name, local structure, or an obvious default that changes no behavior this describes, and return it in assumptions. If it leaves open anything else, or can't be delivered as written, return specProblem and stop.",
+    NO_WRITES
+  ].filter(Boolean).join("\n\n");
+}
+async function writeTest(l, c, reason) {
+  const t = must(
+    await callCoder(
+      `${changeBrief(l, c)}
+
+Write a new test or change an existing one, so that it states the required behavior. Change no production code. It must fail on the current code: run it and return the failing output. When the behavior can't be expressed as a test, return noTest with the reason instead.${reason ? `
+
+An earlier attempt showed the test has to change: ${reason}` : ""}`,
+      `${c.id}: test`,
+      "Build",
+      TEST_SCHEMA
+    ),
+    "build",
+    `A test for ${c.id}.`
+  );
+  l.assumptions.push(...t.assumptions);
+  l.manualActions.push(...t.manualActions);
+  if (t.specProblem) return { paths: [], commit: "", noTest: "", specProblem: t.specProblem };
+  if (t.noTest || t.tests.length === 0) return { paths: [], commit: "", noTest: t.noTest, specProblem: "" };
+  l.testChanges.push(...t.tests);
+  const sha = await commit(l, t.tests, `add a failing test for ${c.id}`);
+  return { paths: t.tests, commit: sha, noTest: "", specProblem: "" };
+}
+function qaBrief(l, c, test) {
+  const history = test.commit ? `The test commit is ${test.commit}, and its protected paths are:
+${list(test.paths)}
+Check in a temporary copy that the test fails at that commit and passes at HEAD. Check that nothing after that commit touches a protected path, and that nothing skips, weakens, or excludes the test, for example by loosening a tolerance, regenerating a snapshot, or changing the test config.` : `This change has no test, because: ${test.noTest}. Judge that reason.`;
+  return `${changeBrief(l, c)}
+
+Validate one change and its history.
+${history}
+Check that the fix delivers the behavior asked for and doesn't merely satisfy the test, for example by special-casing the test's input. Check that the change stays within its criterion or problem. Any failed check is a blocking finding. Set testAtFault when the test is what has to change.`;
+}
+function fixPrompt(l, c, cycle, lastFailure) {
+  const assignment = cycle.paths.length > 0 ? `Make this test pass. These paths are protected, so change none of them:
+${list(cycle.paths)}
+If the test is wrong, return testProblem with the reason and stop.` : `Make the change. It has no test because: ${cycle.noTest}`;
+  return `${changeBrief(l, c)}
+
+${assignment}${lastFailure ? `
+
+The last attempt failed validation:
+${lastFailure}` : ""}`;
+}
+async function qaOf(l, c, cycle) {
+  return must(
+    await agent(qaBrief(l, c, cycle), {
+      agentType: "slopify:qa",
+      label: `${c.id}: qa`,
+      phase: "Build",
+      schema: QA_SCHEMA
+    }),
+    "build",
+    `A qa verdict on ${c.id}.`
+  );
+}
+async function failingChecks(l) {
+  if (!l.small) return "";
+  const brief = checksBrief(l.where, worktreeOf(l));
+  const ran = must(
+    await agent(brief, {
+      agentType: "slopify:checks",
+      label: "checks",
+      phase: "Build",
+      schema: CHECKS_SCHEMA
+    }),
+    "build",
+    "The project's checks."
+  );
+  const failed = ran.commands.filter((x) => x.exitCode !== 0);
+  const lines = failed.map((x) => `${x.command}: ${x.failingLines}`);
+  return lines.join("\n");
+}
+function specStopped(l, c, problem) {
+  const route = l.reviseSpec ? "revise-spec" : "escalate";
+  listRouted(l, route, {
+    problem: { source: "the coder", location: c.id, text: problem },
+    route,
+    severity: "blocker",
+    fingerprint: `${c.id}|spec`,
+    reason: "The coder can't deliver this without making a decision."
+  });
+  return { reason: "", rewriteTest: false };
+}
+async function tryFix(l, c, cycle, lastFailure, attempt) {
+  const fix = must(
+    await callCoder(
+      fixPrompt(l, c, cycle, lastFailure),
+      `${c.id}: fix${attempt > 1 ? ` (try ${String(attempt)})` : ""}`,
+      "Build",
+      FIX_SCHEMA
+    ),
+    "build",
+    `A fix for ${c.id}.`
+  );
+  l.assumptions.push(...fix.assumptions);
+  l.manualActions.push(...fix.manualActions);
+  if (fix.specProblem) return specStopped(l, c, fix.specProblem);
+  if (fix.testProblem) return { reason: fix.testProblem, rewriteTest: true };
+  if (fix.changed.length > 0) await commit(l, fix.changed, `implement ${c.id}`);
+  l.changedThisRound.push(...fix.changed);
+  const failing = await failingChecks(l);
+  if (failing) return { reason: failing, rewriteTest: false };
+  if (l.small && l.round > 0) return { reason: "", rewriteTest: false };
+  const verdict = await qaOf(l, c, cycle);
+  if (verdict.verdict === "pass") return { reason: "", rewriteTest: false };
+  const reason = verdict.findings.map((f) => `${f.location}: ${f.problem}`).join("\n") || verdict.limits;
+  return { reason, rewriteTest: verdict.testAtFault };
+}
+async function runChange(l, c) {
+  let test = await writeTest(l, c, "");
+  let last = { reason: "", rewriteTest: false };
+  for (let attempt = 1; attempt <= MAX_INNER_TRIES; attempt += 1) {
+    if (last.rewriteTest) test = await writeTest(l, c, last.reason);
+    if (test.specProblem) return specStopped(l, c, test.specProblem).reason;
+    last = await tryFix(l, c, test, last.rewriteTest ? "" : last.reason, attempt);
+    if (!last.reason) return "";
+  }
+  return last.reason;
+}
+function criteriaOf(l, ids) {
+  return (l.validate?.criteria ?? []).filter((c) => ids.includes(c.id));
+}
+function changeOfTask(l, task) {
+  return {
+    id: task.id,
+    files: task.files,
+    task,
+    criteria: criteriaOf(l, task.criteria)
+  };
+}
+function changeOfItem(l, item, index) {
+  const { location, criterion } = item.problem;
+  return {
+    id: `fix-${String(index + 1)}`,
+    files: [location.replace(/:\d+(?:-\d+)?$/, "")],
+    criteria: criteriaOf(l, criterion ? [criterion] : []),
+    item
+  };
+}
+async function changeHoldingHalt(l, c) {
+  try {
+    return await runChange(l, c);
+  } catch (error) {
+    if (!(error instanceof Halt)) throw error;
+    l.halted ??= error;
+    return "";
+  }
+}
+async function runChanges(l, changes) {
+  const asTasks = changes.map((c) => ({ ...c, dependsOn: c.task?.dependsOn ?? [] }));
+  for (const wave of waves(asTasks)) {
+    const left = await parallel(wave.map((c) => () => changeHoldingHalt(l, c)));
+    if (l.halted) throw l.halted;
+    for (const [i, c] of wave.entries()) {
+      const remaining = left[i];
+      if (remaining === "") continue;
+      l.open.push({
+        problem: c.item?.problem ?? { source: "qa", location: c.id, text: remaining ?? "the inner loop didn't return" },
+        route: "coder",
+        severity: "blocker",
+        fingerprint: c.item?.fingerprint ?? c.id,
+        reason: remaining ?? "the inner loop didn't return"
+      });
+    }
+  }
+}
+function countFix(l, item) {
+  const prior = l.fixes.get(item.fingerprint) ?? 0;
+  if (prior > 0) l.differently.add(item.fingerprint);
+  l.fixes.set(item.fingerprint, prior + 1);
+}
+async function reviseSpec(l, items2) {
+  if (items2.length === 0 || !l.reviseSpec) return [];
+  const revised = await l.reviseSpec(items2.map((i) => `${i.problem.location}: ${i.problem.text}`));
+  l.build = revised.build;
+  l.validate = revised.validate;
+  return revised.rerun.map((t) => changeOfTask(l, t));
+}
+async function updateDocs(l, problems) {
+  if (l.docs.length === 0 && problems.length === 0) return;
+  if (l.changedThisRound.length === 0 && problems.length === 0) return;
+  const problemLines = problems.map((i) => `${i.problem.location}: ${i.problem.text}`);
+  const w = must(
+    await callDocsWriter(
+      `${l.where}
+Update these documents in the worktree ${worktreeOf(l)} so they describe the code as built. Every claim must be true against the code.
+${list(l.docs)}
+${problems.length > 0 ? `
+Problems to fix:
+${list(problemLines)}` : ""}
+Paths this round changed:
+${list(l.changedThisRound)}
+${NO_WRITES}`,
+      "update the docs",
+      "Build",
+      DOCS_SCHEMA
+    ),
+    "build",
+    "Updated documentation."
+  );
+  if (w.changed.length > 0) await commit(l, w.changed, "update the docs the change affects");
+}
+function firstChanges(l) {
+  if (!l.small) return (l.build?.tasks ?? []).map((t) => changeOfTask(l, t));
+  const assignment = `Deliver this:
+<<<ISSUE
+${l.story}
+ISSUE>>>
+
+The first test ${l.small.firstTest}`;
+  return [{ id: "change", files: [], criteria: [], assignment }];
+}
+async function findDocs(l) {
+  if (!l.small || l.changedThisRound.length === 0) return;
+  const found = await scout(
+    "scout-docs",
+    `${l.where}
+In the worktree ${worktreeOf(l)}, read the diff of these paths, and find the documents it makes untrue or leaves incomplete. Report one evidence item per document, with source set to its path relative to the worktree root, and none when no document is affected.
+${list(l.changedThisRound)}`,
+    { label: "find affected docs", phase: "Build" }
+  );
+  l.docs = must(found, "build", "The documents the change affects.").evidence.map((e) => e.source);
+}
+async function reviseDocument(l, doc, items2) {
+  if (items2.length === 0) return;
+  const changed = await doc.revise(items2.map((i) => `${i.problem.location}: ${i.problem.text}`));
+  l.changedThisRound.push(...changed);
+  if (changed.length > 0) await commit(l, changed, "revise the findings");
+}
+async function buildRound(l) {
+  phase("Build");
+  const openItems = l.open;
+  l.open = [];
+  l.changedThisRound = [];
+  for (const item of openItems) countFix(l, item);
+  if (l.document) {
+    await reviseDocument(l, l.document, openItems);
+    return;
+  }
+  const first = l.round === 0 ? firstChanges(l) : [];
+  const fromSpec = await reviseSpec(
+    l,
+    openItems.filter((i) => i.route === "revise-spec")
+  );
+  const fixes = openItems.filter((i) => i.route === "coder" || i.route === "correct-test").map((item, i) => changeOfItem(l, item, i));
+  const changes = [...first, ...fromSpec, ...fixes];
+  l.affected = unique(changes.flatMap((c) => c.criteria.map((x) => x.id)));
+  await runChanges(l, changes);
+  await findDocs(l);
+  await updateDocs(
+    l,
+    openItems.filter((i) => i.route === "writer")
+  );
+}
+async function runValidation(o) {
+  phase("Validate");
+  const categorized = o.criteria.filter((c) => c.category !== "uncategorized");
+  const toRun = o.focus.length > 0 ? categorized.filter((c) => o.focus.includes(c.id)) : categorized;
+  const [checks, validated] = await parallel([
+    () => o.checks === false ? Promise.resolve({ commands: [] }) : agent(checksBrief(o.where, o.worktree), {
+      agentType: "slopify:checks",
+      label: "checks",
+      phase: "Validate",
+      schema: CHECKS_SCHEMA
+    }),
+    () => (
+      // With no criteria at all, as when validate runs on a PR with no spec, there is nothing to drive the app for.
+      o.criteria.length === 0 ? Promise.resolve({ results: [], uncategorizedSetting: "" }) : agent(
+        `${o.where}
+In the worktree ${o.worktree}, follow TESTING.md's setup and boot, then run each criterion's validation path below, and capture its evidence under .tmp/evidence/. Report what TESTING.md states for its category when it can't be verified, and what it states for uncategorized criteria.${o.changed.length > 0 ? ` Also run every criterion whose code path these changed paths touch, and every criterion if one is a boot or config file:
+${list(o.changed)}` : ""}
+
+Criteria to run:
+${JSON.stringify(toRun)}${o.focus.length > 0 ? `
+
+The other criteria:
+${JSON.stringify(categorized.filter((c) => !toRun.includes(c)))}` : ""}`,
+        { agentType: "slopify:validator", label: "validator", phase: "Validate", schema: VALIDATOR_SCHEMA }
+      )
+    )
+  ]);
+  const ran = must(checks, "validate", "The project's checks.");
+  const verdicts = must(validated, "validate", "The validator's verdicts.");
+  const byId = new Map(o.criteria.map((c) => [c.id, c]));
+  const rows = verdicts.results.map((v) => {
+    const c = byId.get(v.id);
+    const result = v.result === "pass" && v.evidence.length === 0 ? "cannot-verify" : v.result;
+    return {
+      id: v.id,
+      wording: c?.wording ?? v.id,
+      category: c?.category ?? "uncategorized",
+      path: v.ran,
+      result,
+      evidence: v.evidence,
+      setting: v.setting,
+      detail: v.detail
+    };
+  });
+  const problems = [
+    ...ran.commands.filter((x) => x.exitCode !== 0).map((x) => ({ source: "checks", location: x.command, text: x.failingLines || `exit ${String(x.exitCode)}` })),
+    ...rows.filter((r) => r.result === "fail").map((r) => ({
+      source: "validator",
+      location: r.detail,
+      text: `Criterion ${r.id} fails: ${r.wording}`,
+      criterion: r.id
+    }))
+  ];
+  return { rows, uncategorizedSetting: verdicts.uncategorizedSetting, problems };
+}
+async function checkDocs(l) {
+  if (l.docs.length === 0) return [];
+  const verdicts = await parallel(
+    l.docs.map(
+      (doc) => () => lens(
+        "lens-docs",
+        `${l.where}
+In the worktree ${worktreeOf(l)}, judge this document against the code: ${doc}`,
+        {
+          label: `docs: ${doc}`,
+          phase: "Validate"
+        }
+      )
+    )
+  );
+  return verdicts.flatMap(
+    (v, i) => must(v, "validate", `A verdict on ${l.docs[i] ?? "a document"}.`).findings.map((f) => ({
+      source: "lens-docs",
+      location: f.location,
+      text: f.problem
+    }))
+  );
+}
+async function validateRound(l) {
+  const uncategorized = (l.validate?.criteria ?? []).filter((c) => c.category === "uncategorized");
+  const v = await runValidation({
+    where: l.where,
+    worktree: worktreeOf(l),
+    criteria: l.validate?.criteria ?? [],
+    focus: l.round === 0 ? [] : l.affected,
+    changed: l.round === 0 ? [] : l.changedThisRound
+  });
+  for (const r of v.rows) l.rows[r.id] = r;
+  for (const c of uncategorized) {
+    l.rows[c.id] = {
+      id: c.id,
+      wording: c.wording,
+      category: "uncategorized",
+      path: "none: suggest a category to add to TESTING.md",
+      result: "uncategorized",
+      evidence: [],
+      setting: v.uncategorizedSetting,
+      detail: ""
+    };
+  }
+  return [...v.problems, ...await checkDocs(l)];
+}
+function judgeBrief(l, p) {
+  const criterion = p.criterion ? criteriaOf(l, [p.criterion])[0] : void 0;
+  return `${l.where}
+Rule on one problem in the worktree ${worktreeOf(l)}, against the diff from the target branch docs/FORGE.md declares. ${l.story ? `
+
+The issue:
+<<<ISSUE
+${l.story}
+ISSUE>>>` : ""}
+
+Reported by ${p.source} at ${p.location}:
+${p.text}
+${criterion ? `
+The criterion: ${criterion.wording}` : ""}
+
+${SEVERITY_RUBRIC}
+${l.small ? "The ruling is none." : RECURRENCE_RUBRIC}
+
+Earlier rulings:
+${list(l.rulings)}
+
+${answersText(l)}`;
+}
+function listRouted(l, route, item) {
+  const entry = { text: `${item.problem.location}: ${item.problem.text}`, detail: item.reason };
+  const lists = {
+    unverified: l.unverified,
+    "needs-confirmation": l.confirmations,
+    suggestion: l.suggestions,
+    "known-debt": l.knownDebt,
+    "new-issue": l.newIssues,
+    "split-issue": l.newIssues
+  };
+  lists[route]?.push(entry);
+  if (route === "not-validated" && !item.problem.criterion) l.unverified.push(entry);
+  if (route === "escalate") l.escalated.push(item);
+  if (FIX_ROUTES.includes(route)) l.open.push(item);
+}
+function applyToRow(l, p, route, reason) {
+  const row = p.criterion ? l.rows[p.criterion] : void 0;
+  if (!row) return;
+  if (route === "dismiss") {
+    row.result = `pass (the judge overturned a fail: ${reason})`;
+    return;
+  }
+  if (route !== "not-validated") return;
+  row.result = "cannot-verify";
+  row.detail = reason;
+}
+async function judgeProblems(l, problems, phaseTitle) {
+  if (problems.length === 0) return;
+  const hasSpec = !!l.reviseSpec;
+  const verdicts = await parallel(
+    problems.map(
+      (p, i) => () => agent(judgeBrief(l, p), {
+        agentType: "slopify:judge",
+        label: `rule ${String(i + 1)}`,
+        phase: phaseTitle,
+        schema: JUDGE_SCHEMA
+      })
+    )
+  );
+  for (const [i, p] of problems.entries()) {
+    const v = must(verdicts[i], "judge", `A ruling on ${p.location}.`);
+    const route = routeOf(v, l.fixes.get(v.fingerprint) ?? 0, l.differently.has(v.fingerprint), hasSpec);
+    applyToRow(l, p, route, v.reason);
+    l.rulings.push(`${v.fingerprint}: ${v.verdict}, ${v.severity}, ${v.kind}, ${route}. ${v.reason}`);
+    listRouted(l, route, {
+      problem: p,
+      route,
+      severity: v.severity,
+      fingerprint: v.fingerprint,
+      reason: v.reason
+    });
+  }
+}
+async function gateway(l) {
+  phase("Gateway");
+  const results = JSON.stringify(rowsOf(l));
+  const g = must(
+    await agent(
+      `${l.where}
+Check this round before it is pushed, in the worktree ${worktreeOf(l)}: was anything missed? Read the round's diff, and judge it against the spec below and the evidence.
+${l.build ? `
+Build spec:
+${JSON.stringify(l.build)}` : ""}
+${l.validate ? `
+Validation spec:
+${JSON.stringify(l.validate)}` : ""}
+
+Criterion results:
+${results}
+
+Rulings so far:
+${list(l.rulings)}
+
+Return each thing missed. Don't repeat a ruling. Return any document the change affects that isn't on this list:
+${list(l.docs)}`,
+      { agentType: "slopify:judge", label: "gateway", phase: "Gateway", schema: GATEWAY_SCHEMA }
+    ),
+    "gateway",
+    "The gateway judge's verdict."
+  );
+  l.docs = unique([...l.docs, ...g.docsToAdd]);
+  await judgeProblems(
+    l,
+    g.missed.map((m) => ({ source: "gateway judge", location: m.location, text: m.text })),
+    "Gateway"
+  );
+}
+var countOpen = (l) => l.open.length + l.escalated.length;
+function heldRows(l) {
+  return rowsOf(l).filter(
+    (r) => (r.result === "cannot-verify" || r.result === "uncategorized") && !allowsReady(r.setting)
+  );
+}
+function unvalidatedRows(l) {
+  return rowsOf(l).filter(
+    (r) => (r.result === "cannot-verify" || r.result === "uncategorized") && allowsReady(r.setting)
+  );
+}
+var rowEntry = (r) => ({
+  text: `${r.wording} (${r.result})`,
+  detail: r.result === "uncategorized" ? "Suggest a category to add to TESTING.md." : r.detail
+});
+function draftReasons(l) {
+  const item = (i) => ({
+    text: `${i.severity}: ${i.problem.location}: ${i.problem.text}`,
+    detail: `${i.reason} Fix attempts: ${String(l.fixes.get(i.fingerprint) ?? 0)}.`
+  });
+  return [
+    ...l.escalated.map((i) => item(i)),
+    ...l.open.map((i) => item(i)),
+    ...heldRows(l).map((r) => rowEntry(r)),
+    ...l.review.clean ? [] : [{ text: l.review.note || "The review hasn't come back clean yet." }]
+  ];
+}
+function body(l) {
+  return renderBody({
+    issue: l.cardId || "none",
+    specDir: l.specDir,
+    ...l.document && { documents: l.document.paths },
+    draftReasons: draftReasons(l),
+    needsConfirmation: [
+      ...l.confirmations,
+      ...l.decisions.filter((d) => d.affectsAcceptance).map((d) => ({ text: d.question, detail: `Chose: ${d.choice}. Why: ${d.rationale}` }))
+    ],
+    manualActions: unique(l.manualActions),
+    ...l.small?.reproduced && { reproduced: l.small.reproduced },
+    criteria: rowsOf(l),
+    assumptions: [
+      ...l.decisions.filter((d) => !d.affectsAcceptance).map((d) => `${d.question} ${d.choice}`),
+      ...unique(l.assumptions)
+    ],
+    unverified: l.unverified,
+    notValidated: unvalidatedRows(l).map((r) => rowEntry(r)),
+    knownDebt: l.knownDebt,
+    suggestions: l.suggestions,
+    testChanges: unique(l.testChanges)
+  });
+}
+var bodyInstruction = (l) => `Write this PR description to ${worktreeOf(l)}/.tmp/pr-body.md, exactly as it stands, and use that file for the body:
+<<<BODY
+${body(l)}
+BODY>>>`;
+async function pushRound(l, last) {
+  phase("Push");
+  const { state } = l.d;
+  const open = !state.pr && (countOpen(l) === 0 || last);
+  const number = l.reviewNumber + 1;
+  const steps = state.pr ? `Push the branch even if something is still flagged. Then update the PR ${state.pr}. ${bodyInstruction(l)}
+Then fire the review trigger as docs/FORGE.md declares, if it declares one.` : open ? `Push the branch even if something is still flagged. Then open the branch's PR as a draft as docs/FORGE.md declares. ${bodyInstruction(l)}
+Fire the review trigger only if docs/FORGE.md says opening doesn't fire it. ${l.cardId ? `Then attach the PR to card ${l.cardId} as docs/BOARD.md declares.` : ""} Report the PR reference as the operation named pr.` : "Push the branch even if something is still flagged. Open no PR yet.";
+  const lines = [
+    ...open ? ["done publish <the PR reference>"] : [],
+    ...state.pr || open ? [`review ${String(number)} fired <the trigger time>`] : [],
+    `done round ${String(l.round)}`
+  ];
+  const r = pushed(
+    await inOrder(l, () => callPusher(l.d.pushBrief(steps, lines), "push the round", "Push")),
+    "A push of the story branch, and its PR."
+  );
+  if (open) state.pr = opRef(r, "pr");
+  if (state.pr) l.reviewNumber = number;
+}
+var WATCH_MINUTES = 9;
+var WATCH_DISPATCHES = 40;
+async function waitForReview(l) {
+  const { state } = l.d;
+  for (let n = 1; n <= WATCH_DISPATCHES; n += 1) {
+    const w = must(
+      await agent(
+        `${l.where}
+Wait for review ${String(l.reviewNumber)} of this pull request, as docs/FORGE.md's review-status binding declares: first for the review to start, then for it to finish. Wait at most ${String(WATCH_MINUTES)} minutes in this dispatch, then return pending. On finished, return each finding with its id, its location (path:line, or empty), and its text. Change nothing.
+
+Pull request: ${state.pr}
+Worktree: ${worktreeOf(l)}`,
+        {
+          agentType: "slopify:watcher",
+          label: `review ${String(l.reviewNumber)} wait ${String(n)}`,
+          phase: "Review",
+          schema: WATCHER_SCHEMA
+        }
+      ),
+      "review",
+      "The review's status."
+    );
+    if (w.outcome !== "pending") return w;
+  }
+  return null;
+}
+async function reviewRound(l) {
+  phase("Review");
+  const w = await waitForReview(l);
+  const outcome = w?.outcome ?? "timed-out";
+  await inOrder(
+    l,
+    () => callPusher(
+      l.d.pushBrief("Do nothing except append the ledger line.", [
+        `review ${String(l.reviewNumber)} ended ${outcome}: ${String(w?.findings.length ?? 0)} finding(s)`
+      ]),
+      "record the review",
+      "Review"
+    )
+  );
+  l.review = {
+    clean: outcome === "finished" || outcome === "not-declared",
+    note: outcome === "finished" || outcome === "not-declared" ? "" : `Review ${String(l.reviewNumber)} ${outcome}.`
+  };
+  await judgeProblems(
+    l,
+    (w?.findings ?? []).map((f) => ({ source: "the review", location: f.location, text: f.text })),
+    "Review"
+  );
+}
+async function finish(l, ready) {
+  const { state } = l.d;
+  const issues = l.newIssues.length > 0 ? `File one Linear issue for each of these, as docs/BOARD.md declares:
+${list(l.newIssues.map((i) => `${i.text} ${i.detail ?? ""}`))}
+` : "";
+  const questions = [
+    ...unique(l.manualActions).map((a) => `Manual action: ${a}`),
+    ...l.decisions.filter((d) => d.affectsAcceptance).map((d) => `${d.question} We chose: ${d.choice}.`),
+    ...draftReasons(l).map((x) => x.text)
+  ];
+  const card = l.cardId ? ready ? `Perform the operations docs/BOARD.md declares for when the PR's review is clean on card ${l.cardId} (for example moving it to In Review), and comment on the card with the evidence and assumptions:
+${list(questions)}` : `Comment on card ${l.cardId} with what is open:
+${list(questions)}` : "";
+  pushed(
+    await inOrder(
+      l,
+      () => callPusher(
+        l.d.pushBrief(
+          `Update the PR ${state.pr}. ${bodyInstruction(l)}
+${ready ? "Mark the PR ready for review, as docs/FORGE.md declares.\n" : "Leave it a draft.\n"}${issues}${card}`,
+          [`delivery ${ready ? "ready" : "draft"}`]
+        ),
+        ready ? "mark the PR ready" : "report the draft",
+        "Push"
+      )
+    ),
+    "The final PR update."
+  );
+}
+async function validateSmall(l) {
+  if (l.round > 0 && l.affected.length === 0) return;
+  const v = await runValidation({
+    where: l.where,
+    worktree: worktreeOf(l),
+    criteria: l.validate?.criteria ?? [],
+    focus: [],
+    changed: [],
+    checks: false
+  });
+  for (const r of v.rows) l.rows[r.id] = r;
+  for (const p of v.problems) {
+    l.open.push({ problem: p, route: "coder", severity: "blocker", fingerprint: p.text, reason: "" });
+  }
+}
+async function validateDocument(l, doc) {
+  const [v, found] = await Promise.all([
+    runValidation({ where: l.where, worktree: worktreeOf(l), criteria: [], focus: [], changed: [] }),
+    doc.check()
+  ]);
+  await judgeProblems(l, [...v.problems, ...found], "Judge");
+}
+async function round(l, last) {
+  if (l.round > 0 || !l.built) await buildRound(l);
+  if (l.document) {
+    await validateDocument(l, l.document);
+  } else if (l.small) {
+    await validateSmall(l);
+  } else {
+    await judgeProblems(l, await validateRound(l), "Judge");
+    await gateway(l);
+  }
+  await pushRound(l, last);
+}
+function freshLoop(input) {
+  return {
+    ...input,
+    docs: input.build?.docs ?? [],
+    round: 0,
+    reviewNumber: input.startAtReview > 0 ? input.startAtReview - 1 : 0,
+    open: [],
+    escalated: [],
+    rows: {},
+    affected: [],
+    fixes: /* @__PURE__ */ new Map(),
+    differently: /* @__PURE__ */ new Set(),
+    rulings: [],
+    decisions: input.build?.decisions ?? [],
+    assumptions: [],
+    manualActions: [...input.build?.manualActions ?? []],
+    unverified: [],
+    confirmations: [],
+    knownDebt: [],
+    suggestions: [],
+    newIssues: [],
+    testChanges: [],
+    review: { clean: false, note: "" },
+    changedThisRound: [],
+    openByRound: [],
+    commits: Promise.resolve(),
+    halted: null
+  };
+}
+function nextStep(l) {
+  const g = gate({
+    prOpen: !!l.d.state.pr,
+    reviewClean: l.review.clean,
+    open: countOpen(l),
+    held: heldRows(l).length
+  });
+  if (g !== "fix") return g;
+  if (l.round >= MAX_FIX_ROUNDS || noProgress(l.openByRound)) return "end";
+  return l.open.length > 0 || !l.d.state.pr ? "fix" : "end";
+}
+async function runLoop(input) {
+  const l = freshLoop(input);
+  if (input.startAtReview > 0) {
+    l.reviewNumber = input.startAtReview;
+    await reviewRound(l);
+  } else {
+    await round(l, false);
+    if (l.d.state.pr) await reviewRound(l);
+  }
+  l.openByRound.push(countOpen(l));
+  for (let step = nextStep(l); step === "fix"; step = nextStep(l)) {
+    l.round += 1;
+    await round(l, l.round >= MAX_FIX_ROUNDS || noProgress([...l.openByRound, countOpen(l)]));
+    if (l.d.state.pr) await reviewRound(l);
+    l.openByRound.push(countOpen(l));
+  }
+  return endLoop(l, nextStep(l) === "clean");
+}
+async function endLoop(l, ready) {
+  if (!l.d.state.pr) await pushRound(l, true);
+  await finish(l, ready);
+  return {
+    status: ready ? "ready" : "draft",
+    rounds: l.round,
+    pr: l.d.state.pr,
+    review: l.review.note || "clean",
+    draftReasons: ready ? [] : draftReasons(l),
+    decisions: l.decisions.filter((d) => d.affectsAcceptance).map((d) => d.id)
+  };
+}
+function reportOf(workflowName, r, specDir = "") {
+  return [
+    `${workflowName} finished: the PR is ${r.status === "ready" ? "ready for review" : "a draft"}.`,
+    `PR: ${r.pr}.`,
+    specDir ? `Spec: ${specDir}.` : "",
+    `Fix rounds: ${String(r.rounds)}. Review: ${r.review}.`,
+    r.draftReasons.length > 0 ? `Why it is a draft:
+${r.draftReasons.map((x) => `- ${x.text}`).join("\n")}` : "",
+    r.decisions.length > 0 ? `Decisions to confirm: ${r.decisions.join(", ")}.` : ""
+  ].filter(Boolean).join("\n");
+}
+
+// src/slopify/lib/judge.ts
+async function confirmedProblems(problems, brief, phaseTitle) {
+  const rulings = await parallel(
+    problems.map(
+      (p, i) => () => agent(brief(p), {
+        agentType: "slopify:judge",
+        label: `rule ${String(i + 1)}`,
+        phase: phaseTitle,
+        schema: RULING_SCHEMA
+      })
+    )
+  );
+  const confirmed = [];
+  for (const [i, p] of problems.entries()) {
+    const r = must(rulings[i], phaseTitle.toLowerCase(), `A ruling on ${p.location}.`);
+    if (r.verdict === "confirmed" && r.severity !== "minor") confirmed.push(`${p.location}: ${p.text} (${r.reason})`);
+  }
+  return confirmed;
+}
+
+// src/slopify/lib/deliver-steps.ts
+function readStory(cardRes, storyArg, ask) {
+  const storySource = (/^\s*(card|text|none)\b/i.exec(fact(cardRes, "story-source"))?.[1] || "").toLowerCase();
+  const story = storySource === "text" ? storyArg : fact(cardRes, "story");
+  const storyRevision = shaped("sha", fact(cardRes, "story-revision"));
+  if (!story || storySource === "none") {
+    return {
+      need: {
+        ...need("locate", 1, "input", ask.input, cardRes.gaps.join("; ") || cardRes.answer),
+        arg: ask.arg
+      }
+    };
+  }
+  if (!storyRevision) {
+    return { need: need("locate", 1, "prerequisite", "The story revision digest from scout-card.", cardRes.answer) };
+  }
+  if (ask.criteria) {
+    const criteria = fact(cardRes, "criteria");
+    if (absent(criteria, true) && !criteria.trim().includes("\n")) {
+      return {
+        need: need(
+          "locate",
+          1,
+          "story",
+          "The story states no acceptance criteria; it needs observable ones from shape.",
+          cardRes.answer
+        )
+      };
+    }
+  }
+  return { storySource, story, storyRevision };
+}
+function specRelOf(cardRes, cardId, storySource, story, slug) {
+  const titleSlug = (storySource === "card" ? (story.split("\n", 1)[0] ?? "").replace(/^#+\s*/, "") : "").toLowerCase().replaceAll(/[^a-z0-9]+/g, "-").replaceAll(/^-+|-+$/g, "").slice(0, 60).replace(/-+$/, "");
+  return [shaped("rel", val(cardRes, "spec-path"))].find((p) => p.endsWith(".md")) || `docs/specs/${[
+    cardId.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-").replaceAll(/^-+|-+$/g, ""),
+    titleSlug
+  ].filter(Boolean).join("-") || slug}.md`;
+}
+function locate(d, cardRes, storyArg, fallbackSlug, ask) {
+  if (!cardRes) {
+    return {
+      stop: d.stop("locate", [need("locate", 1, "prerequisite", ask.readable, "scout-card did not return")])
+    };
+  }
+  const read = readStory(cardRes, storyArg, ask);
+  if ("need" in read) return { stop: d.stop("locate", [read.need]) };
+  const cardId = shaped("id", val(cardRes, "card"));
+  const boardBranch = shaped("branch", val(cardRes, "branch"));
+  const slug = slugOf(cardId) || fallbackSlug;
+  const specRel = specRelOf(cardRes, cardId, read.storySource, read.story, slug);
+  return { ...read, cardId, boardBranch, slug, specRel };
+}
+async function createWorktree(d, o) {
+  const { state, stop, done, pushBrief, pushStop } = d;
+  const { cardId, boardBranch } = o;
+  const r = await callPusher(
+    pushBrief(
+      `Create or recover ${o.worktree} and branch that docs/FORGE.md declares for ${o.subject}${boardBranch ? ` (the board gives the branch name ${boardBranch})` : ""}. ${cardId ? "Then perform the delivery-start operation docs/BOARD.md declares for the card (for example its status transition), only as bound." : "There is no card, so perform no board operation."} Change no card content. Append the board-start line only once the delivery-start operation is done.`,
+      [...o.lines ?? [], ...cardId ? [`done board-start ${cardId}`] : []],
+      "<worktree>/.tmp/ledger.md at the root of the worktree you create or recover"
+    ),
+    "create the worktree",
+    "Workspace"
+  );
+  if (!pushOk(r)) return pushStop("workspace", r);
+  const wt = opRef(r, "worktree");
+  if (!wt.startsWith("/")) {
+    return stop("workspace", [
+      need("workspace", 1, "prerequisite", `The absolute path of ${o.worktree}.`, JSON.stringify(r.operations))
+    ]);
+  }
+  state.worktree = wt.replace(/\/+$/, "");
+  state.branch = opRef(r, "branch") || state.branch;
+  done("workspace");
+  return null;
+}
+async function workspace(d, o) {
+  const { state, done, skip, pushBrief, pushStop } = d;
+  const { cardId } = o;
+  phase("Workspace");
+  let boardStartRecorded = false;
+  if (state.worktree) {
+    skip("workspace");
+  } else {
+    const created = await createWorktree(d, o);
+    if (created) return created;
+    boardStartRecorded = !!cardId;
+  }
+  if (!o.boardStartDone && !boardStartRecorded) {
+    const b = await callPusher(
+      pushBrief(
+        `Perform the delivery-start operation docs/BOARD.md declares for card ${cardId} (for example its status transition), only as bound and only if the card does not already show it. Do nothing else, and change no card content.`,
+        [`done board-start ${cardId}`]
+      ),
+      "start the card",
+      "Workspace"
+    );
+    if (!pushOk(b)) return pushStop("workspace", b);
+    done("board-start");
+  }
+  if (!state.ledger) state.ledger = `${state.worktree}/.tmp/ledger.md`;
+  return null;
+}
+
+// src/slopify/lib/resume.ts
+async function readResume(d, identifies, specDir) {
+  const cp = must(
+    await scout(
+      "scout-checkpoint",
+      `${d.WHERE}
+Report where this run stands. It is the delivery of ${identifies}.
+Report these keys, each as an evidence item with source set to the key; leave out a key that does not exist:
+- worktree, branch, ledger
+- pr: the PR reference
+- done-board-start: the last "done board-start" ledger line
+- done-round: the last "done round" ledger line
+- done-findings: the paths in the last "done findings" ledger line, space-separated
+- reproduced: the last ledger line that contains "reproduced {"
+- review-fired: the highest <n> among the ledger's "review <n> fired" lines
+- spec-dir: ${specDir ? `the folder ${specDir}, if it exists in the worktree` : 'the spec folder the PR description names after "Spec:"'}, relative to the worktree root
+- build-json: the exact contents of build.json in that folder
+- validate-json: the exact contents of validate.json in that folder`,
+      { label: "read checkpoints", phase: "Locate" }
+    ),
+    "locate",
+    "The run's checkpoints."
+  );
+  const { state } = d;
+  const worktree = shaped("path", val(cp, "worktree"));
+  if (worktree.startsWith("/")) state.worktree = worktree.replace(/\/+$/, "");
+  state.branch = shaped("branch", val(cp, "branch"));
+  state.ledger = shaped("path", val(cp, "ledger"));
+  state.pr = shaped("ref", val(cp, "pr"));
+  return {
+    build: parseBuild(fact(cp, "build-json")),
+    validate: parseValidate(fact(cp, "validate-json")),
+    specDir: shaped("rel", val(cp, "spec-dir")) || specDir,
+    reviewFired: Number(/\d+/.exec(val(cp, "review-fired"))?.[0] ?? 0),
+    built: !!val(cp, "done-round"),
+    boardStartDone: !!val(cp, "done-board-start"),
+    findings: val(cp, "done-findings").split(/\s+/).map((p) => shaped("rel", p)).filter(Boolean),
+    reproduced: parseReproduction(fact(cp, "reproduced"))
+  };
+}
+
+// src/slopify/lib/small.ts
+async function fileCard(d, story, slug, cardType) {
+  const marker = `<!-- deliver-small ${slug} -->`;
+  const r = await callPusher(
+    d.pushBrief(
+      `Create a ${cardType} card from this text, as docs/BOARD.md declares, with one trailing line in its body: ${marker}. First search the board for a card whose body holds that line, and use that card instead of creating another. If docs/BOARD.md declares no board, do nothing. Report the card's identifier as the operation named card.
+<<<TEXT
+${story}
+TEXT>>>`
+    ),
+    "file the card",
+    "Locate"
+  );
+  if (!pushOk(r)) throw new Halt("locate", "A card for this work.", "pusher didn't file one");
+  return opRef(r, "card");
+}
+async function readWork(d, arg) {
+  phase("Locate");
+  const cardRes = await scout(
+    "scout-card",
+    `${d.WHERE}
+The argument below names one card on the board, or is the work itself as a prompt. Read a named card through the read bindings in docs/BOARD.md, or take a prompt as the story. Report these evidence items, each with source set to the item name and excerpt set to its value; leave out an item that does not exist:
+- card: the card identifier, or none for a prompt
+- story-source: card or text
+- story: the story text exactly as you wrote it for hashing, or the argument verbatim for a prompt
+- story-revision: the story revision digest
+- field-re: the field regex you used for it
+- branch: the branch name the board gives the card, or the single word none
+Change nothing on the board or forge.
+
+Argument:
+<<<ARG
+${arg}
+ARG>>>`,
+    { label: "read the work", phase: "Locate" }
+  );
+  return locate(d, cardRes, arg, slugged(arg, "change"), {
+    readable: "A readable Linear issue, or a prompt.",
+    input: "A Linear issue or a prompt saying what to change.",
+    arg: "story",
+    criteria: false
+  });
+}
+async function findCard(d, arg, cardType) {
+  let located = await readWork(d, arg);
+  if ("stop" in located) return { status: "not-started", next: located.stop.needs.map((n) => n.what).join(" ") };
+  if (!located.cardId) {
+    const filed = await fileCard(d, located.story, located.slug, cardType);
+    if (filed) located = await readWork(d, filed);
+    if ("stop" in located) return { status: "not-started", next: located.stop.needs.map((n) => n.what).join(" ") };
+  }
+  const { story, cardId, boardBranch, slug, specRel } = located;
+  const name = (specRel.split("/").pop() ?? slug).replace(/\.md$/, "");
+  return { story, cardId, boardBranch, slug, name, cardType };
+}
+var resumeOf = (d, f) => readResume(d, f.cardId ? `card ${f.cardId}` : `the ${f.cardType} "${f.slug}"`, "");
+function openWork(d, f, resume, lines = []) {
+  return workspace(d, {
+    cardId: f.cardId,
+    boardBranch: f.boardBranch,
+    boardStartDone: resume.boardStartDone,
+    worktree: "the worktree",
+    subject: `this ${f.cardType}`,
+    lines
+  });
+}
+
+// src/slopify/workflows/research.ts
+var WORKFLOW = "research";
+var BOUNDS = "Research informs decisions: make no product decision, implement nothing, and don't commit or touch the board.";
+var LIBRARY_SCHEMA = libraryReaderSchema("the question");
+var PLAN_SCHEMA = {
+  type: "object",
+  required: ["subQuestions"],
+  properties: {
+    subQuestions: {
+      type: "array",
+      items: {
+        type: "object",
+        required: ["id", "question"],
+        properties: {
+          id: { type: "string", description: "A short stable id: q1, q2, ..." },
+          question: { type: "string" }
+        }
+      }
+    }
+  }
+};
+var CLERK_SCHEMA = {
+  type: "object",
+  required: ["verdict", "findings", "evidence"],
   properties: {
     verdict: { type: "string", enum: ["pass", "fail", "unverified"] },
     findings: { ...STRINGS, description: "Each finding with the path or claim it concerns; empty on pass" },
-    evidence: { type: "string", description: "What was checked and how" },
-    specIssue: SPEC_ISSUE_SCHEMA("judging")
+    evidence: { type: "string", description: "What was checked and how, or what stopped the check" }
   }
 };
 var RESEARCH_SCHEMA = {
   type: "object",
-  required: ["findings", "sources", "contradictions", "limits", "specIssue"],
+  required: ["findings", "sources", "contradictions", "limits", "planProblem"],
   properties: {
+    findings: {
+      ...STRINGS,
+      description: "Each as: claim <- source (URL, title); retrieved date; published or version date; supporting passage"
+    },
     sources: {
       type: "array",
-      description: "Every distinct source whose content the findings quote or rest on to answer the question, one entry per canonical source. Leave out the research spec, the library conventions and templates, and any file you read only for orientation",
+      description: "Each distinct source the findings rest on, never the plan or the library conventions",
       items: {
         type: "object",
-        required: ["url", "title", "origin"],
+        required: ["url", "title"],
         properties: {
           url: { type: "string", description: "Canonical URL, or project file path" },
-          title: { type: "string" },
-          origin: {
-            type: "string",
-            description: "When url is a library raw note, the canonical source that note records in its source field; otherwise an empty string"
-          }
+          title: { type: "string" }
         }
       }
     },
-    findings: {
-      ...STRINGS,
-      description: "Each as: claim <- source (URL, title, author); retrieved date; published/version date; supporting passage (quote | paraphrase | inference)"
-    },
     contradictions: STRINGS,
-    limits: {
-      ...STRINGS,
-      description: "Failed or thin retrievals with query, provider, and observation; unfetched leads"
-    },
-    specIssue: SPEC_ISSUE_SCHEMA("retrieving")
+    limits: { ...STRINGS, description: "Failed or thin retrievals, and leads that couldn't be fetched" },
+    planProblem: { type: "string", description: "How the plan is wrong for this sub-question; empty when it isn't" }
   }
 };
 var RAW_SCHEMA = {
   type: "object",
-  required: ["produced", "deferredMetadata", "skipped", "reason"],
+  required: ["path", "deferredMetadata"],
   properties: {
-    produced: {
-      ...STRINGS,
-      description: "Absolute paths of the raw notes written or appended; an empty array when you deliberately wrote nothing"
-    },
-    skipped: {
-      type: "boolean",
-      description: "true only when you deliberately wrote nothing because the evidence has nothing for this source"
-    },
-    reason: {
-      type: "string",
-      description: "When skipped is true, why nothing was written; otherwise an empty string"
-    },
+    path: { type: "string", description: "The raw note written or appended, relative to the worktree root" },
     deferredMetadata: { ...STRINGS, description: "Index, taxonomy, or log entries left for the integrator" }
   }
 };
 var INTEGRATION_SCHEMA = {
   type: "object",
-  required: ["answer", "rawNotes", "synthesis", "metadata", "gaps", "contradictions", "limits"],
+  required: ["pages", "changed"],
   properties: {
-    answer: { type: "string", description: "The cited answer to the question, as far as the evidence allows" },
-    rawNotes: {
-      ...STRINGS,
-      description: "The authoritative current list: absolute paths of every raw note of this research that exists after your work. Leave out notes that were merged or deleted"
-    },
-    synthesis: { ...STRINGS, description: "Absolute paths of the wiki and topic pages written or updated" },
-    metadata: { ...STRINGS, description: "Absolute paths of the index, taxonomy, and log files updated" },
-    gaps: STRINGS,
-    contradictions: STRINGS,
-    limits: STRINGS
+    pages: { ...STRINGS, description: "The wiki pages that answer the question, relative to the worktree root" },
+    changed: { ...STRINGS, description: "Every path written, relative to the worktree root" }
   }
 };
-function blocked(attempts, gate, needs) {
-  return {
-    done: false,
-    gate,
-    attempts,
-    needs
-  };
-}
-function materialIssue(issue) {
-  return issue.material && issue.change.trim().length > 3;
-}
-async function clerkVerdict(st, prompt, opts) {
-  for (let i = 1; i <= MAX_FAILURES; i++) {
-    const v = await agent(prompt, opts);
-    if (v) return v;
-    st.attempts.push({ gate: "validator", approach: opts.label, failed: "the clerk did not return a verdict" });
-  }
-  return null;
-}
-var ABSOLUTE = /^(?:\/|[A-Z]:[\\/]|\\\\)/i;
-function onlyPaths(items) {
-  const out = [];
-  for (const x of items) {
-    const t = x.trim();
-    if (ABSOLUTE.test(t) && !/[\r\n]/.test(t) && /\.md$/i.test(t) && !out.includes(t)) out.push(t);
-  }
-  return out;
-}
-function toAbs(st, p) {
-  const t = p.trim();
-  if (!t || ABSOLUTE.test(t) || !st.projectRoot) return t;
-  const sep = st.projectRoot.includes("\\") && !st.projectRoot.includes("/") ? "\\" : "/";
-  return `${withoutTrailing(st.projectRoot, String.raw`\/`)}${sep}${t.replace(/^\.[\\/]/, "")}`;
-}
-var SCHEME = /^[a-z][a-z0-9+.-]*:\/\//i;
-function normSource(x) {
-  return x.trim().replaceAll("\\", "/").toLowerCase().replace(/#(?![/!]).*$/, "").replace(/\?(.*)$/, (_m, q) => {
-    const kept = q.split("&").filter((param) => param && !param.startsWith("utm_"));
-    return kept.length > 0 ? `?${kept.join("&")}` : "";
-  }).replace(SCHEME, "").replaceAll(/\/{2,}/g, "/").replace(/^www\./, "").replace(/^\.\//, "").replace(/\/+(\?|$)/, "$1");
-}
-var FILE_PATH = /^(?:\/|[a-z]:\/)/;
-function isUrl(x) {
-  const t = x.trim();
-  return SCHEME.test(t) && !/^file:\/\//i.test(t);
-}
-function canon(st, x) {
-  const t = x.trim();
-  return !t || SCHEME.test(t) || ABSOLUTE.test(t) || !st.projectRoot ? t : toAbs(st, t);
-}
-function sameSource(st, a, b) {
-  const x = normSource(canon(st, a));
-  const y = normSource(canon(st, b));
-  if (!x || !y) return false;
-  if (x === y) return true;
-  const [long, short] = x.length >= y.length ? [x, y] : [y, x];
-  return FILE_PATH.test(long) && long.endsWith("/" + short);
-}
-function inLibrary(u) {
-  return !isUrl(u) && /(?:^|\/)library\/(?:raw|wiki|_meta)\//.test(normSource(u));
-}
-function normPath(p) {
-  return p.trim().replaceAll("\\", "/").replace(/^([a-z]):/i, (_m, d) => `${d.toLowerCase()}:`).replaceAll(/(.)\/{2,}/g, "$1/");
-}
-function isWritten(st, path) {
-  const x = normPath(path);
-  return [...st.currentRaw, ...st.pendingWritten].some((w) => normPath(w) === x);
-}
-function writtenPairs(st) {
-  const pairs = [];
-  for (const e of st.sourcePaths) {
-    if (isWritten(st, e.path) && pairs.every((q) => !sameSource(st, q.source, e.source))) pairs.push(e);
-  }
-  return pairs;
-}
-function movedNotes(st, plan) {
-  const moved = [];
-  for (const n of plan) {
-    const w = n.source && writtenPairs(st).find((q) => sameSource(st, q.source, n.source));
-    if (w && normPath(w.path) !== normPath(n.path)) {
-      moved.push(
-        `The raw note for ${n.source} is already written at ${w.path}; keep that path (the plan puts it at ${n.path}).`
-      );
-    }
-  }
-  return moved;
-}
-var FIXED_PATHS = "These source-to-path pairs are fixed: raw notes are append-only and one per source, so the path of a written note is never a spec or research issue. Do not ask to move one.";
-function pairsText(st) {
-  const pairs = writtenPairs(st);
-  return pairs.length > 0 ? pairs.map((q) => `- ${q.source} -> ${q.path}`).join("\n") : "- none";
-}
-function adoptRawList(st, result) {
-  const latest = onlyPaths(result.rawNotes);
-  if (latest.length > 0) st.currentRaw = latest;
-  else log("The scribe returned no raw-note paths; keeping the workflow's own list");
-}
-function list(items) {
-  return items.length > 0 ? items.map((x) => `- ${x}`).join("\n") : "- none";
-}
-function readContext(where, question) {
-  return agent(
-    `${where}
+var CHANGED_SCHEMA = {
+  type: "object",
+  required: ["changed"],
+  properties: { changed: { ...STRINGS, description: "Paths written, relative to the worktree root" } }
+};
+var quoted = (q) => `<<<QUESTION
+${q}
+QUESTION>>>`;
+var scribe = (prompt, label, phaseTitle, schema) => agent(prompt, { agentType: "slopify:library-scribe", label, phase: phaseTitle, schema });
+async function ground(c) {
+  phase("Ground");
+  const lib = must(
+    await agent(
+      `${c.d.WHERE}
+Report what the project library already supports about this question, citing each claim to its file and heading, and name its gaps and stale material. Make no internet requests and no writes.
 
-Report what the project library already supports about this question, so supported work isn't repeated. Read library/_meta/librarian.md, then the relevant index and wiki pages and the raw notes behind them. Cite each supported claim to its file and heading, and name gaps, stale material, and contested pages. Make no internet requests and no writes.
-
-Question: ${question}`,
-    { agentType: "slopify:library-reader", label: "library context", phase: "Context", schema: CONTEXT_SCHEMA }
+${quoted(c.question)}`,
+      { agentType: "slopify:library-reader", label: "library", phase: "Ground", schema: LIBRARY_SCHEMA }
+    ),
+    "ground",
+    "What the library supports."
   );
-}
-function draftSpec(st, spec, why, findings) {
-  const revising = spec !== null;
-  return agent(
-    `${st.where}
-${BOUNDS}
-
-${revising ? `Revise the research spec at ${spec.path}. ${why}` : "Write the research spec."} Put it in the project's spec location (normally docs/specs/), and write only that file. It states the question, scope, evidence standards, planned artifacts, convention fit, acceptance, the bounded sub-questions to retrieve (each with a short stable id), and the raw notes to produce: one raw note per canonical source, as the library conventions require, at the conventional path derived from the source and not from a sub-question id, each naming the sub-questions whose evidence it holds. Return that plan as plannedRawNotes. It sets how good the evidence must be, not what the answer is, and it allows a supported uncertain answer. Read \`library/_meta/librarian.md\` for the conventions. List in changedSubQuestions the ids that are new or whose retrieval must be redone${revising ? "" : " (all of them for a first draft)"}.
-
-Question: ${st.question}
-
-What the library already supports:
-${st.context.summary}
+  return `${lib.summary}
 Supported:
-${list(st.context.supported)}
+${list(lib.supported)}
 Gaps:
-${list(st.context.gaps)}
-${revising ? `
-Raw notes already written by this run, as source -> path (keep each exactly: a raw note is append-only and one per source, so a written note is never moved):
-${pairsText(st)}` : ""}
-${findings.length > 0 ? `
-Findings to resolve:
-${list(findings)}` : ""}`,
-    {
-      agentType: "slopify:library-scribe",
-      label: revising ? "revise spec" : "draft spec",
-      phase: "Spec",
-      schema: SPEC_SCHEMA
-    }
-  );
+${list(lib.gaps)}`;
 }
-function judgeSpec(st, spec) {
-  return clerkVerdict(
-    st,
-    `${st.where}
-
-Judge the research spec at ${spec.path}, revision ${spec.revision}, for research-spec readiness: the question's fit, the authorized scope, evidence standards that allow a supported uncertain answer, planned artifacts, convention fit (library/_meta/librarian.md), and verifiable acceptance. Judge that exact revision, including its planned raw notes (below): one note per canonical source and the conventional paths. Set specIssue.material to true only if the spec itself must change (its question, scope, evidence standards, or planned artifacts); minor notes are not material.
-
-Question: ${st.question}
-
-Planned raw notes:
-${JSON.stringify(spec.plannedRawNotes, null, 2)}
-
-Raw notes already written, as source -> path:
-${pairsText(st)}
-${FIXED_PATHS}`,
-    { agentType: "slopify:library-clerk", label: "judge spec", phase: "Spec", schema: VERDICT_SCHEMA }
-  );
-}
-async function specRound(st, d) {
-  const draft = await draftSpec(st, d.spec, d.why, d.findings);
-  if (!draft) {
-    st.specFailures += 1;
-    st.attempts.push({ gate: "spec", approach: "library-scribe spec draft", failed: "the scribe did not return" });
-    return st.specFailures >= MAX_FAILURES ? "spent" : "revise";
-  }
-  const spec = { ...draft, plannedRawNotes: draft.plannedRawNotes.map((n) => ({ ...n, path: toAbs(st, n.path) })) };
-  d.spec = spec;
-  const moved = movedNotes(st, spec.plannedRawNotes);
-  if (moved.length > 0) {
-    st.specFailures += 1;
-    d.findings = moved;
-    d.why = "The revision moved raw notes that are already written; keep their paths.";
-    st.attempts.push({ gate: "spec", approach: `spec revision ${spec.revision}`, failed: moved.join("; ") });
-    log(`Spec revision ${spec.revision} moves written raw notes; sending it back to the scribe`);
-    return st.specFailures >= MAX_FAILURES ? "spent" : "revise";
-  }
-  const verdict = await judgeSpec(st, spec);
-  if (!verdict) return "spent";
-  if (verdict.verdict === "pass") return "pass";
-  st.specFailures += 1;
-  d.findings = verdict.findings;
-  st.attempts.push({
-    gate: "spec",
-    approach: `spec revision ${spec.revision}`,
-    failed: `${verdict.verdict}: ${verdict.findings.join("; ")}`
-  });
-  d.why = "A fresh library-clerk did not pass it; resolve its findings.";
-  return st.specFailures >= MAX_FAILURES ? "spent" : "revise";
-}
-async function passSpec(st, current, reason, issues) {
-  phase("Spec");
-  const d = { spec: current, findings: issues, why: reason };
-  for (; ; ) {
-    const round = await specRound(st, d);
-    if (round === "pass") return d.spec;
-    if (round === "spent") return null;
-  }
-}
-function pendingAfterRevision(st) {
-  const pending = st.spec.changedSubQuestions.filter((id) => st.spec.subQuestions.some((s) => s.id === id));
-  for (const s of st.spec.subQuestions)
-    if (st.evidence[s.id] === void 0 && !pending.includes(s.id)) pending.push(s.id);
-  return pending;
-}
-function retrieveOne(st, s) {
-  return agent(
-    `${st.where}
+async function writePlan(c, task, label) {
+  const p = must(
+    await scribe(
+      `${c.d.WHERE}
 ${BOUNDS}
+Assignment: research plan. In the worktree ${c.worktree}, ${task} The plan is at ${c.plan}; write only that file.
 
-Investigate this one sub-question of the research spec at ${st.spec.path} (revision ${st.spec.revision}), through the source provider the library conventions name (library/_meta/librarian.md). Meet the spec's evidence standards. List in sources only the sources whose content your findings quote or rest on to answer the question; never the spec, the library conventions, or files you read only for orientation. If you rely on a note already in the library, give its path as url and the canonical source it records in origin. Set specIssue.material to true only if the spec itself must change (its question, scope, evidence standards, or planned artifacts); minor notes are not material.
-
-Question: ${st.question}
-Sub-question ${s.id}: ${s.question}
-
-Already supported by the library:
-${list(st.context.supported)}`,
-    {
-      agentType: "slopify:library-researcher",
-      label: `retrieve ${s.id}`,
-      phase: "Retrieve",
-      schema: RESEARCH_SCHEMA
-    }
+${quoted(c.question)}`,
+      label,
+      "Plan",
+      PLAN_SCHEMA
+    ),
+    "plan",
+    "A research plan."
   );
+  return p.subQuestions;
 }
-function recordRetrieval(st, id, result, issues, retry) {
-  if (result) {
-    st.retrievalTries[id] = 0;
-    st.evidence[id] = result;
-    if (materialIssue(result.specIssue)) issues.push(`Sub-question ${id}: ${result.specIssue.change}`);
-    else if (result.specIssue.change) log(`Sub-question ${id}: non-material spec note ignored`);
-    return;
-  }
-  const tries = (st.retrievalTries[id] || 0) + 1;
-  st.retrievalTries[id] = tries;
-  if (tries < MAX_RETRIEVAL_TRIES) {
-    retry.push(id);
-    log(`Sub-question ${id}: no researcher result; retrieving it again`);
-  } else {
-    st.evidence[id] = {
-      findings: [],
-      sources: [],
-      contradictions: [],
-      limits: ["The researcher did not return."],
-      specIssue: { material: false, change: "" }
-    };
-    log(`Sub-question ${id}: no researcher result after ${tries} attempts; recorded as a retrieval limit`);
-  }
-}
-async function reviseAfterRetrieval(st, issues, retry) {
-  st.specFailures += 1;
-  st.attempts.push({ gate: "spec", approach: "spec revision forced by retrieval", failed: issues.join("; ") });
-  if (st.specFailures >= MAX_FAILURES)
-    return blocked(st.attempts, "Spec", ["A spec that survives retrieval; see attempts."]);
-  const revised = await passSpec(st, st.spec, "Researchers reported a material spec issue; revise it.", issues);
-  if (!revised) {
-    return blocked(st.attempts, "Spec", ["A spec a fresh library-clerk will pass; see the findings in attempts."]);
-  }
-  st.spec = revised;
-  st.pending = pendingAfterRevision(st);
-  for (const id of retry) if (!st.pending.includes(id)) st.pending.push(id);
-  return "again";
-}
-async function retrieve(st) {
-  phase("Retrieve");
-  const toRun = st.spec.subQuestions.filter((s) => st.pending.includes(s.id));
-  const results = await parallel(toRun.map((s) => () => retrieveOne(st, s)));
-  const issues = [];
-  const retry = [];
-  for (const [i, s] of toRun.entries()) recordRetrieval(st, s.id, results[i], issues, retry);
-  for (const s of toRun)
-    if (st.evidence[s.id] !== void 0 && !retry.includes(s.id))
-      st.writtenFor = st.writtenFor.filter((e) => e.sub !== s.id);
-  st.pending = [];
-  st.persisted = null;
-  if (issues.length > 0) return reviseAfterRetrieval(st, issues, retry);
-  if (retry.length > 0) {
-    st.pending = retry;
-    return "again";
-  }
-  return void 0;
-}
-function citedSources(st, id, ev) {
-  const usable = [];
-  const notes = [];
-  for (const x of ev.sources) {
-    if (inLibrary(x.url)) {
-      if (/(?:^|\/)library\/raw\//.test(normSource(x.url)))
-        notes.push({ path: canon(st, x.url), origin: x.origin || "" });
-      else log(`Sub-question ${id}: dropped library path ${x.url} as a source`);
-    } else if (normSource(x.url) && !sameSource(st, st.spec.path, x.url)) usable.push(x);
-  }
-  if (usable.length === 0 && notes.length === 0 && ev.findings.length > 0) usable.push(...plannedSources(st, id));
-  return { usable, notes };
-}
-function plannedSources(st, id) {
-  const out = [];
-  for (const n of st.spec.plannedRawNotes)
-    if (n.source && n.subQuestions.includes(id)) out.push({ url: n.source, title: "" });
-  return out;
-}
-function hashOf(text) {
-  let h = 0;
-  for (const ch of text) h = Math.imul(h, 31) + (ch.slice(0, 1).codePointAt(0) ?? 0) >>> 0;
-  return h.toString(36);
-}
-function slugOf(st, key) {
-  const root = normSource(st.projectRoot);
-  let part = root && key.startsWith(`${root}/`) ? key.slice(root.length + 1) : key;
-  part = part.split("/").slice(-3).join("/");
-  const hyphenated = part.replaceAll(/[^a-z0-9]+/g, "-").replace(/^-+/, "");
-  const words = withoutTrailing(hyphenated, "-").slice(-48).replace(/^-+/, "");
-  return `${words || "source"}-${hashOf(key)}`;
-}
-function rawDir(st) {
-  for (const n of st.spec.plannedRawNotes) {
-    const dir = /^(.*\/library\/raw)\/[^/]+$/i.exec(normPath(n.path))?.[1];
-    if (dir !== void 0) return dir;
-  }
-  return st.projectRoot ? `${withoutTrailing(normPath(st.projectRoot), "/")}/library/raw` : "library/raw";
-}
-function assignPaths(st, jobs) {
-  const taken = new Set(
-    [
-      ...st.currentRaw,
-      ...st.pendingWritten,
-      ...st.sourcePaths.map((q) => q.path),
-      ...st.spec.plannedRawNotes.map((n) => n.path)
-    ].map((p) => normPath(p))
+async function checkPlan(c) {
+  const v = must(
+    await agent(
+      `${c.d.WHERE}
+Assignment: research-plan readiness. In the worktree ${c.worktree}, judge the plan at ${c.plan} for this question.
+
+${quoted(c.question)}`,
+      { agentType: "slopify:library-clerk", label: "check the plan", phase: "Plan", schema: CLERK_SCHEMA }
+    ),
+    "plan",
+    "A check of the plan."
   );
-  for (const job of jobs) {
-    const known = st.sourcePaths.find((q) => sameSource(st, q.source, job.source));
-    const planned = st.spec.plannedRawNotes.find((n) => n.source && sameSource(st, n.source, job.source));
-    const hit = known ?? planned;
-    if (hit) {
-      job.path = hit.path;
-    } else {
-      const date = /^\d{4}-\d{2}-\d{2}$/.test(st.spec.date || "") ? `${st.spec.date}-` : "";
-      const base = `${rawDir(st)}/${date}${slugOf(st, job.key)}`;
-      let candidate = `${base}.md`;
-      let n = 2;
-      while (taken.has(normPath(candidate))) {
-        candidate = `${base}-${n}.md`;
-        n += 1;
-      }
-      job.path = candidate;
-    }
-    taken.add(normPath(job.path));
-  }
+  const found = v.findings.map((f) => ({ source: "library-clerk", location: c.plan, text: f }));
+  return v.verdict === "unverified" && found.length === 0 ? [{ source: "library-clerk", location: c.plan, text: `The check couldn't run: ${v.evidence}` }] : found;
 }
-function buildJobs(st, leads) {
-  const jobs = [];
-  const origins = [];
-  for (const s of st.spec.subQuestions) {
-    const ev = st.evidence[s.id];
-    if (!ev) continue;
-    const { usable, notes } = citedSources(st, s.id, ev);
-    for (const note of notes) {
-      if (!st.pendingExisting.includes(note.path)) st.pendingExisting.push(note.path);
-      if (note.origin) origins.push(note.origin);
-    }
-    if (ev.findings.length > 0 && usable.length === 0 && notes.length === 0)
-      log(`Sub-question ${s.id}: findings cite no usable source; no raw note will hold them`);
-    addJobs(st, jobs, s.id, usable);
-  }
-  assignPaths(st, jobs);
-  addLeads(st, jobs, origins, leads);
-  return jobs;
-}
-function addJobs(st, jobs, id, usable) {
-  for (const src of usable) {
-    if (st.writtenFor.some((e) => e.sub === id && sameSource(st, e.source, src.url))) continue;
-    let job = jobs.find((j) => sameSource(st, j.source, src.url));
-    if (!job) {
-      const planned = st.spec.plannedRawNotes.find((n) => n.source && sameSource(st, n.source, src.url));
-      job = {
-        key: normSource(canon(st, planned ? planned.source : src.url)),
-        source: planned ? planned.source : src.url,
-        title: src.title,
-        path: "",
-        subs: []
-      };
-      jobs.push(job);
-    }
-    if (!job.subs.includes(id)) job.subs.push(id);
-  }
-}
-function addLeads(st, jobs, origins, leads) {
-  for (const n of st.spec.plannedRawNotes) {
-    const covered = jobs.some((j) => sameSource(st, j.source, n.source)) || st.writtenFor.some((e) => sameSource(st, e.source, n.source)) || origins.some((o) => sameSource(st, o, n.source)) || isWritten(st, n.path);
-    if (n.source && !covered) {
-      leads.push(
-        `${n.source}: planned for ${n.path}, but no retrieved evidence cites it; record it as an unretrieved lead, not as evidence`
-      );
-    }
-  }
-}
-function jobPrompt(st, job) {
-  const target = `Write the one raw note for the source ${job.source}${job.title ? ` (${job.title})` : ""} at ${job.path}. That path is yours alone; use it exactly, and if the note already exists, append a dated section instead of rewriting it. The one exception: if another raw note already holds this same canonical source, append to that note instead and return its path.`;
-  const material = job.subs.map((id) => ({
-    id,
-    question: st.spec.subQuestions.find((s) => s.id === id)?.question,
-    evidence: st.evidence[id]
-  }));
-  return `${st.where}
-${BOUNDS}
+async function plan(c, context) {
+  phase("Plan");
+  let subQuestions = await writePlan(
+    c,
+    `write the plan: the bounded sub-questions to retrieve, each with a short stable id, and how good the evidence must be. It may allow a supported uncertain answer. Leave out what the library already supports:
+${context}`,
+    "plan"
+  );
+  for (let round2 = 1; round2 <= MAX_FIX_ROUNDS; round2 += 1) {
+    const problems = await checkPlan(c);
+    const confirmed = await confirmedProblems(
+      problems,
+      (p) => `${c.d.WHERE}
+Rule on one problem reported against the research plan at ${c.plan}, in the worktree ${c.worktree}. blocker: research by this plan can't answer the question. major: a real flaw that should be fixed first. minor: real but low impact.
 
-Assignment: raw notes. ${target} Record only the findings that rest on that source; other sources have their own writers. The library keeps one raw note per canonical source, so before writing, search the raw notes' source fields for the canonical source. Write only that note, and leave the index, taxonomy, and log untouched; return their entries as deferred metadata. In produced, return the absolute path of the note you wrote or appended. If the evidence has nothing for this source, write nothing and return skipped true with the reason.
-
-Research spec: ${st.spec.path} (revision ${st.spec.revision})
-
-Evidence:
-${JSON.stringify(material, null, 2)}`;
-}
-function recordRaw(st, todo, raw) {
-  const failed = [];
-  for (const [i, job] of todo.entries()) {
-    const r = raw[i];
-    const paths = r ? onlyPaths(r.produced) : [];
-    if (r && paths.length === 0 && r.skipped && r.reason.trim()) recordSkipped(st, job, r);
-    else if (r && paths.length > 0) recordWritten(st, job, r, paths);
-    else failed.push(job);
-  }
-  return failed;
-}
-function recordSkipped(st, job, r) {
-  const lead = `${job.source || job.key}: no raw note written (${r.reason.trim()}); record it as an unretrieved lead, not as evidence`;
-  if (!st.pendingLeads.includes(lead)) st.pendingLeads.push(lead);
-  st.pendingDeferred.push(...r.deferredMetadata);
-  for (const sub of job.subs) st.writtenFor.push({ source: job.source, sub });
-}
-function recordWritten(st, job, r, paths) {
-  const first = paths[0] ?? "";
-  const own = normPath(first) === normPath(job.path);
-  const holder = !own && st.sourcePaths.find((q) => normPath(q.path) === normPath(first) && !sameSource(st, q.source, job.source));
-  if (holder)
-    log(
-      `Raw note ${first} holds both ${holder.source} and ${job.source}; the scribe judged them one canonical source, so they share it`
+${p.text}`,
+      "Plan"
     );
-  for (const p of paths) if (!st.pendingWritten.includes(p)) st.pendingWritten.push(p);
-  st.pendingDeferred.push(...r.deferredMetadata);
-  if (st.sourcePaths.every((q) => !sameSource(st, q.source, job.source)))
-    st.sourcePaths.push({ source: job.source, path: first });
-  for (const sub of job.subs) st.writtenFor.push({ source: job.source, sub });
+    if (confirmed.length === 0) return { subQuestions, limits: [] };
+    if (round2 === MAX_FIX_ROUNDS) return { subQuestions, limits: confirmed };
+    subQuestions = await writePlan(
+      c,
+      `revise the plan to fix these problems:
+${list(confirmed)}`,
+      `revise ${String(round2)}`
+    );
+  }
+  return { subQuestions, limits: [] };
 }
-function integrate(st) {
-  return agent(
-    `${st.where}
+async function retrieve(c, subQuestions) {
+  phase("Retrieve");
+  const found = await parallel(
+    subQuestions.map(
+      (s) => () => agent(
+        `${c.d.WHERE}
 ${BOUNDS}
+Investigate one sub-question of the research plan at ${c.worktree}/${c.plan}, through the source provider library/_meta/librarian.md names, and meet the plan's evidence standards. If the plan is wrong for this sub-question, say how in planProblem, and answer as well as you can.
 
-Assignment: integration. You are the only writer of the synthesis and shared metadata for this batch. All raw-note writes have finished. Integrate the research spec at ${st.spec.path} (revision ${st.spec.revision}) into the library: write the wiki synthesis that answers the question with each consequential claim cited to its raw-note evidence anchor, and complete the index, taxonomy, and log, including the deferred metadata below. Never overwrite raw notes with synthesis, and keep uncertainty, contradictions, and unretrieved leads visible. Report each raw note's disposition. In rawNotes, return the authoritative current list of this research's raw notes (absolute paths).
+${quoted(c.question)}
 
-Question: ${st.question}
+Sub-question ${s.id}: ${s.question}`,
+        {
+          agentType: "slopify:library-researcher",
+          label: `retrieve ${s.id}`,
+          phase: "Retrieve",
+          schema: RESEARCH_SCHEMA
+        }
+      )
+    )
+  );
+  return subQuestions.map((s, i) => must(found[i], "retrieve", `Evidence for ${s.id}.`));
+}
+function bySource(evidence) {
+  const sources = /* @__PURE__ */ new Map();
+  for (const e of evidence) {
+    for (const s of e.sources) {
+      const url = s.url.trim();
+      const entry = sources.get(url) ?? { title: s.title, findings: [] };
+      entry.findings.push(...e.findings);
+      sources.set(url, entry);
+    }
+  }
+  return sources;
+}
+async function persist(c, evidence, limits) {
+  phase("Persist");
+  const sources = [...bySource(evidence)];
+  const notes = await parallel(
+    sources.map(
+      ([url, s]) => () => scribe(
+        `${c.d.WHERE}
+${BOUNDS}
+Assignment: raw notes. In the worktree ${c.worktree}, record this one source in its raw note, as library/_meta/librarian.md says: append to the note that already records it, or create one. Keep only the findings below that rest on this source.
 
-Raw notes written by this run:
-${list(st.currentRaw)}
+Source: ${url} (${s.title})
+Findings:
+${list(s.findings)}`,
+        `raw note ${String(sources.findIndex(([u]) => u === url) + 1)}`,
+        "Persist",
+        RAW_SCHEMA
+      )
+    )
+  );
+  const raw = sources.map(([url], i) => must(notes[i], "persist", `The raw note for ${url}.`));
+  const open = [
+    ...limits,
+    ...evidence.flatMap((e) => [...e.limits, ...e.contradictions, ...e.planProblem ? [e.planProblem] : []])
+  ];
+  const rawPaths = list(raw.map((r) => r.path));
+  const deferred = list(raw.flatMap((r) => r.deferredMetadata));
+  const integrated = must(
+    await scribe(
+      `${c.d.WHERE}
+${BOUNDS}
+Assignment: integration. You are the only writer of the synthesis and shared metadata. In the worktree ${c.worktree}, write the wiki page or pages that answer the question, each consequential claim cited to its raw-note evidence, and complete the index, taxonomy, and log, including the deferred metadata below. Keep these limits and contradictions visible in the pages:
+${list(open)}
 
-Raw notes written since the last integration:
-${list(st.pendingWritten)}
+${quoted(c.question)}
+
+Raw notes:
+${rawPaths}
 
 Deferred metadata:
-${list(st.pendingDeferred)}
-
-Library raw notes the research cites (existing notes: cite them, do not rewrite them or re-append their evidence):
-${list(st.pendingExisting)}
-
-Planned sources with no retrieved evidence (keep each visible as an unretrieved lead in the library's format; cite nothing about its contents):
-${list(st.pendingLeads)}
-
-Retrieval limits and contradictions reported by researchers:
-${JSON.stringify(
-      st.spec.subQuestions.filter((s) => st.evidence[s.id]).map((s) => ({ id: s.id, contradictions: st.evidence[s.id]?.contradictions, limits: st.evidence[s.id]?.limits })),
-      null,
-      2
-    )}`,
-    { agentType: "slopify:library-scribe", label: "integrate", phase: "Persist", schema: INTEGRATION_SCHEMA }
+${deferred}`,
+      "integrate",
+      "Persist",
+      INTEGRATION_SCHEMA
+    ),
+    "persist",
+    "The integrated wiki pages."
   );
+  const paths = list([.../* @__PURE__ */ new Set([...raw.map((r) => r.path), ...integrated.changed])]);
+  const doneLine = `done findings ${integrated.pages.join(" ")}`;
+  pushed(
+    await callPusher(
+      c.d.pushBrief(
+        `Commit exactly these paths as they stand, staged by explicit path, with a message in the convention docs/FORGE.md declares, saying: add the research on this question. Do not push.
+${paths}`,
+        [doneLine]
+      ),
+      "commit: add the research",
+      "Persist"
+    ),
+    "A commit of the research."
+  );
+  return integrated.pages;
 }
-async function persist(st) {
-  phase("Persist");
-  const leads = [];
-  let todo = buildJobs(st, leads);
-  st.pendingLeads.push(...leads.filter((l) => !st.pendingLeads.includes(l)));
-  while (todo.length > 0) {
-    const raw = await parallel(
-      todo.map(
-        (job) => () => agent(jobPrompt(st, job), {
-          agentType: "slopify:library-scribe",
-          label: `raw note ${job.path ? job.path.split(/[\\/]/).at(-1) ?? "" : job.key.slice(0, 40)}`,
-          phase: "Persist",
-          schema: RAW_SCHEMA
-        })
-      )
-    );
-    todo = recordRaw(st, todo, raw);
-    if (todo.length === 0) {
-      continue;
+async function checkLibrary(c) {
+  const scope = `In the worktree ${c.worktree}, check the library files this branch changes from the target branch docs/FORGE.md declares.`;
+  const assignments = ["answer and evidence support", "library integrity"];
+  const verdicts = await parallel(
+    assignments.map(
+      (a) => () => agent(`${c.d.WHERE}
+Assignment: ${a}. ${scope}
+
+${quoted(c.question)}`, {
+        agentType: "slopify:library-clerk",
+        label: a,
+        phase: "Validate",
+        schema: CLERK_SCHEMA
+      })
+    )
+  );
+  return assignments.flatMap((a, i) => {
+    const v = must(verdicts[i], "validate", `A verdict on ${a}.`);
+    const found = v.findings.map((f) => ({ source: "library-clerk", location: a, text: f }));
+    if (v.verdict === "unverified" && found.length === 0) {
+      found.push({ source: "library-clerk", location: a, text: `The check couldn't run: ${v.evidence}` });
     }
-    st.persistFailures += 1;
-    st.attempts.push({
-      gate: "persist",
-      approach: `raw notes for ${todo.map((j) => j.key).join(", ")}`,
-      failed: "the scribe returned no note path"
-    });
-    if (st.persistFailures >= MAX_FAILURES)
-      return blocked(st.attempts, "Persist", ["A raw note for every planned source; see attempts."]);
-    log(`Raw-note writers returned no path for ${todo.length} note(s); retrying them`);
-  }
-  for (const p of st.pendingWritten) if (!st.currentRaw.includes(p)) st.currentRaw.push(p);
-  const integrated = await integrate(st);
-  if (!integrated) {
-    st.persistFailures += 1;
-    st.attempts.push({ gate: "persist", approach: "integration", failed: "the integrator did not return" });
-    return st.persistFailures >= MAX_FAILURES ? blocked(st.attempts, "Persist", ["A completed integration; see attempts."]) : "again";
-  }
-  st.persisted = integrated;
-  adoptRawList(st, integrated);
-  st.pendingWritten = [];
-  st.pendingDeferred = [];
-  st.pendingLeads = [];
-  st.pendingExisting = [];
-  return { integration: integrated };
+    return found;
+  });
 }
-function validatePrompt(st, persisted) {
-  return `${st.where}
-
-Validate the persisted research: the changed paths, the draft answer, the raw evidence, the spec revision, and the affected links and metadata. Check that scope against the library conventions (library/_meta/librarian.md) and the cited sources, not the whole library. Set specIssue.material to true only if the spec itself must change (its question, scope, evidence standards, or planned artifacts); minor notes are not material.
-
-Question: ${st.question}
-Spec: ${st.spec.path} (revision ${st.spec.revision})
-Raw notes:
-${list(st.currentRaw)}
-Written raw notes, as source -> path. ${FIXED_PATHS}
-${pairsText(st)}
-Synthesis:
-${list(onlyPaths(persisted.synthesis))}
-Metadata:
-${list(onlyPaths(persisted.metadata))}
-
-Draft answer:
-${persisted.answer}`;
-}
-function done(st, persisted, verdict) {
-  const artifacts = {
-    spec: st.spec.path,
-    rawNotes: st.currentRaw,
-    synthesis: onlyPaths(persisted.synthesis),
-    metadata: onlyPaths(persisted.metadata)
-  };
-  return {
-    done: true,
-    answer: persisted.answer,
-    artifacts,
-    verdict: { verdict: verdict.verdict, evidence: verdict.evidence },
-    report: [
-      `Research done; a fresh library-clerk passed it (${verdict.evidence}).`,
-      `Spec: ${artifacts.spec}`,
-      `Raw notes: ${artifacts.rawNotes.join(", ") || "none"}`,
-      `Synthesis: ${artifacts.synthesis.join(", ") || "none"}`,
-      `Index and log: ${artifacts.metadata.join(", ") || "none"}`
-    ].join("\n"),
-    gaps: persisted.gaps,
-    contradictions: persisted.contradictions,
-    limits: persisted.limits
-  };
-}
-function repair(st, persisted, findings) {
-  return agent(
-    `${st.where}
+async function repair(c, problems) {
+  const r = must(
+    await scribe(
+      `${c.d.WHERE}
 ${BOUNDS}
-
-Assignment: integration repair. You are the only writer. A fresh library-clerk did not pass the persisted research. Repair exactly these findings in the files they concern, without researching new questions, and keep uncertainty and contradictions visible. Then return the same report as the integration; rawNotes is the authoritative current list of this research's raw notes after your repair, without any note you merged or deleted.
-
-Spec: ${st.spec.path} (revision ${st.spec.revision})
-Question: ${st.question}
-
-Findings:
-${list(findings)}
-
-Current artifacts:
-Raw notes:
-${list(st.currentRaw)}
-Synthesis:
-${list(onlyPaths(persisted.synthesis))}
-Metadata:
-${list(onlyPaths(persisted.metadata))}`,
-    { agentType: "slopify:library-scribe", label: "repair", phase: "Persist", schema: INTEGRATION_SCHEMA }
+Assignment: integration repair. You are the only writer. In the worktree ${c.worktree}, fix these problems in the library files they concern, without researching new questions, and keep uncertainty and contradictions visible. Never rewrite a raw note's original capture.
+${list(problems)}`,
+      "repair",
+      "Build",
+      CHANGED_SCHEMA
+    ),
+    "build",
+    "Repaired library files."
   );
-}
-async function validate(st, persisted) {
-  phase("Validate");
-  const verdict = await clerkVerdict(st, validatePrompt(st, persisted), {
-    agentType: "slopify:library-clerk",
-    label: "validate research",
-    phase: "Validate",
-    schema: VERDICT_SCHEMA
-  });
-  if (!verdict)
-    return blocked(st.attempts, "Persist", [
-      "A verdict from a fresh library-clerk on the persisted research; see attempts."
-    ]);
-  if (verdict.verdict === "pass") return done(st, persisted, verdict);
-  st.persistFailures += 1;
-  const findings = verdict.findings;
-  st.attempts.push({
-    gate: "persist",
-    approach: `integration validated as ${verdict.verdict}`,
-    failed: findings.join("; ")
-  });
-  if (st.persistFailures >= MAX_FAILURES) {
-    return blocked(st.attempts, "Persist", [
-      "Persisted research a fresh library-clerk will pass; see the findings in attempts."
-    ]);
-  }
-  if (materialIssue(verdict.specIssue)) {
-    st.specFailures += 1;
-    st.attempts.push({
-      gate: "spec",
-      approach: "spec revision forced by validation",
-      failed: verdict.specIssue.change
-    });
-    if (st.specFailures >= MAX_FAILURES)
-      return blocked(st.attempts, "Spec", ["A spec that survives validation; see attempts."]);
-    const revised = await passSpec(st, st.spec, "The final validation reported a material spec issue; revise it.", [
-      verdict.specIssue.change
-    ]);
-    if (!revised) {
-      return blocked(st.attempts, "Spec", ["A spec a fresh library-clerk will pass; see the findings in attempts."]);
-    }
-    st.spec = revised;
-    st.pending = pendingAfterRevision(st);
-    st.persisted = null;
-    return void 0;
-  }
-  phase("Persist");
-  const repaired = await repair(st, persisted, findings);
-  if (repaired) {
-    st.persisted = repaired;
-    adoptRawList(st, repaired);
-  } else st.attempts.push({ gate: "persist", approach: "repair", failed: "the scribe did not return" });
-  return void 0;
-}
-async function integrationOf(st) {
-  return st.persisted ? { integration: st.persisted } : persist(st);
-}
-async function researchLoop(st) {
-  for (; ; ) {
-    if (st.pending.length > 0) {
-      const next = await retrieve(st);
-      if (next === "again") continue;
-      if (next) return next;
-    }
-    const persisted = await integrationOf(st);
-    if (persisted === "again") continue;
-    if (!("integration" in persisted)) return persisted;
-    const result = await validate(st, persisted.integration);
-    if (result) return result;
-  }
+  return r.changed;
 }
 async function run() {
   const input = inputOf(args, "question");
-  const question = textOf(input["question"]);
-  if (!question) {
-    return { started: false, next: "Ask the user for the research question, then invoke again." };
+  const arg = textOf(input["question"]);
+  if (!arg)
+    return { status: "not-started", next: "Ask the user for the Linear issue or the question, then invoke again." };
+  const d = createDeliver({ workflow: WORKFLOW, projectRoot: textOf(input["projectRoot"]), storyArg: arg });
+  try {
+    const found = await findCard(d, arg, "research");
+    if ("status" in found) return found;
+    const resume = await resumeOf(d, found);
+    const stopped = await openWork(d, found, resume);
+    if (stopped) return stopped;
+    const c = {
+      d,
+      question: found.story,
+      plan: `.tmp/research/${found.slug}.plan.md`,
+      worktree: d.state.worktree
+    };
+    let pages = resume.findings;
+    if (pages.length === 0) {
+      const context = await ground(c);
+      const planned = await plan(c, context);
+      pages = await persist(c, await retrieve(c, planned.subQuestions), planned.limits);
+    }
+    const result = await runLoop({
+      d,
+      where: d.WHERE,
+      story: found.story,
+      cardId: found.cardId,
+      build: null,
+      validate: null,
+      specDir: "",
+      answers: answersOf(input["answers"]),
+      startAtReview: d.state.pr ? Math.max(resume.reviewFired, 1) : 0,
+      built: true,
+      document: { paths: pages, check: () => checkLibrary(c), revise: (problems) => repair(c, problems) }
+    });
+    return { ...result, workflow: WORKFLOW, report: reportOf(WORKFLOW, result) };
+  } catch (error) {
+    return stopOf(d, error);
   }
-  const projectRoot = textOf(input["projectRoot"]);
-  const where = whereOf(projectRoot);
-  phase("Context");
-  const context = await readContext(where, question);
-  if (!context) {
-    return blocked([], "Context", [
-      "The library-reader did not return; check that the project has a library (run /slopify:bootstrap) and invoke again."
-    ]);
-  }
-  const st = {
-    question,
-    projectRoot,
-    where,
-    context,
-    attempts: [],
-    specFailures: 0,
-    persistFailures: 0,
-    persisted: null,
-    pendingWritten: [],
-    pendingDeferred: [],
-    writtenFor: [],
-    sourcePaths: [],
-    pendingExisting: [],
-    pendingLeads: [],
-    retrievalTries: {},
-    currentRaw: []
-  };
-  const spec = await passSpec(st, null, "", []);
-  return spec ? researchLoop({ ...st, spec, evidence: {}, pending: spec.subQuestions.map((s) => s.id) }) : blocked(st.attempts, "Spec", ["A spec a fresh library-clerk will pass; see the findings in attempts."]);
 }
 
 // src/slopify/workflows/research.entry.ts

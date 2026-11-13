@@ -815,7 +815,7 @@ describe("the document flow", () => {
       specDir: "",
       built: true,
       document: {
-        path: "docs/spikes/smr-1.md",
+        paths: ["docs/spikes/smr-1.md"],
         check: () => {
           checked += 1;
           return Promise.resolve(problems[checked - 1] ?? []);

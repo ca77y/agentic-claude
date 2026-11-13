@@ -3,7 +3,8 @@ import { callPusher, createDeliver, list, opRef, show, slugOf, type Stopped } fr
 import { inputOf, textOf, type NotStarted } from "../lib/input.ts";
 import { must, pushed, stopOf, type Run } from "../lib/loop.ts";
 import { MAX_FIX_ROUNDS } from "../lib/rules.ts";
-import { RULING_SCHEMA, libraryReaderSchema } from "../lib/schemas.ts";
+import { confirmedProblems } from "../lib/judge.ts";
+import { libraryReaderSchema } from "../lib/schemas.ts";
 
 export const meta = {
   name: "shape",
@@ -210,23 +211,13 @@ async function checkDraft(d: Run, c: Card): Promise<Problem[]> {
   });
 }
 
-async function rule(d: Run, c: Card, problems: readonly Problem[]): Promise<string[]> {
-  const rulings = await parallel(
-    problems.map(
-      (p, i) => () =>
-        agent(
-          `${d.WHERE}\nRule on one problem ${p.source} reported in the card draft ${c.draft}, a ${c.kind}, checking it against the draft and the card template. blocker: a delivery can't take the card as it is. major: a real flaw that should be fixed before filing. minor: real but low impact.\n\nAt ${p.location}:\n${p.text}`,
-          { agentType: "slopify:judge", label: `rule ${String(i + 1)}`, phase: "Check", schema: RULING_SCHEMA },
-        ),
-    ),
+const rule = (d: Run, c: Card, problems: readonly Problem[]): Promise<string[]> =>
+  confirmedProblems(
+    problems,
+    (p) =>
+      `${d.WHERE}\nRule on one problem ${p.source} reported in the card draft ${c.draft}, a ${c.kind}, checking it against the draft and the card template. blocker: a delivery can't take the card as it is. major: a real flaw that should be fixed before filing. minor: real but low impact.\n\nAt ${p.location}:\n${p.text}`,
+    "Check",
   );
-  const confirmed: string[] = [];
-  for (const [i, p] of problems.entries()) {
-    const r = must(rulings[i], "check", `A ruling on ${p.location}.`);
-    if (r.verdict === "confirmed" && r.severity !== "minor") confirmed.push(`${p.location}: ${p.text} (${r.reason})`);
-  }
-  return confirmed;
-}
 
 // Up to three rounds of checks and revisions. What is still wrong after them becomes an open question.
 async function refine(d: Run, c: Card, firstOpen: readonly string[]): Promise<string[]> {

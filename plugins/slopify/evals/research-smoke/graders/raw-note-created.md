@@ -1,4 +1,4 @@
 ---
 type: file_exists
-path: library/raw/*.md
+path: .worktrees/smoke/library/raw/*.md
 ---

@@ -1,4 +1,4 @@
 ---
 type: file_exists
-path: library/wiki/*.md
+path: .worktrees/smoke/library/wiki/*.md
 ---

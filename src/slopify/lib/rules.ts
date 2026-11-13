@@ -140,8 +140,8 @@ export interface Listed {
 export interface PrBody {
   issue: string;
   specDir: string;
-  /** A spike's findings document. */
-  document?: string;
+  /** The documents a spike or a research run adds. */
+  documents?: readonly string[];
   draftReasons: readonly Listed[];
   needsConfirmation: readonly Listed[];
   /** Irreversible steps nothing explicitly permits, left for a person to do. */
@@ -178,7 +178,7 @@ function criteriaTable(rows: readonly CriterionRow[]): string {
 // The PR description, rendered from the run state and written again after every round.
 export function renderBody(b: PrBody): string {
   return [
-    `Issue: ${b.issue}${b.specDir ? `\n\nSpec: \`${b.specDir}\`` : ""}${b.document ? `\n\nFindings: \`${b.document}\`` : ""}`,
+    `Issue: ${b.issue}${b.specDir ? `\n\nSpec: \`${b.specDir}\`` : ""}${b.documents?.length ? `\n\nFindings: ${b.documents.map((p) => `\`${p}\``).join(", ")}` : ""}`,
     section("Why this is a draft", items(b.draftReasons)),
     section("Needs confirmation", items(b.needsConfirmation)),
     section("Manual actions", b.manualActions.map((a) => `- ${a}`).join("\n")),

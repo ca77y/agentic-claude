@@ -479,6 +479,26 @@ function pushed(r, what) {
   throw new Halt("push", what, unmet ?? "pusher didn't return");
 }
 
+// src/slopify/lib/judge.ts
+async function confirmedProblems(problems, brief, phaseTitle) {
+  const rulings = await parallel(
+    problems.map(
+      (p, i) => () => agent(brief(p), {
+        agentType: "slopify:judge",
+        label: `rule ${String(i + 1)}`,
+        phase: phaseTitle,
+        schema: RULING_SCHEMA
+      })
+    )
+  );
+  const confirmed = [];
+  for (const [i, p] of problems.entries()) {
+    const r = must(rulings[i], phaseTitle.toLowerCase(), `A ruling on ${p.location}.`);
+    if (r.verdict === "confirmed" && r.severity !== "minor") confirmed.push(`${p.location}: ${p.text} (${r.reason})`);
+  }
+  return confirmed;
+}
+
 // src/slopify/workflows/shape.ts
 var WORKFLOW = "shape";
 var DELIVERABLE = "Deliverable";
@@ -633,26 +653,15 @@ The card draft is ${c.draft}, a ${c.kind}.`, { label: name, phase: "Check" })
     return found;
   });
 }
-async function rule(d, c, problems) {
-  const rulings = await parallel(
-    problems.map(
-      (p, i) => () => agent(
-        `${d.WHERE}
+var rule = (d, c, problems) => confirmedProblems(
+  problems,
+  (p) => `${d.WHERE}
 Rule on one problem ${p.source} reported in the card draft ${c.draft}, a ${c.kind}, checking it against the draft and the card template. blocker: a delivery can't take the card as it is. major: a real flaw that should be fixed before filing. minor: real but low impact.
 
 At ${p.location}:
 ${p.text}`,
-        { agentType: "slopify:judge", label: `rule ${String(i + 1)}`, phase: "Check", schema: RULING_SCHEMA }
-      )
-    )
-  );
-  const confirmed = [];
-  for (const [i, p] of problems.entries()) {
-    const r = must(rulings[i], "check", `A ruling on ${p.location}.`);
-    if (r.verdict === "confirmed" && r.severity !== "minor") confirmed.push(`${p.location}: ${p.text} (${r.reason})`);
-  }
-  return confirmed;
-}
+  "Check"
+);
 async function refine(d, c, firstOpen) {
   let open = [...firstOpen];
   for (let round = 1; round <= MAX_FIX_ROUNDS; round += 1) {

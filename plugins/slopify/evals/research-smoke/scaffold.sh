@@ -13,11 +13,26 @@ git init -q -b main
 git config user.email eval@example.com
 git config user.name eval
 
-mkdir -p docs/specs
+mkdir -p docs/specs docs/spikes
 cat > docs/BOARD.md <<'MD'
 # Board declaration
 
 No board: there are no card operations. Acceptance comes from the user's request.
+MD
+git init -q --bare .forge/remote.git
+git remote add origin "$PWD/.forge/remote.git"
+cat > TESTING.md <<'MD'
+# Testing
+
+## Checks
+
+None.
+
+## Categories
+
+### Uncategorized
+
+When a criterion fits no category, the pull request is `ready` or stays `draft`: draft
 MD
 cat > docs/FORGE.md <<'MD'
 # Forge declaration
@@ -26,24 +41,23 @@ Configuration does not authorize execution; the user's request does.
 
 ## Repository
 
-- Remote and permitted push destinations: none; this repository is local only.
-- Forge: none. Hosted pull requests and reviews are unsupported.
+- Paths in this declaration are relative to the main checkout root, never to a worktree.
+- Remote and permitted push destinations: `origin`, the local bare repository `.forge/remote.git`; only the research branch is pushed.
+- Forge: a local stub. A pull request is the file `.forge/prs/smoke.md`.
 - Target branch and its protection: `main`; automated work never commits to it.
 
 ## Workspace
 
-- Branch name: `research/<slug>`.
-- Story worktree path and its ignore rule: `.worktrees/<slug>`, ignored by `.gitignore`.
-- Cleanup after merge: the user.
+- Branch name: `research/smoke`. Worktree: `.worktrees/smoke`, created with `git worktree add .worktrees/smoke -b research/smoke main`, or `git worktree add .worktrees/smoke research/smoke` when the branch exists.
 
 ## Commits and push
 
-- Commit convention: Conventional Commits.
-- When to push: never; there is no remote.
+- Commit convention: Conventional Commits. Push with `git -C <worktree> push -u origin research/smoke`, then `git -C <worktree> push` each later round.
 
 ## Pull request
 
-- Unsupported.
+- Create or update: write `.forge/prs/smoke.md` with `# <title>` and the body the workflow renders, under a `Draft: yes` line while it's a draft; marking it ready removes that line.
+- Review trigger and status: none.
 
 ## Restrictions
 
@@ -70,6 +84,6 @@ cat > sources/token-bucket.md <<'MD'
 A token bucket holds up to 40 tokens and gains 5 tokens per second. Each request removes one token. A request that finds the bucket empty is rejected with HTTP 429, so a client can burst up to 40 requests and then sustain 5 requests per second.
 MD
 
-printf '.worktrees/\n/.tmp/\n' > .gitignore
+printf '.worktrees/\n/.tmp/\n/.forge/\n' > .gitignore
 git add -A
 git commit -qm "chore: seed"

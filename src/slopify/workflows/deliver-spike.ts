@@ -402,9 +402,9 @@ export default async function run(): Promise<SpikeResult> {
     const started = await startWork(d, arg, "spike");
     if ("status" in started) return started;
     const { story, cardId, slug, name, resume } = started;
-    const docRel = resume.findings || `docs/spikes/${name}.md`;
+    const docRel = resume.findings[0] ?? `docs/spikes/${name}.md`;
     // A committed document is the checkpoint: a rerun goes straight to the loop.
-    if (!resume.findings) {
+    if (resume.findings.length === 0) {
       const evidence = await ground(d, story);
       const planned = await plan(d, story, evidence);
       const measured = await prototype(d, slug, planned.claims);
@@ -422,7 +422,7 @@ export default async function run(): Promise<SpikeResult> {
       startAtReview: d.state.pr ? Math.max(resume.reviewFired, 1) : 0,
       built: true,
       document: {
-        path: docRel,
+        paths: [docRel],
         check: () => checkDocument(d, story, docRel),
         revise: (problems) => reviseDocument(d, docRel, problems),
       },
