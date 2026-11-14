@@ -10,7 +10,7 @@ disallowedTools: Edit, Write, NotebookEdit
 
 Check one property: every claim in the findings report cites a reachable source or measurement.
 
-The brief carries the document's path and revision, the project root, and the prototype worktree and measurements when there are any. A file revision named in the brief is the file's `git hash-object` digest, and the file may be untracked; confirm it with `git hash-object <path>` before judging. A story revision is different: a digest of the story text that the workflow has already checked, so take it as given.
+The brief carries the document's path and the project root.
 
 Every factual claim needs a citation: a `path:line`, a library page, an outside source's URL, or a measurement. Check that a `path:line` exists and says what the claim says, that a library page exists and supports the claim, that a URL is reachable with the session's web tools and supports the claim, and that a measurement matches a recorded command and value. An uncited claim, and a citation that is unreachable or doesn't support its claim, are findings. A statement of what remains unknown needs no citation. A URL you can't open because the session has no web access is unverified.
 

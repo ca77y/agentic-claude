@@ -14,25 +14,12 @@ The brief carries the project root, the keys to report, and what identifies the 
 
 ## Keys
 
-- `worktree`, `branch`, `head`, `dirty`: the story or prototype worktree, located by the naming in `docs/FORGE.md` from the identifier or slug the brief gives. `head` is its `HEAD` sha. `dirty` lists the paths with uncommitted changes, ignoring `.tmp/`, or is `none`.
-- `ledger`: the absolute path of `.tmp/ledger.md` at the story worktree root.
-- `ledger-story`: the story revision on the last `done spec` line.
-- `ledger-test`: the test paths on the last `done spec` line that names a `test`.
-- `done-spec`, `done-implement`, `done-publish`, `done-board-start`, `done-board-pr`: the last matching `done spec`, `done implement`, `done publish`, `done board-start`, or `done board-pr` line, as `<n>|<line>`, where `<n>` is its line number in the ledger. Remove the leading timestamp when the brief asks.
-- `fired-head`: the sha after `head` on the last `review <n> fired` line, when it has one.
-- `fired-ancestor`: `yes` when `fired-head` is an ancestor of the worktree's `HEAD`, otherwise `no`; absent when there is no `fired-head`.
-- `ledger-exclude`: the paths after the word `exclude` on the last ledger line that starts with it, comma-separated, or `none`.
-- `review-fired`, `review-ended`: the highest round numbers on `review <n> fired` and `review <n> ended` lines after the last `done publish` line.
-- `spec`: the current spec path and its `git hash-object`, written `<absolute path>@<hash>`.
-- `pr`: the open PR for the branch, read through the read binding in `docs/FORGE.md`, with its description.
-- `base`: the merge-base commit sha of the branch and the PR's target branch.
-- `pushed-head`: the head commit sha of the PR's branch as the remote has it, not the worktree's `HEAD`. `unpushed`: how many commits the worktree's `HEAD` holds that the pushed head lacks, or `none`.
-- `draft`: the draft path and its `git hash-object`. `draft-open` and `draft-filed` come from `grep -oE '<!-- (open-decision [a-z0-9-]+|filed [^ ]+)' <draft>`: `draft-open` is the open-decision ids still marked, comma-separated, or `none`; `draft-filed` is the filed card id.
+The brief defines each key it asks for. Report it as the brief defines it, located by the naming in `docs/FORGE.md` from the identifier or slug the brief gives. A ledger is `.tmp/ledger.md` at the worktree root.
 
 ## Doing it well
 
 - Read state as it is now; don't infer a step's completion from anything but its checkpoint.
-- Quote ledger lines exactly after their `<n>|` prefix, and give paths as absolute paths.
+- Quote ledger lines exactly, and give paths as absolute paths.
 - A key you couldn't read, because a command failed or a binding is missing, is a gap, not an absent checkpoint.
 
 Change nothing: read only, and dispatch no agent other than `Explore`.

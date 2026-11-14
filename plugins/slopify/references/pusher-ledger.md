@@ -9,7 +9,9 @@ The brief gives the lines that record the step it completes. Append them in the 
 ```text
 <time> run <n>: <workflow> <primary arg> | worktree <path> | branch <name>
 <time> done spec <spec folder> story <story revision>
+<time> done findings <paths>
 <time> done board-start <card id>
+<time> reproduced {"steps": [...], "observed": "..."}
 <time> done round <n>
 <time> done publish <pr reference>
 <time> review <n> fired <trigger time>
@@ -18,7 +20,5 @@ The brief gives the lines that record the step it completes. Append them in the 
 ```
 
 - `run <n>`: `n` is one more than the highest run number already in the file, or 1.
-- `done spec`: the spec hash is `git hash-object` of the committed spec; `test <path>` names the regression test committed with it.
-- `done board-start` and `done board-pr`: written as soon as the card's delivery-start operation, or the board operations for when the PR opens, are done, so a rerun retries only the board operation that is missing. `done board-pr` comes before `done publish`, which waits for the review trigger.
-- `done implement … pushed`: written when a review round's push carries the commit.
-- `review <n> fired`: the trigger time the forge operation reported, and `head <sha>`, the pushed head that review judges. A pushed head beyond it on a rerun means a fix was pushed and the steps after the push did not finish.
+- `done board-start`: written as soon as the card's delivery-start operation is done, so a rerun retries only that operation when it is missing.
+- `review <n> fired`: the trigger time the forge operation reported.

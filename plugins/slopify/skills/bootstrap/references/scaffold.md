@@ -2,7 +2,7 @@
 
 Copy files from `resources/library/` relative to the owning skill directory, preserving the tree under the target project's `library/`. Copy missing files. For an existing configuration file, fix what contradicts the scaffold's rules while keeping project customizations. Never touch raw notes or wiki pages. Edit the copies, not the bundled resources.
 
-The resource tree contains README and CLAUDE files, `raw/README.md`, `wiki/README.md`, and `_meta/` index, taxonomy, log, librarian guide, and templates. All are part of the scaffold, even when the library starts empty.
+The resource tree contains README and instruction files, `raw/README.md`, `wiki/README.md`, and `_meta/` index, taxonomy, log, librarian guide, and templates. All are part of the scaffold, even when the library starts empty.
 
 Replace these tokens wherever they occur in newly copied files:
 
@@ -13,6 +13,8 @@ Replace these tokens wherever they occur in newly copied files:
 | `{{DOMAIN_ONE_LINER}}`         | Supported scope or neutral project research scope                                     |
 | `{{SOURCE_PROVIDER_GUIDANCE}}` | The source provider the user chose, stated as the one route research uses             |
 | `{{DOMAIN_TAGS}}`              | Established tags as Markdown bullets, or an HTML comment that domain tags start empty |
+
+Name `library/CLAUDE.md` after the project's instruction files: `library/AGENTS.md` when the project uses `AGENTS.md`.
 
 Preserve `<% ... %>` Templater expressions in `_meta/templates/`; they are intentional. Resolve any tokens left unresolved in existing files.
 

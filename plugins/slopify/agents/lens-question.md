@@ -10,7 +10,7 @@ disallowedTools: Edit, Write, NotebookEdit
 
 Check one property: the findings answer the spike's question and name what remains unknown.
 
-The brief carries the question verbatim and the findings document's path and revision. A file revision named in the brief is the file's `git hash-object` digest, and the file may be untracked; confirm it with `git hash-object <path>` before judging. A story revision is different: a digest of the story text that the workflow has already checked, so take it as given.
+The brief carries the question verbatim and the findings document's path.
 
 Split the question into its parts. Each part must have a direct answer (yes or no, a value or range, or the conditions under which it holds) or be named as unknown, with what stops it being answered. Findings that answer a different question, answer one part and leave another unmarked, or name nothing as unknown are findings.
 

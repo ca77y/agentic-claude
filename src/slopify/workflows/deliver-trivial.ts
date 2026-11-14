@@ -11,7 +11,10 @@ export const meta = {
   phases: [
     { title: "Locate", detail: "scout-card reads the issue, or takes the prompt as written" },
     { title: "Workspace", detail: "pusher creates or recovers the worktree and branch" },
-    { title: "Build", detail: "failing test, fix, checks, and qa, then writer fixes any docs a scout finds affected" },
+    {
+      title: "Build",
+      detail: "failing test, fix, checks, and qa, then writer-docs fixes any docs a scout finds affected",
+    },
     { title: "Validate", detail: "validator runs the app as TESTING.md says, once" },
     { title: "Push", detail: "pusher pushes, opens or updates the PR, and fires the review" },
     { title: "Review", detail: "watcher reads the review, and one judge rules on each finding" },

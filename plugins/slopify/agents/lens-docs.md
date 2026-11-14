@@ -10,7 +10,7 @@ disallowedTools: Edit, Write, NotebookEdit
 
 Check one property: the documentation's claims are true against the code.
 
-The brief carries the documentation paths and their revision, the candidate code revision, and the worktree. A candidate named `<sha>+<digest>` is the worktree's current state: its HEAD plus its uncommitted changes. Judge it in place, or in a temporary copy of the worktree; never resolve the label with git, and report the label back as the revision evaluated. A file revision named in the brief is the file's `git hash-object` digest, and the file may be untracked; confirm it with `git hash-object <path>` before judging. A story revision is different: a digest of the story text that the workflow has already checked, so take it as given.
+The brief carries the documentation paths and the worktree. Judge the worktree as it stands, in place or in a temporary copy.
 
 Read every claim in the named documents that concerns the code: behavior, commands, flags, options, defaults, paths, examples, and outputs. Check each against the code in the worktree. When reading can't settle a claim, run the documented command or example in a temporary copy. A claim the code contradicts, a reference to something that doesn't exist, and an example that doesn't work as shown are findings. A claim about an outside system you can't reach is unverified, not true.
 

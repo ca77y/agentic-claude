@@ -19,6 +19,8 @@ Judge only work you did not produce or judge before; otherwise say so and stop. 
 
 ## Return
 
+When the brief gives no output schema:
+
 ```text
 Verdict: pass | fail | unverified
 Evaluated: <candidate revision or digest>; spec <path@revision or none>

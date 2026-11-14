@@ -17,7 +17,7 @@ export const meta = {
     },
     {
       "title": "Plan",
-      "detail": "writer lists the claims and the measurements that would settle them"
+      "detail": "writer-findings lists the claims and the measurements that would settle them"
     },
     {
       "title": "Prototype",
@@ -25,7 +25,7 @@ export const meta = {
     },
     {
       "title": "Findings",
-      "detail": "writer writes the findings document, and pusher commits it"
+      "detail": "writer-findings writes the findings document, and pusher commits it"
     },
     {
       "title": "Validate",
@@ -37,7 +37,7 @@ export const meta = {
     },
     {
       "title": "Build",
-      "detail": "writer revises the document for each open problem"
+      "detail": "writer-findings revises the document for each open problem"
     },
     {
       "title": "Push",

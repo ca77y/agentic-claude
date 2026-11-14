@@ -13,7 +13,7 @@ export const meta = {
     },
     {
       "title": "Build",
-      "detail": "failing test, fix, checks, and qa, then writer fixes any docs a scout finds affected"
+      "detail": "failing test, fix, checks, and qa, then writer-docs fixes any docs a scout finds affected"
     },
     {
       "title": "Validate",

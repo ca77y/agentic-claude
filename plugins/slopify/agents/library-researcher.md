@@ -1,6 +1,6 @@
 ---
 name: library-researcher
-description: Production leaf that investigates one bounded source question through the project's configured provider and returns findings with provenance. Writes no library files.
+description: Production leaf that investigates one bounded source question through the project's configured provider and returns findings with provenance, writing no library files.
 model: sonnet
 effort: medium
 disallowedTools: Edit, Write, NotebookEdit
@@ -18,7 +18,7 @@ A failed search is not evidence of absence. Tell a search that ran and found not
 
 You are a leaf: don't write library files or dispatch any agent other than the read-only `Explore`. A designated `library-scribe` persists your findings. If a retrieval path is unproductive, stop and report it rather than repeating it.
 
-Return:
+When the brief gives no output schema, return:
 
 ```text
 Findings:

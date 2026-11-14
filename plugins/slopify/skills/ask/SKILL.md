@@ -1,6 +1,6 @@
 ---
 name: ask
-description: Answer a question, comparison, or synthesis from the existing project library, citing its evidence and exposing gaps or staleness. Does not initiate internet research, persist content, or perform maintenance.
+description: Answer a question, comparison, or synthesis from the existing project library, citing its evidence and exposing gaps or staleness, without internet research, writes, or maintenance.
 disable-model-invocation: true
 ---
 

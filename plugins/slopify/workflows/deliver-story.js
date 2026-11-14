@@ -29,7 +29,7 @@ export const meta = {
     },
     {
       "title": "Spec",
-      "detail": "writer writes the spec folder, and pusher commits it"
+      "detail": "writer-spec writes the spec folder, and pusher commits it"
     },
     {
       "title": "Challenge",
@@ -37,7 +37,7 @@ export const meta = {
     },
     {
       "title": "Build",
-      "detail": "one coder and qa inner loop per change, then writer updates the listed docs"
+      "detail": "one coder and qa inner loop per change, then writer-docs updates the listed docs"
     },
     {
       "title": "Validate",

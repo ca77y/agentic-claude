@@ -1,6 +1,6 @@
 ---
 name: bootstrap
-description: Create a project's board, forge, and testing declarations (`docs/BOARD.md`, `docs/FORGE.md`, `TESTING.md`), its agent instructions and `.claude/rules/`, its Markdown research library, and the root library pointer, or verify and fix existing ones, with optional Obsidian settings. Use for project setup, not research, content maintenance, or external board/forge operations.
+description: Create a project's board, forge, and testing declarations (`docs/BOARD.md`, `docs/FORGE.md`, `TESTING.md`), its agent instructions and `.claude/rules/`, its Markdown research library, and the root library pointer, or verify and fix existing ones, with optional Obsidian settings, as project setup rather than research, content maintenance, or board and forge operations.
 disable-model-invocation: true
 ---
 

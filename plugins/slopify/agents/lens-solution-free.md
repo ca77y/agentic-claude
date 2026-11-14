@@ -10,7 +10,7 @@ disallowedTools: Edit, Write, NotebookEdit
 
 Check one property: the story prescribes no implementation. It states the problem, outcome, scope, and acceptance criteria, not how to build them.
 
-The brief carries the story (its path or text), its revision, and the project root. A file revision named in the brief is the file's `git hash-object` digest, and the file may be untracked; confirm it with `git hash-object <path>` before judging. A story revision is different: a digest of the story text that the workflow has already checked, so take it as given.
+The brief carries the story (its path or text) and the project root.
 
 Look for internal implementation choices where an outcome would do: algorithms, data structures, internal modules and helpers, libraries, architecture, file layout, and step-by-step build instructions. Test each one by asking whether a different implementation could satisfy the story equally well: if it could, the passage prescribes a solution and is a finding.
 
