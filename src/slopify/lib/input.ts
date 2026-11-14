@@ -31,6 +31,9 @@ export function inputOf(a: unknown, primary: string, numbers = false): Input {
   return { [primary]: text };
 }
 
+/** A boolean field; true only for true. */
+export const flagOf = (v: unknown): boolean => v === true;
+
 /** A string field trimmed; '' for anything else. */
 export const textOf = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
 

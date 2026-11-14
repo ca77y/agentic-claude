@@ -1,6 +1,6 @@
 import { STRINGS } from "../lib/family.ts";
 import { callPusher, createDeliver, list, type Stopped } from "../lib/deliver.ts";
-import { answersOf, inputOf, textOf, type NotStarted } from "../lib/input.ts";
+import { answersOf, flagOf, inputOf, textOf, type NotStarted } from "../lib/input.ts";
 import { confirmedProblems, type Reported } from "../lib/judge.ts";
 import { must, pushed, reportOf, runLoop, stopOf, type LoopResult, type Problem, type Run } from "../lib/loop.ts";
 import { MAX_FIX_ROUNDS } from "../lib/rules.ts";
@@ -12,7 +12,7 @@ export const meta = {
   description:
     "Answer a question from new sources in the project library, from a Linear issue or a prompt, delivered as a pull request: a checked plan, one researcher per sub-question, one raw note per source, and wiki pages that answer the question, which go through the delivery loop's checks and review until they are clean",
   whenToUse:
-    "Run only when the user invokes /slopify:research or asks for the slopify research workflow. Answers from the existing library belong to the ask skill. Args: {question, projectRoot?, answers?}, or the question as a plain string; question is a card identifier or URL, or the question as a prompt; projectRoot defaults to the session project directory.",
+    "Run only when the user invokes /slopify:research or asks for the slopify research workflow. Answers from the existing library belong to the ask skill. Args: {question, projectRoot?, branchOnly?, answers?}, or the question as a plain string; question is a card identifier or URL, or the question as a prompt; projectRoot defaults to the session project directory; branchOnly: true, when the user asks for a branch without a worktree, checks the branch out in the main checkout and creates no worktree.",
   phases: [
     { title: "Locate", detail: "scout-card reads the issue, or pusher files a card for a prompt" },
     { title: "Workspace", detail: "pusher creates or recovers the worktree and branch" },
@@ -336,7 +336,12 @@ export default async function run(): Promise<ResearchResult> {
   const arg = textOf(input["question"]);
   if (!arg)
     return { status: "not-started", next: "Ask the user for the Linear issue or the question, then invoke again." };
-  const d = createDeliver({ workflow: WORKFLOW, projectRoot: textOf(input["projectRoot"]), storyArg: arg });
+  const d = createDeliver({
+    workflow: WORKFLOW,
+    projectRoot: textOf(input["projectRoot"]),
+    storyArg: arg,
+    branchOnly: flagOf(input["branchOnly"]),
+  });
   try {
     const found = await findCard(d, arg, "research");
     if ("status" in found) return found;

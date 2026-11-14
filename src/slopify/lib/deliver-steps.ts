@@ -128,11 +128,18 @@ interface WorkspaceOpts {
 async function createWorktree(d: Run, o: WorkspaceOpts): Promise<Stopped | null> {
   const { state, stop, done, pushBrief, pushStop } = d;
   const { cardId, boardBranch } = o;
+  const named = boardBranch ? ` (the board gives the branch name ${boardBranch})` : "";
+  // A branch only is for a checkout that can't hold a worktree, such as a sandbox that blocks .git/worktrees.
+  const where = d.branchOnly
+    ? `Create or recover the branch that docs/FORGE.md declares for ${o.subject}${named}, and check it out in the main checkout; the user asked for a branch only, so create no worktree, and report the main checkout's absolute path as the operation worktree.`
+    : `Create or recover ${o.worktree} and branch that docs/FORGE.md declares for ${o.subject}${named}.`;
   const r = await callPusher(
     pushBrief(
-      `Create or recover ${o.worktree} and branch that docs/FORGE.md declares for ${o.subject}${boardBranch ? ` (the board gives the branch name ${boardBranch})` : ""}. ${cardId ? "Then perform the delivery-start operation docs/BOARD.md declares for the card (for example its status transition), only as bound." : "There is no card, so perform no board operation."} Change no card content. Append the board-start line only once the delivery-start operation is done.`,
-      [...(o.lines ?? []), ...(cardId ? [`done board-start ${cardId}`] : [])],
-      "<worktree>/.tmp/ledger.md at the root of the worktree you create or recover",
+      `${where} Then perform the delivery-start operation docs/BOARD.md declares for the card (for example its status transition), only as bound. Change no card content. Append the board-start line only once the delivery-start operation is done.`,
+      [...(o.lines ?? []), `done board-start ${cardId}`],
+      d.branchOnly
+        ? "<main checkout>/.tmp/ledger.md at the root of the main checkout"
+        : "<worktree>/.tmp/ledger.md at the root of the worktree you create or recover",
     ),
     "create the worktree",
     "Workspace",
@@ -161,7 +168,7 @@ export async function workspace(d: Run, o: WorkspaceOpts): Promise<Stopped | nul
   } else {
     const created = await createWorktree(d, o);
     if (created) return created;
-    boardStartRecorded = !!cardId;
+    boardStartRecorded = true;
   }
   // The delivery-start board operation follows the worktree; a rerun that finds the worktree but no
   // ledger line for the operation does it now, since it may have failed after the worktree was made.

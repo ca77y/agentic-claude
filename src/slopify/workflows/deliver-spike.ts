@@ -1,6 +1,6 @@
 import { STRINGS, lens, scout, type LensResult } from "../lib/family.ts";
 import { NO_WRITES, callCoder, callPusher, createDeliver, list, opRef, show, type Stopped } from "../lib/deliver.ts";
-import { answersOf, inputOf, textOf, type NotStarted } from "../lib/input.ts";
+import { answersOf, flagOf, inputOf, textOf, type NotStarted } from "../lib/input.ts";
 import { must, pushed, reportOf, runLoop, stopOf, type LoopResult, type Problem, type Run } from "../lib/loop.ts";
 import { MAX_INNER_TRIES } from "../lib/rules.ts";
 import { libraryReaderSchema } from "../lib/schemas.ts";
@@ -11,7 +11,7 @@ export const meta = {
   description:
     "Answer a bounded technical question from a Linear issue or a prompt with a cited findings document, delivered as a pull request: scouts gather evidence, a plan lists the claims, a throwaway prototype measures what evidence can't settle, and the document goes through the delivery loop's checks and review until it is clean",
   whenToUse:
-    'Run only when the user invokes /slopify:deliver-spike or asks for the slopify deliver-spike workflow, for a bounded technical question that needs findings, measurements, or a throwaway prototype. Open-ended outside research ("what is the best X") belongs to /slopify:research. Args: {question, projectRoot?, answers?}, or the question as a plain string; question is a card identifier or URL, or the question as a prompt; projectRoot defaults to the session project directory; answers maps a decision id from a draft or blocked result to its answer when rerunning.',
+    'Run only when the user invokes /slopify:deliver-spike or asks for the slopify deliver-spike workflow, for a bounded technical question that needs findings, measurements, or a throwaway prototype. Open-ended outside research ("what is the best X") belongs to /slopify:research. Args: {question, projectRoot?, branchOnly?, answers?}, or the question as a plain string; question is a card identifier or URL, or the question as a prompt; projectRoot defaults to the session project directory; branchOnly: true, when the user asks for a branch without a worktree, checks the branch out in the main checkout and creates no worktree; answers maps a decision id from a draft or blocked result to its answer when rerunning.',
   phases: [
     { title: "Locate", detail: "scout-card reads the issue, or pusher files a spike card for a prompt" },
     { title: "Workspace", detail: "pusher creates or recovers the worktree and branch" },
@@ -262,7 +262,9 @@ async function prototype(d: Run, slug: string, claims: readonly Claim[]): Promis
   const made = pushed(
     await callPusher(
       d.pushBrief(
-        `${PROTOTYPE_AUTH} Create the prototype branch and worktree that docs/FORGE.md's "Spike prototypes" line names for the slug ${slug}, from the target branch. If that line says none, create nothing and report the operation worktree with the reference none.`,
+        d.branchOnly
+          ? `${PROTOTYPE_AUTH} Create the prototype branch that docs/FORGE.md's "Spike prototypes" line names for the slug ${slug}, from the target branch, and check it out in the main checkout; the user asked for branches only, so create no worktree, and report the main checkout's absolute path as the operation worktree. If that line says none, create nothing and report the operation worktree with the reference none.`
+          : `${PROTOTYPE_AUTH} Create the prototype branch and worktree that docs/FORGE.md's "Spike prototypes" line names for the slug ${slug}, from the target branch. If that line says none, create nothing and report the operation worktree with the reference none.`,
       ),
       "create the prototype",
       "Prototype",
@@ -281,7 +283,11 @@ async function prototype(d: Run, slug: string, claims: readonly Claim[]): Promis
   const measured = await measureAll(d, worktree, toMeasure);
   pushed(
     await callPusher(
-      d.pushBrief(`${PROTOTYPE_AUTH} Remove the prototype worktree ${worktree} and delete its local branch.`),
+      d.pushBrief(
+        d.branchOnly
+          ? `${PROTOTYPE_AUTH} In the main checkout ${worktree}, discard the prototype's changes, check out the spike's branch ${d.state.branch} again, and delete the prototype's local branch.`
+          : `${PROTOTYPE_AUTH} Remove the prototype worktree ${worktree} and delete its local branch.`,
+      ),
       "delete the prototype",
       "Prototype",
     ),
@@ -397,7 +403,12 @@ export default async function run(): Promise<SpikeResult> {
   if (!arg) {
     return { status: "not-started", next: "Ask the user for the Linear issue or the question, then invoke again." };
   }
-  const d = createDeliver({ workflow: WORKFLOW, projectRoot: textOf(input["projectRoot"]), storyArg: arg });
+  const d = createDeliver({
+    workflow: WORKFLOW,
+    projectRoot: textOf(input["projectRoot"]),
+    storyArg: arg,
+    branchOnly: flagOf(input["branchOnly"]),
+  });
   try {
     const started = await startWork(d, arg, "spike");
     if ("status" in started) return started;

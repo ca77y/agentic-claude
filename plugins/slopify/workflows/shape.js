@@ -224,6 +224,7 @@ function callPusher(prompt, label, phaseTitle) {
 }
 function createDeliver(config) {
   const { workflow: WORKFLOW2, projectRoot, storyArg } = config;
+  const branchOnly = config.branchOnly === true;
   const WHERE = projectRoot ? `The project is at ${projectRoot}; address files by absolute path under it.` : "The project is the session project directory; address files by absolute path.";
   const AUTH = `Authorization, from the user's invocation of /slopify:${WORKFLOW2}: the story branch and worktree, attributable commits, the pushes the brief asks for, opening or updating this task's PR as a draft or ready, the declared review trigger, the one issue comment and label the brief asks for when the run ends or halts, and filing the issues the brief lists. It does not authorize merging, releases, any other message, rewriting docs/BOARD.md or docs/FORGE.md, or changing a card's content. Work exactly as docs/BOARD.md and docs/FORGE.md declare; an operation that is not bound is unmet, never improvised. Stage explicit paths only.`;
   const completed = [];
@@ -289,7 +290,7 @@ Report each operation you performed as an operations entry, named worktree, bran
       )
     ]);
   }
-  return { WHERE, state, done, skip, stop, pushBrief, pushStop };
+  return { WHERE, branchOnly, state, done, skip, stop, pushBrief, pushStop };
 }
 
 // src/slopify/lib/input.ts
@@ -696,7 +697,7 @@ async function file(d, c, slug, deliverable) {
       `${d.WHERE}
 The user's invocation of shape authorizes exactly this: write the card draft below to one card on the board, as docs/BOARD.md declares, and set its ${DELIVERABLE} label as asked. Nothing else: no commit, branch, push, PR, or other card. Work exactly as docs/BOARD.md binds it.
 
-The draft is ${c.draft}. Use its text exactly as written, with one trailing line, ${marker}, which lets a rerun find this card. ${target} ${label} Keep every label the card already has otherwise. Report the card's identifier as the operation named card. If docs/BOARD.md declares no board, do nothing and report done.`,
+The draft is ${c.draft}. Use its text exactly as written, with one trailing line, ${marker}, which lets a rerun find this card. ${target} ${label} Keep every label the card already has otherwise. Report the card's identifier as the operation named card.`,
       c.cardId ? "update the card" : "file the card",
       "File"
     ),

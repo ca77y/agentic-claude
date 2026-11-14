@@ -28,7 +28,7 @@ export async function readResume(d: Run, identifies: string, specDir: string): P
       `${d.WHERE}
 Report where this run stands. It is the delivery of ${identifies}.
 Report these keys, each as an evidence item with source set to the key; leave out a key that does not exist:
-- worktree, branch, ledger
+${d.branchOnly ? "- worktree: the main checkout, only when it has this run's branch checked out; there is no worktree\n- branch, ledger" : "- worktree, branch, ledger"}
 - pr: the PR reference
 - done-board-start: the last "done board-start" ledger line
 - done-round: the last "done round" ledger line

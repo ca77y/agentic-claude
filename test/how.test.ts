@@ -304,7 +304,23 @@ const SMALL_AGENTS: Record<string, Script> = {
   watcher: () => ({ outcome: "finished", waitingFor: "", limitMinutes: 60, reference: "r", findings: [] }),
 };
 
+// A prompt with no card: pusher files SMR-50 for it, and the card reads back with the prompt as its story.
 const promptRun: Script = (type, label, prompt) => {
+  if (label === "file the card") {
+    return { done: true, unmet: [], operations: [{ op: "card", reference: "SMR-50" }] };
+  }
+  if (type === "scout-card" && prompt.includes("SMR-50")) {
+    return {
+      answer: "a",
+      gaps: [],
+      evidence: [
+        { source: "card", location: "x", excerpt: "SMR-50" },
+        { source: "story-source", location: "x", excerpt: "card" },
+        { source: "story", location: "x", excerpt: "Add mul to calc.py\n\nBody" },
+        { source: "story-revision", location: "x", excerpt: "abc1234" },
+      ],
+    };
+  }
   if (type === "scout-card") {
     return {
       answer: "a",
@@ -352,24 +368,7 @@ const failedReport = (): string => calls.find((c) => c.label === "report the fai
 
 describe("the small workflows", () => {
   test("deliver-trivial files a card for a prompt, then delivers against that card", async () => {
-    current.script = (type, label, prompt) => {
-      if (label === "file the card") {
-        return { done: true, unmet: [], operations: [{ op: "card", reference: "SMR-50" }] };
-      }
-      if (type === "scout-card" && prompt.includes("SMR-50")) {
-        return {
-          answer: "a",
-          gaps: [],
-          evidence: [
-            { source: "card", location: "x", excerpt: "SMR-50" },
-            { source: "story-source", location: "x", excerpt: "card" },
-            { source: "story", location: "x", excerpt: "Add mul\n\nBody" },
-            { source: "story-revision", location: "x", excerpt: "abc1234" },
-          ],
-        };
-      }
-      return promptRun(type, label, prompt);
-    };
+    current.script = promptRun;
     Object.assign(globalThis, { args: "Add mul to calc.py" });
     await deliverTrivial();
     const filing = calls.find((c) => c.label === "file the card");
@@ -394,6 +393,24 @@ describe("the small workflows", () => {
     const first = calls.find((c) => c.label === "change: test");
     assert.ok(first?.prompt.includes("Add mul to calc.py"));
     assert.ok(first?.prompt.includes("states the new behavior"));
+  });
+
+  test("deliver-trivial creates a worktree unless the user asks for a branch only", async () => {
+    current.script = (type, label, prompt) => {
+      if (type === "scout-checkpoint") return { ...SCOUT, evidence: [] };
+      return label === "create the worktree"
+        ? { done: true, unmet: [], operations: [{ op: "worktree", reference: "/p/wt" }] }
+        : promptRun(type, label, prompt);
+    };
+    Object.assign(globalThis, { args: { story: "Add mul to calc.py" } });
+    await deliverTrivial();
+    assert.ok(!createBrief().includes("create no worktree"));
+    calls.length = 0;
+    Object.assign(globalThis, { args: { story: "Add mul to calc.py", branchOnly: true } });
+    await deliverTrivial();
+    assert.ok(createBrief().includes("check it out in the main checkout"));
+    assert.ok(createBrief().includes("create no worktree"));
+    assert.ok(calls.find((c) => c.label === "read checkpoints")?.prompt.includes("there is no worktree"));
   });
 
   test("deliver-bugfix reproduces the bug, records it, and uses it as the first test", async () => {

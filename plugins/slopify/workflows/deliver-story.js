@@ -1,7 +1,7 @@
 export const meta = {
   "name": "deliver-story",
   "description": "Deliver a non-simple story from a Deliverable Linear issue to a pull request: independent designs, opus advisors, and a challenged spec decide how; a coder and qa build each change test first; the app is validated as TESTING.md says; and the PR goes ready once its review is clean, or stays a draft that says what is open",
-  "whenToUse": "Run only when the user invokes /slopify:deliver-story or asks for the slopify deliver-story workflow. Args: {story, projectRoot?, answers?}, or the story as a plain string; story is a card identifier or URL for an issue labelled Deliverable; projectRoot defaults to the session project directory; answers maps a decision id from a draft or blocked result to its answer when rerunning.",
+  "whenToUse": "Run only when the user invokes /slopify:deliver-story or asks for the slopify deliver-story workflow. Args: {story, projectRoot?, branchOnly?, answers?}, or the story as a plain string; story is a card identifier or URL for an issue labelled Deliverable; projectRoot defaults to the session project directory; branchOnly: true, when the user asks for a branch without a worktree, checks the branch out in the main checkout and creates no worktree; answers maps a decision id from a draft or blocked result to its answer when rerunning.",
   "phases": [
     {
       "title": "Locate",
@@ -300,6 +300,7 @@ function callPusher(prompt, label, phaseTitle) {
 }
 function createDeliver(config) {
   const { workflow: WORKFLOW, projectRoot, storyArg } = config;
+  const branchOnly = config.branchOnly === true;
   const WHERE = projectRoot ? `The project is at ${projectRoot}; address files by absolute path under it.` : "The project is the session project directory; address files by absolute path.";
   const AUTH = `Authorization, from the user's invocation of /slopify:${WORKFLOW}: the story branch and worktree, attributable commits, the pushes the brief asks for, opening or updating this task's PR as a draft or ready, the declared review trigger, the one issue comment and label the brief asks for when the run ends or halts, and filing the issues the brief lists. It does not authorize merging, releases, any other message, rewriting docs/BOARD.md or docs/FORGE.md, or changing a card's content. Work exactly as docs/BOARD.md and docs/FORGE.md declare; an operation that is not bound is unmet, never improvised. Stage explicit paths only.`;
   const completed = [];
@@ -365,7 +366,7 @@ Report each operation you performed as an operations entry, named worktree, bran
       )
     ]);
   }
-  return { WHERE, state, done, skip, stop, pushBrief, pushStop };
+  return { WHERE, branchOnly, state, done, skip, stop, pushBrief, pushStop };
 }
 
 // src/slopify/lib/deliver-steps.ts
@@ -424,11 +425,13 @@ function locate(d, cardRes, storyArg, fallbackSlug, ask) {
 async function createWorktree(d, o) {
   const { state, stop, done, pushBrief, pushStop } = d;
   const { cardId, boardBranch } = o;
+  const named = boardBranch ? ` (the board gives the branch name ${boardBranch})` : "";
+  const where = d.branchOnly ? `Create or recover the branch that docs/FORGE.md declares for ${o.subject}${named}, and check it out in the main checkout; the user asked for a branch only, so create no worktree, and report the main checkout's absolute path as the operation worktree.` : `Create or recover ${o.worktree} and branch that docs/FORGE.md declares for ${o.subject}${named}.`;
   const r = await callPusher(
     pushBrief(
-      `Create or recover ${o.worktree} and branch that docs/FORGE.md declares for ${o.subject}${boardBranch ? ` (the board gives the branch name ${boardBranch})` : ""}. ${cardId ? "Then perform the delivery-start operation docs/BOARD.md declares for the card (for example its status transition), only as bound." : "There is no card, so perform no board operation."} Change no card content. Append the board-start line only once the delivery-start operation is done.`,
-      [...o.lines ?? [], ...cardId ? [`done board-start ${cardId}`] : []],
-      "<worktree>/.tmp/ledger.md at the root of the worktree you create or recover"
+      `${where} Then perform the delivery-start operation docs/BOARD.md declares for the card (for example its status transition), only as bound. Change no card content. Append the board-start line only once the delivery-start operation is done.`,
+      [...o.lines ?? [], `done board-start ${cardId}`],
+      d.branchOnly ? "<main checkout>/.tmp/ledger.md at the root of the main checkout" : "<worktree>/.tmp/ledger.md at the root of the worktree you create or recover"
     ),
     "create the worktree",
     "Workspace"
@@ -455,7 +458,7 @@ async function workspace(d, o) {
   } else {
     const created = await createWorktree(d, o);
     if (created) return created;
-    boardStartRecorded = !!cardId;
+    boardStartRecorded = true;
   }
   if (!o.boardStartDone && !boardStartRecorded) {
     const b = await callPusher(
@@ -856,7 +859,7 @@ async function commit(l, paths, message) {
     l,
     () => callPusher(
       l.d.pushBrief(
-        `Commit exactly these paths as they stand, staged by explicit path, with a message in the convention docs/FORGE.md declares, saying: ${message}.${l.cardId ? ` Name the issue ${l.cardId} in it.` : ""} Do not push.
+        `Commit exactly these paths as they stand, staged by explicit path, with a message in the convention docs/FORGE.md declares, saying: ${message}. Name the issue ${l.cardId} in it. Do not push.
 ${list(paths)}`
       ),
       `commit: ${message}`,
@@ -1389,7 +1392,7 @@ function draftReasons(l) {
 }
 function body(l) {
   return renderBody({
-    issue: l.cardId || "none",
+    issue: l.cardId,
     specDir: l.specDir,
     ...l.document && { documents: l.document.paths },
     draftReasons: draftReasons(l),
@@ -1422,7 +1425,7 @@ async function pushRound(l, last) {
   const number = l.reviewNumber + 1;
   const steps = state.pr ? `Push the branch even if something is still flagged. Then update the PR ${state.pr}. ${bodyInstruction(l)}
 Then fire the review trigger as docs/FORGE.md declares, if it declares one.` : open ? `Push the branch even if something is still flagged. Then open the branch's PR as a draft as docs/FORGE.md declares. ${bodyInstruction(l)}
-Fire the review trigger only if docs/FORGE.md says opening doesn't fire it. ${l.cardId ? `Then attach the PR to card ${l.cardId} as docs/BOARD.md declares.` : ""} Report the PR reference as the operation named pr.` : "Push the branch even if something is still flagged. Open no PR yet.";
+Fire the review trigger only if docs/FORGE.md says opening doesn't fire it. Then attach the PR to card ${l.cardId} as docs/BOARD.md declares. Report the PR reference as the operation named pr.` : "Push the branch even if something is still flagged. Open no PR yet.";
   const lines = [
     ...open ? ["done publish <the PR reference>"] : [],
     ...state.pr || open ? [`review ${String(number)} fired <the trigger time>`] : [],
@@ -1495,9 +1498,9 @@ ${list(l.newIssues.map((i) => `${i.text} ${i.detail ?? ""}`))}
     ...l.decisions.filter((d) => d.affectsAcceptance).map((d) => `${d.question} We chose: ${d.choice}.`),
     ...draftReasons(l).map((x) => x.text)
   ];
-  const card = l.cardId ? ready ? `Perform the operations docs/BOARD.md declares for when the PR's review is clean on card ${l.cardId} (for example moving it to In Review), and comment on the card with the evidence and assumptions:
+  const card = ready ? `Perform the operations docs/BOARD.md declares for when the PR's review is clean on card ${l.cardId} (for example moving it to In Review), and comment on the card with the evidence and assumptions:
 ${list(questions)}` : `Comment on card ${l.cardId} with what is open:
-${list(questions)}` : "";
+${list(questions)}`;
   pushed(
     await inOrder(
       l,
@@ -1882,7 +1885,7 @@ Return build and validate exactly as you wrote them. ${NO_WRITES}`,
 async function commitSpec(o, message, phaseTitle) {
   const r = await callPusher(
     o.d.pushBrief(
-      `Commit the folder ${o.specDir} as it stands, staged by explicit path, with a message in the convention docs/FORGE.md declares, saying: ${message}.${o.cardId ? ` Name the issue ${o.cardId} in it.` : ""} Do not push.`,
+      `Commit the folder ${o.specDir} as it stands, staged by explicit path, with a message in the convention docs/FORGE.md declares, saying: ${message}. Name the issue ${o.cardId} in it. Do not push.`,
       [`done spec ${o.specDir} story ${o.storyRevision}`]
     ),
     "commit the spec",
@@ -2118,6 +2121,7 @@ function inputOf(a, primary, numbers = false) {
   }
   return { [primary]: text };
 }
+var flagOf = (v) => v === true;
 var textOf = (v) => typeof v === "string" ? v.trim() : "";
 function answerValue(x) {
   const text = String(x);
@@ -2135,7 +2139,7 @@ async function readResume(d, identifies, specDir) {
       `${d.WHERE}
 Report where this run stands. It is the delivery of ${identifies}.
 Report these keys, each as an evidence item with source set to the key; leave out a key that does not exist:
-- worktree, branch, ledger
+${d.branchOnly ? "- worktree: the main checkout, only when it has this run's branch checked out; there is no worktree\n- branch, ledger" : "- worktree, branch, ledger"}
 - pr: the PR reference
 - done-board-start: the last "done board-start" ledger line
 - done-round: the last "done round" ledger line
@@ -2170,27 +2174,23 @@ Report these keys, each as an evidence item with source set to the key; leave ou
 
 // src/slopify/workflows/deliver-story.ts
 async function refuse(d, cardId) {
-  const next = `Issue ${cardId || "the argument"} has no Deliverable label. Run /slopify:shape on it first, then invoke again.`;
-  if (cardId) {
-    await callPusher(
-      d.pushBrief(`Comment on card ${cardId}, as docs/BOARD.md declares: ${next} Do nothing else.`),
-      "comment on the issue",
-      "Locate"
-    );
-  }
+  const next = `Issue ${cardId} has no Deliverable label. Run /slopify:shape on it first, then invoke again.`;
+  await callPusher(
+    d.pushBrief(`Comment on card ${cardId}, as docs/BOARD.md declares: ${next} Do nothing else.`),
+    "comment on the issue",
+    "Locate"
+  );
   return { status: "not-started", next };
 }
 async function brokenWorkflow(d, cardId, tried) {
   const what = `The how phase ran out of attempts, so the workflow is broken for this issue. Everything tried:
 ${tried.map((t) => `- ${t}`).join("\n")}`;
-  if (cardId) {
-    await callPusher(
-      d.pushBrief(`Comment on card ${cardId}, as docs/BOARD.md declares:
+  await callPusher(
+    d.pushBrief(`Comment on card ${cardId}, as docs/BOARD.md declares:
 ${what}`),
-      "report the halt",
-      "Spec"
-    );
-  }
+    "report the halt",
+    "Spec"
+  );
   return d.stop("how", [{ id: "how-1", kind: "validation", what, evidence: "" }]);
 }
 async function deliver(d, storyArg, how) {
@@ -2222,10 +2222,15 @@ ARG>>>`,
     criteria: false
   });
   if ("stop" in located) return { status: "not-started", next: located.stop.needs.map((n) => n.what).join(" ") };
-  const { story, storyRevision, cardId, boardBranch, slug, specRel } = located;
+  const { story, storyRevision, cardId, boardBranch, specRel } = located;
+  if (!cardId)
+    return {
+      status: "not-started",
+      next: "Ask the user for the Linear issue to deliver; a story reaches delivery only as an issue shape filed."
+    };
   if (!isDeliverable(fact(cardRes, "labels"))) return refuse(d, cardId);
   const specDir = specRel.replace(/\.md$/, "");
-  const resume = await readResume(d, cardId ? `card ${cardId}` : `the story "${slug}"`, specDir);
+  const resume = await readResume(d, `card ${cardId}`, specDir);
   const stopped = await workspace(d, {
     cardId,
     boardBranch,
@@ -2270,7 +2275,8 @@ async function run() {
   const d = createDeliver({
     workflow: "deliver-story",
     projectRoot,
-    storyArg
+    storyArg,
+    branchOnly: flagOf(input["branchOnly"])
   });
   try {
     return await deliver(d, storyArg, { where: d.WHERE, answers: answersOf(input["answers"]) });

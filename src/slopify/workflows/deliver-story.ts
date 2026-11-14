@@ -2,7 +2,7 @@ import { scout, fact, slugged } from "../lib/family.ts";
 import { callPusher, createDeliver, type Stopped } from "../lib/deliver.ts";
 import { locate, workspace } from "../lib/deliver-steps.ts";
 import { runHow, specReviser, type HowInput } from "../lib/how.ts";
-import { answersOf, inputOf, textOf, type NotStarted } from "../lib/input.ts";
+import { answersOf, flagOf, inputOf, textOf, type NotStarted } from "../lib/input.ts";
 import { must, reportOf, runLoop, stopOf, type LoopResult, type Run } from "../lib/loop.ts";
 import { readResume } from "../lib/resume.ts";
 import { isDeliverable } from "../lib/rules.ts";
@@ -12,7 +12,7 @@ export const meta = {
   description:
     "Deliver a non-simple story from a Deliverable Linear issue to a pull request: independent designs, opus advisors, and a challenged spec decide how; a coder and qa build each change test first; the app is validated as TESTING.md says; and the PR goes ready once its review is clean, or stays a draft that says what is open",
   whenToUse:
-    "Run only when the user invokes /slopify:deliver-story or asks for the slopify deliver-story workflow. Args: {story, projectRoot?, answers?}, or the story as a plain string; story is a card identifier or URL for an issue labelled Deliverable; projectRoot defaults to the session project directory; answers maps a decision id from a draft or blocked result to its answer when rerunning.",
+    "Run only when the user invokes /slopify:deliver-story or asks for the slopify deliver-story workflow. Args: {story, projectRoot?, branchOnly?, answers?}, or the story as a plain string; story is a card identifier or URL for an issue labelled Deliverable; projectRoot defaults to the session project directory; branchOnly: true, when the user asks for a branch without a worktree, checks the branch out in the main checkout and creates no worktree; answers maps a decision id from a draft or blocked result to its answer when rerunning.",
   phases: [
     { title: "Locate", detail: "scout-card reads the issue and its labels; scout-checkpoint reads the run state" },
     { title: "Workspace", detail: "pusher creates or recovers the worktree and branch, and starts the issue" },
@@ -35,26 +35,22 @@ type Delivered = LoopResult & { workflow: "deliver-story"; specDir: string; repo
 
 // An issue only reaches delivery through shape, so a missing label is the one thing to say to its author.
 async function refuse(d: Run, cardId: string): Promise<NotStarted> {
-  const next = `Issue ${cardId || "the argument"} has no Deliverable label. Run /slopify:shape on it first, then invoke again.`;
-  if (cardId) {
-    await callPusher(
-      d.pushBrief(`Comment on card ${cardId}, as docs/BOARD.md declares: ${next} Do nothing else.`),
-      "comment on the issue",
-      "Locate",
-    );
-  }
+  const next = `Issue ${cardId} has no Deliverable label. Run /slopify:shape on it first, then invoke again.`;
+  await callPusher(
+    d.pushBrief(`Comment on card ${cardId}, as docs/BOARD.md declares: ${next} Do nothing else.`),
+    "comment on the issue",
+    "Locate",
+  );
   return { status: "not-started", next };
 }
 
 async function brokenWorkflow(d: Run, cardId: string, tried: readonly string[]): Promise<Stopped> {
   const what = `The how phase ran out of attempts, so the workflow is broken for this issue. Everything tried:\n${tried.map((t) => `- ${t}`).join("\n")}`;
-  if (cardId) {
-    await callPusher(
-      d.pushBrief(`Comment on card ${cardId}, as docs/BOARD.md declares:\n${what}`),
-      "report the halt",
-      "Spec",
-    );
-  }
+  await callPusher(
+    d.pushBrief(`Comment on card ${cardId}, as docs/BOARD.md declares:\n${what}`),
+    "report the halt",
+    "Spec",
+  );
   return d.stop("how", [{ id: "how-1", kind: "validation", what, evidence: "" }]);
 }
 
@@ -91,11 +87,16 @@ ARG>>>`,
     criteria: false,
   });
   if ("stop" in located) return { status: "not-started", next: located.stop.needs.map((n) => n.what).join(" ") };
-  const { story, storyRevision, cardId, boardBranch, slug, specRel } = located;
+  const { story, storyRevision, cardId, boardBranch, specRel } = located;
+  if (!cardId)
+    return {
+      status: "not-started",
+      next: "Ask the user for the Linear issue to deliver; a story reaches delivery only as an issue shape filed.",
+    };
   if (!isDeliverable(fact(cardRes, "labels"))) return refuse(d, cardId);
 
   const specDir = specRel.replace(/\.md$/, "");
-  const resume = await readResume(d, cardId ? `card ${cardId}` : `the story "${slug}"`, specDir);
+  const resume = await readResume(d, `card ${cardId}`, specDir);
   const stopped = await workspace(d, {
     cardId,
     boardBranch,
@@ -144,6 +145,7 @@ export default async function run(): Promise<NotStarted | Stopped | Delivered> {
     workflow: "deliver-story",
     projectRoot,
     storyArg,
+    branchOnly: flagOf(input["branchOnly"]),
   });
   try {
     return await deliver(d, storyArg, { where: d.WHERE, answers: answersOf(input["answers"]) });

@@ -352,7 +352,7 @@ async function commit(l: Loop, paths: readonly string[], message: string): Promi
   const r = await inOrder(l, () =>
     callPusher(
       l.d.pushBrief(
-        `Commit exactly these paths as they stand, staged by explicit path, with a message in the convention docs/FORGE.md declares, saying: ${message}.${l.cardId ? ` Name the issue ${l.cardId} in it.` : ""} Do not push.\n${list(paths)}`,
+        `Commit exactly these paths as they stand, staged by explicit path, with a message in the convention docs/FORGE.md declares, saying: ${message}. Name the issue ${l.cardId} in it. Do not push.\n${list(paths)}`,
       ),
       `commit: ${message}`,
       "Build",
@@ -939,7 +939,7 @@ function draftReasons(l: Loop): Listed[] {
 
 function body(l: Loop): string {
   return renderBody({
-    issue: l.cardId || "none",
+    issue: l.cardId,
     specDir: l.specDir,
     ...(l.document && { documents: l.document.paths }),
     draftReasons: draftReasons(l),
@@ -975,7 +975,7 @@ async function pushRound(l: Loop, last: boolean): Promise<void> {
   const steps = state.pr
     ? `Push the branch even if something is still flagged. Then update the PR ${state.pr}. ${bodyInstruction(l)}\nThen fire the review trigger as docs/FORGE.md declares, if it declares one.`
     : open
-      ? `Push the branch even if something is still flagged. Then open the branch's PR as a draft as docs/FORGE.md declares. ${bodyInstruction(l)}\nFire the review trigger only if docs/FORGE.md says opening doesn't fire it. ${l.cardId ? `Then attach the PR to card ${l.cardId} as docs/BOARD.md declares.` : ""} Report the PR reference as the operation named pr.`
+      ? `Push the branch even if something is still flagged. Then open the branch's PR as a draft as docs/FORGE.md declares. ${bodyInstruction(l)}\nFire the review trigger only if docs/FORGE.md says opening doesn't fire it. Then attach the PR to card ${l.cardId} as docs/BOARD.md declares. Report the PR reference as the operation named pr.`
       : "Push the branch even if something is still flagged. Open no PR yet.";
   const lines = [
     ...(open ? ["done publish <the PR reference>"] : []),
@@ -1057,11 +1057,9 @@ async function finish(l: Loop, ready: boolean): Promise<void> {
     ...l.decisions.filter((d) => d.affectsAcceptance).map((d) => `${d.question} We chose: ${d.choice}.`),
     ...draftReasons(l).map((x) => x.text),
   ];
-  const card = l.cardId
-    ? ready
-      ? `Perform the operations docs/BOARD.md declares for when the PR's review is clean on card ${l.cardId} (for example moving it to In Review), and comment on the card with the evidence and assumptions:\n${list(questions)}`
-      : `Comment on card ${l.cardId} with what is open:\n${list(questions)}`
-    : "";
+  const card = ready
+    ? `Perform the operations docs/BOARD.md declares for when the PR's review is clean on card ${l.cardId} (for example moving it to In Review), and comment on the card with the evidence and assumptions:\n${list(questions)}`
+    : `Comment on card ${l.cardId} with what is open:\n${list(questions)}`;
   pushed(
     await inOrder(l, () =>
       callPusher(

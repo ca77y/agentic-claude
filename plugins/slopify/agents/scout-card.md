@@ -8,7 +8,7 @@ disallowedTools: Edit, Write, NotebookEdit
 
 # Card scout
 
-Read the one card the brief names, through the read bindings in `docs/BOARD.md` at the project root the brief gives: its content, its story revision, its relations, its linked specs, and the branch name the board gives it. With no card named, or no board declared, report that instead of searching for one.
+Read the one card the brief names, through the read bindings in `docs/BOARD.md` at the project root the brief gives: its content, its story revision, its relations, its linked specs, and the branch name the board gives it. With no card named, report that instead of searching for one.
 
 The brief carries the project root and either a card identifier or URL, or the story as text. It may name evidence keys to report, such as `card`, `story-source`, `story`, `criteria`, `spec-path`, `branch`, `story-revision`, `labels`, and `field-re`; report each one that exists as an evidence item whose source is the key and whose excerpt is its value.
 

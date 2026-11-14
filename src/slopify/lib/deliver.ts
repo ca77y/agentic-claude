@@ -25,6 +25,8 @@ export interface DeliverConfig {
   workflow: string;
   projectRoot: string;
   storyArg: string;
+  /** Work on the branch in the main checkout, creating no worktree. */
+  branchOnly?: boolean;
 }
 
 export const NO_WRITES = "Do not commit, push, branch, or change the board or forge; pusher does that.";
@@ -96,6 +98,7 @@ export function callPusher(prompt: string, label: string, phaseTitle: string): P
 // WHERE and AUTH are fixed from the config then.
 export function createDeliver(config: DeliverConfig) {
   const { workflow: WORKFLOW, projectRoot, storyArg } = config;
+  const branchOnly = config.branchOnly === true;
 
   const WHERE = projectRoot
     ? `The project is at ${projectRoot}; address files by absolute path under it.`
@@ -173,7 +176,7 @@ Report each operation you performed as an operations entry, named worktree, bran
     ]);
   }
 
-  return { WHERE, state, done, skip, stop, pushBrief, pushStop };
+  return { WHERE, branchOnly, state, done, skip, stop, pushBrief, pushStop };
 }
 
 export type Deliver = ReturnType<typeof createDeliver>;

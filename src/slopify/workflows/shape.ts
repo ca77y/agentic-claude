@@ -265,7 +265,7 @@ async function file(d: Run, c: Card, slug: string, deliverable: boolean): Promis
       `${d.WHERE}
 The user's invocation of shape authorizes exactly this: write the card draft below to one card on the board, as docs/BOARD.md declares, and set its ${DELIVERABLE} label as asked. Nothing else: no commit, branch, push, PR, or other card. Work exactly as docs/BOARD.md binds it.
 
-The draft is ${c.draft}. Use its text exactly as written, with one trailing line, ${marker}, which lets a rerun find this card. ${target} ${label} Keep every label the card already has otherwise. Report the card's identifier as the operation named card. If docs/BOARD.md declares no board, do nothing and report done.`,
+The draft is ${c.draft}. Use its text exactly as written, with one trailing line, ${marker}, which lets a rerun find this card. ${target} ${label} Keep every label the card already has otherwise. Report the card's identifier as the operation named card.`,
       c.cardId ? "update the card" : "file the card",
       "File",
     ),

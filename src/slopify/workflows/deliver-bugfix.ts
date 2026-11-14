@@ -1,5 +1,5 @@
 import { callPusher, createDeliver } from "../lib/deliver.ts";
-import { answersOf, inputOf, textOf, type NotStarted } from "../lib/input.ts";
+import { answersOf, flagOf, inputOf, textOf, type NotStarted } from "../lib/input.ts";
 import { pushed, stopOf, type Run } from "../lib/loop.ts";
 import { reproduce } from "../lib/reproduce.ts";
 import { reproductionLine, type Reproduction } from "../lib/rules.ts";
@@ -13,7 +13,7 @@ export const meta = {
   description:
     "Fix a bug autonomously, from a Linear issue or a prompt to a pull request: reproduce it, turn the reproduction into a failing test, fix it, run the reproduction again in the app, and show the before and after in a PR that goes ready once its review is clean. A bug that can't be reproduced is labelled Unreproducible on its card, with no PR",
   whenToUse:
-    "Run only when the user invokes /slopify:deliver-bugfix or asks for the slopify deliver-bugfix workflow. Args: {story, projectRoot?, answers?}, or the bug as a plain string; story is a card identifier or URL, or the report; projectRoot defaults to the session project directory; answers maps a decision id from a draft or blocked result to its answer when rerunning.",
+    "Run only when the user invokes /slopify:deliver-bugfix or asks for the slopify deliver-bugfix workflow. Args: {story, projectRoot?, branchOnly?, answers?}, or the bug as a plain string; story is a card identifier or URL, or the report; projectRoot defaults to the session project directory; branchOnly: true, when the user asks for a branch without a worktree, checks the branch out in the main checkout and creates no worktree; answers maps a decision id from a draft or blocked result to its answer when rerunning.",
   phases: [
     { title: "Locate", detail: "scout-card reads the issue, or pusher files a Bug card for a report" },
     { title: "Ground", detail: "scout-code, scout-tests, and scout-history" },
@@ -38,7 +38,7 @@ async function markUnreproducible(d: Run, cardId: string, why: string): Promise<
   pushed(
     await callPusher(
       d.pushBrief(
-        `On card ${cardId}, add the label ${UNREPRODUCIBLE_LABEL} and comment, as docs/BOARD.md declares. If it declares no board, do nothing.\nThe comment: This bug could not be reproduced, so no fix was attempted.\n${why}`,
+        `On card ${cardId}, add the label ${UNREPRODUCIBLE_LABEL} and comment, as docs/BOARD.md declares.\nThe comment: This bug could not be reproduced, so no fix was attempted.\n${why}`,
       ),
       "report the failed reproduction",
       "Reproduce",
@@ -66,7 +66,12 @@ export default async function run(): Promise<NotStarted | Unreproducible | Small
   const input = inputOf(args, "story");
   const arg = textOf(input["story"]);
   if (!arg) return { status: "not-started", next: "Ask the user for the bug: a Linear issue or a report." };
-  const d = createDeliver({ workflow: WORKFLOW, projectRoot: textOf(input["projectRoot"]), storyArg: arg });
+  const d = createDeliver({
+    workflow: WORKFLOW,
+    projectRoot: textOf(input["projectRoot"]),
+    storyArg: arg,
+    branchOnly: flagOf(input["branchOnly"]),
+  });
   try {
     const found = await findCard(d, arg, "Bug");
     if ("status" in found) return found;

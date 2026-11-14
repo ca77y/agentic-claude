@@ -2,7 +2,7 @@
 import { scout, slugged } from "./family.ts";
 import { callPusher, createDeliver, opRef, pushOk, type Stopped } from "./deliver.ts";
 import { locate, workspace } from "./deliver-steps.ts";
-import { answersOf, inputOf, textOf, type NotStarted } from "./input.ts";
+import { answersOf, flagOf, inputOf, textOf, type NotStarted } from "./input.ts";
 import { Halt, reportOf, runLoop, stopOf, type LoopResult, type Run } from "./loop.ts";
 import { readResume, type Resume } from "./resume.ts";
 import type { Listed } from "./rules.ts";
@@ -40,13 +40,14 @@ async function fileCard(d: Run, story: string, slug: string, cardType: string): 
   const marker = `<!-- deliver-small ${slug} -->`;
   const r = await callPusher(
     d.pushBrief(
-      `Create a ${cardType} card from this text, as docs/BOARD.md declares, with one trailing line in its body: ${marker}. First search the board for a card whose body holds that line, and use that card instead of creating another. If docs/BOARD.md declares no board, do nothing. Report the card's identifier as the operation named card.\n<<<TEXT\n${story}\nTEXT>>>`,
+      `Create a ${cardType} card from this text, as docs/BOARD.md declares, with one trailing line in its body: ${marker}. First search the board for a card whose body holds that line, and use that card instead of creating another. Report the card's identifier as the operation named card.\n<<<TEXT\n${story}\nTEXT>>>`,
     ),
     "file the card",
     "Locate",
   );
-  if (!pushOk(r)) throw new Halt("locate", "A card for this work.", "pusher didn't file one");
-  return opRef(r, "card");
+  const card = opRef(r, "card");
+  if (!pushOk(r) || !card) throw new Halt("locate", "A card for this work.", "pusher didn't file one");
+  return card;
 }
 
 async function readWork(d: Run, arg: string) {
@@ -95,8 +96,7 @@ export async function findCard(d: Run, arg: string, cardType: string): Promise<F
   let located = await readWork(d, arg);
   if ("stop" in located) return { status: "not-started", next: located.stop.needs.map((n) => n.what).join(" ") };
   if (!located.cardId) {
-    const filed = await fileCard(d, located.story, located.slug, cardType);
-    if (filed) located = await readWork(d, filed);
+    located = await readWork(d, await fileCard(d, located.story, located.slug, cardType));
     if ("stop" in located) return { status: "not-started", next: located.stop.needs.map((n) => n.what).join(" ") };
   }
   const { story, cardId, boardBranch, slug, specRel } = located;
@@ -104,8 +104,7 @@ export async function findCard(d: Run, arg: string, cardType: string): Promise<F
   return { story, cardId, boardBranch, slug, name, cardType };
 }
 
-export const resumeOf = (d: Run, f: Found): Promise<Resume> =>
-  readResume(d, f.cardId ? `card ${f.cardId}` : `the ${f.cardType} "${f.slug}"`, "");
+export const resumeOf = (d: Run, f: Found): Promise<Resume> => readResume(d, `card ${f.cardId}`, "");
 
 /** Create or recover the worktree and start the card; lines go on the ledger the worktree's creation starts. */
 export function openWork(d: Run, f: Found, resume: Resume, lines: readonly string[] = []): Promise<Stopped | null> {
@@ -157,6 +156,7 @@ export async function runSmall(workflowArgs: unknown, workflowName: string, firs
     workflow: workflowName,
     projectRoot: textOf(input["projectRoot"]),
     storyArg: arg,
+    branchOnly: flagOf(input["branchOnly"]),
   });
   try {
     const started = await startWork(d, arg, "story");

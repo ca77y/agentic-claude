@@ -1,6 +1,6 @@
 # Board operations
 
-Read `docs/BOARD.md` for the tracker, its bindings, the card shape, the statuses, the user-owned decisions, and each operation's conditions. Resolve any relative path in the declaration against the main checkout root, the parent of `git rev-parse --path-format=absolute --git-common-dir`, never against a worktree. With no board declared, every card operation is unmet.
+Read `docs/BOARD.md` for the tracker, its bindings, the card shape, the statuses, the user-owned decisions, and each operation's conditions. Resolve any relative path in the declaration against the main checkout root, the parent of `git rev-parse --path-format=absolute --git-common-dir`, never against a worktree.
 
 - **Find the exact card** through the read binding, by the identifier the brief gives. Never act on a near match.
 - **Operate only as bound.** Each transition, PR attachment, or other delivery operation runs at the point and under the conditions the declaration states, such as the statuses it applies from. A condition that isn't met is reported, not forced.

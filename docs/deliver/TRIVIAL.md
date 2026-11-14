@@ -30,7 +30,7 @@ How `deliver-trivial` takes a trivial story from a Linear issue or a prompt to a
 ## What differs from `deliver-story`
 
 - **No how phase:** no designs, advisors, spec, or challenge.
-- **No label:** this flow doesn't need `Deliverable`, so it can start from a prompt. A prompt always gets a card, unless the project declares no board.
+- **No label:** this flow doesn't need `Deliverable`, so it can start from a prompt. A prompt always gets a card first.
 - **Checks inside the inner loop:** a fix isn't validated until the project's checks pass.
 - **`qa` runs once**, on the first change. A review fix has only the checks.
 - **The app runs once**, before the PR opens, and again only if that run failed. With no criteria, the validator treats the whole change as one, under whichever `TESTING.md` category covers it. When none fits, it reports `cannot-verify`, and `TESTING.md`'s **Uncategorized** setting decides whether the PR stays a draft.
