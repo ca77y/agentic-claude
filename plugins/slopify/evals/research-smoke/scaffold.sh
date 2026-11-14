@@ -14,10 +14,38 @@ git config user.email eval@example.com
 git config user.name eval
 
 mkdir -p docs/specs docs/spikes
+mkdir -p .board
 cat > docs/BOARD.md <<'MD'
 # Board declaration
 
-No board: there are no card operations. Acceptance comes from the user's request.
+Configuration does not authorize execution; the user's request does.
+
+## Board
+
+- Paths in this declaration are relative to the main checkout root, never to a worktree.
+- Tracker: local Markdown cards, one file per card under `.board/`.
+
+## Operations
+
+- Locate, read, search: read and search `.board/*.md`.
+- Create: write `.board/<TYPE>-<n>.md`, where `<TYPE>` is the card's type in capitals (`STORY`, `BUG`, `SPIKE`, `RESEARCH`) and `n` is one more than the highest existing number for that type (starting at 1), with a `Status: Todo` line under the title.
+- Update content and labels: rewrite the card file; labels are one `Labels:` line under the status line, comma-separated.
+- Transition: rewrite the card's `Status:` line.
+- Attach a PR: add a `PR: <path>` line under the status line.
+- Comment: append a `## Comments` section, or a paragraph to it.
+
+## Cards
+
+- Identity and spec naming: the file name without `.md` (`STORY-1`); a spec is the folder `docs/specs/<lowercase identifier>-<slug>/`.
+- Story format: `# <title>`, the status and labels lines, a summary paragraph, then `## Why`, `## Scope`, `## Out of scope`, `## Acceptance criteria`, and `## Assumptions`, `## Open questions`, `## References` when they apply.
+- Bug format: `# <title>`, the status and labels lines, then `## Observed`, `## Expected`, `## Steps`, and `## Assumptions`, `## Open questions`, `## References` when they apply.
+- Spike and research format: `# <title>`, the status and labels lines, then `## Question`, `## What counts as an answer`, and `## Conditions`, `## Assumptions`, `## Open questions`, `## References` when they apply.
+
+## Delivery
+
+- When delivery starts: set `Status: In Progress`. When the PR opens: attach it and set `Status: In Review`.
+
+Never rewrite an acceptance criterion to match an implementation.
 MD
 git init -q --bare .forge/remote.git
 git remote add origin "$PWD/.forge/remote.git"
@@ -86,4 +114,4 @@ MD
 
 printf '.worktrees/\n/.tmp/\n/.forge/\n' > .gitignore
 git add -A
-git commit -qm "chore: seed"
+GIT_AUTHOR_DATE=2026-01-01T00:00:00Z GIT_COMMITTER_DATE=2026-01-01T00:00:00Z git commit -qm "chore: seed"

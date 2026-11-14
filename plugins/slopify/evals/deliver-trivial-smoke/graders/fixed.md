@@ -1,5 +1,5 @@
 ---
 type: regex
-target: { source: file, path: .worktrees/smoke/calc.py }
+target: { source: file, path: calc.py }
 pattern: 'def mul\(a, b\)'
 ---

@@ -1,6 +1,6 @@
 PLUGINS ?= $(wildcard plugins/*/)
 
-.PHONY: install build check format test smoke-test
+.PHONY: install build check format test smoke
 
 # Once per clone: dev tools and the pre-commit hook.
 install:
@@ -32,9 +32,10 @@ format:
 test:
 	npm run --silent test:unit
 
-# The smoke evals call models and take long: run them only on request, four cases at a time.
+# The smoke evals call models, so run them only on request. Each case checks that its workflow starts and reaches
+# its first milestones within ten minutes, and all cases run at once, so the whole run takes about ten minutes.
 # Smoke workflows can outlast a headless session's wait for background work, so that ceiling is lifted.
-smoke-test:
+smoke:
 	for p in $(PLUGINS); do \
-	  CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0 claude plugin eval "$$p" --tag smoke -j 4 --allow-tools Bash Write Edit Agent Workflow --scaffold --ablation none --trust-plugin || exit 1; \
+	  CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0 claude plugin eval "$$p" --tag smoke -j 6 --allow-tools Bash Write Edit Agent Workflow --scaffold --ablation none --trust-plugin || exit 1; \
 	done

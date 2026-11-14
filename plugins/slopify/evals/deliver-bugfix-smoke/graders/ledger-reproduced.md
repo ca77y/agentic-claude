@@ -1,6 +1,6 @@
 ---
 type: regex
-target: { source: file, path: .worktrees/smoke/.tmp/ledger.md }
+target: { source: file, path: .tmp/ledger.md }
 pattern: 'reproduced \{"steps":\['
 flags: m
 ---

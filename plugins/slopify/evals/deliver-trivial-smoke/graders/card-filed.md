@@ -1,4 +1,4 @@
 ---
 type: file_exists
-path: .forge/prs/smoke.md
+path: .board/STORY-1.md
 ---
