@@ -190,7 +190,7 @@ var SHAPES = {
 };
 var TRAILING_STOP = /* @__PURE__ */ new Set([".", ",", ";", ":"]);
 function unremark(kind, text) {
-  const remark = kind === "path" ? /\s+[([][^)\]]*[)\]]$/ : /\s+[([].*$/;
+  const remark = kind === "path" ? /(?:\s+[([][^)\]]*[)\]]|,\s[^/]*)$/ : /\s+[([].*$/;
   let t = text;
   let prev;
   do {

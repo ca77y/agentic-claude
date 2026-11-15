@@ -152,7 +152,8 @@ export function absent(v: string | null | undefined, whole?: boolean): boolean {
 // A checkpoint value counts only in its expected shape, never as prose. Kinds: path (absolute),
 // rel (relative path, never absolute), sha, branch, ref (a PR URL, number, or path), rev (<path>@<hex>), id.
 // Returns the value, or '' when it is absent or has another shape. A value followed by a
-// parenthetical remark, or by a full stop, is the value. A path may hold any character but a newline.
+// parenthetical remark, a comma and a remark, or a full stop, is the value. A path may hold any
+// character but a newline.
 const SHAPES = {
   path: /^\/(?:[^\n]*[^\s.,;:])?$/,
   rel: /^[\w@.+[\]-][\w@.+()[\]/-]*$/,
@@ -168,7 +169,7 @@ export type Shape = keyof typeof SHAPES;
 const TRAILING_STOP = new Set([".", ",", ";", ":"]);
 function unremark(kind: Shape, text: string): string {
   // eslint-disable-next-line sonarjs/super-linear-regex -- matched against one short line from a scout
-  const remark = kind === "path" ? /\s+[([][^)\]]*[)\]]$/ : /\s+[([].*$/;
+  const remark = kind === "path" ? /(?:\s+[([][^)\]]*[)\]]|,\s[^/]*)$/ : /\s+[([].*$/;
   let t = text;
   let prev: string;
   do {
@@ -182,8 +183,8 @@ export function shaped(kind: Shape, v: string | null | undefined): string {
   const re = SHAPES[kind];
   const t = ((v ?? "").split("\n", 1)[0] ?? "").trim();
   if (absent(t)) return "";
-  // A trailing remark is stripped first. In a path only a parenthetical that ends the value is a remark:
-  // one with more path after it belongs to a directory name.
+  // A trailing remark is stripped first. In a path only a parenthetical or a comma clause that ends the value
+  // is a remark: one with more path after it belongs to a directory name.
   const tok = unremark(kind, t);
   if (tok && re.test(tok)) return tok;
   return re.test(t) ? t : "";

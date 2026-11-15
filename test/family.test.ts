@@ -56,8 +56,11 @@ describe("shaped", () => {
   test("accepts a GitHub-style card id", () => {
     assert.equal(shaped("id", "#123"), "#123");
   });
-  test("keeps same-line prose out of a path", { todo: "the path shape accepts any text after a slash" }, () => {
-    assert.equal(shaped("path", "/repo/.worktrees/smr-1, clean"), "");
+  test("strips a trailing comma remark from a path", () => {
+    assert.equal(shaped("path", "/repo/.worktrees/smr-1, clean"), "/repo/.worktrees/smr-1");
+  });
+  test("keeps a directory whose name holds a comma", () => {
+    assert.equal(shaped("path", "/Users/j/Work, old/app"), "/Users/j/Work, old/app");
   });
 });
 
