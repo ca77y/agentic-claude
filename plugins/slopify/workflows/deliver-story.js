@@ -342,18 +342,19 @@ function createDeliver(config) {
     return [...out, ...lines ?? []];
   }
   function pushBrief(instruction, lines, ledgerNote) {
-    const ln = takeLines(lines);
+    const hasLedger = !!state.worktree || !!ledgerNote;
+    const ln = hasLedger ? takeLines(lines) : [];
     return `${WHERE}
 You are the only agent in this workflow that acts on the board and forge. ${AUTH}
 
-Worktree: ${state.worktree || "(not created yet)"}. Ledger: ${ledgerNote || `${state.worktree}/.tmp/ledger.md`}.
+Worktree: ${state.worktree || "(not created yet)"}.${hasLedger ? ` Ledger: ${ledgerNote || `${state.worktree}/.tmp/ledger.md`}.` : ""}
 
 ${instruction}
 
 ${ln.length > 0 ? `Append these lines, in this order, to the ledger (create it, with its directory, if absent). Stamp each with the current time in front and fill every <placeholder> from what you just did:
 ${ln.map((l) => `- ${l}`).join("\n")}` : "Append no ledger lines."}
 
-Report each operation you performed as an operations entry, named worktree, branch, delivery-start, commit, push, pr, review-trigger, or ledger, with its reference. Set done only when every operation asked for is complete; list each one that is unbound or failed in unmet.`;
+Report each operation you performed as an operations entry, named worktree, branch, delivery-start, commit, push, pr, review-trigger, or ledger, with its reference. Set done only when every operation this brief asks for is complete. List in unmet only an operation this brief asks for that is unbound or failed; one it doesn't ask for is neither performed nor unmet.`;
   }
   function pushStop(step, r) {
     return stop(step, [
@@ -1423,12 +1424,13 @@ async function pushRound(l, last) {
   const { state } = l.d;
   const open = !state.pr && (countOpen(l) === 0 || last);
   const number = l.reviewNumber + 1;
+  const noReview = "When docs/FORGE.md declares no review, fire nothing: that is not unmet.";
   const steps = state.pr ? `Push the branch even if something is still flagged. Then update the PR ${state.pr}. ${bodyInstruction(l)}
-Then fire the review trigger as docs/FORGE.md declares, if it declares one.` : open ? `Push the branch even if something is still flagged. Then open the branch's PR as a draft as docs/FORGE.md declares. ${bodyInstruction(l)}
-Fire the review trigger only if docs/FORGE.md says opening doesn't fire it. Then attach the PR to card ${l.cardId} as docs/BOARD.md declares. Report the PR reference as the operation named pr.` : "Push the branch even if something is still flagged. Open no PR yet.";
+Then fire the review trigger as docs/FORGE.md declares. ${noReview}` : open ? `Push the branch even if something is still flagged. Then open the branch's PR as a draft as docs/FORGE.md declares. ${bodyInstruction(l)}
+Fire the review trigger only if docs/FORGE.md says opening doesn't fire it. ${noReview} Then attach the PR to card ${l.cardId} as docs/BOARD.md declares. Report the PR reference as the operation named pr.` : "Push the branch even if something is still flagged. Open no PR yet.";
   const lines = [
     ...open ? ["done publish <the PR reference>"] : [],
-    ...state.pr || open ? [`review ${String(number)} fired <the trigger time>`] : [],
+    ...state.pr || open ? [`review ${String(number)} fired <the trigger time, or none when docs/FORGE.md declares no review>`] : [],
     `done round ${String(l.round)}`
   ];
   const r = pushed(

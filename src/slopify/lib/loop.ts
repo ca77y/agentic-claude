@@ -972,14 +972,18 @@ async function pushRound(l: Loop, last: boolean): Promise<void> {
   const { state } = l.d;
   const open = !state.pr && (countOpen(l) === 0 || last);
   const number = l.reviewNumber + 1;
+  // A project may declare no review; the watcher then reports not-declared, which counts as clean.
+  const noReview = "When docs/FORGE.md declares no review, fire nothing: that is not unmet.";
   const steps = state.pr
-    ? `Push the branch even if something is still flagged. Then update the PR ${state.pr}. ${bodyInstruction(l)}\nThen fire the review trigger as docs/FORGE.md declares, if it declares one.`
+    ? `Push the branch even if something is still flagged. Then update the PR ${state.pr}. ${bodyInstruction(l)}\nThen fire the review trigger as docs/FORGE.md declares. ${noReview}`
     : open
-      ? `Push the branch even if something is still flagged. Then open the branch's PR as a draft as docs/FORGE.md declares. ${bodyInstruction(l)}\nFire the review trigger only if docs/FORGE.md says opening doesn't fire it. Then attach the PR to card ${l.cardId} as docs/BOARD.md declares. Report the PR reference as the operation named pr.`
+      ? `Push the branch even if something is still flagged. Then open the branch's PR as a draft as docs/FORGE.md declares. ${bodyInstruction(l)}\nFire the review trigger only if docs/FORGE.md says opening doesn't fire it. ${noReview} Then attach the PR to card ${l.cardId} as docs/BOARD.md declares. Report the PR reference as the operation named pr.`
       : "Push the branch even if something is still flagged. Open no PR yet.";
   const lines = [
     ...(open ? ["done publish <the PR reference>"] : []),
-    ...(state.pr || open ? [`review ${String(number)} fired <the trigger time>`] : []),
+    ...(state.pr || open
+      ? [`review ${String(number)} fired <the trigger time, or none when docs/FORGE.md declares no review>`]
+      : []),
     `done round ${String(l.round)}`,
   ];
   const r = pushed(

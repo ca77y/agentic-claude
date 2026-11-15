@@ -329,18 +329,19 @@ function createDeliver(config) {
     return [...out, ...lines ?? []];
   }
   function pushBrief(instruction, lines, ledgerNote) {
-    const ln = takeLines(lines);
+    const hasLedger = !!state.worktree || !!ledgerNote;
+    const ln = hasLedger ? takeLines(lines) : [];
     return `${WHERE}
 You are the only agent in this workflow that acts on the board and forge. ${AUTH}
 
-Worktree: ${state.worktree || "(not created yet)"}. Ledger: ${ledgerNote || `${state.worktree}/.tmp/ledger.md`}.
+Worktree: ${state.worktree || "(not created yet)"}.${hasLedger ? ` Ledger: ${ledgerNote || `${state.worktree}/.tmp/ledger.md`}.` : ""}
 
 ${instruction}
 
 ${ln.length > 0 ? `Append these lines, in this order, to the ledger (create it, with its directory, if absent). Stamp each with the current time in front and fill every <placeholder> from what you just did:
 ${ln.map((l) => `- ${l}`).join("\n")}` : "Append no ledger lines."}
 
-Report each operation you performed as an operations entry, named worktree, branch, delivery-start, commit, push, pr, review-trigger, or ledger, with its reference. Set done only when every operation asked for is complete; list each one that is unbound or failed in unmet.`;
+Report each operation you performed as an operations entry, named worktree, branch, delivery-start, commit, push, pr, review-trigger, or ledger, with its reference. Set done only when every operation this brief asks for is complete. List in unmet only an operation this brief asks for that is unbound or failed; one it doesn't ask for is neither performed nor unmet.`;
   }
   function pushStop(step, r) {
     return stop(step, [
@@ -1307,12 +1308,13 @@ async function pushRound(l, last) {
   const { state } = l.d;
   const open = !state.pr && (countOpen(l) === 0 || last);
   const number = l.reviewNumber + 1;
+  const noReview = "When docs/FORGE.md declares no review, fire nothing: that is not unmet.";
   const steps = state.pr ? `Push the branch even if something is still flagged. Then update the PR ${state.pr}. ${bodyInstruction(l)}
-Then fire the review trigger as docs/FORGE.md declares, if it declares one.` : open ? `Push the branch even if something is still flagged. Then open the branch's PR as a draft as docs/FORGE.md declares. ${bodyInstruction(l)}
-Fire the review trigger only if docs/FORGE.md says opening doesn't fire it. Then attach the PR to card ${l.cardId} as docs/BOARD.md declares. Report the PR reference as the operation named pr.` : "Push the branch even if something is still flagged. Open no PR yet.";
+Then fire the review trigger as docs/FORGE.md declares. ${noReview}` : open ? `Push the branch even if something is still flagged. Then open the branch's PR as a draft as docs/FORGE.md declares. ${bodyInstruction(l)}
+Fire the review trigger only if docs/FORGE.md says opening doesn't fire it. ${noReview} Then attach the PR to card ${l.cardId} as docs/BOARD.md declares. Report the PR reference as the operation named pr.` : "Push the branch even if something is still flagged. Open no PR yet.";
   const lines = [
     ...open ? ["done publish <the PR reference>"] : [],
-    ...state.pr || open ? [`review ${String(number)} fired <the trigger time>`] : [],
+    ...state.pr || open ? [`review ${String(number)} fired <the trigger time, or none when docs/FORGE.md declares no review>`] : [],
     `done round ${String(l.round)}`
   ];
   const r = pushed(
@@ -1930,12 +1932,13 @@ async function measureAll(d, worktree, claims) {
   return {
     measurements: t.confirmed,
     unknowns: claims.filter((c) => isPending(c)).map((c) => `${c.claim} Not measured: ${t.why.get(c.id) ?? ""}`),
-    assumptions: t.assumptions
+    assumptions: t.assumptions,
+    prototyped: true
   };
 }
 async function prototype(d, slug, claims) {
   const toMeasure = claims.filter((c) => c.measurement);
-  if (toMeasure.length === 0) return { measurements: [], unknowns: [], assumptions: [] };
+  if (toMeasure.length === 0) return { measurements: [], unknowns: [], assumptions: [], prototyped: false };
   phase("Prototype");
   const made = pushed(
     await callPusher(
@@ -1952,7 +1955,8 @@ async function prototype(d, slug, claims) {
     return {
       measurements: [],
       unknowns: toMeasure.map((c) => `${c.claim} Not measured: the project declares no spike prototypes.`),
-      assumptions: []
+      assumptions: [],
+      prototyped: false
     };
   }
   const measured = await measureAll(d, worktree, toMeasure);
@@ -2060,6 +2064,20 @@ ${NO_WRITES}`,
   );
   return w.changed;
 }
+function prototypeReport(claims, m) {
+  if (!m.prototyped) {
+    return m.unknowns.length > 0 ? `No prototype was built. Not measured:
+${list(m.unknowns)}` : "No prototype was needed: the evidence settled every claim.";
+  }
+  const text = (id) => claims.find((c) => c.id === id)?.claim ?? id;
+  return [
+    "A throwaway prototype was built on a local branch, then deleted; it was never pushed or merged.",
+    m.measurements.length > 0 ? `Measured, each rerun and confirmed by a separate qa:
+${list(m.measurements.map((x) => `${text(x.claim)} ${x.value} (\`${x.command}\`)`))}` : "",
+    m.unknowns.length > 0 ? `Not measured:
+${list(m.unknowns)}` : ""
+  ].filter(Boolean).join("\n");
+}
 async function run() {
   const input = inputOf(args, "question");
   const arg = textOf(input["question"]);
@@ -2077,10 +2095,12 @@ async function run() {
     if ("status" in started) return started;
     const { story, cardId, slug, name, resume } = started;
     const docRel = resume.findings[0] ?? `docs/spikes/${name}.md`;
+    let prototyped = "";
     if (resume.findings.length === 0) {
       const evidence = await ground(d, story);
       const planned = await plan(d, story, evidence);
       const measured = await prototype(d, slug, planned.claims);
+      prototyped = prototypeReport(planned.claims, measured);
       await writeFindings(d, story, docRel, evidence, planNotes(planned.claims, measured, planned.assumptions));
     }
     const result = await runLoop({
@@ -2100,7 +2120,11 @@ async function run() {
         revise: (problems) => reviseDocument2(d, docRel, problems)
       }
     });
-    return { ...result, workflow: WORKFLOW, report: reportOf(WORKFLOW, result) };
+    return {
+      ...result,
+      workflow: WORKFLOW,
+      report: [reportOf(WORKFLOW, result), `Findings: ${docRel}.`, prototyped].filter(Boolean).join("\n")
+    };
   } catch (error) {
     return stopOf(d, error);
   }

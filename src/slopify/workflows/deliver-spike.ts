@@ -111,6 +111,8 @@ interface Measured {
   measurements: Measurement[];
   unknowns: string[];
   assumptions: string[];
+  /** A prototype was built and then deleted, never pushed or merged. */
+  prototyped: boolean;
 }
 
 export type SpikeResult = NotStarted | Stopped | (LoopResult & { workflow: "deliver-spike"; report: string });
@@ -252,12 +254,13 @@ async function measureAll(d: Run, worktree: string, claims: readonly Claim[]): P
     measurements: t.confirmed,
     unknowns: claims.filter((c) => isPending(c)).map((c) => `${c.claim} Not measured: ${t.why.get(c.id) ?? ""}`),
     assumptions: t.assumptions,
+    prototyped: true,
   };
 }
 
 async function prototype(d: Run, slug: string, claims: readonly Claim[]): Promise<Measured> {
   const toMeasure = claims.filter((c) => c.measurement);
-  if (toMeasure.length === 0) return { measurements: [], unknowns: [], assumptions: [] };
+  if (toMeasure.length === 0) return { measurements: [], unknowns: [], assumptions: [], prototyped: false };
   phase("Prototype");
   const made = pushed(
     await callPusher(
@@ -278,6 +281,7 @@ async function prototype(d: Run, slug: string, claims: readonly Claim[]): Promis
       measurements: [],
       unknowns: toMeasure.map((c) => `${c.claim} Not measured: the project declares no spike prototypes.`),
       assumptions: [],
+      prototyped: false,
     };
   }
   const measured = await measureAll(d, worktree, toMeasure);
@@ -397,6 +401,25 @@ ${NO_WRITES}`,
 
 // ---- Run --------------------------------------------------------------------
 
+// What the prototype settled, for the report: the loop's result knows nothing of it.
+function prototypeReport(claims: readonly Claim[], m: Measured): string {
+  if (!m.prototyped) {
+    return m.unknowns.length > 0
+      ? `No prototype was built. Not measured:\n${list(m.unknowns)}`
+      : "No prototype was needed: the evidence settled every claim.";
+  }
+  const text = (id: string): string => claims.find((c) => c.id === id)?.claim ?? id;
+  return [
+    "A throwaway prototype was built on a local branch, then deleted; it was never pushed or merged.",
+    m.measurements.length > 0
+      ? `Measured, each rerun and confirmed by a separate qa:\n${list(m.measurements.map((x) => `${text(x.claim)} ${x.value} (\`${x.command}\`)`))}`
+      : "",
+    m.unknowns.length > 0 ? `Not measured:\n${list(m.unknowns)}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
 export default async function run(): Promise<SpikeResult> {
   const input = inputOf(args, "question");
   const arg = textOf(input["question"]);
@@ -414,11 +437,13 @@ export default async function run(): Promise<SpikeResult> {
     if ("status" in started) return started;
     const { story, cardId, slug, name, resume } = started;
     const docRel = resume.findings[0] ?? `docs/spikes/${name}.md`;
-    // A committed document is the checkpoint: a rerun goes straight to the loop.
+    // A committed document is the checkpoint: a rerun goes straight to the loop, and the document holds the measurements.
+    let prototyped = "";
     if (resume.findings.length === 0) {
       const evidence = await ground(d, story);
       const planned = await plan(d, story, evidence);
       const measured = await prototype(d, slug, planned.claims);
+      prototyped = prototypeReport(planned.claims, measured);
       await writeFindings(d, story, docRel, evidence, planNotes(planned.claims, measured, planned.assumptions));
     }
     const result = await runLoop({
@@ -438,7 +463,11 @@ export default async function run(): Promise<SpikeResult> {
         revise: (problems) => reviseDocument(d, docRel, problems),
       },
     });
-    return { ...result, workflow: WORKFLOW, report: reportOf(WORKFLOW, result) };
+    return {
+      ...result,
+      workflow: WORKFLOW,
+      report: [reportOf(WORKFLOW, result), `Findings: ${docRel}.`, prototyped].filter(Boolean).join("\n"),
+    };
   } catch (error) {
     return stopOf(d, error);
   }

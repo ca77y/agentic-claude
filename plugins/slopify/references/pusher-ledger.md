@@ -14,11 +14,11 @@ The brief gives the lines that record the step it completes. Append them in the 
 <time> reproduced {"steps": [...], "observed": "..."}
 <time> done round <n>
 <time> done publish <pr reference>
-<time> review <n> fired <trigger time>
+<time> review <n> fired <trigger time or none>
 <time> review <n> ended <finished|failed|timed-out|not-declared>: <number> finding(s)
 <time> delivery <ready|draft>
 ```
 
 - `run <n>`: `n` is one more than the highest run number already in the file, or 1.
 - `done board-start`: written as soon as the card's delivery-start operation is done, so a rerun retries only that operation when it is missing.
-- `review <n> fired`: the trigger time the forge operation reported.
+- `review <n> fired`: the trigger time the forge operation reported, or `none` when `docs/FORGE.md` declares no review.

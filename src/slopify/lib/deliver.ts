@@ -131,7 +131,8 @@ export function createDeliver(config: DeliverConfig) {
       checkpoint,
     });
   }
-  // Ledger lines ride on the next pusher dispatch; the run line goes first.
+  // Ledger lines ride on the next pusher dispatch that has a ledger to write; the run line goes first. Before the
+  // checkout exists, as when a prompt's card is filed, there is no ledger, so the lines wait.
   function takeLines(lines: readonly string[] | undefined): string[] {
     const out: string[] = [];
     if (runLinePending) {
@@ -148,11 +149,12 @@ export function createDeliver(config: DeliverConfig) {
     return [...out, ...(lines ?? [])];
   }
   function pushBrief(instruction: string, lines?: readonly string[], ledgerNote?: string): string {
-    const ln = takeLines(lines);
+    const hasLedger = !!state.worktree || !!ledgerNote;
+    const ln = hasLedger ? takeLines(lines) : [];
     return `${WHERE}
 You are the only agent in this workflow that acts on the board and forge. ${AUTH}
 
-Worktree: ${state.worktree || "(not created yet)"}. Ledger: ${ledgerNote || `${state.worktree}/.tmp/ledger.md`}.
+Worktree: ${state.worktree || "(not created yet)"}.${hasLedger ? ` Ledger: ${ledgerNote || `${state.worktree}/.tmp/ledger.md`}.` : ""}
 
 ${instruction}
 
@@ -162,7 +164,7 @@ ${
     : "Append no ledger lines."
 }
 
-Report each operation you performed as an operations entry, named worktree, branch, delivery-start, commit, push, pr, review-trigger, or ledger, with its reference. Set done only when every operation asked for is complete; list each one that is unbound or failed in unmet.`;
+Report each operation you performed as an operations entry, named worktree, branch, delivery-start, commit, push, pr, review-trigger, or ledger, with its reference. Set done only when every operation this brief asks for is complete. List in unmet only an operation this brief asks for that is unbound or failed; one it doesn't ask for is neither performed nor unmet.`;
   }
   function pushStop(step: string, r: PusherResult | null): Stopped {
     return stop(step, [

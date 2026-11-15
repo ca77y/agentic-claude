@@ -266,18 +266,19 @@ function createDeliver(config) {
     return [...out, ...lines ?? []];
   }
   function pushBrief(instruction, lines, ledgerNote) {
-    const ln = takeLines(lines);
+    const hasLedger = !!state.worktree || !!ledgerNote;
+    const ln = hasLedger ? takeLines(lines) : [];
     return `${WHERE}
 You are the only agent in this workflow that acts on the board and forge. ${AUTH}
 
-Worktree: ${state.worktree || "(not created yet)"}. Ledger: ${ledgerNote || `${state.worktree}/.tmp/ledger.md`}.
+Worktree: ${state.worktree || "(not created yet)"}.${hasLedger ? ` Ledger: ${ledgerNote || `${state.worktree}/.tmp/ledger.md`}.` : ""}
 
 ${instruction}
 
 ${ln.length > 0 ? `Append these lines, in this order, to the ledger (create it, with its directory, if absent). Stamp each with the current time in front and fill every <placeholder> from what you just did:
 ${ln.map((l) => `- ${l}`).join("\n")}` : "Append no ledger lines."}
 
-Report each operation you performed as an operations entry, named worktree, branch, delivery-start, commit, push, pr, review-trigger, or ledger, with its reference. Set done only when every operation asked for is complete; list each one that is unbound or failed in unmet.`;
+Report each operation you performed as an operations entry, named worktree, branch, delivery-start, commit, push, pr, review-trigger, or ledger, with its reference. Set done only when every operation this brief asks for is complete. List in unmet only an operation this brief asks for that is unbound or failed; one it doesn't ask for is neither performed nor unmet.`;
   }
   function pushStop(step, r) {
     return stop(step, [
