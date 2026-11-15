@@ -1,4 +1,4 @@
-import { STRINGS, advise, lens, scout, slugged, type ScoutResult } from "../lib/family.ts";
+import { STRINGS, advise, defectsOf, lens, scout, slugged, type ScoutResult } from "../lib/family.ts";
 import { callPusher, createDeliver, list, opRef, show, slugOf, type Stopped } from "../lib/deliver.ts";
 import { inputOf, textOf, type NotStarted } from "../lib/input.ts";
 import { must, pushed, stopOf, type Run } from "../lib/loop.ts";
@@ -202,7 +202,7 @@ async function checkDraft(d: Run, c: Card): Promise<Problem[]> {
   );
   return lenses.flatMap((name, i) => {
     const v = must(verdicts[i], "check", `A verdict from ${name}.`);
-    const found = v.findings.map((f) => ({ source: name, location: f.location, text: f.problem }));
+    const found = defectsOf(v).map((f) => ({ source: name, location: f.location, text: f.problem }));
     // A check that couldn't run found nothing, which is not the same as passing.
     if (v.verdict === "unverified" && found.length === 0) {
       found.push({ source: name, location: c.draft, text: `The check couldn't run: ${v.limits}` });

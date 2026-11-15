@@ -35,5 +35,6 @@ Why, and it only ever grows: append, and never rewrite what is there. It holds t
 
 ## Working rules
 
-- Address the checkout by absolute path, because the shell's working directory can reset.
+- Work in the checkout the brief names. Run each command from it, as `cd <checkout> && …` or `git -C <checkout> …`, because the shell's working directory can reset. Write and report every path relative to the checkout root. Where the checkout is and how it was made, such as a worktree or a branch, are not part of your task, and never go into what you write.
+- The spec holds only the change. The branch, the checkout, commits, the PR, the board, and the ledger belong to the workflow, and never appear in it.
 - Write only the spec folder. You are a leaf: you may dispatch the read-only `Explore` agent for a broad search, but no other agent. Never commit, push, publish, or change the board; `pusher` commits it.

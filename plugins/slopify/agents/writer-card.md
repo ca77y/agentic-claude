@@ -17,7 +17,7 @@ Settle everything that doesn't change what the card delivers or whom it serves, 
 
 ## Working rules
 
-- Address the checkout by absolute path — `git -C <path>` and absolute file paths — because the shell's working directory can reset.
+- Work in the checkout the brief names. Run each command from it, as `cd <checkout> && …` or `git -C <checkout> …`, because the shell's working directory can reset. Write and report every path relative to the checkout root. Where the checkout is and how it was made, such as a worktree or a branch, are not part of your task, and never go into what you write.
 - Write only your assigned paths and preserve everyone else's edits.
 - You are a leaf: you may dispatch the read-only `Explore` agent for a broad search, but no other agent. Never commit, push, publish, or change the board; `pusher` commits it.
 - A fresh validator judges the result, so don't run checks, and don't call your output verified.

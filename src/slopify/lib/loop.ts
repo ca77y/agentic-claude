@@ -1,6 +1,6 @@
 // The build and validate loop every delivery shares: an outer loop over the whole story, with one coder and
 // qa inner loop per change. docs/deliver/STORY.md describes it. All of its control flow comes from rules.ts.
-import { LENS_SCHEMA, lens, scout, STRINGS, type Answers, type LensResult } from "./family.ts";
+import { LENS_SCHEMA, defectsOf, lens, scout, STRINGS, type Answers, type LensResult } from "./family.ts";
 import {
   NO_WRITES,
   callCoder,
@@ -761,7 +761,7 @@ async function checkDocs(l: Loop): Promise<Problem[]> {
     ),
   );
   return verdicts.flatMap((v: LensResult | null, i) =>
-    must(v, "validate", `A verdict on ${l.docs[i] ?? "a document"}.`).findings.map((f) => ({
+    defectsOf(must(v, "validate", `A verdict on ${l.docs[i] ?? "a document"}.`)).map((f) => ({
       source: "lens-docs",
       location: f.location,
       text: f.problem,

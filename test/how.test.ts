@@ -254,6 +254,13 @@ describe("the how phase", () => {
     assert.equal(count("writer-spec"), 1);
   });
 
+  test("sends nothing a passing lens lists to a judge", async () => {
+    const noted = { ...LENS_PASS, findings: [{ location: "build.json", problem: "Covered.", blocking: false }] };
+    const r = await how(happy({ "lens-scope": () => noted, "lens-consistency": () => noted }));
+    assert.ok("build" in r);
+    assert.equal(calls.filter((c) => c.type === "judge" && c.label !== "decide").length, 0);
+  });
+
   test("never treats a check that died as a pass", async () => {
     await assert.rejects(how(happy({ "check-claim": () => null })));
   });

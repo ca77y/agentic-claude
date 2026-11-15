@@ -93,7 +93,7 @@ Configuration does not authorize execution; the user's request does.
 MD
 
 cp -R "$resources/library" library
-today=$(date +%Y-%m-%d)
+today=2026-01-01 # fixed, so the seed commit and its sha are the same on every run
 for f in $(find library -type f -name '*.md'); do
   sed \
     -e "s|{{PROJECT_NAME}}|Eval Project|g" \

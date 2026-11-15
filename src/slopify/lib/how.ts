@@ -1,6 +1,15 @@
 // deliver-story's how phase: three independent designs, opus advisors, one decision, a spec folder, and a challenge
 // that tries to break it. The issue says why and what; this decides how, so choices here are made, never asked.
-import { LENS_SCHEMA, STRINGS, lens, scout, type Answers, type LensResult, type ScoutResult } from "./family.ts";
+import {
+  LENS_SCHEMA,
+  STRINGS,
+  defectsOf,
+  lens,
+  scout,
+  type Answers,
+  type LensResult,
+  type ScoutResult,
+} from "./family.ts";
 import { NO_WRITES, callPusher, callSpecWriter, list, opRef, pushOk, show, unique } from "./deliver.ts";
 import { Halt, must, type Run } from "./loop.ts";
 import { MAX_CHALLENGE_ROUNDS, MAX_DESIGN_TRIES } from "./rules.ts";
@@ -312,7 +321,7 @@ interface SpecProblem {
 const check = (name: string, label: string, brief: string) => () =>
   agent(brief, { agentType: `slopify:${name}`, label, phase: "Challenge", schema: CHECK_SCHEMA });
 const findingsOf = (v: LensResult): SpecProblem[] =>
-  v.findings.map((f) => ({ location: f.location, problem: f.problem }));
+  defectsOf(v).map((f) => ({ location: f.location, problem: f.problem }));
 
 async function runChecks(o: HowInput, spec: SpecResult): Promise<SpecProblem[]> {
   const specText = JSON.stringify({ build: spec.build, validate: spec.validate });

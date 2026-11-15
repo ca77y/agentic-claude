@@ -71,10 +71,15 @@ var LENS_SCHEMA = {
   type: "object",
   required: ["verdict", "evaluated", "findings", "limits"],
   properties: {
-    verdict: { type: "string", enum: ["pass", "fail", "unverified"] },
+    verdict: {
+      type: "string",
+      enum: ["pass", "fail", "unverified"],
+      description: "fail when there is any finding; pass only when nothing is wrong"
+    },
     evaluated: { type: "string", description: "The exact revision judged" },
     findings: {
       type: "array",
+      description: "Each thing that is wrong, and where; empty when nothing is wrong. Never list what holds, passes, or is covered.",
       items: {
         type: "object",
         required: ["location", "problem", "blocking"],
@@ -83,7 +88,7 @@ var LENS_SCHEMA = {
             type: "string",
             description: "path:line or the item judged"
           },
-          problem: { type: "string" },
+          problem: { type: "string", description: "What is wrong" },
           blocking: { type: "boolean" }
         }
       }
@@ -123,6 +128,7 @@ var ADVISOR_SCHEMA = {
     }
   }
 };
+var defectsOf = (v) => v.verdict === "pass" ? [] : v.findings;
 function familyAgent(prefix, schema, name, prompt, opts) {
   if (!name.startsWith(prefix)) throw new Error(`${name} is not a ${prefix}* agent`);
   return agent(prompt, { ...opts, agentType: `slopify:${name}`, schema });
@@ -225,7 +231,7 @@ function callPusher(prompt, label, phaseTitle) {
 function createDeliver(config) {
   const { workflow: WORKFLOW2, projectRoot, storyArg } = config;
   const branchOnly = config.branchOnly === true;
-  const WHERE = projectRoot ? `The project is at ${projectRoot}; address files by absolute path under it.` : "The project is the session project directory; address files by absolute path.";
+  const WHERE = projectRoot ? `The project is at ${projectRoot}.` : "The project is the session project directory.";
   const AUTH = `Authorization, from the user's invocation of /slopify:${WORKFLOW2}: the story branch and worktree, attributable commits, the pushes the brief asks for, opening or updating this task's PR as a draft or ready, the declared review trigger, the one issue comment and label the brief asks for when the run ends or halts, and filing the issues the brief lists. It does not authorize merging, releases, any other message, rewriting docs/BOARD.md or docs/FORGE.md, or changing a card's content. Work exactly as docs/BOARD.md and docs/FORGE.md declare; an operation that is not bound is unmet, never improvised. Stage explicit paths only.`;
   const completed = [];
   const state = {
@@ -648,7 +654,7 @@ The card draft is ${c.draft}, a ${c.kind}.`, { label: name, phase: "Check" })
   );
   return lenses.flatMap((name, i) => {
     const v = must(verdicts[i], "check", `A verdict from ${name}.`);
-    const found = v.findings.map((f) => ({ source: name, location: f.location, text: f.problem }));
+    const found = defectsOf(v).map((f) => ({ source: name, location: f.location, text: f.problem }));
     if (v.verdict === "unverified" && found.length === 0) {
       found.push({ source: name, location: c.draft, text: `The check couldn't run: ${v.limits}` });
     }

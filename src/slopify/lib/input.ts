@@ -54,7 +54,5 @@ export function answersOf(v: unknown): Answers {
 
 /** The brief line that says where the project is. */
 export function whereOf(projectRoot: string): string {
-  return projectRoot
-    ? `The project is at ${projectRoot}; address files by absolute path under it.`
-    : "The project is the session project directory; address files by absolute path.";
+  return projectRoot ? `The project is at ${projectRoot}.` : "The project is the session project directory.";
 }

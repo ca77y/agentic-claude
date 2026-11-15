@@ -1,4 +1,4 @@
-import { STRINGS, lens, scout, type LensResult } from "../lib/family.ts";
+import { STRINGS, defectsOf, lens, scout, type LensResult } from "../lib/family.ts";
 import { NO_WRITES, callCoder, callPusher, createDeliver, list, opRef, show, type Stopped } from "../lib/deliver.ts";
 import { answersOf, flagOf, inputOf, textOf, type NotStarted } from "../lib/input.ts";
 import { must, pushed, reportOf, runLoop, stopOf, type LoopResult, type Problem, type Run } from "../lib/loop.ts";
@@ -374,7 +374,7 @@ async function checkDocument(d: Run, story: string, docRel: string): Promise<Pro
   );
   return lenses.flatMap(([name], i) => {
     const v: LensResult = must(verdicts[i], "validate", `A verdict from ${name}.`);
-    const problems = v.findings.map((f) => ({ source: name, location: f.location, text: f.problem }));
+    const problems = defectsOf(v).map((f) => ({ source: name, location: f.location, text: f.problem }));
     // A check that couldn't run found nothing, which is not the same as passing.
     if (v.verdict === "unverified" && problems.length === 0) {
       problems.push({ source: name, location: docRel, text: `The check couldn't run: ${v.limits}` });

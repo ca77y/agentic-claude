@@ -63,7 +63,11 @@ const CLERK_SCHEMA = {
   required: ["verdict", "findings", "evidence"],
   properties: {
     verdict: { type: "string", enum: ["pass", "fail", "unverified"] },
-    findings: { ...STRINGS, description: "Each finding with the path or claim it concerns; empty on pass" },
+    findings: {
+      ...STRINGS,
+      description:
+        "Each thing that is wrong, with the path or claim it concerns; empty on pass. Never list what holds.",
+    },
     evidence: { type: "string", description: "What was checked and how, or what stopped the check" },
   },
 } as const;
@@ -173,7 +177,11 @@ async function checkPlan(c: Ctx): Promise<Reported[]> {
     "plan",
     "A check of the plan.",
   );
-  const found = v.findings.map((f) => ({ source: "library-clerk", location: c.plan, text: f }));
+  const found = (v.verdict === "pass" ? [] : v.findings).map((f) => ({
+    source: "library-clerk",
+    location: c.plan,
+    text: f,
+  }));
   return v.verdict === "unverified" && found.length === 0
     ? [{ source: "library-clerk", location: c.plan, text: `The check couldn't run: ${v.evidence}` }]
     : found;
@@ -307,7 +315,11 @@ async function checkLibrary(c: Ctx): Promise<Problem[]> {
   );
   return assignments.flatMap((a, i) => {
     const v = must(verdicts[i], "validate", `A verdict on ${a}.`);
-    const found = v.findings.map((f) => ({ source: "library-clerk", location: a, text: f }));
+    const found = (v.verdict === "pass" ? [] : v.findings).map((f) => ({
+      source: "library-clerk",
+      location: a,
+      text: f,
+    }));
     if (v.verdict === "unverified" && found.length === 0) {
       found.push({ source: "library-clerk", location: a, text: `The check couldn't run: ${v.evidence}` });
     }

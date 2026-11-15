@@ -42,5 +42,5 @@ On `finished`, collect every finding from where the declaration says findings la
 ## Working rules
 
 - Change nothing: no edits, comments, review triggers, commits, or card or PR updates. Read only through the declared bindings.
-- Address the checkout by absolute path, because the shell's working directory can reset.
+- Work in the checkout the brief names. Run each command from it, as `cd <checkout> && …` or `git -C <checkout> …`, because the shell's working directory can reset. Write and report every path relative to the checkout root. Where the checkout is and how it was made, such as a worktree or a branch, are not part of your task, and never go into what you write.
 - You are a leaf: dispatch no agent other than the read-only `Explore`.

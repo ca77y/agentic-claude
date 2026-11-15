@@ -43,10 +43,16 @@ export const LENS_SCHEMA = {
   type: "object",
   required: ["verdict", "evaluated", "findings", "limits"],
   properties: {
-    verdict: { type: "string", enum: ["pass", "fail", "unverified"] },
+    verdict: {
+      type: "string",
+      enum: ["pass", "fail", "unverified"],
+      description: "fail when there is any finding; pass only when nothing is wrong",
+    },
     evaluated: { type: "string", description: "The exact revision judged" },
     findings: {
       type: "array",
+      description:
+        "Each thing that is wrong, and where; empty when nothing is wrong. Never list what holds, passes, or is covered.",
       items: {
         type: "object",
         required: ["location", "problem", "blocking"],
@@ -55,7 +61,7 @@ export const LENS_SCHEMA = {
             type: "string",
             description: "path:line or the item judged",
           },
-          problem: { type: "string" },
+          problem: { type: "string", description: "What is wrong" },
           blocking: { type: "boolean" },
         },
       },
@@ -99,6 +105,9 @@ const ADVISOR_SCHEMA = {
 
 export type ScoutResult = Infer<typeof SCOUT_SCHEMA>;
 export type LensResult = Infer<typeof LENS_SCHEMA>;
+
+/** A lens's problems. A pass means nothing is wrong, so whatever a passing lens lists goes to no judge. */
+export const defectsOf = (v: LensResult): LensResult["findings"] => (v.verdict === "pass" ? [] : v.findings);
 export type AdvisorResult = Infer<typeof ADVISOR_SCHEMA>;
 
 /** Options for a scout, lens, or advisor dispatch; the helper sets the agent type and schema. */

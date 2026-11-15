@@ -55,10 +55,15 @@ var LENS_SCHEMA = {
   type: "object",
   required: ["verdict", "evaluated", "findings", "limits"],
   properties: {
-    verdict: { type: "string", enum: ["pass", "fail", "unverified"] },
+    verdict: {
+      type: "string",
+      enum: ["pass", "fail", "unverified"],
+      description: "fail when there is any finding; pass only when nothing is wrong"
+    },
     evaluated: { type: "string", description: "The exact revision judged" },
     findings: {
       type: "array",
+      description: "Each thing that is wrong, and where; empty when nothing is wrong. Never list what holds, passes, or is covered.",
       items: {
         type: "object",
         required: ["location", "problem", "blocking"],
@@ -67,7 +72,7 @@ var LENS_SCHEMA = {
             type: "string",
             description: "path:line or the item judged"
           },
-          problem: { type: "string" },
+          problem: { type: "string", description: "What is wrong" },
           blocking: { type: "boolean" }
         }
       }
@@ -206,7 +211,7 @@ function inputOf(a, primary, numbers = false) {
 }
 var textOf = (v) => typeof v === "string" ? v.trim() : "";
 function whereOf(projectRoot) {
-  return projectRoot ? `The project is at ${projectRoot}; address files by absolute path under it.` : "The project is the session project directory; address files by absolute path.";
+  return projectRoot ? `The project is at ${projectRoot}.` : "The project is the session project directory.";
 }
 
 // src/slopify/lib/spec.ts
