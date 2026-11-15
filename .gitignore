@@ -19,3 +19,7 @@ plugins/*/evals/results/
 
 # Development tooling
 node_modules/
+
+# Obsidian local/generated state
+.obsidian/workspace.json
+.obsidian/workspace-mobile.json

@@ -1,4 +1,12 @@
-# Architecture
+---
+paths:
+  - "src/**"
+  - "scripts/**"
+  - "test/**"
+  - "plugins/**"
+---
+
+# Architecture principles
 
 Rules that hold for every plugin in this repo, whatever its current design.
 
@@ -11,7 +19,19 @@ Rules that hold for every plugin in this repo, whatever its current design.
 
   A plugin may also rely on fixed locations of its own, such as `docs/specs/`, `docs/spikes/`, and the ignored `.tmp/`. `bootstrap` sets the project up so that each exists and is reachable.
 
+- `bootstrap` sets a repository up correctly, and the rest of the plugin takes that setup as ground truth. Never add a defensive check or a fallback: nothing runs to confirm the environment or the setup, and nothing handles a setup that is wrong. A check that would fire on a correctly configured repository and do nothing doesn't belong in a workflow or an agent.
 - Configuration doesn't authorize anything; the user's request does. An operation that the declarations don't bind is not performed.
 - One agent role performs every write to git, the board, and the forge: commits, pushes, branches, worktrees, issues, PRs, and comments. No other agent does any of these.
 - A validator judges only work it didn't produce. It runs in a fresh dispatch and changes nothing. A check that couldn't run is reported as such: never as passed, and never as a defect for a producer to fix.
 - A delivery ends in a PR unless one of its declared halt conditions holds. A PR is marked ready only when its review is clean. No agent merges or approves.
+
+## Hard rules
+
+None beyond the principles above and the root `AGENTS.md`.
+
+## Full design
+
+- [`docs/DESIGN.md`](../../docs/DESIGN.md)
+- [`docs/deliver/`](../../docs/deliver/STORY.md)
+- [`docs/RESEARCH.md`](../../docs/RESEARCH.md)
+- [`docs/SHAPE.md`](../../docs/SHAPE.md)

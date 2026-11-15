@@ -5,3 +5,6 @@ plugins/*/workflows/*.js
 plugins/*/skills/*/scripts/*.js
 # npm writes its lockfile
 package-lock.json
+# The library and Obsidian settings stay identical to the bootstrap scaffold
+library/
+.obsidian/

@@ -1,6 +1,6 @@
 # Design
 
-How the plugins are built. When the code changes a decision below, update it here in the same change. The delivery process is in [`deliver/`](deliver/STORY.md).
+How the plugins are built, within the principles in [`.claude/rules/architecture.md`](../.claude/rules/architecture.md). When the code changes a decision below, update it here in the same change. The delivery process is in [`deliver/`](deliver/STORY.md).
 
 ## Workflows and skills
 
