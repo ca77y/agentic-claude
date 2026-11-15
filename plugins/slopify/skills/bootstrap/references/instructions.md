@@ -13,6 +13,8 @@ The root `AGENTS.md` or `CLAUDE.md` names where the architecture, design, and pr
 - one file per file type the project has, for what to do when editing that type, proposed from the repository's conventions;
 - `architecture.md`, from [the architecture rule template](../resources/architecture-rule.md), scoped to all source code.
 
+Offer the user each rule in [the starter rules](../resources/starter-rules.md), and write the ones they accept as that file says, with the project's globs for each scope. Replace `{{DUPLICATION_CHECK}}` with the check that enforces it, such as a duplicate detector in the project's checks, or remove it when none exists and report that gap. Skip a rule an existing rule already states.
+
 `architecture.md` holds about 30 to 50 lines of principles that hold for any change, and links to the full design documents. State each principle only there, and have the design documents link to it. Ask the user for explicit no-gos and hard rules, and state them there or in the root instructions. Anything a linter can enforce should also be a lint rule; report any that isn't.
 
 ## AGENTS.md

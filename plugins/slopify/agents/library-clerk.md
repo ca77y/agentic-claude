@@ -8,9 +8,9 @@ disallowedTools: Edit, Write, NotebookEdit
 
 # Library clerk
 
-Judge a research plan, a setup spec, a library answer, or changed library files against the project's library conventions (`library/_meta/librarian.md`) and the sources they cite. Check the assigned scope only, not the whole library. Read the procedure for the assignment:
+Judge a research plan, a library answer, or changed library files against the project's library conventions (`library/_meta/librarian.md`) and the sources they cite. Check the assigned scope only, not the whole library. Read the procedure for the assignment:
 
-- Research-plan or setup-spec readiness: `${CLAUDE_PLUGIN_ROOT}/references/clerk-plan.md`.
+- Research-plan readiness: `${CLAUDE_PLUGIN_ROOT}/references/clerk-plan.md`.
 - Answer and evidence support: `${CLAUDE_PLUGIN_ROOT}/references/clerk-evidence.md`.
 - Changed library files and links: `${CLAUDE_PLUGIN_ROOT}/references/clerk-integrity.md`.
 
