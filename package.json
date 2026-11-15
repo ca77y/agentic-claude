@@ -23,13 +23,13 @@
   "scripts": {
     "build": "node scripts/build.ts",
     "build:check": "node scripts/build.ts --check",
-    "typecheck": "node node_modules/typescript7/bin/tsc -p src && node node_modules/typescript7/bin/tsc -p test && node node_modules/typescript7/bin/tsc -p .",
+    "typecheck": "node node_modules/typescript7/bin/tsc -p src && node node_modules/typescript7/bin/tsc -p src/slopify/skills && node node_modules/typescript7/bin/tsc -p test && node node_modules/typescript7/bin/tsc -p .",
     "lint:ts": "eslint --cache --cache-location node_modules/.cache/eslint/ .",
     "lint:md": "markdownlint-cli2 \"**/*.md\"",
     "lint:format": "prettier --check --cache .",
     "lint:dead": "knip",
     "lint:dup": "jscpd src",
-    "lint:types": "type-coverage -p src/tsconfig.json --strict --at-least 100",
+    "lint:types": "type-coverage -p src/tsconfig.json --strict --at-least 100 && type-coverage -p src/slopify/skills/tsconfig.json --strict --at-least 100",
     "test:unit": "node --test \"test/**/*.test.ts\""
   }
 }

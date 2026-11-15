@@ -4,5 +4,7 @@
     // Workflows run in the Workflow runtime, not Node: only the runtime globals in runtime.d.ts exist.
     "types": []
   },
-  "include": ["**/*.ts"]
+  "include": ["**/*.ts"],
+  // Skill scripts run in Node, with their own config.
+  "exclude": ["*/skills/**"]
 }

@@ -2,5 +2,6 @@
 plugins/*/skills/*/resources/
 # Built from src/ by scripts/build.ts
 plugins/*/workflows/*.js
+plugins/*/skills/*/scripts/*.js
 # npm writes its lockfile
 package-lock.json

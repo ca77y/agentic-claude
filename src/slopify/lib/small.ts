@@ -40,7 +40,7 @@ async function fileCard(d: Run, story: string, slug: string, cardType: string): 
   const marker = `<!-- deliver-small ${slug} -->`;
   const r = await callPusher(
     d.pushBrief(
-      `Create a ${cardType} card from this text, as docs/BOARD.md declares, with one trailing line in its body: ${marker}. First search the board for a card whose body holds that line, and use that card instead of creating another. Report the card's identifier as the operation named card.\n<<<TEXT\n${story}\nTEXT>>>`,
+      `Create a ${cardType} card from this text, as docs/BOARD.md declares, with one trailing line in its body: ${marker}. First search the board for a card whose body holds that line, and use that card instead of creating another. Report the card's identifier as the operation card.\n<<<TEXT\n${story}\nTEXT>>>`,
     ),
     "file the card",
     "Locate",

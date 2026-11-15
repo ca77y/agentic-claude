@@ -18,6 +18,7 @@ How the plugins are built. When the code changes a decision below, update it her
 
 - A workflow's source is `src/<plugin>/workflows/<name>.ts`. It exports a pure-literal `meta` and a default `run()`. Code that several workflows share is an ordinary module under `src/<plugin>/lib/`.
 - `scripts/build.ts` uses esbuild to bundle each source into `plugins/<plugin>/workflows/<name>.js`, which is the file the runtime runs. The built files are committed.
+- A skill that needs a deterministic program, such as `workflow-investigate`'s run statistics, has a Node script whose source is `src/<plugin>/skills/<skill>/main.ts`. The same build bundles it into `plugins/<plugin>/skills/<skill>/scripts/<skill>.js`, the file the skill runs. Its code is linted, type-checked, and tested like a workflow's.
 - The runtime's globals are typed in `src/runtime.d.ts`. Each agent schema is declared `as const`, and its result type is inferred from it. So the code that reads an agent's output is checked against the schema the agent must satisfy.
 
 ## Agent roles and tiers
