@@ -82,7 +82,7 @@ An `unverified` finding doesn't block and goes in its own PR section. Whether a 
   - `ready`: the PR exists and its review is clean.
   - `draft`: the PR exists, and its description lists what is open.
   - `blocked`: one of the workflow's halt conditions held.
-  - `not-started`: the issue couldn't be read or isn't marked deliverable.
+  - `not-started`: the issue couldn't be read or isn't marked deliverable, or an answer isn't plain text.
 - A `blocked` or `draft` result names what it needs by id, along with the stages completed and how to rerun.
 - The issue is the acceptance source. A workflow may clarify a criterion in the spec, keeping the original wording beside the clarification. It never rewrites the issue.
 
@@ -95,5 +95,5 @@ An `unverified` finding doesn't block and goes in its own PR section. Whether a 
   - an append-only `.tmp/ledger.md` that only `pusher` writes.
 - A scout reads the checkpoints at the start of each run.
 - Specs are written and read by agents, and stay in the repository as context for later failures. Humans compact or remove them.
-- A rerun skips every stage its checkpoints show complete and still current. Once the PR exists, a rerun resumes at the review. Answers to a `draft` or `blocked` result go in `answers`, keyed by id.
+- A rerun skips every stage its checkpoints show complete and still current. Once the PR exists, a rerun resumes at the review. Answers to a `draft` or `blocked` result go in `answers`, keyed by id. Each answer is plain text: a string, or a number or boolean read as text. An answer that is an object or a list ends the run as `not-started`, naming its id, before any agent works, and a `null` answer counts as unanswered.
 - A rerun in the same session can instead resume through the workflow runtime, which replays earlier dispatches from the cache.
