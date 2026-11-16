@@ -499,19 +499,23 @@ function inputOf(a, primary, numbers = false) {
 }
 var flagOf = (v) => v === true;
 var textOf = (v) => typeof v === "string" ? v.trim() : "";
-function answerValue(x) {
-  const text = String(x);
-  return x === null || x === void 0 || typeof x === "string" || typeof x === "number" || typeof x === "boolean" ? x : text;
-}
+var isPlain = (x) => typeof x === "string" || typeof x === "number" || typeof x === "boolean";
 var isMap = (v) => isRecord(v) && !Array.isArray(v);
 function answersOf(v) {
-  return isMap(v) ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, answerValue(x)])) : {};
+  return isMap(v) ? Object.fromEntries(Object.entries(v).filter((e) => isPlain(e[1]))) : {};
 }
 function answersRejected(v) {
-  if (v === void 0 || v === null || isMap(v)) return null;
-  return {
+  if (v === void 0 || v === null) return null;
+  if (!isMap(v)) {
+    return {
+      status: "not-started",
+      next: 'The answers argument must be a map from a decision id to its answer, such as {"q1": "a"}. Ask the user for the answers as a map, then invoke again.'
+    };
+  }
+  const ids = Object.entries(v).filter(([, x]) => isRecord(x)).map(([id]) => id);
+  return ids.length === 0 ? null : {
     status: "not-started",
-    next: 'The answers argument must be a map from a decision id to its answer, such as {"q1": "a"}. Ask the user for the answers as a map, then invoke again.'
+    next: `The answer to ${ids.join(", ")} must be plain text, not an object or a list. Invoke again with each of those answers given as text.`
   };
 }
 

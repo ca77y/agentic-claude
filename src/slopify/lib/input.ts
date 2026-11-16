@@ -37,28 +37,38 @@ export const flagOf = (v: unknown): boolean => v === true;
 /** A string field trimmed; '' for anything else. */
 export const textOf = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
 
-// An answer as answerOf reads it: a primitive as given, anything else as its string form.
-function answerValue(x: unknown): Answers[string] {
-  const text = String(x);
-  return x === null || x === undefined || typeof x === "string" || typeof x === "number" || typeof x === "boolean"
-    ? x
-    : text;
-}
+// An answer is plain text: a string, or a number or boolean read as its text. null is no answer.
+const isPlain = (x: unknown): x is string | number | boolean =>
+  typeof x === "string" || typeof x === "number" || typeof x === "boolean";
 
 const isMap = (v: unknown): v is Input => isRecord(v) && !Array.isArray(v);
 
-/** The answers arg, by need id; anything but a map is no answers, so check it with answersRejected first. */
+/** The answers arg, by need id; check it with answersRejected first. A null answer is unanswered. */
 export function answersOf(v: unknown): Answers {
-  return isMap(v) ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, answerValue(x)])) : {};
+  return isMap(v)
+    ? Object.fromEntries(Object.entries(v).filter((e): e is [string, string | number | boolean] => isPlain(e[1])))
+    : {};
 }
 
-/** Why the answers arg can't be read, before any agent works: it is given but is not a map. A missing one is none. */
+/** Why the answers arg can't be used, before any agent works: it is given but is not a map, or an answer in it is an
+ * object or a list, which no agent may see. A missing one is none. */
 export function answersRejected(v: unknown): NotStarted | null {
-  if (v === undefined || v === null || isMap(v)) return null;
-  return {
-    status: "not-started",
-    next: 'The answers argument must be a map from a decision id to its answer, such as {"q1": "a"}. Ask the user for the answers as a map, then invoke again.',
-  };
+  if (v === undefined || v === null) return null;
+  if (!isMap(v)) {
+    return {
+      status: "not-started",
+      next: 'The answers argument must be a map from a decision id to its answer, such as {"q1": "a"}. Ask the user for the answers as a map, then invoke again.',
+    };
+  }
+  const ids = Object.entries(v)
+    .filter(([, x]) => isRecord(x))
+    .map(([id]) => id);
+  return ids.length === 0
+    ? null
+    : {
+        status: "not-started",
+        next: `The answer to ${ids.join(", ")} must be plain text, not an object or a list. Invoke again with each of those answers given as text.`,
+      };
 }
 
 /** The brief line that says where the project is. */

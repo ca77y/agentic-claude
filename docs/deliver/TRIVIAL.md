@@ -43,8 +43,8 @@ The PR, its sections, the loop limits, test first, and what the run is allowed t
 
 ## Halt conditions
 
-| #   | Condition                                                                                         | Found at | What the user gets                                           |
-| --- | ------------------------------------------------------------------------------------------------- | -------- | ------------------------------------------------------------ |
-| H1  | The issue can't be read, the argument says nothing, or `answers` is given but isn't a map         | Read     | `not-started`, no board write                                |
-| H2  | The push is denied, or PR creation fails                                                          | Push     | `blocked`; finished work stays committed on the local branch |
-| H3  | Infrastructure: a stop signal, a required tool denied, or a budget, usage, or agent limit reached | Any      | `blocked`, with the state reported on the issue              |
+| #   | Condition                                                                                                 | Found at | What the user gets                                           |
+| --- | --------------------------------------------------------------------------------------------------------- | -------- | ------------------------------------------------------------ |
+| H1  | The issue can't be read, the argument says nothing, or `answers` isn't a map or holds an object or a list | Read     | `not-started`, no board write                                |
+| H2  | The push is denied, or PR creation fails                                                                  | Push     | `blocked`; finished work stays committed on the local branch |
+| H3  | Infrastructure: a stop signal, a required tool denied, or a budget, usage, or agent limit reached         | Any      | `blocked`, with the state reported on the issue              |
