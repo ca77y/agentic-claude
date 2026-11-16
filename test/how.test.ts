@@ -6,8 +6,10 @@ import { createDeliver } from "../src/slopify/lib/deliver.ts";
 import { runHow } from "../src/slopify/lib/how.ts";
 import type { Run } from "../src/slopify/lib/loop.ts";
 import deliverBugfix from "../src/slopify/workflows/deliver-bugfix.ts";
+import deliverSpike from "../src/slopify/workflows/deliver-spike.ts";
 import deliverStory from "../src/slopify/workflows/deliver-story.ts";
 import deliverTrivial from "../src/slopify/workflows/deliver-trivial.ts";
+import research from "../src/slopify/workflows/research.ts";
 import { calls, current, installAgents, type Reply, type Script } from "./harness.ts";
 
 installAgents();
@@ -487,6 +489,42 @@ describe("the small workflows", () => {
     assert.equal(r.status, "ready");
     assert.equal(count("scout-history"), 0);
     assert.ok(calls.find((c) => c.label === "change: test")?.prompt.includes("run add(1, 1)"));
+  });
+
+  test("a workflow rejects an object or a list answer before any agent works, naming the decision", async () => {
+    current.script = promptRun;
+    const workflows: [string, string, () => Promise<{ status: string }>][] = [
+      ["deliver-bugfix", "story", deliverBugfix],
+      ["deliver-story", "story", deliverStory],
+      ["deliver-spike", "question", deliverSpike],
+      ["deliver-trivial", "story", deliverTrivial],
+      ["research", "question", research],
+    ];
+    for (const [name, field, run] of workflows) {
+      for (const answer of [{ choice: "a" }, ["a", "b"]]) {
+        calls.length = 0;
+        Object.assign(globalThis, { args: { [field]: "SMR-1", answers: { "spec-q1-abc1234": answer } } });
+        const r = await run();
+        const shown = `${name} with ${JSON.stringify(answer)}`;
+        assert.equal(r.status, "not-started", shown);
+        assert.equal(calls.length, 0, shown);
+        const next = "next" in r && typeof r.next === "string" ? r.next : "";
+        assert.ok(next.includes("spec-q1-abc1234"), shown);
+        assert.match(next, /plain text/, shown);
+      }
+    }
+  });
+
+  test("a null answer counts as unanswered, while text and number answers reach the agents", async () => {
+    current.script = promptRun;
+    Object.assign(globalThis, {
+      args: { story: "Add mul to calc.py", answers: { "q-null": null, "q-text": "yes", "q-number": 3 } },
+    });
+    await deliverTrivial();
+    const first = calls.find((c) => c.label === "change: test")?.prompt ?? "";
+    assert.ok(first.includes("q-text"));
+    assert.ok(first.includes("q-number"));
+    assert.ok(calls.every((c) => !c.prompt.includes("q-null")));
   });
 
   test("both ask for the work when the argument is empty", async () => {
