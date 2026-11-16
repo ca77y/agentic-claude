@@ -229,7 +229,7 @@ describe("the how phase", () => {
     assert.equal(count("writer-spec"), 1);
   });
 
-  test("halts on a blocker still open after every round", async () => {
+  test("halts on a blocker still open after three revisions", async () => {
     const r = await how(
       happy({
         "check-claim": () => ({ holds: false, location: "a.ts", problem: "gone" }),
@@ -238,7 +238,8 @@ describe("the how phase", () => {
     );
     assert.ok("exhausted" in r);
     assert.ok(r.exhausted[0]?.includes("gone"));
-    assert.equal(count("check-claim"), 3);
+    assert.equal(count("writer-spec"), 4, "the spec and three revisions");
+    assert.equal(count("check-claim"), 4);
   });
 
   test("records a major still open after every round, and continues", async () => {

@@ -20,7 +20,8 @@ export const meta = {
     { title: "Ground", detail: "library-reader reports what the library already supports" },
     {
       title: "Plan",
-      detail: "library-scribe writes the plan; library-clerk checks it and a judge rules, up to three rounds",
+      detail:
+        "library-scribe writes the plan; library-clerk checks it and a judge rules; library-scribe revises, up to three times",
     },
     { title: "Retrieve", detail: "one library-researcher per sub-question" },
     {
@@ -188,7 +189,7 @@ async function checkPlan(c: Ctx): Promise<Reported[]> {
     : found;
 }
 
-// Up to three rounds. What is still wrong after them is a limit the answer states.
+// Up to three revisions, each checked. What is still wrong after them is a limit the answer states.
 async function plan(c: Ctx, context: string): Promise<{ subQuestions: SubQuestion[]; limits: string[] }> {
   phase("Plan");
   let subQuestions = await writePlan(
@@ -196,7 +197,7 @@ async function plan(c: Ctx, context: string): Promise<{ subQuestions: SubQuestio
     `write the plan: the bounded sub-questions to retrieve, each with a short stable id, and how good the evidence must be. It may allow a supported uncertain answer. Leave out what the library already supports:\n${context}`,
     "plan",
   );
-  for (let round = 1; round <= MAX_FIX_ROUNDS; round += 1) {
+  for (let revisions = 0; revisions <= MAX_FIX_ROUNDS; revisions += 1) {
     const problems = await checkPlan(c);
     const confirmed = await confirmedProblems(
       problems,
@@ -204,11 +205,11 @@ async function plan(c: Ctx, context: string): Promise<{ subQuestions: SubQuestio
       "Plan",
     );
     if (confirmed.length === 0) return { subQuestions, limits: [] };
-    if (round === MAX_FIX_ROUNDS) return { subQuestions, limits: confirmed };
+    if (revisions === MAX_FIX_ROUNDS) return { subQuestions, limits: confirmed };
     subQuestions = await writePlan(
       c,
       `revise the plan to fix these problems:\n${list(confirmed)}`,
-      `revise ${String(round)}`,
+      `revise ${String(revisions + 1)}`,
     );
   }
   return { subQuestions, limits: [] };

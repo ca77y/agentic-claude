@@ -17,7 +17,7 @@ export const meta = {
     },
     {
       "title": "Plan",
-      "detail": "library-scribe writes the plan; library-clerk checks it and a judge rules, up to three rounds"
+      "detail": "library-scribe writes the plan; library-clerk checks it and a judge rules; library-scribe revises, up to three times"
     },
     {
       "title": "Retrieve",
@@ -231,7 +231,7 @@ function blocked(workflow, step, needs, extra = {}) {
 // src/slopify/lib/rules.ts
 var MAX_FIX_ROUNDS = 3;
 var MAX_INNER_TRIES = 3;
-var MAX_HOOK_REPAIRS = 2;
+var MAX_HOOK_REPAIRS = 3;
 var isBlocking = (r) => r.severity === "blocker" || r.severity === "major";
 function routeOf(r, priorFixes, differentlyUsed, hasSpec) {
   if (r.verdict === "dismissed") return "dismiss";
@@ -654,7 +654,10 @@ var FIX_SCHEMA = {
   properties: {
     changed: { ...STRINGS, description: "Paths changed, relative to the worktree root" },
     ran: { ...STRINGS, description: "Each command and its result" },
-    testProblem: { type: "string", description: "Why the test is wrong; empty when it isn't" },
+    testProblem: {
+      type: "string",
+      description: "Why the test is wrong or leaves out a case the change must handle; empty when neither"
+    },
     specProblem: {
       type: "string",
       description: "What the brief doesn't settle or can't deliver as written; empty when none"
@@ -674,7 +677,10 @@ var QA_SCHEMA = {
   required: [...LENS_SCHEMA.required, "testAtFault"],
   properties: {
     ...LENS_SCHEMA.properties,
-    testAtFault: { type: "boolean", description: "True when the test itself is what has to change" }
+    testAtFault: {
+      type: "boolean",
+      description: "True when the test itself is what has to change, including when it leaves out a case"
+    }
   }
 };
 var CHECKS_SCHEMA = {
@@ -886,12 +892,12 @@ Check in a temporary copy that the test fails at that commit on one of its asser
 
 Validate one change and its history.
 ${history}
-Check that the fix delivers the behavior asked for and doesn't merely satisfy the test, for example by special-casing the test's input. Check that the change stays within its criterion or problem. Any failed check is a blocking finding. Set testAtFault when the test is what has to change.`;
+Check that the fix delivers the behavior asked for and doesn't merely satisfy the test, for example by special-casing the test's input. Check that the change stays within its criterion or problem. Any failed check is a blocking finding. Set testAtFault when the test is what has to change, including when it leaves out a case the change must handle.`;
 }
 function fixPrompt(l, c, cycle, lastFailure) {
   const assignment = cycle.paths.length > 0 ? `Make this test pass. These paths are protected, so change none of them:
 ${list(cycle.paths)}
-If the test is wrong, return testProblem with the reason and stop.` : `Make the change. It has no test because: ${cycle.noTest}`;
+If the test is wrong, or leaves out a case the change must handle, return testProblem with the reason and stop.` : `Make the change. It has no test because: ${cycle.noTest}`;
   return `${changeBrief(l, c)}
 
 ${assignment}${lastFailure ? `
@@ -953,10 +959,11 @@ async function tryFix(l, c, cycle, lastFailure, attempt) {
   );
   l.assumptions.push(...fix.assumptions);
   l.manualActions.push(...fix.manualActions);
+  l.changedThisRound.push(...fix.changed);
+  const committed = fix.changed.length === 0 || await commit(l, fix.changed, `implement ${c.id}`, coderRepair(l, c)) !== null;
   if (fix.specProblem) return specStopped(l, c, fix.specProblem);
   if (fix.testProblem) return { reason: fix.testProblem, rewriteTest: true };
-  l.changedThisRound.push(...fix.changed);
-  if (fix.changed.length > 0 && !await commit(l, fix.changed, `implement ${c.id}`, coderRepair(l, c))) return DONE;
+  if (!committed) return DONE;
   const failing = await failingChecks(l);
   if (failing) return { reason: failing, rewriteTest: false };
   if (l.small && l.round > 0) return { reason: "", rewriteTest: false };
@@ -2006,7 +2013,7 @@ async function plan(c, context) {
 ${context}`,
     "plan"
   );
-  for (let round2 = 1; round2 <= MAX_FIX_ROUNDS; round2 += 1) {
+  for (let revisions = 0; revisions <= MAX_FIX_ROUNDS; revisions += 1) {
     const problems = await checkPlan(c);
     const confirmed = await confirmedProblems(
       problems,
@@ -2015,12 +2022,12 @@ The checks reported problems in the research plan at ${c.plan}, in the worktree 
       "Plan"
     );
     if (confirmed.length === 0) return { subQuestions, limits: [] };
-    if (round2 === MAX_FIX_ROUNDS) return { subQuestions, limits: confirmed };
+    if (revisions === MAX_FIX_ROUNDS) return { subQuestions, limits: confirmed };
     subQuestions = await writePlan(
       c,
       `revise the plan to fix these problems:
 ${list(confirmed)}`,
-      `revise ${String(round2)}`
+      `revise ${String(revisions + 1)}`
     );
   }
   return { subQuestions, limits: [] };

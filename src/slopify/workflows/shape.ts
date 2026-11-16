@@ -23,7 +23,7 @@ export const meta = {
     { title: "Draft", detail: "writer-card writes the card from its kind's template" },
     {
       title: "Check",
-      detail: "lenses by kind, then one judge rules on the round's findings; writer-card revises, up to three rounds",
+      detail: "lenses by kind, then one judge rules on the round's findings; writer-card revises, up to three times",
     },
     { title: "File", detail: "pusher creates or updates the card, and its Deliverable label" },
   ],
@@ -221,15 +221,15 @@ const rule = (d: Run, c: Card, problems: readonly Problem[]): Promise<string[]> 
     "Check",
   );
 
-// Up to three rounds of checks and revisions. What is still wrong after them becomes an open question.
+// Up to three revisions, each checked. What is still wrong after them becomes an open question.
 async function refine(d: Run, c: Card, firstOpen: readonly string[]): Promise<string[]> {
   let open = [...firstOpen];
-  for (let round = 1; round <= MAX_FIX_ROUNDS; round += 1) {
+  for (let revisions = 0; revisions <= MAX_FIX_ROUNDS; revisions += 1) {
     phase("Check");
     const confirmed = await rule(d, c, await checkDraft(d, c));
     if (confirmed.length === 0) return open;
     open =
-      round === MAX_FIX_ROUNDS
+      revisions === MAX_FIX_ROUNDS
         ? await write(
             d,
             c,
@@ -241,7 +241,7 @@ async function refine(d: Run, c: Card, firstOpen: readonly string[]): Promise<st
             d,
             c,
             `Revise the draft to fix these problems:\n${list(confirmed)}`,
-            `revise ${String(round)}`,
+            `revise ${String(revisions + 1)}`,
             "Check",
           );
   }

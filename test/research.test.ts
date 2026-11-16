@@ -132,13 +132,13 @@ describe("research", () => {
     assert.equal(count("library-scribe", "revise"), 1);
   });
 
-  test("states what is still wrong with the plan after three rounds as a limit, and goes on", async () => {
+  test("states what is still wrong with the plan after three revisions as a limit, and goes on", async () => {
     const r = await run(
       "SMR-30",
       happy({ "library-clerk": (_t, label) => (label === "check the plan" ? FAIL : PASS) }),
     );
     assert.equal(r.status, "ready");
-    assert.equal(count("library-scribe", "revise"), 2);
+    assert.equal(count("library-scribe", "revise"), 3);
     assert.ok(integratePrompt().includes("q2 is unbounded"));
   });
 

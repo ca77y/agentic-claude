@@ -30,7 +30,7 @@ A delivery ends in a PR unless one of the halt conditions below holds. Anything 
  │   │                           each compares all 3 designs
  │   └── none viable  DECIDE     judge (opus) picks one and grafts the best of the others  ⛔ H3
  │                    SPEC       writer-spec (opus) writes the spec folder → pusher commits it
- │   ▲  ≤3 rounds     CHALLENGE  check-claim × N, check-criterion × N, lens-scope (haiku),
+ │   ▲  ≤3 revisions  CHALLENGE  check-claim × N, check-criterion × N, lens-scope (haiku),
  │   │                           lens-consistency (sonnet)
  │   │                           the 5 advisors, fresh, try to break the spec: blocker or major only
  │   │                           later rounds: only failed or changed checks; advisors check the revision
@@ -88,7 +88,7 @@ The issue says why and what. This stage decides how, and it deserves more time a
 3. **Advise.** Five advisors each compare all three designs from one angle: `advisor-architecture`, `advisor-performance`, `advisor-risk`, `advisor-security`, and `advisor-testability`. The last asks whether each criterion can be proved through its `TESTING.md` validation path. Each claim cites the code, and each concern says what would fix it.
 4. **Decide.** One `judge` picks a design, grafts in the best of the others, and records what was rejected and why. If it rules no design viable, Design runs again with its reasons, at most once more. If none survives that, the run halts.
 5. **Spec.** `writer-spec` writes the [spec folder](#the-spec), and `pusher` commits it before any code exists.
-6. **Challenge.** At most three rounds:
+6. **Challenge.** At most three revisions, each checked by the next round:
    - One `check-claim` per file, symbol, or API claim checks that it is true of the code.
    - One `check-criterion` per criterion checks that its category matches what `TESTING.md` says that category covers, and that the category's path can check it.
    - `lens-scope` checks that the spec adds and drops no scope. `lens-consistency` checks it against the project's rules and documents.
@@ -97,7 +97,7 @@ The issue says why and what. This stage decides how, and it deserves more time a
    - `writer-spec` revises for every advisor finding and every problem the judge returns, and records each one and its reason in `RATIONALE.md`.
    - After a revision, the next round checks the revision. The code doesn't change during the challenge, so a claim or criterion that held and kept its wording isn't checked again. The advisors report each problem the revision didn't fix and each `blocker` or `major` it introduced, rather than attacking the whole spec again.
 
-   A `major` still open after the last round is recorded and the run continues. A `blocker` still open halts the run.
+   A `major` still open after the last revision's round is recorded and the run continues. A `blocker` still open halts the run.
 
 #### The spec
 

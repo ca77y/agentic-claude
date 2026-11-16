@@ -124,7 +124,7 @@ describe("shape", () => {
     assert.equal(count("writer-card"), 1);
   });
 
-  test("records what is still wrong after three rounds as open questions, so it isn't Deliverable", async () => {
+  test("records what is still wrong after three revisions as open questions, so it isn't Deliverable", async () => {
     const r = await run(
       "Let users multiply",
       happy({
@@ -133,7 +133,7 @@ describe("shape", () => {
       }),
     );
     assert.ok("deliverable" in r && !r.deliverable);
-    assert.equal(count("writer-card", "revise"), 2);
+    assert.equal(count("writer-card", "revise"), 3);
     assert.equal(count("writer-card", "record what is open"), 1);
   });
 

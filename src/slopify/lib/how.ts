@@ -23,7 +23,7 @@ import {
   unique,
 } from "./deliver.ts";
 import { Halt, must, type Run } from "./loop.ts";
-import { MAX_CHALLENGE_ROUNDS, MAX_DESIGN_TRIES } from "./rules.ts";
+import { MAX_DESIGN_TRIES, MAX_FIX_ROUNDS } from "./rules.ts";
 import { BUILD, VALIDATE, type Build, type Task, type Validate } from "./spec.ts";
 
 const STANCES = [
@@ -540,7 +540,7 @@ async function challenge(o: HowInput, first: SpecResult): Promise<{ spec: SpecRe
   let spec = first;
   let open: RuledSpecProblem[] = [];
   const held = new Set<string>();
-  for (let n = 1; n <= MAX_CHALLENGE_ROUNDS; n += 1) {
+  for (let revisions = 0; revisions <= MAX_FIX_ROUNDS; revisions += 1) {
     phase("Challenge");
     const revisedFor = open;
     const [checked, attacked] = await parallel([() => runChecks(o, spec, held), () => runAttack(o, revisedFor)]);
@@ -551,7 +551,7 @@ async function challenge(o: HowInput, first: SpecResult): Promise<{ spec: SpecRe
       ...(await ruleOn(o, must(checked, "how", "The spec's checks."), advised)),
     ];
     if (open.length === 0) return { spec, blockers: [] };
-    if (n === MAX_CHALLENGE_ROUNDS) break;
+    if (revisions === MAX_FIX_ROUNDS) break;
     spec = await writeAndCommit(
       o,
       `Revise the spec for these problems, and update RATIONALE.md with each one and its reason:\n${list(problemLines(open))}`,

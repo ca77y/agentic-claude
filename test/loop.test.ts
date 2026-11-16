@@ -223,7 +223,7 @@ describe("a commit a hook rejects", () => {
     assert.ok(repair?.prompt.includes("a.test.ts:1 lint error"));
   });
 
-  test("leaves a commit the hook still rejects after two fixes open for the next round", async () => {
+  test("leaves a commit the hook still rejects after three fixes open for the next round", async () => {
     let rejected = 0;
     const prompts: string[] = [];
     const laterTest = { ...OK_TEST, tests: ["b.test.ts"] };
@@ -236,16 +236,16 @@ describe("a commit a hook rejects", () => {
         pusher: (_t, label, prompt) => {
           if (!label.startsWith("commit:")) return pusher(prompt);
           prompts.push(prompt);
-          if (!label.startsWith("commit: add a failing test") || rejected >= 3) return OK_PUSH;
+          if (!label.startsWith("commit: add a failing test") || rejected >= 4) return OK_PUSH;
           rejected += 1;
           return REJECTED;
         },
       }),
     );
     const r = await runLoop(inputFor(freshRun()));
-    assert.equal(count("coder", "fix the commit hook's report"), 2);
+    assert.equal(count("coder", "fix the commit hook's report"), 3);
     assert.equal(count("qa"), 1);
-    assert.ok(prompts[3]?.includes("a.test.ts"), "the next commit carries the rejected paths");
+    assert.ok(prompts[4]?.includes("a.test.ts"), "the next commit carries the rejected paths");
     assert.notEqual(r.status, "blocked");
   });
 });
@@ -294,6 +294,21 @@ describe("the inner loop", () => {
     );
     await runLoop(inputFor(freshRun()));
     assert.equal(count("coder", ": test"), 2);
+  });
+
+  test("commits a fix's changes even when the coder also reports a problem", async () => {
+    let fix = 0;
+    use(
+      happy({
+        coder: (_t, label) => {
+          if (label.endsWith(": test")) return OK_TEST;
+          fix += 1;
+          return fix === 1 ? { ...OK_FIX, testProblem: "it leaves out a case" } : OK_FIX;
+        },
+      }),
+    );
+    await runLoop(inputFor(freshRun()));
+    assert.equal(count("pusher", "commit: implement t1"), 2);
   });
 
   test("keeps a change open as a blocker after three tries, and doesn't stop the round", async () => {

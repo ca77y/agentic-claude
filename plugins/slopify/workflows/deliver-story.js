@@ -244,8 +244,7 @@ function blocked(workflow, step, needs, extra = {}) {
 var MAX_FIX_ROUNDS = 3;
 var MAX_INNER_TRIES = 3;
 var MAX_DESIGN_TRIES = 2;
-var MAX_CHALLENGE_ROUNDS = 3;
-var MAX_HOOK_REPAIRS = 2;
+var MAX_HOOK_REPAIRS = 3;
 var DELIVERABLE_LABEL = "Deliverable";
 var isBlocking = (r) => r.severity === "blocker" || r.severity === "major";
 function routeOf(r, priorFixes, differentlyUsed, hasSpec) {
@@ -755,7 +754,10 @@ var FIX_SCHEMA = {
   properties: {
     changed: { ...STRINGS, description: "Paths changed, relative to the worktree root" },
     ran: { ...STRINGS, description: "Each command and its result" },
-    testProblem: { type: "string", description: "Why the test is wrong; empty when it isn't" },
+    testProblem: {
+      type: "string",
+      description: "Why the test is wrong or leaves out a case the change must handle; empty when neither"
+    },
     specProblem: {
       type: "string",
       description: "What the brief doesn't settle or can't deliver as written; empty when none"
@@ -775,7 +777,10 @@ var QA_SCHEMA = {
   required: [...LENS_SCHEMA.required, "testAtFault"],
   properties: {
     ...LENS_SCHEMA.properties,
-    testAtFault: { type: "boolean", description: "True when the test itself is what has to change" }
+    testAtFault: {
+      type: "boolean",
+      description: "True when the test itself is what has to change, including when it leaves out a case"
+    }
   }
 };
 var CHECKS_SCHEMA = {
@@ -987,12 +992,12 @@ Check in a temporary copy that the test fails at that commit on one of its asser
 
 Validate one change and its history.
 ${history}
-Check that the fix delivers the behavior asked for and doesn't merely satisfy the test, for example by special-casing the test's input. Check that the change stays within its criterion or problem. Any failed check is a blocking finding. Set testAtFault when the test is what has to change.`;
+Check that the fix delivers the behavior asked for and doesn't merely satisfy the test, for example by special-casing the test's input. Check that the change stays within its criterion or problem. Any failed check is a blocking finding. Set testAtFault when the test is what has to change, including when it leaves out a case the change must handle.`;
 }
 function fixPrompt(l, c, cycle, lastFailure) {
   const assignment = cycle.paths.length > 0 ? `Make this test pass. These paths are protected, so change none of them:
 ${list(cycle.paths)}
-If the test is wrong, return testProblem with the reason and stop.` : `Make the change. It has no test because: ${cycle.noTest}`;
+If the test is wrong, or leaves out a case the change must handle, return testProblem with the reason and stop.` : `Make the change. It has no test because: ${cycle.noTest}`;
   return `${changeBrief(l, c)}
 
 ${assignment}${lastFailure ? `
@@ -1054,10 +1059,11 @@ async function tryFix(l, c, cycle, lastFailure, attempt) {
   );
   l.assumptions.push(...fix.assumptions);
   l.manualActions.push(...fix.manualActions);
+  l.changedThisRound.push(...fix.changed);
+  const committed = fix.changed.length === 0 || await commit(l, fix.changed, `implement ${c.id}`, coderRepair(l, c)) !== null;
   if (fix.specProblem) return specStopped(l, c, fix.specProblem);
   if (fix.testProblem) return { reason: fix.testProblem, rewriteTest: true };
-  l.changedThisRound.push(...fix.changed);
-  if (fix.changed.length > 0 && !await commit(l, fix.changed, `implement ${c.id}`, coderRepair(l, c))) return DONE;
+  if (!committed) return DONE;
   const failing = await failingChecks(l);
   if (failing) return { reason: failing, rewriteTest: false };
   if (l.small && l.round > 0) return { reason: "", rewriteTest: false };
@@ -2157,7 +2163,7 @@ async function challenge(o, first) {
   let spec = first;
   let open = [];
   const held = /* @__PURE__ */ new Set();
-  for (let n = 1; n <= MAX_CHALLENGE_ROUNDS; n += 1) {
+  for (let revisions = 0; revisions <= MAX_FIX_ROUNDS; revisions += 1) {
     phase("Challenge");
     const revisedFor = open;
     const [checked, attacked] = await parallel([() => runChecks(o, spec, held), () => runAttack(o, revisedFor)]);
@@ -2168,7 +2174,7 @@ async function challenge(o, first) {
       ...await ruleOn(o, must(checked, "how", "The spec's checks."), advised)
     ];
     if (open.length === 0) return { spec, blockers: [] };
-    if (n === MAX_CHALLENGE_ROUNDS) break;
+    if (revisions === MAX_FIX_ROUNDS) break;
     spec = await writeAndCommit(
       o,
       `Revise the spec for these problems, and update RATIONALE.md with each one and its reason:

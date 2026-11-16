@@ -4,8 +4,7 @@
 export const MAX_FIX_ROUNDS = 3;
 export const MAX_INNER_TRIES = 3;
 export const MAX_DESIGN_TRIES = 2;
-export const MAX_CHALLENGE_ROUNDS = 3;
-export const MAX_HOOK_REPAIRS = 2;
+export const MAX_HOOK_REPAIRS = 3;
 const DELIVERABLE_LABEL = "Deliverable";
 
 export type Severity = "blocker" | "major" | "minor" | "nit" | "pre-existing" | "none";
