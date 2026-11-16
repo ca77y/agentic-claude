@@ -2,7 +2,7 @@
 import { scout, slugged } from "./family.ts";
 import { callPusher, createDeliver, opRef, pushOk, type Stopped } from "./deliver.ts";
 import { locate, workspace } from "./deliver-steps.ts";
-import { answersOf, flagOf, inputOf, textOf, type NotStarted } from "./input.ts";
+import { answersOf, answersRejected, flagOf, inputOf, textOf, type NotStarted } from "./input.ts";
 import { Halt, reportOf, runLoop, stopOf, type LoopResult, type Run } from "./loop.ts";
 import { readResume, type Resume } from "./resume.ts";
 import type { Listed } from "./rules.ts";
@@ -149,6 +149,8 @@ export async function deliverSmall(d: Run, started: Started, input: SmallFlow): 
 export async function runSmall(workflowArgs: unknown, workflowName: string, firstTest: string): Promise<SmallResult> {
   const input = inputOf(workflowArgs, "story");
   const arg = textOf(input["story"]);
+  const rejected = answersRejected(input["answers"]);
+  if (rejected) return rejected;
   if (!arg) {
     return { status: "not-started", next: "Ask the user for the Linear issue or a prompt, then invoke again." };
   }

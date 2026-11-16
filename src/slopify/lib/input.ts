@@ -45,11 +45,20 @@ function answerValue(x: unknown): Answers[string] {
     : text;
 }
 
-/** The answers arg, by need id; an array is no answers. */
+const isMap = (v: unknown): v is Input => isRecord(v) && !Array.isArray(v);
+
+/** The answers arg, by need id; anything but a map is no answers, so check it with answersRejected first. */
 export function answersOf(v: unknown): Answers {
-  return isRecord(v) && !Array.isArray(v)
-    ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, answerValue(x)]))
-    : {};
+  return isMap(v) ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, answerValue(x)])) : {};
+}
+
+/** Why the answers arg can't be read, before any agent works: it is given but is not a map. A missing one is none. */
+export function answersRejected(v: unknown): NotStarted | null {
+  if (v === undefined || v === null || isMap(v)) return null;
+  return {
+    status: "not-started",
+    next: 'The answers argument must be a map from a decision id to its answer, such as {"q1": "a"}. Ask the user for the answers as a map, then invoke again.',
+  };
 }
 
 /** The brief line that says where the project is. */
