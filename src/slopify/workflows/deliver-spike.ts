@@ -1,6 +1,18 @@
+import { dispatch } from "../lib/dispatch.ts";
 import { STRINGS, defectsOf, lens, scout, type LensResult } from "../lib/family.ts";
-import { NO_WRITES, callCoder, callPusher, createDeliver, list, opRef, show, type Stopped } from "../lib/deliver.ts";
-import { answersOf, flagOf, inputOf, textOf, unplainAnswers, type NotStarted } from "../lib/input.ts";
+import {
+  NO_WRITES,
+  REPAIR_SCHEMA,
+  callCoder,
+  callPusher,
+  commitRepairing,
+  createDeliver,
+  list,
+  opRef,
+  show,
+  type Stopped,
+} from "../lib/deliver.ts";
+import { answersOf, answersRejected, flagOf, inputOf, textOf, type NotStarted } from "../lib/input.ts";
 import { must, pushed, reportOf, runLoop, stopOf, type LoopResult, type Problem, type Run } from "../lib/loop.ts";
 import { MAX_INNER_TRIES } from "../lib/rules.ts";
 import { libraryReaderSchema } from "../lib/schemas.ts";
@@ -73,7 +85,7 @@ const PROTOTYPE_SCHEMA = {
     measurements: { type: "array", items: MEASUREMENT },
     assumptions: {
       ...STRINGS,
-      description: "Each trivial question you settled yourself, as the question and your choice",
+      description: "Each implementation choice a reviewer would want to know, as the question and your choice",
     },
     problem: { type: "string", description: "Why these claims can't be measured as asked; empty when they can" },
   },
@@ -142,11 +154,11 @@ async function ground(d: Run, story: string): Promise<string> {
   ] as const;
   const [library, ...found] = await parallel([
     () =>
-      agent(
+      dispatch(
         brief(
           "Report what the project library already supports about this question, citing each claim to its file and heading, and name its gaps. Make no internet requests.",
         ),
-        { agentType: "slopify:library-reader", label: "library", phase: "Ground", schema: LIBRARY_SCHEMA },
+        { agentType: "slopify:library-reader", phase: "Ground", schema: LIBRARY_SCHEMA },
       ),
     ...scouts.map(
       ([name, task]) =>
@@ -166,7 +178,7 @@ async function ground(d: Run, story: string): Promise<string> {
 async function plan(d: Run, story: string, evidence: string) {
   phase("Plan");
   return must(
-    await agent(
+    await dispatch(
       `${d.WHERE}
 Plan the answer to this spike's question from the evidence below, and return each assumption you make.
 
@@ -196,7 +208,7 @@ Write only inside that worktree. If a claim can't be measured as asked, return p
 
 async function confirm(d: Run, worktree: string, measurements: readonly Measurement[]) {
   return must(
-    await agent(
+    await dispatch(
       `${d.WHERE}
 In the worktree ${worktree}, rerun each measurement below and say whether you reproduce its value. A value that depends on the machine is confirmed when your rerun agrees within the variation the claim allows. Change nothing.
 ${JSON.stringify(measurements)}`,
@@ -305,7 +317,7 @@ async function prototype(d: Run, slug: string, claims: readonly Claim[]): Promis
 async function writeFindings(d: Run, story: string, docRel: string, evidence: string, notes: string): Promise<void> {
   phase("Findings");
   const w = must(
-    await agent(
+    await dispatch(
       `${d.WHERE}
 In the worktree ${d.state.worktree}, write the spike's findings document at ${docRel}.
 
@@ -322,18 +334,23 @@ ${NO_WRITES}`,
     "findings",
     "The findings document.",
   );
-  const paths = list(w.changed);
-  pushed(
-    await callPusher(
+  const send = () =>
+    callPusher(
       d.pushBrief(
-        `Commit exactly these paths as they stand, staged by explicit path, with a message in the convention docs/FORGE.md declares, saying: add the spike's findings. Do not push.\n${paths}`,
+        `Commit exactly these paths as they stand, staged by explicit path, with a message in the convention docs/FORGE.md declares, saying: add the spike's findings. Do not push.\n${list(w.changed)}`,
         [`done findings ${docRel}`],
       ),
       "commit: add the spike's findings",
       "Findings",
-    ),
-    "A commit of the findings document.",
-  );
+    );
+  const repair = (brief: string) =>
+    dispatch(`${d.WHERE}\nIn the worktree ${d.state.worktree}:\n${brief}\n\n${NO_WRITES}`, {
+      agentType: "slopify:writer-findings",
+      label: "fix the commit hook's report",
+      phase: "Findings",
+      schema: REPAIR_SCHEMA,
+    });
+  pushed(await commitRepairing(w.changed, send, repair), "A commit of the findings document.");
 }
 
 function planNotes(claims: readonly Claim[], measured: Measured, planAssumptions: readonly string[]): string {
@@ -385,7 +402,7 @@ async function checkDocument(d: Run, story: string, docRel: string): Promise<Pro
 
 async function reviseDocument(d: Run, docRel: string, problems: readonly string[]): Promise<string[]> {
   const w = must(
-    await agent(
+    await dispatch(
       `${d.WHERE}
 In the worktree ${d.state.worktree}, revise the spike's findings document at ${docRel} to fix these problems.
 ${list(problems)}
@@ -422,9 +439,9 @@ function prototypeReport(claims: readonly Claim[], m: Measured): string {
 
 export default async function run(): Promise<SpikeResult> {
   const input = inputOf(args, "question");
-  const rejected = unplainAnswers(input["answers"]);
-  if (rejected) return rejected;
   const arg = textOf(input["question"]);
+  const rejected = answersRejected(input["answers"]);
+  if (rejected) return rejected;
   if (!arg) {
     return { status: "not-started", next: "Ask the user for the Linear issue or the question, then invoke again." };
   }

@@ -41,18 +41,26 @@ export const textOf = (v: unknown): string => (typeof v === "string" ? v.trim() 
 const isPlain = (x: unknown): x is string | number | boolean =>
   typeof x === "string" || typeof x === "number" || typeof x === "boolean";
 
-const answerMap = (v: unknown): Input => (isRecord(v) && !Array.isArray(v) ? v : {});
+const isMap = (v: unknown): v is Input => isRecord(v) && !Array.isArray(v);
 
-/** The answers arg, by need id; an array is no answers, and a null answer is unanswered. */
+/** The answers arg, by need id; check it with answersRejected first. A null answer is unanswered. */
 export function answersOf(v: unknown): Answers {
-  return Object.fromEntries(
-    Object.entries(answerMap(v)).filter((e): e is [string, string | number | boolean] => isPlain(e[1])),
-  );
+  return isMap(v)
+    ? Object.fromEntries(Object.entries(v).filter((e): e is [string, string | number | boolean] => isPlain(e[1])))
+    : {};
 }
 
-/** A not-started result naming each answer that is an object or a list, which no agent may see; null when there is none. */
-export function unplainAnswers(v: unknown): NotStarted | null {
-  const ids = Object.entries(answerMap(v))
+/** Why the answers arg can't be used, before any agent works: it is given but is not a map, or an answer in it is an
+ * object or a list, which no agent may see. A missing one is none. */
+export function answersRejected(v: unknown): NotStarted | null {
+  if (v === undefined || v === null) return null;
+  if (!isMap(v)) {
+    return {
+      status: "not-started",
+      next: 'The answers argument must be a map from a decision id to its answer, such as {"q1": "a"}. Ask the user for the answers as a map, then invoke again.',
+    };
+  }
+  const ids = Object.entries(v)
     .filter(([, x]) => isRecord(x))
     .map(([id]) => id);
   return ids.length === 0

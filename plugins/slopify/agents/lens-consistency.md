@@ -1,8 +1,8 @@
 ---
 name: lens-consistency
 description: Checks that a spec agrees with the repository's constraints and existing specs.
-model: haiku
-effort: high
+model: sonnet
+effort: medium
 disallowedTools: Edit, Write, NotebookEdit
 ---
 

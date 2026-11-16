@@ -17,7 +17,7 @@ People own the issue. They say what kind of card they want, read it on Linear, a
  4 DRAFT ─────── writer-card (opus) writes the card from the kind's template
  │               it settles what doesn't change the outcome as a labelled assumption,
  │               and marks what does as an open question
- 5 CHECK ─────── checks by kind (haiku), then judge × N (opus), one per finding
+ 5 CHECK ─────── checks by kind (haiku), then judge × 1 (opus) rules on the round's findings
  │   ▲ ≤3 rounds a confirmed problem goes back to writer-card
  │   └────────── what is still open after the last round becomes an open question
  6 FILE ──────── pusher creates or updates the card on Linear

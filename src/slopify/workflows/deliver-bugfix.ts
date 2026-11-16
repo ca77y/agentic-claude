@@ -1,5 +1,5 @@
 import { callPusher, createDeliver } from "../lib/deliver.ts";
-import { answersOf, flagOf, inputOf, textOf, unplainAnswers, type NotStarted } from "../lib/input.ts";
+import { answersOf, answersRejected, flagOf, inputOf, textOf, type NotStarted } from "../lib/input.ts";
 import { pushed, stopOf, type Run } from "../lib/loop.ts";
 import { reproduce } from "../lib/reproduce.ts";
 import { reproductionLine, type Reproduction } from "../lib/rules.ts";
@@ -64,9 +64,9 @@ function fixFrom(r: Reproduction) {
 
 export default async function run(): Promise<NotStarted | Unreproducible | SmallResult> {
   const input = inputOf(args, "story");
-  const rejected = unplainAnswers(input["answers"]);
-  if (rejected) return rejected;
   const arg = textOf(input["story"]);
+  const rejected = answersRejected(input["answers"]);
+  if (rejected) return rejected;
   if (!arg) return { status: "not-started", next: "Ask the user for the bug: a Linear issue or a report." };
   const d = createDeliver({
     workflow: WORKFLOW,

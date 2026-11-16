@@ -37,14 +37,14 @@ How `deliver-trivial` takes a trivial story from a Linear issue or a prompt to a
 - **`judge` rules only on review findings.** A failing check or validator run goes straight back to `coder`.
 - **No gateway `judge`, and no recurrence rulings.** A finding that comes back stays open and keeps the PR a draft.
 - **A scout finds the affected docs**, because no spec lists them.
-- **`coder` settles only trivial questions**, such as a name or an obvious default, and lists them under Assumptions. With no spec to send it back to, anything else the issue or prompt leaves open keeps the PR a draft, listed for you to settle.
+- **`coder` decides how, not what**, and lists the choices worth knowing under Assumptions. With no spec to send it back to, a question about what to build that the issue or prompt leaves open keeps the PR a draft, listed for you to settle.
 
 The PR, its sections, the loop limits, test first, and what the run is allowed to do are as in `STORY.md`, except that the criteria table has one row.
 
 ## Halt conditions
 
-| #   | Condition                                                                                         | Found at | What the user gets                                           |
-| --- | ------------------------------------------------------------------------------------------------- | -------- | ------------------------------------------------------------ |
-| H1  | The issue can't be read, the argument says nothing, or an answer is an object or a list           | Read     | `not-started`, no board write                                |
-| H2  | The push is denied, or PR creation fails                                                          | Push     | `blocked`; finished work stays committed on the local branch |
-| H3  | Infrastructure: a stop signal, a required tool denied, or a budget, usage, or agent limit reached | Any      | `blocked`, with the state reported on the issue              |
+| #   | Condition                                                                                                 | Found at | What the user gets                                           |
+| --- | --------------------------------------------------------------------------------------------------------- | -------- | ------------------------------------------------------------ |
+| H1  | The issue can't be read, the argument says nothing, or `answers` isn't a map or holds an object or a list | Read     | `not-started`, no board write                                |
+| H2  | The push is denied, or PR creation fails                                                                  | Push     | `blocked`; finished work stays committed on the local branch |
+| H3  | Infrastructure: a stop signal, a required tool denied, or a budget, usage, or agent limit reached         | Any      | `blocked`, with the state reported on the issue              |

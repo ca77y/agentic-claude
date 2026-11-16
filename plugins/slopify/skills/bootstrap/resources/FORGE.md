@@ -7,7 +7,6 @@ Configuration does not authorize execution; the user's request does. An operatio
 - Remote and permitted push destinations: {{REMOTES_AND_DESTINATIONS}}
 - Forge and how it is reached, without credentials: {{FORGE_ACCESS_OR_NONE}}
 - Target branch and its protection: {{TARGET_BRANCH_AND_PROTECTION}}
-- Default working checkout: {{DEFAULT_CHECKOUT}}
 
 ## Workspace
 

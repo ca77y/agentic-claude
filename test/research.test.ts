@@ -27,7 +27,8 @@ const evidenceFor = (url: string, extra: Record<string, unknown> = {}) => ({
 });
 const PASS = { verdict: "pass", findings: [], evidence: "read it" };
 const FAIL = { verdict: "fail", findings: ["q2 is unbounded"], evidence: "read it" };
-// One judge serves both the plan's rulings and the loop's.
+// The plan's judge rules on a round's findings at once; the loop's judge rules on one problem.
+const PLAN_RULED = { problems: [{ location: "q2", problem: "q2 is unbounded", severity: "major", reason: "seen" }] };
 const CONFIRMED = {
   verdict: "confirmed",
   severity: "major",
@@ -69,7 +70,7 @@ const DEFAULTS: Record<string, Script> = {
   "library-scribe": (_t, label) => scribe(label),
   "library-clerk": () => PASS,
   "library-researcher": (_t, label) => evidenceFor(label === "retrieve q1" ? "https://a.example" : "https://b.example"),
-  judge: () => CONFIRMED,
+  judge: (_t, label) => (label === "rule on the findings" ? PLAN_RULED : CONFIRMED),
   checks: () => ({ commands: [{ command: "lint", exitCode: 0, failingLines: "" }] }),
   watcher: () => ({ outcome: "finished", waitingFor: "", limitMinutes: 60, reference: "r", findings: [] }),
   pusher: (_t, _l, prompt) => (prompt.includes("open the branch's PR") ? PR : OK_PUSH),
@@ -182,6 +183,15 @@ describe("research", () => {
     assert.equal(r.status, "ready");
     assert.equal(count("library-reader"), 0);
     assert.equal(count("library-researcher"), 0);
+  });
+
+  test("recovers only an open PR, so a closed PR on the same branch name is never taken as the run's", async () => {
+    await run("SMR-30", happy());
+    const brief = calls.find((c) => c.type === "scout-checkpoint")?.prompt ?? "";
+    assert.match(
+      brief,
+      /- pr: the reference of the branch's open PR; leave it out when the branch's only PRs are closed/,
+    );
   });
 
   test("asks for the question when given nothing", async () => {

@@ -4,7 +4,7 @@ The rest of the plugin takes what this skill sets up as ground truth and checks 
 
 ## Root instructions
 
-The root `AGENTS.md` or `CLAUDE.md` names where the architecture, design, and product documents live, so a designer or advisor can read them in full. Give it the project's global rules.
+The root `AGENTS.md` or `CLAUDE.md` names where the architecture, design, and product documents live, so a designer or advisor can read them in full. Give it the project's global rules, including where work happens outside a delivery: unless the user chooses otherwise, on the target branch in the root checkout, with no new branch or worktree, committed only when the user asks; only a delivery request creates a story branch in its own worktree and ends in a PR.
 
 ## Rules
 

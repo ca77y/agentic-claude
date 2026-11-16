@@ -1,6 +1,7 @@
+import { dispatch } from "../lib/dispatch.ts";
 import { STRINGS } from "../lib/family.ts";
-import { callPusher, createDeliver, list, type Stopped } from "../lib/deliver.ts";
-import { answersOf, flagOf, inputOf, textOf, unplainAnswers, type NotStarted } from "../lib/input.ts";
+import { REPAIR_SCHEMA, callPusher, commitRepairing, createDeliver, list, type Stopped } from "../lib/deliver.ts";
+import { answersOf, answersRejected, flagOf, inputOf, textOf, type NotStarted } from "../lib/input.ts";
 import { confirmedProblems, type Reported } from "../lib/judge.ts";
 import { must, pushed, reportOf, runLoop, stopOf, type LoopResult, type Problem, type Run } from "../lib/loop.ts";
 import { MAX_FIX_ROUNDS } from "../lib/rules.ts";
@@ -137,16 +138,16 @@ export type ResearchResult = NotStarted | Stopped | (LoopResult & { workflow: "r
 
 const quoted = (q: string): string => `<<<QUESTION\n${q}\nQUESTION>>>`;
 const scribe = <const S extends Schema>(prompt: string, label: string, phaseTitle: string, schema: S) =>
-  agent(prompt, { agentType: "slopify:library-scribe", label, phase: phaseTitle, schema });
+  dispatch(prompt, { agentType: "slopify:library-scribe", label, phase: phaseTitle, schema });
 
 // ---- Ground and plan --------------------------------------------------------
 
 async function ground(c: Ctx): Promise<string> {
   phase("Ground");
   const lib = must(
-    await agent(
+    await dispatch(
       `${c.d.WHERE}\nReport what the project library already supports about this question, citing each claim to its file and heading, and name its gaps and stale material. Make no internet requests and no writes.\n\n${quoted(c.question)}`,
-      { agentType: "slopify:library-reader", label: "library", phase: "Ground", schema: LIBRARY_SCHEMA },
+      { agentType: "slopify:library-reader", phase: "Ground", schema: LIBRARY_SCHEMA },
     ),
     "ground",
     "What the library supports.",
@@ -170,7 +171,7 @@ async function writePlan(c: Ctx, task: string, label: string): Promise<SubQuesti
 
 async function checkPlan(c: Ctx): Promise<Reported[]> {
   const v = must(
-    await agent(
+    await dispatch(
       `${c.d.WHERE}\nAssignment: research-plan readiness. In the worktree ${c.worktree}, judge the plan at ${c.plan} for this question.\n\n${quoted(c.question)}`,
       { agentType: "slopify:library-clerk", label: "check the plan", phase: "Plan", schema: CLERK_SCHEMA },
     ),
@@ -199,8 +200,7 @@ async function plan(c: Ctx, context: string): Promise<{ subQuestions: SubQuestio
     const problems = await checkPlan(c);
     const confirmed = await confirmedProblems(
       problems,
-      (p) =>
-        `${c.d.WHERE}\nRule on one problem reported against the research plan at ${c.plan}, in the worktree ${c.worktree}. blocker: research by this plan can't answer the question. major: a real flaw that should be fixed first. minor: real but low impact.\n\n${p.text}`,
+      `${c.d.WHERE}\nThe checks reported problems in the research plan at ${c.plan}, in the worktree ${c.worktree}. blocker: research by this plan can't answer the question. major: a real flaw that should be fixed first. minor: real but low impact.`,
       "Plan",
     );
     if (confirmed.length === 0) return { subQuestions, limits: [] };
@@ -221,7 +221,7 @@ async function retrieve(c: Ctx, subQuestions: readonly SubQuestion[]): Promise<E
   const found = await parallel(
     subQuestions.map(
       (s) => () =>
-        agent(
+        dispatch(
           `${c.d.WHERE}\n${BOUNDS}\nInvestigate one sub-question of the research plan at ${c.worktree}/${c.plan}, through the source provider library/_meta/librarian.md names, and meet the plan's evidence standards. If the plan is wrong for this sub-question, say how in planProblem, and answer as well as you can.\n\n${quoted(c.question)}\n\nSub-question ${s.id}: ${s.question}`,
           {
             agentType: "slopify:library-researcher",
@@ -281,19 +281,25 @@ async function persist(c: Ctx, evidence: readonly Evidence[], limits: readonly s
     "persist",
     "The integrated wiki pages.",
   );
-  const paths = list([...new Set([...raw.map((r) => r.path), ...integrated.changed])]);
+  const paths = [...new Set([...raw.map((r) => r.path), ...integrated.changed])];
   const doneLine = `done findings ${integrated.pages.join(" ")}`;
-  pushed(
-    await callPusher(
+  const send = () =>
+    callPusher(
       c.d.pushBrief(
-        `Commit exactly these paths as they stand, staged by explicit path, with a message in the convention docs/FORGE.md declares, saying: add the research on this question. Do not push.\n${paths}`,
+        `Commit exactly these paths as they stand, staged by explicit path, with a message in the convention docs/FORGE.md declares, saying: add the research on this question. Do not push.\n${list(paths)}`,
         [doneLine],
       ),
       "commit: add the research",
       "Persist",
-    ),
-    "A commit of the research.",
-  );
+    );
+  const repair = (brief: string) =>
+    scribe(
+      `${c.d.WHERE}\n${BOUNDS}\nAssignment: the paths below, in the worktree ${c.worktree}.\n${brief}`,
+      "fix the commit hook's report",
+      "Persist",
+      REPAIR_SCHEMA,
+    );
+  pushed(await commitRepairing(paths, send, repair), "A commit of the research.");
   return integrated.pages;
 }
 
@@ -305,7 +311,7 @@ async function checkLibrary(c: Ctx): Promise<Problem[]> {
   const verdicts = await parallel(
     assignments.map(
       (a) => () =>
-        agent(`${c.d.WHERE}\nAssignment: ${a}. ${scope}\n\n${quoted(c.question)}`, {
+        dispatch(`${c.d.WHERE}\nAssignment: ${a}. ${scope}\n\n${quoted(c.question)}`, {
           agentType: "slopify:library-clerk",
           label: a,
           phase: "Validate",
@@ -345,9 +351,9 @@ async function repair(c: Ctx, problems: readonly string[]): Promise<string[]> {
 
 export default async function run(): Promise<ResearchResult> {
   const input = inputOf(args, "question");
-  const rejected = unplainAnswers(input["answers"]);
-  if (rejected) return rejected;
   const arg = textOf(input["question"]);
+  const rejected = answersRejected(input["answers"]);
+  if (rejected) return rejected;
   if (!arg)
     return { status: "not-started", next: "Ask the user for the Linear issue or the question, then invoke again." };
   const d = createDeliver({

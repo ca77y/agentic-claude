@@ -23,14 +23,14 @@ How the plugins are built, within the principles in [`.claude/rules/architecture
 
 ## Agent roles and tiers
 
-- **Scouts and checks** run on haiku. Each has one small task whose answer can be checked: gather one kind of evidence, or test one property. They fan out widely, and each returns evidence with its claim.
+- **Scouts and checks** run on haiku. Each has one small task whose answer can be checked: gather one kind of evidence, or test one property. They fan out widely, and each returns evidence with its claim. `lens-consistency` runs on sonnet, because it reads the whole spec against the rules and the code it touches.
 - **`designer`** runs on opus. It produces one full approach from a stance the script gives it, independently of the other designers.
-- **`judge`** runs on opus. Most dispatches rule on one item, such as one review finding or one validation verdict. A gateway dispatch checks a whole round before it is pushed. It confirms, overturns, or dismisses what a cheaper agent or the forge's reviewer reported, against the evidence and the rubric in its brief. It never downgrades a confirmed defect, and it never accepts a pass that lacks evidence.
-- **Producers** change files: `writer-spec` for specs, `writer-docs` for documents, `writer-findings` for a spike's plan and findings, `writer-card` for stories, and `coder` for code and tests. All run on opus. `coder` only implements its brief and settles only trivial questions, listed as assumptions: anything else the brief leaves open goes back as a spec problem. Code is written test first: one dispatch commits a failing test, and a separate dispatch makes it pass without changing any committed test. `qa` checks the history for that.
+- **`judge`** runs on opus. Most dispatches rule on one item, such as one review finding or one validation verdict. In a spec's challenge, one dispatch rules on all the cheap checks' findings of a round together, merging duplicates. A gateway dispatch checks a whole round before it is pushed. It confirms, overturns, or dismisses what a cheaper agent or the forge's reviewer reported, against the evidence and the rubric in its brief. It never downgrades a confirmed defect, and it never accepts a pass that lacks evidence.
+- **Producers** change files: `writer-spec` for specs, `writer-docs` for documents, `writer-findings` for a spike's plan and findings, `writer-card` for stories, and `coder` for code and tests. All run on opus. A spec translates the issue's product requirements into technical requirements and interfaces, and stops above the code. `coder` decides how to meet them inside its task's files, and lists the choices worth knowing as assumptions; a question about what to build goes back as a spec problem. Code is written test first: one dispatch commits a failing test, and a separate dispatch makes it pass without changing any committed test. `qa` checks the history for that.
 - **`qa`** runs on sonnet. It validates one `coder` change against what that change was meant to do, for example one fix against its finding.
 - **`validator`** runs on sonnet. It drives the running app as the project's `TESTING.md` describes, and returns per-criterion verdicts with evidence.
-- **Operations agents** act on the world outside the files. `pusher` performs every write the declarations bind. `watcher` waits on an external event.
-- **Advisors** give one view each and don't decide. In `shape`, they run on sonnet and judge the why and the what. In delivery, they run on opus at high effort and do the heavy lifting on the how: they compare the designs, then try to break the finished spec.
+- **Operations agents** act on the world outside the files. `pusher` performs every write the declarations bind. It changes no produced file: when a commit hook rejects a commit, it reports the hook's output, the producer of those files fixes exactly that, and the commit is sent again, at most twice. In the delivery loop, a commit the hook still rejects doesn't stop the run: it becomes an open blocker for the next round, and the next commit carries its paths. `watcher` waits on an external event.
+- **Advisors** give one view each and don't decide. In `shape`, they run on sonnet and judge the why and the what. In delivery, they run on opus at high effort and do the heavy lifting on the how: they compare the designs, then try to break the finished spec. When they attack the spec, or check a revision of it, they report only a `blocker` or a `major`, and their findings go to `writer-spec` without a judge, because a judge on the same tier adds little.
 - A workflow passes each dispatch the schema its output must follow. An agent's model and effort come from its frontmatter, and a workflow never overrides them.
 
 ## Severity and problem kinds
@@ -82,7 +82,7 @@ An `unverified` finding doesn't block and goes in its own PR section. Whether a 
   - `ready`: the PR exists and its review is clean.
   - `draft`: the PR exists, and its description lists what is open.
   - `blocked`: one of the workflow's halt conditions held.
-  - `not-started`: the issue couldn't be read or isn't marked deliverable, or an answer isn't plain text.
+  - `not-started`: the issue couldn't be read or isn't marked deliverable, `answers` was given as something other than a map, or an answer isn't plain text.
 - A `blocked` or `draft` result names what it needs by id, along with the stages completed and how to rerun.
 - The issue is the acceptance source. A workflow may clarify a criterion in the spec, keeping the original wording beside the clarification. It never rewrites the issue.
 
@@ -95,5 +95,5 @@ An `unverified` finding doesn't block and goes in its own PR section. Whether a 
   - an append-only `.tmp/ledger.md` that only `pusher` writes.
 - A scout reads the checkpoints at the start of each run.
 - Specs are written and read by agents, and stay in the repository as context for later failures. Humans compact or remove them.
-- A rerun skips every stage its checkpoints show complete and still current. Once the PR exists, a rerun resumes at the review. Answers to a `draft` or `blocked` result go in `answers`, keyed by id. Each answer is plain text: a string, or a number or boolean read as text. An answer that is an object or a list ends the run as `not-started`, naming its id, before any agent works, and a `null` answer counts as unanswered.
+- A rerun skips every stage its checkpoints show complete and still current. Once the PR exists, a rerun resumes at the review. Answers to a `draft` or `blocked` result go in `answers`, a map keyed by id. Each answer is plain text: a string, or a number or boolean read as text. `answers` that isn't a map, or an answer that is an object or a list, ends the run as `not-started` before any agent works, naming what to fix, and a `null` answer counts as unanswered.
 - A rerun in the same session can instead resume through the workflow runtime, which replays earlier dispatches from the cache.

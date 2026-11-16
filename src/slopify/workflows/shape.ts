@@ -1,3 +1,4 @@
+import { dispatch } from "../lib/dispatch.ts";
 import { STRINGS, advise, defectsOf, lens, scout, slugged, type ScoutResult } from "../lib/family.ts";
 import { callPusher, createDeliver, list, opRef, show, slugOf, type Stopped } from "../lib/deliver.ts";
 import { inputOf, textOf, type NotStarted } from "../lib/input.ts";
@@ -20,7 +21,10 @@ export const meta = {
     { title: "Ground", detail: "library-reader and scouts, by kind" },
     { title: "Advise", detail: "advisors, by kind" },
     { title: "Draft", detail: "writer-card writes the card from its kind's template" },
-    { title: "Check", detail: "lenses by kind, then one judge per finding; writer-card revises, up to three rounds" },
+    {
+      title: "Check",
+      detail: "lenses by kind, then one judge rules on the round's findings; writer-card revises, up to three rounds",
+    },
     { title: "File", detail: "pusher creates or updates the card, and its Deliverable label" },
   ],
 } as const satisfies WorkflowMeta;
@@ -119,7 +123,7 @@ async function read(
       scout(
         "scout-related-cards",
         `${d.WHERE}\nSearch the board for cards that duplicate, overlap, conflict with, or depend on this. Change nothing.\n\n${idea || cardArg}`,
-        { label: "related cards", phase: "Read" },
+        { phase: "Read" },
       ),
   ]);
   if (cardArg) must(card, "read", `Card ${cardArg}.`);
@@ -132,13 +136,12 @@ async function ground(d: Run, c: Card, related: ScoutResult): Promise<string> {
   const { scouts } = KINDS[c.kind];
   const [library, ...found] = await parallel([
     () =>
-      agent(
+      dispatch(
         brief(
           "Report what the project library already supports about this, citing each claim to its file and heading.",
         ),
         {
           agentType: "slopify:library-reader",
-          label: "library",
           phase: "Ground",
           schema: LIBRARY_SCHEMA,
         },
@@ -182,7 +185,7 @@ async function adviseAll(d: Run, c: Card, evidence: string): Promise<string> {
 
 async function write(d: Run, c: Card, task: string, label: string, phaseTitle: string): Promise<string[]> {
   const w = must(
-    await agent(
+    await dispatch(
       `${d.WHERE}\nThe card is a ${c.kind}. Write it at ${c.draft}, and only there. ${task}\n\n${subject(c)}\n\nDo not file it, commit, or change the board; pusher does that.`,
       { agentType: "slopify:writer-card", label, phase: phaseTitle, schema: WRITER_SCHEMA },
     ),
@@ -214,8 +217,7 @@ async function checkDraft(d: Run, c: Card): Promise<Problem[]> {
 const rule = (d: Run, c: Card, problems: readonly Problem[]): Promise<string[]> =>
   confirmedProblems(
     problems,
-    (p) =>
-      `${d.WHERE}\nRule on one problem ${p.source} reported in the card draft ${c.draft}, a ${c.kind}, checking it against the draft and the card template. blocker: a delivery can't take the card as it is. major: a real flaw that should be fixed before filing. minor: real but low impact.\n\nAt ${p.location}:\n${p.text}`,
+    `${d.WHERE}\nThe checks reported problems in the card draft ${c.draft}, a ${c.kind}; check them against the draft and the card template. blocker: a delivery can't take the card as it is. major: a real flaw that should be fixed before filing. minor: real but low impact.`,
     "Check",
   );
 

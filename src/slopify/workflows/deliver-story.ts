@@ -2,7 +2,7 @@ import { scout, fact, slugged } from "../lib/family.ts";
 import { callPusher, createDeliver, type Stopped } from "../lib/deliver.ts";
 import { locate, workspace } from "../lib/deliver-steps.ts";
 import { runHow, specReviser, type HowInput } from "../lib/how.ts";
-import { answersOf, flagOf, inputOf, textOf, unplainAnswers, type NotStarted } from "../lib/input.ts";
+import { answersOf, answersRejected, flagOf, inputOf, textOf, type NotStarted } from "../lib/input.ts";
 import { must, reportOf, runLoop, stopOf, type LoopResult, type Run } from "../lib/loop.ts";
 import { readResume } from "../lib/resume.ts";
 import { isDeliverable } from "../lib/rules.ts";
@@ -139,9 +139,9 @@ ARG>>>`,
 
 export default async function run(): Promise<NotStarted | Stopped | Delivered> {
   const input = inputOf(args, "story");
-  const rejected = unplainAnswers(input["answers"]);
-  if (rejected) return rejected;
   const storyArg = textOf(input["story"]);
+  const rejected = answersRejected(input["answers"]);
+  if (rejected) return rejected;
   if (!storyArg) {
     return { status: "not-started", next: "Ask the user for the Linear issue to deliver, then invoke again." };
   }

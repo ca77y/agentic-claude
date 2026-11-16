@@ -1,17 +1,21 @@
 // The build and validate loop every delivery shares: an outer loop over the whole story, with one coder and
 // qa inner loop per change. docs/deliver/STORY.md describes it. All of its control flow comes from rules.ts.
+import { dispatch } from "./dispatch.ts";
 import { LENS_SCHEMA, defectsOf, lens, scout, STRINGS, type Answers, type LensResult } from "./family.ts";
 import {
   NO_WRITES,
   callCoder,
   callDocsWriter,
   callPusher,
+  commitRepairing,
   list,
   need,
   opRef,
   pushOk,
   unique,
+  REPAIR_SCHEMA,
   type Deliver,
+  type HookRepair,
   type PusherResult,
   type Stopped,
 } from "./deliver.ts";
@@ -59,10 +63,18 @@ export function stopOf(d: Run, error: unknown): Stopped {
 
 const TEST_SCHEMA = {
   type: "object",
-  required: ["tests", "failingOutput", "noTest", "specProblem", "assumptions", "manualActions"],
+  required: ["tests", "stubs", "failingOutput", "noTest", "specProblem", "assumptions", "manualActions"],
   properties: {
     tests: { ...STRINGS, description: "Test paths written or changed, relative to the worktree root" },
-    failingOutput: { type: "string", description: "The test's failing output on the current code" },
+    stubs: {
+      ...STRINGS,
+      description:
+        "Production paths where you added a stub so the test compiles, relative to the worktree root; empty when none",
+    },
+    failingOutput: {
+      type: "string",
+      description: "The Checks commands' output on the current code, failing only on the new test's assertions",
+    },
     noTest: { type: "string", description: "Why the behavior can't be expressed as a test; empty when it can" },
     specProblem: {
       type: "string",
@@ -70,7 +82,7 @@ const TEST_SCHEMA = {
     },
     assumptions: {
       ...STRINGS,
-      description: "Each trivial question you settled yourself, as the question and your choice",
+      description: "Each implementation choice a reviewer would want to know, as the question and your choice",
     },
     manualActions: {
       ...STRINGS,
@@ -92,7 +104,7 @@ const FIX_SCHEMA = {
     },
     assumptions: {
       ...STRINGS,
-      description: "Each trivial question you settled yourself, as the question and your choice",
+      description: "Each implementation choice a reviewer would want to know, as the question and your choice",
     },
     manualActions: {
       ...STRINGS,
@@ -301,7 +313,7 @@ interface Loop extends LoopInput {
   differently: Set<string>;
   rulings: string[];
   decisions: RecordedDecision[];
-  /** Trivial questions the coder settled itself. */
+  /** Implementation choices the coder made itself. */
   assumptions: string[];
   /** Irreversible steps nothing permits, left for a person. */
   manualActions: string[];
@@ -313,6 +325,8 @@ interface Loop extends LoopInput {
   testChanges: string[];
   review: ReviewOutcome;
   changedThisRound: string[];
+  /** Paths whose commit the hook still rejected after repairs; the next commit carries them. */
+  uncommitted: string[];
   openByRound: number[];
   commits: Promise<unknown>;
   halted: Halt | null;
@@ -348,18 +362,42 @@ export function pushed(r: PusherResult | null, what: string): PusherResult {
   throw new Halt("push", what, unmet ?? "pusher didn't return");
 }
 
-async function commit(l: Loop, paths: readonly string[], message: string): Promise<string> {
-  const r = await inOrder(l, () =>
-    callPusher(
-      l.d.pushBrief(
-        `Commit exactly these paths as they stand, staged by explicit path, with a message in the convention docs/FORGE.md declares, saying: ${message}. Name the issue ${l.cardId} in it. Do not push.\n${list(paths)}`,
+// A hook rejection its producer couldn't repair is a problem like any other, so it stays open for the next round
+// instead of ending the delivery. Returns the commit, or null when the hook rejected it.
+async function commit(l: Loop, paths: readonly string[], message: string, repair: HookRepair): Promise<string | null> {
+  const all = [...new Set([...l.uncommitted, ...paths])];
+  const send = () =>
+    inOrder(l, () =>
+      callPusher(
+        l.d.pushBrief(
+          `Commit exactly these paths as they stand, staged by explicit path, with a message in the convention docs/FORGE.md declares, saying: ${message}. Name the issue ${l.cardId} in it. Do not push.\n${list(all)}`,
+        ),
+        `commit: ${message}`,
+        "Build",
       ),
-      `commit: ${message}`,
-      "Build",
-    ),
-  );
-  return opRef(pushed(r, `A commit of ${paths.join(", ")}.`), "commit");
+    );
+  const r = await commitRepairing(all, send, repair);
+  if (r?.hookRejection) {
+    l.uncommitted = all;
+    l.open.push({
+      problem: { source: "the commit hook", location: all.join(", "), text: r.hookRejection },
+      route: "coder",
+      severity: "blocker",
+      fingerprint: `hook|${all.join(",")}`,
+      reason: "The commit hook rejects these paths, so they are not committed.",
+    });
+    return null;
+  }
+  const sha = opRef(pushed(r, `A commit of ${all.join(", ")}.`), "commit");
+  l.uncommitted = l.uncommitted.filter((x) => !all.includes(x));
+  return sha;
 }
+
+// The coder that wrote a change fixes what a commit hook reported in it.
+const coderRepair =
+  (l: Loop, c: Change): HookRepair =>
+  (brief) =>
+    callCoder(`${changeBrief(l, c)}\n\n${brief}`, `${c.id}: fix the commit hook's report`, "Build", REPAIR_SCHEMA);
 
 // ---- Inner loop -------------------------------------------------------------
 
@@ -378,7 +416,7 @@ function changeBrief(l: Loop, c: Change): string {
     criteria ? `The criteria it delivers:\n${criteria}` : "",
     c.item ? `The problem to fix, at ${c.item.problem.location}:\n${c.item.problem.text}\n${c.item.reason}` : "",
     answersText(l),
-    "Make no irreversible change, such as a migration on shared data, deleting a public API, or changing production config, unless this explicitly permits it: build its reversible part, and return the rest in manualActions. Implement what this says. Settle a trivial question yourself, such as a name, local structure, or an obvious default that changes no behavior this describes, and return it in assumptions. If it leaves open anything else, or can't be delivered as written, return specProblem and stop.",
+    "Make no irreversible change, such as a migration on shared data, deleting a public API, or changing production config, unless this explicitly permits it: build its reversible part, and return the rest in manualActions. Meet what this requires. How to implement it in your paths is your decision; return each choice a reviewer would want to know in assumptions. If a requirement is unclear or can't be met, or meeting it would change behavior this describes or an interface another task relies on, return specProblem and stop.",
     NO_WRITES,
   ]
     .filter(Boolean)
@@ -387,7 +425,8 @@ function changeBrief(l: Loop, c: Change): string {
 
 interface CycleTest {
   paths: string[];
-  commit: string;
+  /** Null when the hook rejected the test's commit. */
+  commit: string | null;
   noTest: string;
   specProblem: string;
 }
@@ -397,7 +436,7 @@ async function writeTest(l: Loop, c: Change, reason: string): Promise<CycleTest>
     await callCoder(
       `${changeBrief(l, c)}
 
-Write a new test or change an existing one, so that it states the required behavior. Change no production code. It must fail on the current code: run it and return the failing output. When the behavior can't be expressed as a test, return noTest with the reason instead.${reason ? `\n\nAn earlier attempt showed the test has to change: ${reason}` : ""}`,
+Write a new test or change an existing one, so that it states the required behavior. It must fail on the current code on its merit: an assertion about the behavior fails, never a compile, type, or import error. When the test names code that doesn't exist yet, add the smallest stub that lets it compile and run, such as a declaration with the right signature that doesn't do the work, and list it in stubs; change no other production code. End by running the Checks commands TESTING.md declares: each must pass except for the new test's failing assertions. Return that output. When the behavior can't be expressed as a test, return noTest with the reason instead.${reason ? `\n\nAn earlier attempt showed the test has to change: ${reason}` : ""}`,
       `${c.id}: test`,
       "Build",
       TEST_SCHEMA,
@@ -410,14 +449,14 @@ Write a new test or change an existing one, so that it states the required behav
   if (t.specProblem) return { paths: [], commit: "", noTest: "", specProblem: t.specProblem };
   if (t.noTest || t.tests.length === 0) return { paths: [], commit: "", noTest: t.noTest, specProblem: "" };
   l.testChanges.push(...t.tests);
-  const sha = await commit(l, t.tests, `add a failing test for ${c.id}`);
+  const sha = await commit(l, [...t.tests, ...t.stubs], `add a failing test for ${c.id}`, coderRepair(l, c));
   return { paths: t.tests, commit: sha, noTest: "", specProblem: "" };
 }
 
 function qaBrief(l: Loop, c: Change, test: CycleTest): string {
   const history = test.commit
     ? `The test commit is ${test.commit}, and its protected paths are:\n${list(test.paths)}
-Check in a temporary copy that the test fails at that commit and passes at HEAD. Check that nothing after that commit touches a protected path, and that nothing skips, weakens, or excludes the test, for example by loosening a tolerance, regenerating a snapshot, or changing the test config.`
+Check in a temporary copy that the test fails at that commit on one of its assertions, not on a compile, type, or import error, and that it passes at HEAD. Check that nothing after that commit touches a protected path, and that nothing skips, weakens, or excludes the test, for example by loosening a tolerance, regenerating a snapshot, or changing the test config.`
     : `This change has no test, because: ${test.noTest}. Judge that reason.`;
   return `${changeBrief(l, c)}
 
@@ -436,7 +475,7 @@ function fixPrompt(l: Loop, c: Change, cycle: CycleTest, lastFailure: string): s
 
 async function qaOf(l: Loop, c: Change, cycle: CycleTest) {
   return must(
-    await agent(qaBrief(l, c, cycle), {
+    await dispatch(qaBrief(l, c, cycle), {
       agentType: "slopify:qa",
       label: `${c.id}: qa`,
       phase: "Build",
@@ -452,7 +491,7 @@ async function failingChecks(l: Loop): Promise<string> {
   if (!l.small) return "";
   const brief = checksBrief(l.where, worktreeOf(l));
   const ran = must(
-    await agent(brief, {
+    await dispatch(brief, {
       agentType: "slopify:checks",
       label: "checks",
       phase: "Build",
@@ -466,13 +505,14 @@ async function failingChecks(l: Loop): Promise<string> {
   return lines.join("\n");
 }
 
+const DONE: TryResult = { reason: "", rewriteTest: false };
 interface TryResult {
   /** What is still wrong; empty when this try delivered the change. */
   reason: string;
   rewriteTest: boolean;
 }
 
-// A coder settles only trivial questions, so anything else its brief leaves open goes back to whoever writes the brief: the spec's writer, or,
+// A coder decides only how, so a question about what to build goes back to whoever writes the brief: the spec's writer, or,
 // with no spec, the person reading the draft.
 function specStopped(l: Loop, c: Change, problem: string): TryResult {
   const route: Route = l.reviseSpec ? "revise-spec" : "escalate";
@@ -502,8 +542,9 @@ async function tryFix(l: Loop, c: Change, cycle: CycleTest, lastFailure: string,
   l.manualActions.push(...fix.manualActions);
   if (fix.specProblem) return specStopped(l, c, fix.specProblem);
   if (fix.testProblem) return { reason: fix.testProblem, rewriteTest: true };
-  if (fix.changed.length > 0) await commit(l, fix.changed, `implement ${c.id}`);
   l.changedThisRound.push(...fix.changed);
+  // A rejected commit is already an open problem, and qa can't judge what isn't committed.
+  if (fix.changed.length > 0 && !(await commit(l, fix.changed, `implement ${c.id}`, coderRepair(l, c)))) return DONE;
   const failing = await failingChecks(l);
   if (failing) return { reason: failing, rewriteTest: false };
   // A small flow's qa runs once, on its first change; a review fix there has only the checks.
@@ -521,6 +562,7 @@ async function runChange(l: Loop, c: Change): Promise<string> {
   for (let attempt = 1; attempt <= MAX_INNER_TRIES; attempt += 1) {
     if (last.rewriteTest) test = await writeTest(l, c, last.reason);
     if (test.specProblem) return specStopped(l, c, test.specProblem).reason;
+    if (test.commit === null) return "";
     last = await tryFix(l, c, test, last.rewriteTest ? "" : last.reason, attempt);
     if (!last.reason) return "";
   }
@@ -614,7 +656,16 @@ ${NO_WRITES}`,
     "build",
     "Updated documentation.",
   );
-  if (w.changed.length > 0) await commit(l, w.changed, "update the docs the change affects");
+  if (w.changed.length > 0) {
+    await commit(l, w.changed, "update the docs the change affects", (brief) =>
+      callDocsWriter(
+        `${l.where}\nIn the worktree ${worktreeOf(l)}:\n${brief}\n${NO_WRITES}`,
+        "fix the commit hook's report",
+        "Build",
+        REPAIR_SCHEMA,
+      ),
+    );
+  }
 }
 
 function firstChanges(l: Loop): Change[] {
@@ -639,7 +690,7 @@ async function reviseDocument(l: Loop, doc: LoopDocument, items: readonly OpenIt
   if (items.length === 0) return;
   const changed = await doc.revise(items.map((i) => `${i.problem.location}: ${i.problem.text}`));
   l.changedThisRound.push(...changed);
-  if (changed.length > 0) await commit(l, changed, "revise the findings");
+  if (changed.length > 0) await commit(l, changed, "revise the findings", (brief) => doc.revise([brief]));
 }
 
 async function buildRound(l: Loop): Promise<void> {
@@ -696,7 +747,7 @@ export async function runValidation(o: {
     () =>
       o.checks === false
         ? Promise.resolve({ commands: [] })
-        : agent(checksBrief(o.where, o.worktree), {
+        : dispatch(checksBrief(o.where, o.worktree), {
             agentType: "slopify:checks",
             label: "checks",
             phase: "Validate",
@@ -706,7 +757,7 @@ export async function runValidation(o: {
       // With no criteria at all, as when validate runs on a PR with no spec, there is nothing to drive the app for.
       o.criteria.length === 0
         ? Promise.resolve({ results: [], uncategorizedSetting: "" })
-        : agent(
+        : dispatch(
             `${o.where}\nIn the worktree ${o.worktree}, follow TESTING.md's setup and boot, then run each criterion's validation path below, and capture its evidence under .tmp/evidence/. Report what TESTING.md states for its category when it can't be verified, and what it states for uncategorized criteria.${o.changed.length > 0 ? ` Also run every criterion whose code path these changed paths touch, and every criterion if one is a boot or config file:\n${list(o.changed)}` : ""}\n\nCriteria to run:\n${JSON.stringify(toRun)}${o.focus.length > 0 ? `\n\nThe other criteria:\n${JSON.stringify(categorized.filter((c) => !toRun.includes(c)))}` : ""}`,
             { agentType: "slopify:validator", label: "validator", phase: "Validate", schema: VALIDATOR_SCHEMA },
           ),
@@ -851,7 +902,7 @@ async function judgeProblems(l: Loop, problems: readonly Problem[], phaseTitle: 
   const verdicts = await parallel(
     problems.map(
       (p, i) => () =>
-        agent(judgeBrief(l, p), {
+        dispatch(judgeBrief(l, p), {
           agentType: "slopify:judge",
           label: `rule ${String(i + 1)}`,
           phase: phaseTitle,
@@ -878,7 +929,7 @@ async function gateway(l: Loop): Promise<void> {
   phase("Gateway");
   const results = JSON.stringify(rowsOf(l));
   const g = must(
-    await agent(
+    await dispatch(
       `${l.where}
 Check this round before it is pushed, in the worktree ${worktreeOf(l)}: was anything missed? Read the round's diff, and judge it against the spec below and the evidence.
 ${l.build ? `\nBuild spec:\n${JSON.stringify(l.build)}` : ""}
@@ -1002,7 +1053,7 @@ async function waitForReview(l: Loop) {
   const { state } = l.d;
   for (let n = 1; n <= WATCH_DISPATCHES; n += 1) {
     const w = must(
-      await agent(
+      await dispatch(
         `${l.where}
 Wait for review ${String(l.reviewNumber)} of this pull request, as docs/FORGE.md's review-status binding declares: first for the review to start, then for it to finish. Wait at most ${String(WATCH_MINUTES)} minutes in this dispatch, then return pending. On finished, return each finding with its id, its location (path:line, or empty), and its text. Change nothing.
 
@@ -1144,6 +1195,7 @@ function freshLoop(input: LoopInput): Loop {
     testChanges: [],
     review: { clean: false, note: "" },
     changedThisRound: [],
+    uncommitted: [],
     openByRound: [],
     commits: Promise.resolve(),
     halted: null,

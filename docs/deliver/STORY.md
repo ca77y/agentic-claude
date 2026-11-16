@@ -25,14 +25,16 @@ A delivery ends in a PR unless one of the halt conditions below holds. Anything 
  ▼
  3 HOW ────────────── GROUND     scout-code, scout-tests, scout-docs, scout-history (haiku), library-reader
  │   ▲  ≤2 tries      DESIGN     designer × 3 (opus), independent: smallest fit, best structure, most robust
- │   │                           scout-upstream-docs, scout-known-issues per dependency (haiku)
+ │   │                           scout-upstream-docs, scout-known-issues per new dependency (haiku)
  │   │                ADVISE     architecture, performance, risk, security, testability (opus, high)
  │   │                           each compares all 3 designs
  │   └── none viable  DECIDE     judge (opus) picks one and grafts the best of the others  ⛔ H3
  │                    SPEC       writer-spec (opus) writes the spec folder → pusher commits it
- │   ▲  ≤3 rounds     CHALLENGE  check-claim × N, check-criterion × N, lens-scope, lens-consistency (haiku)
- │   │                           the 5 advisors, fresh, try to break the spec
- │   └── confirmed →             judge × N (opus) → writer-spec revises                         ⛔ H3
+ │   ▲  ≤3 rounds     CHALLENGE  check-claim × N, check-criterion × N, lens-scope (haiku),
+ │   │                           lens-consistency (sonnet)
+ │   │                           the 5 advisors, fresh, try to break the spec: blocker or major only
+ │   │                           later rounds: only failed or changed checks; advisors check the revision
+ │   └── problems →              judge × 1 (opus) rules on the checks' findings → writer-spec revises  ⛔ H3
  ▼
  4 BUILD AND VALIDATE  outer loop: the first build, then ≤3 fix rounds
  │
@@ -82,7 +84,7 @@ The script reads the `Deliverable` label from what `scout-card` returned. `shape
 The issue says why and what. This stage decides how, and it deserves more time and tokens than anything else in the workflow. It never stops on a choice about how: those choices are ours, so they are made and recorded. Each step feeds the next.
 
 1. **Ground.** The scouts and `library-reader` return file and line pointers, existing symbols, tests, documentation claims, history, and earlier research.
-2. **Design.** Three independent `designer` dispatches each produce a full approach, and none sees the others. The script gives each a fixed stance: the smallest change that fits the existing patterns, the best long-term structure, and the most robust under failure. Each reads the project's full architecture and design documents, and marks what it reuses and what it creates. `scout-upstream-docs` and `scout-known-issues` then run once for each dependency any design names.
+2. **Design.** Three independent `designer` dispatches each produce a full approach, and none sees the others. The script gives each a fixed stance: the smallest change that fits the existing patterns, the best long-term structure, and the most robust under failure. Each reads the project's full architecture and design documents, and marks what it reuses and what it creates. Each design lists the outside libraries and services it relies on, never the project's own code or tools, and marks what is new: a dependency the project doesn't use yet, or a part of it the project doesn't use yet. `scout-upstream-docs` and `scout-known-issues` then run once for each new dependency, by name, whichever designs name it.
 3. **Advise.** Five advisors each compare all three designs from one angle: `advisor-architecture`, `advisor-performance`, `advisor-risk`, `advisor-security`, and `advisor-testability`. The last asks whether each criterion can be proved through its `TESTING.md` validation path. Each claim cites the code, and each concern says what would fix it.
 4. **Decide.** One `judge` picks a design, grafts in the best of the others, and records what was rejected and why. If it rules no design viable, Design runs again with its reasons, at most once more. If none survives that, the run halts.
 5. **Spec.** `writer-spec` writes the [spec folder](#the-spec), and `pusher` commits it before any code exists.
@@ -90,8 +92,10 @@ The issue says why and what. This stage decides how, and it deserves more time a
    - One `check-claim` per file, symbol, or API claim checks that it is true of the code.
    - One `check-criterion` per criterion checks that its category matches what `TESTING.md` says that category covers, and that the category's path can check it.
    - `lens-scope` checks that the spec adds and drops no scope. `lens-consistency` checks it against the project's rules and documents.
-   - The same five advisors, in fresh dispatches, try to break the finished spec.
-   - One `judge` per problem rules on it, and `writer-spec` revises for each confirmed `blocker` or `major`. The rulings go in `RATIONALE.md`.
+   - The same five advisors, in fresh dispatches, try to break the finished spec. Each reports only a `blocker` or a `major`, with its evidence, because nothing acts on a minor problem. Their findings need no judge.
+   - One `judge` rules on all the checks' and lenses' findings of the round together. It merges findings that report the same problem, leaves out what an advisor already reported, and returns each problem that holds as a `blocker` or a `major`.
+   - `writer-spec` revises for every advisor finding and every problem the judge returns, and records each one and its reason in `RATIONALE.md`.
+   - After a revision, the next round checks the revision. The code doesn't change during the challenge, so a claim or criterion that held and kept its wording isn't checked again. The advisors report each problem the revision didn't fix and each `blocker` or `major` it introduced, rather than attacking the whole spec again.
 
    A `major` still open after the last round is recorded and the run continues. A `blocker` still open halts the run.
 
@@ -108,7 +112,7 @@ Each story gets one folder, `docs/specs/<lowercase issue id>-<slug>/`. Nothing i
   - its wording copied from the issue, which can change later;
   - its `category` from `TESTING.md`, or `uncategorized` when none fits;
   - the validation path to run, the evidence it must produce, and the first test to write.
-- **`RATIONALE.md`** says why, and only ever grows: the designs considered, each advisor's view and whether it was adopted, what was rejected, the rulings, and the risks. Only agents redoing the design read it.
+- **`RATIONALE.md`** says why the spec is what it is now: the designs considered and why the chosen one won, each advisor's view and whether it was adopted, what was rejected, the rulings in force, and the open risks. Each revision updates it and removes what the revision made untrue; git keeps the earlier versions. Only agents redoing the design read it.
 
 No agent opens the whole spec. The script hands each one its slice, and project rules reach agents through `.claude/rules/` and `AGENTS.md`:
 
@@ -130,7 +134,7 @@ This stage is two nested loops. The inner loop makes one change correct, and onl
 1. **Build.** Each change runs its own inner loop, the [test-first cycle](#test-first).
    - In the first round, each task in `build.json` is one change. The script works out dependency waves from `dependsOn`. Tasks in a wave whose files don't overlap run in parallel, and the others run one after another. When a criterion's category validates with a flow, the flow is the test, for example a Playwright spec or a Maestro file.
    - In later rounds, each open `code` or `test` problem is one change, and an open `spec` problem first goes to the advisors and `writer-spec`, who revise the spec. `pusher` commits the revision, and the tasks it changes run again.
-   - `coder` implements what its brief says. It settles trivial questions itself, such as a name or an obvious default that changes no described behavior, and lists them under Assumptions. If the brief leaves anything else open, it returns a spec problem, which goes to `writer-spec`.
+   - `coder` meets what its brief requires, and decides how: structure, names, helpers, and algorithms. It lists the choices worth knowing under Assumptions. A requirement that is unclear or can't be met, or that would change described behavior or an interface another task relies on, comes back as a spec problem, which goes to `writer-spec`.
    - An inner loop that runs out of tries doesn't stop the round. Its problem stays open as a `blocker`.
    - After the inner loops, `writer-docs` updates the documents on the `docs` list, so they describe the code as built. It runs in every round that changed code or has an open `docs` problem, and when the list isn't empty. `pusher` commits its work. Documentation needs no failing test, so it stays out of the inner loop.
 2. **Validate.** `checks` runs the `Checks` commands from `TESTING.md` and returns the exit codes and failing lines. `validator` then follows each criterion's category path, as defined below. In the first round it runs every criterion. In later rounds it runs the criteria whose code paths changed, or every criterion when a fix touched boot or config files. It runs even when `checks` fails. Boot is its first step, so a broken build fails there and is judged like any other problem. One `lens-docs` per listed document checks that its claims are true against the code.
@@ -210,16 +214,16 @@ The description is rendered from the run state and updated after every round. It
 This is the inner loop. Every code change runs through it, from the first build to each later fix, whichever check found the problem. The tests are fixed before the code, and the code is validated against tests it couldn't touch. It gets at most three tries.
 
 1. **Test.** A `coder` dispatch writes a new test or changes an existing one, so that the test states the required behavior: its task's criteria in the first build, or one problem in a later round.
-   - It changes no production code.
-   - The test must fail on the current code. The dispatch returns the test paths and the failing output.
-   - `pusher` commits the test in a commit of its own. The commit stays local until the push.
+   - The test must fail on the current code on its merit: an assertion fails, never a compile, type, or import error. When it names code that doesn't exist yet, the dispatch adds the smallest stub that lets it compile, and changes no other production code.
+   - It ends by running the `Checks` commands `TESTING.md` declares, which pass except for the new test's assertions, so the commit hook accepts the test. The dispatch returns the test paths, the stubs, and that output.
+   - `pusher` commits the test and its stubs in a commit of their own. Only the test paths are protected, so the fix can replace the stubs. The commit stays local until the push.
    - When the behavior can't be expressed as a test, the dispatch returns `noTest` with a reason instead. An example is a CI setting. `qa` then judges the reason.
 2. **Fix.** A fresh `coder` dispatch makes the test pass.
    - The paths in the test commit are protected, and it changes none of them.
    - If it finds the test wrong, it returns `testProblem` with the reason and stops. The cycle then restarts at step 1 with that reason, which counts as one try.
    - `pusher` commits the fix.
 3. **Validate.** A fresh `qa` checks the change and its history:
-   - The test fails at the test commit and passes at HEAD.
+   - The test fails at the test commit on one of its assertions, not on a compile, type, or import error, and passes at HEAD.
    - Nothing after the test commit touches a protected path. Nothing skips, weakens, or excludes the test, for example by loosening a tolerance, regenerating a snapshot, or changing the test config.
    - The fix delivers the behavior the criterion or problem asks for. It doesn't merely satisfy the test, for example by special-casing the test's input.
    - The change stays within its criterion or problem.
@@ -232,7 +236,7 @@ These are the only conditions that stop the run:
 
 | #   | Condition                                                                                         | Found at | What the user gets                                                                   |
 | --- | ------------------------------------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------ |
-| H1  | The Linear issue can't be read, or an answer is an object or a list                               | Intake   | `not-started`, no board write                                                        |
+| H1  | The Linear issue can't be read, or `answers` isn't a map or holds an object or a list             | Intake   | `not-started`, no board write                                                        |
 | H2  | The issue doesn't have the `Deliverable` label                                                    | Intake   | `not-started`, and an issue comment saying to run `shape`                            |
 | H3  | The how phase's loops are exhausted: no design survives, or a `blocker` stays open in the spec    | How      | `blocked`, and an issue comment saying the workflow is broken, with everything tried |
 | H4  | The push is denied, or PR creation fails                                                          | Push     | `blocked`; finished work stays committed on the local branch                         |

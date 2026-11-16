@@ -1,5 +1,6 @@
 // deliver-story's how phase: three independent designs, opus advisors, one decision, a spec folder, and a challenge
 // that tries to break it. The issue says why and what; this decides how, so choices here are made, never asked.
+import { dispatch } from "./dispatch.ts";
 import {
   LENS_SCHEMA,
   STRINGS,
@@ -10,16 +11,25 @@ import {
   type LensResult,
   type ScoutResult,
 } from "./family.ts";
-import { NO_WRITES, callPusher, callSpecWriter, list, opRef, pushOk, show, unique } from "./deliver.ts";
+import {
+  NO_WRITES,
+  callPusher,
+  callSpecWriter,
+  commitRepairing,
+  list,
+  opRef,
+  pushOk,
+  show,
+  unique,
+} from "./deliver.ts";
 import { Halt, must, type Run } from "./loop.ts";
 import { MAX_CHALLENGE_ROUNDS, MAX_DESIGN_TRIES } from "./rules.ts";
-import { RULING_SCHEMA } from "./schemas.ts";
 import { BUILD, VALIDATE, type Build, type Task, type Validate } from "./spec.ts";
 
 const STANCES = [
-  "the smallest change that fits the existing patterns",
-  "the best long-term structure",
-  "the most robust under failure",
+  { name: "smallest change", stance: "the smallest change that fits the existing patterns" },
+  { name: "long-term structure", stance: "the best long-term structure" },
+  { name: "robust under failure", stance: "the most robust under failure" },
 ] as const;
 
 const HOW_ADVISORS = [
@@ -49,7 +59,23 @@ const DESIGN_SCHEMA = {
     create: { ...STRINGS, description: "What gets created" },
     interfaces: STRINGS,
     data: STRINGS,
-    dependencies: { ...STRINGS, description: "Each outside library or service it needs; empty when none" },
+    dependencies: {
+      type: "array",
+      description:
+        "Each outside library or service it relies on, never the project's own code, tools, or agents; empty when none",
+      items: {
+        type: "object",
+        required: ["name", "reliesOn", "new"],
+        properties: {
+          name: { type: "string", description: "Its name alone, such as its package name" },
+          reliesOn: { type: "string", description: "The part of it the design relies on, such as an API or feature" },
+          new: {
+            type: "boolean",
+            description: "True when the project doesn't use it yet, or doesn't use that part of it yet",
+          },
+        },
+      },
+    },
     risks: STRINGS,
   },
 } as const;
@@ -123,7 +149,48 @@ const CHECK_SCHEMA = {
   },
 } as const;
 
+// A spec problem the challenge acts on. Nothing acts on a minor one, so no agent reports or confirms it.
+const SPEC_PROBLEM = {
+  type: "object",
+  required: ["location", "problem", "severity", "reason"],
+  properties: {
+    location: { type: "string", description: "The spec file and item, or path:line" },
+    problem: { type: "string", description: "What is wrong and what would fix it" },
+    severity: {
+      type: "string",
+      enum: ["blocker", "major"],
+      description: "blocker: building this spec can't deliver the issue. major: a real flaw to fix before building",
+    },
+    reason: { type: "string", description: "The evidence it rests on, path:line or source" },
+  },
+} as const;
+
+const ATTACK_SCHEMA = {
+  type: "object",
+  required: ["findings"],
+  properties: {
+    findings: {
+      type: "array",
+      description: "Each blocker or major way the spec fails; empty when there is none",
+      items: SPEC_PROBLEM,
+    },
+  },
+} as const;
+
+const CHALLENGE_RULING_SCHEMA = {
+  type: "object",
+  required: ["problems"],
+  properties: {
+    problems: {
+      type: "array",
+      description: "Each distinct blocker or major problem the reported findings show; empty when none holds",
+      items: SPEC_PROBLEM,
+    },
+  },
+} as const;
+
 type SpecResult = Infer<typeof SPEC_SCHEMA>;
+type RuledSpecProblem = Infer<typeof SPEC_PROBLEM>;
 type Design = Infer<typeof DESIGN_SCHEMA> & { stance: string };
 type Decided = Infer<typeof DECISION_SCHEMA>;
 
@@ -156,9 +223,8 @@ async function ground(o: HowInput): Promise<string> {
     () => scout("scout-docs", `${ask} find every document making claims about this area.`),
     () => scout("scout-history", `${ask} find when and why behavior in this area changed.`),
     () =>
-      agent(`${ask} report what the project library already supports about this issue, with citations.`, {
+      dispatch(`${ask} report what the project library already supports about this issue, with citations.`, {
         agentType: "slopify:library-reader",
-        label: "library",
         phase: "Ground",
         schema: CONTEXT_SCHEMA,
       }),
@@ -176,9 +242,10 @@ async function design(o: HowInput, gathered: string, rejectedBefore: readonly st
   phase("Design");
   const designs = await parallel(
     STANCES.map(
-      (stance) => () =>
-        agent(
-          `${o.where}
+      ({ name, stance }) =>
+        () =>
+          dispatch(
+            `${o.where}
 ${STORY_BLOCK(o)}
 
 Design how to deliver this from one stance: ${stance}. Work alone: other designers take other stances, and you don't see their work. Read the project's full architecture and design documents first; its root instructions name them. Mark what you reuse and what you create, citing path:line, so nobody rebuilds what exists. Change nothing.
@@ -186,37 +253,49 @@ Design how to deliver this from one stance: ${stance}. Work alone: other designe
 What the scouts found:
 ${gathered}
 ${rejectedBefore.length > 0 ? `\nEarlier designs were ruled not viable, for these reasons:\n${list(rejectedBefore)}` : ""}`,
-          { agentType: "slopify:designer", label: stance, phase: "Design", schema: DESIGN_SCHEMA },
-        ),
+            { agentType: "slopify:designer", label: name, phase: "Design", schema: DESIGN_SCHEMA },
+          ),
     ),
   );
   const returned: Design[] = [];
   for (const [i, x] of designs.entries()) {
-    if (x) returned.push({ ...x, stance: STANCES[i] ?? "" });
+    if (x) returned.push({ ...x, stance: STANCES[i]?.stance ?? "" });
   }
   return returned;
 }
 
-// One scout pair per dependency any design names, for the advisors to judge from.
+// What a project already uses the way a design uses it has nothing new to look up, so only the new parts of outside
+// dependencies get scouts: one pair per name, whichever designs name it.
+function newDependencies(designs: readonly Design[]): Record<string, string[]> {
+  const byName: Record<string, string[]> = {};
+  const named = designs.flatMap((x) => x.dependencies);
+  for (const dep of named) {
+    if (!dep.new) continue;
+    const name = dep.name.trim().toLowerCase();
+    byName[name] = unique([...(byName[name] ?? []), dep.reliesOn]);
+  }
+  return byName;
+}
+
+// One scout pair per new dependency, for the advisors to judge from.
 async function researchDependencies(o: HowInput, designs: readonly Design[]): Promise<string> {
-  const deps = unique(designs.flatMap((x) => x.dependencies));
+  const byName = newDependencies(designs);
+  const deps = Object.keys(byName);
   if (deps.length === 0) return "";
+  const usage = (dep: string): string => `The designs rely on:\n${list(byName[dep])}`;
   const found = await parallel(
     deps.flatMap((dep) => [
       (): Promise<ScoutResult | null> =>
         scout(
           "scout-upstream-docs",
-          `${o.where}\nFind the official docs for ${dep}: versions, limits, and deprecations relevant to this issue:\n${o.story}`,
+          `${o.where}\nFind the official docs for ${dep}: versions, limits, and deprecations relevant to this issue.\n${usage(dep)}\n\nThe issue:\n${o.story}`,
           { label: `docs: ${dep}`, phase: "Design" },
         ),
       (): Promise<ScoutResult | null> =>
         scout(
           "scout-known-issues",
-          `${o.where}\nFind the pitfalls and open bugs in ${dep} relevant to this issue:\n${o.story}`,
-          {
-            label: `issues: ${dep}`,
-            phase: "Design",
-          },
+          `${o.where}\nFind the pitfalls and open bugs in ${dep} relevant to this issue.\n${usage(dep)}\n\nThe issue:\n${o.story}`,
+          { label: `issues: ${dep}`, phase: "Design" },
         ),
     ]),
   );
@@ -233,7 +312,7 @@ async function advise(o: HowInput, designs: readonly Design[], outside: string):
   const views = await parallel(
     HOW_ADVISORS.map(
       (name) => () =>
-        agent(
+        dispatch(
           `${o.where}
 ${STORY_BLOCK(o)}
 
@@ -241,7 +320,7 @@ Compare all of these designs from your one angle, reading the code at ${worktree
 
 ${JSON.stringify(designs)}
 ${outside ? `\nOutside evidence:\n${outside}` : ""}`,
-          { agentType: `slopify:${name}`, label: name.replace("advisor-", ""), phase: "Advise", schema: ADVICE_SCHEMA },
+          { agentType: `slopify:${name}`, phase: "Advise", schema: ADVICE_SCHEMA },
         ),
     ),
   );
@@ -253,7 +332,7 @@ ${outside ? `\nOutside evidence:\n${outside}` : ""}`,
 async function decide(o: HowInput, designs: readonly Design[], advice: string): Promise<Decided> {
   phase("Decide");
   return must(
-    await agent(
+    await dispatch(
       `${o.where}
 ${STORY_BLOCK(o)}
 
@@ -274,7 +353,7 @@ ${advice}`,
 // ---- Spec -------------------------------------------------------------------
 
 const SPEC_FILES = (o: HowInput): string =>
-  `Spec folder: ${worktree(o)}/${o.specDir}. It holds build.json, validate.json, and RATIONALE.md, which only ever grows.`;
+  `Spec folder: ${worktree(o)}/${o.specDir}. It holds build.json, validate.json, and RATIONALE.md, which says why the spec is what it is now.`;
 
 async function writeSpec(o: HowInput, instruction: string): Promise<SpecResult> {
   phase("Spec");
@@ -297,18 +376,30 @@ Return build and validate exactly as you wrote them. ${NO_WRITES}`,
   );
 }
 
-async function commitSpec(o: HowInput, message: string, phaseTitle: string): Promise<void> {
-  const r = await callPusher(
-    o.d.pushBrief(
-      `Commit the folder ${o.specDir} as it stands, staged by explicit path, with a message in the convention docs/FORGE.md declares, saying: ${message}. Name the issue ${o.cardId} in it. Do not push.`,
-      [`done spec ${o.specDir} story ${o.storyRevision}`],
-    ),
-    "commit the spec",
-    phaseTitle,
-  );
+// The writer fixes what a commit hook reports, so the spec returned is the one committed.
+async function writeAndCommit(
+  o: HowInput,
+  instruction: string,
+  message: string,
+  phaseTitle: string,
+): Promise<SpecResult> {
+  let spec = await writeSpec(o, instruction);
+  const send = () =>
+    callPusher(
+      o.d.pushBrief(
+        `Commit the folder ${o.specDir} as it stands, staged by explicit path, with a message in the convention docs/FORGE.md declares, saying: ${message}. Name the issue ${o.cardId} in it. Do not push.`,
+        [`done spec ${o.specDir} story ${o.storyRevision}`],
+      ),
+      "commit the spec",
+      phaseTitle,
+    );
+  const r = await commitRepairing([o.specDir], send, async (brief) => {
+    spec = await writeSpec(o, brief);
+  });
   if (!pushOk(r) || !opRef(r, "commit")) {
     throw new Halt("how", "A commit of the spec folder.", r?.unmet.join("; ") || "pusher didn't commit it");
   }
+  return spec;
 }
 
 // ---- Challenge --------------------------------------------------------------
@@ -319,21 +410,28 @@ interface SpecProblem {
 }
 
 const check = (name: string, label: string, brief: string) => () =>
-  agent(brief, { agentType: `slopify:${name}`, label, phase: "Challenge", schema: CHECK_SCHEMA });
+  dispatch(brief, { agentType: `slopify:${name}`, label, phase: "Challenge", schema: CHECK_SCHEMA });
 const findingsOf = (v: LensResult): SpecProblem[] =>
   defectsOf(v).map((f) => ({ location: f.location, problem: f.problem }));
 
-async function runChecks(o: HowInput, spec: SpecResult): Promise<SpecProblem[]> {
+// The claims and criteria that held in an earlier round. The code doesn't change during the challenge, so one that held
+// and kept its wording holds still and isn't checked again.
+const claimKey = (claim: string): string => `claim ${claim}`;
+const criterionKey = (c: SpecResult["validate"]["criteria"][number]): string => `criterion ${JSON.stringify(c)}`;
+
+async function runChecks(o: HowInput, spec: SpecResult, held: Set<string>): Promise<SpecProblem[]> {
   const specText = JSON.stringify({ build: spec.build, validate: spec.validate });
+  const claims = spec.claims.filter((c) => !held.has(claimKey(c)));
+  const criteria = spec.validate.criteria.filter((c) => !held.has(criterionKey(c)));
   const results = await parallel([
-    ...spec.claims.map((claim, i) =>
+    ...claims.map((claim, i) =>
       check(
         "check-claim",
         `claim ${String(i + 1)}`,
         `${o.where}\nIn the worktree ${worktree(o)}, check that this claim is true of the code: ${claim}`,
       ),
     ),
-    ...spec.validate.criteria.map((c) =>
+    ...criteria.map((c) =>
       check(
         "check-criterion",
         `criterion ${c.id}`,
@@ -346,76 +444,79 @@ async function runChecks(o: HowInput, spec: SpecResult): Promise<SpecProblem[]> 
       lens(
         "lens-scope",
         `${o.where}\n${STORY_BLOCK(o)}\n\nCheck that this spec covers the issue's criteria and adds and drops no scope:\n${specText}`,
-        { label: "scope", phase: "Challenge" },
+        { phase: "Challenge" },
       ),
     () =>
       lens(
         "lens-consistency",
         `${o.where}\nCheck this spec against the project's rules and documents, in the worktree ${worktree(o)}:\n${specText}`,
-        { label: "consistency", phase: "Challenge" },
+        { phase: "Challenge" },
       ),
   ]);
+  const checked = results.map((r) => must(r, "how", "A check on the spec."));
+  const keys = [...claims.map((c) => claimKey(c)), ...criteria.map((c) => criterionKey(c))];
+  for (const [i, r] of checked.entries()) if (r.holds) held.add(keys[i] ?? "");
   return [
-    ...results
-      .map((r) => must(r, "how", "A check on the spec."))
-      .filter((r) => !r.holds)
-      .map((r) => ({ location: r.location, problem: r.problem })),
+    ...checked.filter((r) => !r.holds).map((r) => ({ location: r.location, problem: r.problem })),
     ...lenses.flatMap((v) => findingsOf(must(v, "how", "A lens on the spec."))),
   ];
 }
 
-async function runAttack(o: HowInput): Promise<SpecProblem[]> {
+const FULL_ATTACK =
+  "Try to break this finished spec from your one angle, reading the code it touches. Report only what must change before building: a blocker or a major, each with its location and evidence.";
+
+// After a revision, the advisors check the revision rather than attack the whole spec again.
+const revisionCheck = (revisedFor: readonly RuledSpecProblem[]): string =>
+  `The spec was revised for these problems:\n${list(problemLines(revisedFor))}\n\nFrom your one angle, reading the code it touches, report each of them the revision didn't fix, and each blocker or major the revision itself introduced, each with its location and evidence. Don't attack again what the revision left unchanged.`;
+
+async function runAttack(o: HowInput, revisedFor: readonly RuledSpecProblem[]): Promise<RuledSpecProblem[]> {
+  const ask = revisedFor.length > 0 ? revisionCheck(revisedFor) : FULL_ATTACK;
   const views = await parallel(
     HOW_ADVISORS.map(
       (name) => () =>
-        agent(
+        dispatch(
           `${o.where}
 ${STORY_BLOCK(o)}
 
 ${SPEC_FILES(o)} Read all three files.
 
-Try to break this finished spec from your one angle, reading the code it touches. Report each way it fails, as a finding with its location. Change nothing.`,
+${ask} Leave out anything minor, because nothing acts on it. Change nothing.`,
           {
             agentType: `slopify:${name}`,
-            label: `attack: ${name.replace("advisor-", "")}`,
+            label: revisedFor.length > 0 ? "check the revision" : "attack the spec",
             phase: "Challenge",
-            schema: LENS_SCHEMA,
+            schema: ATTACK_SCHEMA,
           },
         ),
     ),
   );
-  return views.flatMap((v) => findingsOf(must(v, "how", "An advisor's attack on the spec.")));
+  return views.flatMap((v) => must(v, "how", "An advisor's attack on the spec.").findings);
 }
 
-interface RuledSpecProblem extends SpecProblem {
-  severity: string;
-  reason: string;
-}
-
-async function ruleOn(o: HowInput, problems: readonly SpecProblem[]): Promise<RuledSpecProblem[]> {
-  const rulings = await parallel(
-    problems.map(
-      (p, i) => () =>
-        agent(
-          `${o.where}
+// One judge rules on every finding the cheap checks reported in a round, so it reads the spec and the code once and
+// can merge findings that report the same problem. The advisors' findings need no judge.
+async function ruleOn(
+  o: HowInput,
+  reported: readonly SpecProblem[],
+  advised: readonly RuledSpecProblem[],
+): Promise<RuledSpecProblem[]> {
+  if (reported.length === 0) return [];
+  const r = await dispatch(
+    `${o.where}
 ${STORY_BLOCK(o)}
 
 ${SPEC_FILES(o)}
 
-Rule on one problem reported against the spec, checking it against the code. blocker: building this spec can't deliver the issue. major: a real flaw that should be fixed before building. minor: real but low impact.
+Cheap checks reported these findings against the spec. Rule on all of them, checking each against the code, and merge findings that report the same problem. Return each distinct problem that holds as a blocker or a major. Leave out what doesn't hold, what is minor (real but low impact), and what an advisor's finding below already covers.
 
-At ${p.location}:
-${p.problem}`,
-          { agentType: "slopify:judge", label: `rule ${String(i + 1)}`, phase: "Challenge", schema: RULING_SCHEMA },
-        ),
-    ),
+Reported findings:
+${list(reported.map((p) => `${p.location}: ${p.problem}`))}
+
+The advisors' findings, which the spec is revised for already:
+${list(advised.map((p) => `${p.location}: ${p.problem}`))}`,
+    { agentType: "slopify:judge", label: "rule on the findings", phase: "Challenge", schema: CHALLENGE_RULING_SCHEMA },
   );
-  const confirmed: RuledSpecProblem[] = [];
-  for (const [i, p] of problems.entries()) {
-    const r = must(rulings[i], "how", `A ruling on ${p.location}.`);
-    if (r.verdict === "confirmed") confirmed.push({ ...p, severity: r.severity, reason: r.reason });
-  }
-  return confirmed;
+  return must(r, "how", "The rulings on the spec's findings.").problems;
 }
 
 const problemLines = (problems: readonly RuledSpecProblem[]): string[] =>
@@ -438,33 +539,34 @@ function unpermitted(build: Build): RuledSpecProblem[] {
 async function challenge(o: HowInput, first: SpecResult): Promise<{ spec: SpecResult; blockers: string[] }> {
   let spec = first;
   let open: RuledSpecProblem[] = [];
+  const held = new Set<string>();
   for (let n = 1; n <= MAX_CHALLENGE_ROUNDS; n += 1) {
     phase("Challenge");
-    const [checked, attacked] = await parallel([() => runChecks(o, spec), () => runAttack(o)]);
+    const revisedFor = open;
+    const [checked, attacked] = await parallel([() => runChecks(o, spec, held), () => runAttack(o, revisedFor)]);
+    const advised = must(attacked, "how", "The advisors' attack on the spec.");
     open = [
       ...unpermitted(spec.build),
-      ...(await ruleOn(o, [
-        ...must(checked, "how", "The spec's checks."),
-        ...must(attacked, "how", "The advisors' attack on the spec."),
-      ])),
+      ...advised,
+      ...(await ruleOn(o, must(checked, "how", "The spec's checks."), advised)),
     ];
-    const toFix = open.filter((p) => p.severity !== "minor");
-    if (toFix.length === 0) return { spec, blockers: [] };
+    if (open.length === 0) return { spec, blockers: [] };
     if (n === MAX_CHALLENGE_ROUNDS) break;
-    spec = await writeSpec(
+    spec = await writeAndCommit(
       o,
-      `Revise the spec for these confirmed problems, and append each ruling to RATIONALE.md:\n${list(problemLines(toFix))}`,
+      `Revise the spec for these problems, and update RATIONALE.md with each one and its reason:\n${list(problemLines(open))}`,
+      "revise the spec after its challenge",
+      "Challenge",
     );
-    await commitSpec(o, "revise the spec after its challenge", "Challenge");
   }
-  const leftOver = problemLines(open.filter((p) => p.severity !== "minor"));
   const stillBlocking = problemLines(open.filter((p) => p.severity === "blocker"));
-  if (stillBlocking.length === 0 && leftOver.length > 0) {
-    spec = await writeSpec(
+  if (stillBlocking.length === 0) {
+    spec = await writeAndCommit(
       o,
-      `Record these open problems as risks in RATIONALE.md, changing nothing else:\n${list(leftOver)}`,
+      `Record these open problems as risks in RATIONALE.md, changing nothing else:\n${list(problemLines(open))}`,
+      "record the spec's open risks",
+      "Challenge",
     );
-    await commitSpec(o, "record the spec's open risks", "Challenge");
   }
   return { spec, blockers: stillBlocking };
 }
@@ -498,7 +600,7 @@ export async function runHow(o: HowInput): Promise<HowResult | HowExhausted> {
   const chosen = await chooseDesign(o, gathered);
   if ("exhausted" in chosen) return chosen;
   const { decided, designs } = chosen;
-  const spec = await writeSpec(
+  const spec = await writeAndCommit(
     o,
     `Write the spec folder from this decision. Copy each criterion's wording from the issue word for word, and file each under a TESTING.md category, or uncategorized when none fits. Record the designs, the advice, and what was rejected in RATIONALE.md.
 
@@ -510,8 +612,9 @@ ${JSON.stringify(designs)}
 
 What the scouts found:
 ${gathered}`,
+    "add the spec",
+    "Spec",
   );
-  await commitSpec(o, "add the spec", "Spec");
   const challenged = await challenge(o, spec);
   return challenged.blockers.length > 0
     ? { exhausted: challenged.blockers }
@@ -523,11 +626,12 @@ export function specReviser(o: HowInput) {
   return async (problems: readonly string[]): Promise<HowResult & { rerun: Task[] }> => {
     phase("Advise");
     const before = await attackFor(o, problems);
-    const spec = await writeSpec(
+    const spec = await writeAndCommit(
       o,
-      `Building showed the spec is wrong. Revise it for these problems, and append them and the advice to RATIONALE.md:\n${list(problems)}\n\nThe advisors' views:\n${list(before)}`,
+      `Building showed the spec is wrong. Revise it for these problems, and update RATIONALE.md with them and the advice:\n${list(problems)}\n\nThe advisors' views:\n${list(before)}`,
+      "revise the spec",
+      "Spec",
     );
-    await commitSpec(o, "revise the spec", "Spec");
     // The writer's task list is the whole spec, so every task whose files or criteria a problem names runs again.
     const named = (t: Task): boolean =>
       problems.some((p) => [t.id, ...t.files, ...t.criteria].some((x) => p.includes(x)));
@@ -540,7 +644,7 @@ async function attackFor(o: HowInput, problems: readonly string[]): Promise<stri
   const views = await parallel(
     HOW_ADVISORS.map(
       (name) => () =>
-        agent(
+        dispatch(
           `${o.where}
 ${STORY_BLOCK(o)}
 
@@ -549,7 +653,7 @@ ${SPEC_FILES(o)} Read all three files.
 Building showed the spec is wrong. From your one angle, say what should change. Each finding gives its location and the change. Change nothing.
 
 ${list(problems)}`,
-          { agentType: `slopify:${name}`, label: name.replace("advisor-", ""), phase: "Advise", schema: LENS_SCHEMA },
+          { agentType: `slopify:${name}`, phase: "Advise", schema: LENS_SCHEMA },
         ),
     ),
   );

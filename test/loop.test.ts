@@ -27,6 +27,7 @@ const VALIDATE: Validate = {
 const OK_PUSH = { done: true, unmet: [], operations: [{ op: "commit", reference: "abc" }] };
 const OK_TEST = {
   tests: ["a.test.ts"],
+  stubs: [],
   failingOutput: "red",
   noTest: "",
   specProblem: "",
@@ -164,6 +165,12 @@ describe("a delivery with nothing wrong", () => {
     assert.ok(finalPrompt().includes("Mark the PR ready"));
   });
 
+  test("names the agent first on every progress row", async () => {
+    use(happy());
+    await runLoop(inputFor(freshRun()));
+    for (const c of calls) assert.ok(c.row === c.type || c.row.startsWith(`${c.type} · `), c.row);
+  });
+
   test("commits the test before the fix, each on its own", async () => {
     use(happy());
     await runLoop(inputFor(freshRun()));
@@ -177,6 +184,69 @@ describe("a delivery with nothing wrong", () => {
     const fix = calls.find((c) => c.label === "t1: fix");
     assert.ok(fix?.prompt.includes("protected"));
     assert.ok(fix?.prompt.includes("a.test.ts"));
+  });
+
+  test("commits a test's stubs with it and leaves them unprotected", async () => {
+    const withStub = { ...OK_TEST, stubs: ["src/stub.ts"] };
+    use(happy({ coder: (_t, label) => (label.endsWith(": test") ? withStub : OK_FIX) }));
+    await runLoop(inputFor(freshRun()));
+    const testCommit = calls.find((c) => c.label === "commit: add a failing test for t1");
+    assert.ok(testCommit?.prompt.includes("src/stub.ts"));
+    const fix = calls.find((c) => c.label === "t1: fix");
+    assert.ok(!fix?.prompt.includes("src/stub.ts"));
+  });
+});
+
+describe("a commit a hook rejects", () => {
+  const REJECTED = {
+    done: false,
+    unmet: ["commit: the hook failed"],
+    operations: [],
+    hookRejection: "a.test.ts:1 lint error",
+  };
+
+  test("has the coder fix what the hook reported, then commits again", async () => {
+    let tries = 0;
+    use(
+      happy({
+        pusher: (_t, label, prompt) => {
+          if (!label.startsWith("commit: add a failing test")) return pusher(prompt);
+          tries += 1;
+          return tries === 1 ? REJECTED : OK_PUSH;
+        },
+      }),
+    );
+    const r = await runLoop(inputFor(freshRun()));
+    assert.equal(r.status, "ready");
+    assert.equal(tries, 2);
+    const repair = calls.find((c) => c.label === "t1: fix the commit hook's report");
+    assert.ok(repair?.prompt.includes("a.test.ts:1 lint error"));
+  });
+
+  test("leaves a commit the hook still rejects after two fixes open for the next round", async () => {
+    let rejected = 0;
+    const prompts: string[] = [];
+    const laterTest = { ...OK_TEST, tests: ["b.test.ts"] };
+    use(
+      happy({
+        coder: (_t, label) => {
+          if (label === "t1: test") return OK_TEST;
+          return label.endsWith(": test") ? laterTest : OK_FIX;
+        },
+        pusher: (_t, label, prompt) => {
+          if (!label.startsWith("commit:")) return pusher(prompt);
+          prompts.push(prompt);
+          if (!label.startsWith("commit: add a failing test") || rejected >= 3) return OK_PUSH;
+          rejected += 1;
+          return REJECTED;
+        },
+      }),
+    );
+    const r = await runLoop(inputFor(freshRun()));
+    assert.equal(count("coder", "fix the commit hook's report"), 2);
+    assert.equal(count("qa"), 1);
+    assert.ok(prompts[3]?.includes("a.test.ts"), "the next commit carries the rejected paths");
+    assert.notEqual(r.status, "blocked");
   });
 });
 
@@ -236,14 +306,15 @@ describe("the inner loop", () => {
   });
 });
 
-describe("a coder settles only trivial questions", () => {
+describe("a coder decides how, not what", () => {
   const OPEN = "the spec doesn't say which store to use";
 
-  test("tells the coder to settle only trivial questions", async () => {
+  test("leaves how to the coder, and sends a question about what back", async () => {
     use(happy());
     await statusOf();
     const fix = calls.find((c) => c.label === "t1: fix");
-    assert.ok(fix?.prompt.includes("Settle a trivial question yourself"));
+    assert.ok(fix?.prompt.includes("How to implement it in your paths is your decision"));
+    assert.ok(fix?.prompt.includes("return specProblem"));
   });
 
   test("sends what the brief leaves open to the spec's writer, then builds the revised task", async () => {
