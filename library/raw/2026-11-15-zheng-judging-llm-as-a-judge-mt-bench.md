@@ -2,7 +2,7 @@
 title: Zheng et al., Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena
 type: raw
 summary: Zheng et al. (2023) on LLM judge agreement with humans and judge biases, plus five follow-up papers on position, length and self-preference bias and on agent-based judging
-tags: [evaluation, llm-as-judge]
+tags: [evaluation, llm-as-judge, reliability]
 aliases: [MT-Bench, LLM-as-a-Judge]
 source: https://arxiv.org/abs/2306.05685
 accessed: 2026-11-15

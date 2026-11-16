@@ -1,7 +1,7 @@
 ---
 title: Reliability topic map
 type: moc
-summary: Map of library pages tagged reliability (21 pages: 5 wiki, 16 raw).
+summary: "Map of library pages tagged reliability (23 pages: 5 wiki, 18 raw)."
 tags: [reliability]
 aliases: []
 up: "[[library/_meta/index|Library Index]]"
@@ -55,3 +55,5 @@ SORT file.name ASC
 - [[library/raw/2026-11-15-miller-adding-error-bars-to-evals|Adding Error Bars to Evals (Miller, arXiv 2411.00640)]]
 - [[library/raw/2026-11-15-openai-why-we-no-longer-evaluate-swe-bench-verified|Why SWE-bench Verified no longer measures frontier coding capabilities (OpenAI)]]
 - [[library/raw/2026-11-15-tau-bench-tool-agent-user-interaction|tau-bench: A Benchmark for Tool-Agent-User Interaction in Real-World Domains]]
+- [[library/raw/2026-11-15-ye-justice-or-prejudice-llm-judge-biases|Justice or Prejudice? Quantifying Biases in LLM-as-a-Judge]]
+- [[library/raw/2026-11-15-zheng-judging-llm-as-a-judge-mt-bench|Zheng et al., Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena]]
