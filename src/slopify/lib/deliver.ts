@@ -1,5 +1,6 @@
 // What every delivery shares: the pusher schema, the dispatchers, and one run's state with the helpers that read and
 // change it.
+import { dispatch } from "./dispatch.ts";
 import { absent, blocked, fact, type Blocked, type Need, type NeedKind, type ScoutResult } from "./family.ts";
 import { pusherSchema } from "./schemas.ts";
 
@@ -72,7 +73,7 @@ export function callSpecWriter<const S extends Schema>(
   phaseTitle: string,
   schema: S,
 ): Promise<Infer<S> | null> {
-  return agent(prompt, { agentType: "slopify:writer-spec", label, phase: phaseTitle, schema });
+  return dispatch(prompt, { agentType: "slopify:writer-spec", label, phase: phaseTitle, schema });
 }
 export function callDocsWriter<const S extends Schema>(
   prompt: string,
@@ -80,7 +81,7 @@ export function callDocsWriter<const S extends Schema>(
   phaseTitle: string,
   schema: S,
 ): Promise<Infer<S> | null> {
-  return agent(prompt, { agentType: "slopify:writer-docs", label, phase: phaseTitle, schema });
+  return dispatch(prompt, { agentType: "slopify:writer-docs", label, phase: phaseTitle, schema });
 }
 export function callCoder<const S extends Schema>(
   prompt: string,
@@ -88,10 +89,10 @@ export function callCoder<const S extends Schema>(
   phaseTitle: string,
   schema: S,
 ): Promise<Infer<S> | null> {
-  return agent(prompt, { agentType: "slopify:coder", label, phase: phaseTitle, schema });
+  return dispatch(prompt, { agentType: "slopify:coder", label, phase: phaseTitle, schema });
 }
 export function callPusher(prompt: string, label: string, phaseTitle: string): Promise<PusherResult | null> {
-  return agent(prompt, { agentType: "slopify:pusher", label, phase: phaseTitle, schema: PUSHER_SCHEMA });
+  return dispatch(prompt, { agentType: "slopify:pusher", label, phase: phaseTitle, schema: PUSHER_SCHEMA });
 }
 
 // Builds one run's state and the helpers that close over it. Call it where the run's helpers are first needed:

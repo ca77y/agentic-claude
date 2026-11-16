@@ -1,3 +1,4 @@
+import { dispatch } from "../lib/dispatch.ts";
 import { STRINGS } from "../lib/family.ts";
 import { callPusher, createDeliver, list, type Stopped } from "../lib/deliver.ts";
 import { answersOf, answersRejected, flagOf, inputOf, textOf, type NotStarted } from "../lib/input.ts";
@@ -137,16 +138,16 @@ export type ResearchResult = NotStarted | Stopped | (LoopResult & { workflow: "r
 
 const quoted = (q: string): string => `<<<QUESTION\n${q}\nQUESTION>>>`;
 const scribe = <const S extends Schema>(prompt: string, label: string, phaseTitle: string, schema: S) =>
-  agent(prompt, { agentType: "slopify:library-scribe", label, phase: phaseTitle, schema });
+  dispatch(prompt, { agentType: "slopify:library-scribe", label, phase: phaseTitle, schema });
 
 // ---- Ground and plan --------------------------------------------------------
 
 async function ground(c: Ctx): Promise<string> {
   phase("Ground");
   const lib = must(
-    await agent(
+    await dispatch(
       `${c.d.WHERE}\nReport what the project library already supports about this question, citing each claim to its file and heading, and name its gaps and stale material. Make no internet requests and no writes.\n\n${quoted(c.question)}`,
-      { agentType: "slopify:library-reader", label: "library", phase: "Ground", schema: LIBRARY_SCHEMA },
+      { agentType: "slopify:library-reader", phase: "Ground", schema: LIBRARY_SCHEMA },
     ),
     "ground",
     "What the library supports.",
@@ -170,7 +171,7 @@ async function writePlan(c: Ctx, task: string, label: string): Promise<SubQuesti
 
 async function checkPlan(c: Ctx): Promise<Reported[]> {
   const v = must(
-    await agent(
+    await dispatch(
       `${c.d.WHERE}\nAssignment: research-plan readiness. In the worktree ${c.worktree}, judge the plan at ${c.plan} for this question.\n\n${quoted(c.question)}`,
       { agentType: "slopify:library-clerk", label: "check the plan", phase: "Plan", schema: CLERK_SCHEMA },
     ),
@@ -221,7 +222,7 @@ async function retrieve(c: Ctx, subQuestions: readonly SubQuestion[]): Promise<E
   const found = await parallel(
     subQuestions.map(
       (s) => () =>
-        agent(
+        dispatch(
           `${c.d.WHERE}\n${BOUNDS}\nInvestigate one sub-question of the research plan at ${c.worktree}/${c.plan}, through the source provider library/_meta/librarian.md names, and meet the plan's evidence standards. If the plan is wrong for this sub-question, say how in planProblem, and answer as well as you can.\n\n${quoted(c.question)}\n\nSub-question ${s.id}: ${s.question}`,
           {
             agentType: "slopify:library-researcher",
@@ -305,7 +306,7 @@ async function checkLibrary(c: Ctx): Promise<Problem[]> {
   const verdicts = await parallel(
     assignments.map(
       (a) => () =>
-        agent(`${c.d.WHERE}\nAssignment: ${a}. ${scope}\n\n${quoted(c.question)}`, {
+        dispatch(`${c.d.WHERE}\nAssignment: ${a}. ${scope}\n\n${quoted(c.question)}`, {
           agentType: "slopify:library-clerk",
           label: a,
           phase: "Validate",

@@ -164,6 +164,12 @@ describe("a delivery with nothing wrong", () => {
     assert.ok(finalPrompt().includes("Mark the PR ready"));
   });
 
+  test("names the agent first on every progress row", async () => {
+    use(happy());
+    await runLoop(inputFor(freshRun()));
+    for (const c of calls) assert.ok(c.row === c.type || c.row.startsWith(`${c.type} · `), c.row);
+  });
+
   test("commits the test before the fix, each on its own", async () => {
     use(happy());
     await runLoop(inputFor(freshRun()));

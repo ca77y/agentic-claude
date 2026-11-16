@@ -1,5 +1,6 @@
 // The build and validate loop every delivery shares: an outer loop over the whole story, with one coder and
 // qa inner loop per change. docs/deliver/STORY.md describes it. All of its control flow comes from rules.ts.
+import { dispatch } from "./dispatch.ts";
 import { LENS_SCHEMA, defectsOf, lens, scout, STRINGS, type Answers, type LensResult } from "./family.ts";
 import {
   NO_WRITES,
@@ -436,7 +437,7 @@ function fixPrompt(l: Loop, c: Change, cycle: CycleTest, lastFailure: string): s
 
 async function qaOf(l: Loop, c: Change, cycle: CycleTest) {
   return must(
-    await agent(qaBrief(l, c, cycle), {
+    await dispatch(qaBrief(l, c, cycle), {
       agentType: "slopify:qa",
       label: `${c.id}: qa`,
       phase: "Build",
@@ -452,7 +453,7 @@ async function failingChecks(l: Loop): Promise<string> {
   if (!l.small) return "";
   const brief = checksBrief(l.where, worktreeOf(l));
   const ran = must(
-    await agent(brief, {
+    await dispatch(brief, {
       agentType: "slopify:checks",
       label: "checks",
       phase: "Build",
@@ -696,7 +697,7 @@ export async function runValidation(o: {
     () =>
       o.checks === false
         ? Promise.resolve({ commands: [] })
-        : agent(checksBrief(o.where, o.worktree), {
+        : dispatch(checksBrief(o.where, o.worktree), {
             agentType: "slopify:checks",
             label: "checks",
             phase: "Validate",
@@ -706,7 +707,7 @@ export async function runValidation(o: {
       // With no criteria at all, as when validate runs on a PR with no spec, there is nothing to drive the app for.
       o.criteria.length === 0
         ? Promise.resolve({ results: [], uncategorizedSetting: "" })
-        : agent(
+        : dispatch(
             `${o.where}\nIn the worktree ${o.worktree}, follow TESTING.md's setup and boot, then run each criterion's validation path below, and capture its evidence under .tmp/evidence/. Report what TESTING.md states for its category when it can't be verified, and what it states for uncategorized criteria.${o.changed.length > 0 ? ` Also run every criterion whose code path these changed paths touch, and every criterion if one is a boot or config file:\n${list(o.changed)}` : ""}\n\nCriteria to run:\n${JSON.stringify(toRun)}${o.focus.length > 0 ? `\n\nThe other criteria:\n${JSON.stringify(categorized.filter((c) => !toRun.includes(c)))}` : ""}`,
             { agentType: "slopify:validator", label: "validator", phase: "Validate", schema: VALIDATOR_SCHEMA },
           ),
@@ -851,7 +852,7 @@ async function judgeProblems(l: Loop, problems: readonly Problem[], phaseTitle: 
   const verdicts = await parallel(
     problems.map(
       (p, i) => () =>
-        agent(judgeBrief(l, p), {
+        dispatch(judgeBrief(l, p), {
           agentType: "slopify:judge",
           label: `rule ${String(i + 1)}`,
           phase: phaseTitle,
@@ -878,7 +879,7 @@ async function gateway(l: Loop): Promise<void> {
   phase("Gateway");
   const results = JSON.stringify(rowsOf(l));
   const g = must(
-    await agent(
+    await dispatch(
       `${l.where}
 Check this round before it is pushed, in the worktree ${worktreeOf(l)}: was anything missed? Read the round's diff, and judge it against the spec below and the evidence.
 ${l.build ? `\nBuild spec:\n${JSON.stringify(l.build)}` : ""}
@@ -1002,7 +1003,7 @@ async function waitForReview(l: Loop) {
   const { state } = l.d;
   for (let n = 1; n <= WATCH_DISPATCHES; n += 1) {
     const w = must(
-      await agent(
+      await dispatch(
         `${l.where}
 Wait for review ${String(l.reviewNumber)} of this pull request, as docs/FORGE.md's review-status binding declares: first for the review to start, then for it to finish. Wait at most ${String(WATCH_MINUTES)} minutes in this dispatch, then return pending. On finished, return each finding with its id, its location (path:line, or empty), and its text. Change nothing.
 

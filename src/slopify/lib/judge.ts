@@ -1,4 +1,5 @@
 // One judge per reported problem, outside the delivery loop: the problems a judge confirms as blocker or major.
+import { dispatch } from "./dispatch.ts";
 import { must } from "./loop.ts";
 import { RULING_SCHEMA } from "./schemas.ts";
 
@@ -17,7 +18,7 @@ export async function confirmedProblems(
   const rulings = await parallel(
     problems.map(
       (p, i) => () =>
-        agent(brief(p), {
+        dispatch(brief(p), {
           agentType: "slopify:judge",
           label: `rule ${String(i + 1)}`,
           phase: phaseTitle,

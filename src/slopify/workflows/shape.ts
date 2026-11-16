@@ -1,3 +1,4 @@
+import { dispatch } from "../lib/dispatch.ts";
 import { STRINGS, advise, defectsOf, lens, scout, slugged, type ScoutResult } from "../lib/family.ts";
 import { callPusher, createDeliver, list, opRef, show, slugOf, type Stopped } from "../lib/deliver.ts";
 import { inputOf, textOf, type NotStarted } from "../lib/input.ts";
@@ -119,7 +120,7 @@ async function read(
       scout(
         "scout-related-cards",
         `${d.WHERE}\nSearch the board for cards that duplicate, overlap, conflict with, or depend on this. Change nothing.\n\n${idea || cardArg}`,
-        { label: "related cards", phase: "Read" },
+        { phase: "Read" },
       ),
   ]);
   if (cardArg) must(card, "read", `Card ${cardArg}.`);
@@ -132,13 +133,12 @@ async function ground(d: Run, c: Card, related: ScoutResult): Promise<string> {
   const { scouts } = KINDS[c.kind];
   const [library, ...found] = await parallel([
     () =>
-      agent(
+      dispatch(
         brief(
           "Report what the project library already supports about this, citing each claim to its file and heading.",
         ),
         {
           agentType: "slopify:library-reader",
-          label: "library",
           phase: "Ground",
           schema: LIBRARY_SCHEMA,
         },
@@ -182,7 +182,7 @@ async function adviseAll(d: Run, c: Card, evidence: string): Promise<string> {
 
 async function write(d: Run, c: Card, task: string, label: string, phaseTitle: string): Promise<string[]> {
   const w = must(
-    await agent(
+    await dispatch(
       `${d.WHERE}\nThe card is a ${c.kind}. Write it at ${c.draft}, and only there. ${task}\n\n${subject(c)}\n\nDo not file it, commit, or change the board; pusher does that.`,
       { agentType: "slopify:writer-card", label, phase: phaseTitle, schema: WRITER_SCHEMA },
     ),

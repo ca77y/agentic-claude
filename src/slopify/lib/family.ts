@@ -1,5 +1,6 @@
 // What every slopify workflow shares: the scout, lens, and advisor schemas and dispatchers, the readers for
 // checkpoint values, and the decision and blocked-result helpers.
+import { dispatch } from "./dispatch.ts";
 
 export const STRINGS = { type: "array", items: { type: "string" } } as const;
 
@@ -121,7 +122,7 @@ function familyAgent<const S extends Schema>(
   opts?: FamilyOptions,
 ): Promise<Infer<S> | null> {
   if (!name.startsWith(prefix)) throw new Error(`${name} is not a ${prefix}* agent`);
-  return agent(prompt, { ...opts, agentType: `slopify:${name}`, schema });
+  return dispatch(prompt, { ...opts, agentType: `slopify:${name}`, schema });
 }
 export const scout = (name: string, prompt: string, opts?: FamilyOptions): Promise<ScoutResult | null> =>
   familyAgent("scout-", SCOUT_SCHEMA, name, prompt, opts);

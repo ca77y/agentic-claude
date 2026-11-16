@@ -2,7 +2,8 @@
 export type Reply = Record<string, unknown> | null;
 export type Script = (type: string, label: string, prompt: string) => Reply;
 
-export const calls: { type: string; label: string; prompt: string }[] = [];
+/** `label` is what the dispatch is for, without the agent name the progress view shows in front of it; `row` is the whole row. */
+export const calls: { type: string; label: string; row: string; prompt: string }[] = [];
 export const current: { script: Script } = { script: () => null };
 
 async function runAll(thunks: (() => Promise<unknown>)[]): Promise<unknown[]> {
@@ -17,8 +18,9 @@ async function runAll(thunks: (() => Promise<unknown>)[]): Promise<unknown[]> {
 }
 function fakeAgent(prompt: string, opts: { agentType?: string; label?: string }): Promise<Reply> {
   const type = (opts.agentType ?? "").replace("slopify:", "");
-  const label = opts.label ?? "";
-  calls.push({ type, label, prompt });
+  const row = opts.label ?? "";
+  const label = row.startsWith(`${type} · `) ? row.slice(type.length + 3) : row;
+  calls.push({ type, label, row, prompt });
   return Promise.resolve(current.script(type, label, prompt));
 }
 export function installAgents(): void {

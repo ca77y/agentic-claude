@@ -112,6 +112,12 @@ describe("the how phase", () => {
     }
   });
 
+  test("names the agent first on every progress row", async () => {
+    await how(happy());
+    for (const c of calls) assert.ok(c.row === c.type || c.row.startsWith(`${c.type} · `), c.row);
+    assert.ok(calls.some((c) => c.row === "designer · smallest change"));
+  });
+
   test("gives each designer its own stance, and none sees another's work", async () => {
     await how(happy());
     const briefs = calls.filter((c) => c.type === "designer").map((c) => c.prompt);

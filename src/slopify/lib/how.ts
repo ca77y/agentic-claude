@@ -1,5 +1,6 @@
 // deliver-story's how phase: three independent designs, opus advisors, one decision, a spec folder, and a challenge
 // that tries to break it. The issue says why and what; this decides how, so choices here are made, never asked.
+import { dispatch } from "./dispatch.ts";
 import {
   LENS_SCHEMA,
   STRINGS,
@@ -17,9 +18,9 @@ import { RULING_SCHEMA } from "./schemas.ts";
 import { BUILD, VALIDATE, type Build, type Task, type Validate } from "./spec.ts";
 
 const STANCES = [
-  "the smallest change that fits the existing patterns",
-  "the best long-term structure",
-  "the most robust under failure",
+  { name: "smallest change", stance: "the smallest change that fits the existing patterns" },
+  { name: "long-term structure", stance: "the best long-term structure" },
+  { name: "robust under failure", stance: "the most robust under failure" },
 ] as const;
 
 const HOW_ADVISORS = [
@@ -156,9 +157,8 @@ async function ground(o: HowInput): Promise<string> {
     () => scout("scout-docs", `${ask} find every document making claims about this area.`),
     () => scout("scout-history", `${ask} find when and why behavior in this area changed.`),
     () =>
-      agent(`${ask} report what the project library already supports about this issue, with citations.`, {
+      dispatch(`${ask} report what the project library already supports about this issue, with citations.`, {
         agentType: "slopify:library-reader",
-        label: "library",
         phase: "Ground",
         schema: CONTEXT_SCHEMA,
       }),
@@ -176,9 +176,10 @@ async function design(o: HowInput, gathered: string, rejectedBefore: readonly st
   phase("Design");
   const designs = await parallel(
     STANCES.map(
-      (stance) => () =>
-        agent(
-          `${o.where}
+      ({ name, stance }) =>
+        () =>
+          dispatch(
+            `${o.where}
 ${STORY_BLOCK(o)}
 
 Design how to deliver this from one stance: ${stance}. Work alone: other designers take other stances, and you don't see their work. Read the project's full architecture and design documents first; its root instructions name them. Mark what you reuse and what you create, citing path:line, so nobody rebuilds what exists. Change nothing.
@@ -186,13 +187,13 @@ Design how to deliver this from one stance: ${stance}. Work alone: other designe
 What the scouts found:
 ${gathered}
 ${rejectedBefore.length > 0 ? `\nEarlier designs were ruled not viable, for these reasons:\n${list(rejectedBefore)}` : ""}`,
-          { agentType: "slopify:designer", label: stance, phase: "Design", schema: DESIGN_SCHEMA },
-        ),
+            { agentType: "slopify:designer", label: name, phase: "Design", schema: DESIGN_SCHEMA },
+          ),
     ),
   );
   const returned: Design[] = [];
   for (const [i, x] of designs.entries()) {
-    if (x) returned.push({ ...x, stance: STANCES[i] ?? "" });
+    if (x) returned.push({ ...x, stance: STANCES[i]?.stance ?? "" });
   }
   return returned;
 }
@@ -233,7 +234,7 @@ async function advise(o: HowInput, designs: readonly Design[], outside: string):
   const views = await parallel(
     HOW_ADVISORS.map(
       (name) => () =>
-        agent(
+        dispatch(
           `${o.where}
 ${STORY_BLOCK(o)}
 
@@ -241,7 +242,7 @@ Compare all of these designs from your one angle, reading the code at ${worktree
 
 ${JSON.stringify(designs)}
 ${outside ? `\nOutside evidence:\n${outside}` : ""}`,
-          { agentType: `slopify:${name}`, label: name.replace("advisor-", ""), phase: "Advise", schema: ADVICE_SCHEMA },
+          { agentType: `slopify:${name}`, phase: "Advise", schema: ADVICE_SCHEMA },
         ),
     ),
   );
@@ -253,7 +254,7 @@ ${outside ? `\nOutside evidence:\n${outside}` : ""}`,
 async function decide(o: HowInput, designs: readonly Design[], advice: string): Promise<Decided> {
   phase("Decide");
   return must(
-    await agent(
+    await dispatch(
       `${o.where}
 ${STORY_BLOCK(o)}
 
@@ -319,7 +320,7 @@ interface SpecProblem {
 }
 
 const check = (name: string, label: string, brief: string) => () =>
-  agent(brief, { agentType: `slopify:${name}`, label, phase: "Challenge", schema: CHECK_SCHEMA });
+  dispatch(brief, { agentType: `slopify:${name}`, label, phase: "Challenge", schema: CHECK_SCHEMA });
 const findingsOf = (v: LensResult): SpecProblem[] =>
   defectsOf(v).map((f) => ({ location: f.location, problem: f.problem }));
 
@@ -346,13 +347,13 @@ async function runChecks(o: HowInput, spec: SpecResult): Promise<SpecProblem[]> 
       lens(
         "lens-scope",
         `${o.where}\n${STORY_BLOCK(o)}\n\nCheck that this spec covers the issue's criteria and adds and drops no scope:\n${specText}`,
-        { label: "scope", phase: "Challenge" },
+        { phase: "Challenge" },
       ),
     () =>
       lens(
         "lens-consistency",
         `${o.where}\nCheck this spec against the project's rules and documents, in the worktree ${worktree(o)}:\n${specText}`,
-        { label: "consistency", phase: "Challenge" },
+        { phase: "Challenge" },
       ),
   ]);
   return [
@@ -368,7 +369,7 @@ async function runAttack(o: HowInput): Promise<SpecProblem[]> {
   const views = await parallel(
     HOW_ADVISORS.map(
       (name) => () =>
-        agent(
+        dispatch(
           `${o.where}
 ${STORY_BLOCK(o)}
 
@@ -377,7 +378,7 @@ ${SPEC_FILES(o)} Read all three files.
 Try to break this finished spec from your one angle, reading the code it touches. Report each way it fails, as a finding with its location. Change nothing.`,
           {
             agentType: `slopify:${name}`,
-            label: `attack: ${name.replace("advisor-", "")}`,
+            label: "attack the spec",
             phase: "Challenge",
             schema: LENS_SCHEMA,
           },
@@ -396,7 +397,7 @@ async function ruleOn(o: HowInput, problems: readonly SpecProblem[]): Promise<Ru
   const rulings = await parallel(
     problems.map(
       (p, i) => () =>
-        agent(
+        dispatch(
           `${o.where}
 ${STORY_BLOCK(o)}
 
@@ -540,7 +541,7 @@ async function attackFor(o: HowInput, problems: readonly string[]): Promise<stri
   const views = await parallel(
     HOW_ADVISORS.map(
       (name) => () =>
-        agent(
+        dispatch(
           `${o.where}
 ${STORY_BLOCK(o)}
 
@@ -549,7 +550,7 @@ ${SPEC_FILES(o)} Read all three files.
 Building showed the spec is wrong. From your one angle, say what should change. Each finding gives its location and the change. Change nothing.
 
 ${list(problems)}`,
-          { agentType: `slopify:${name}`, label: name.replace("advisor-", ""), phase: "Advise", schema: LENS_SCHEMA },
+          { agentType: `slopify:${name}`, phase: "Advise", schema: LENS_SCHEMA },
         ),
     ),
   );

@@ -1,3 +1,4 @@
+import { dispatch } from "../lib/dispatch.ts";
 import { STRINGS, defectsOf, lens, scout, type LensResult } from "../lib/family.ts";
 import { NO_WRITES, callCoder, callPusher, createDeliver, list, opRef, show, type Stopped } from "../lib/deliver.ts";
 import { answersOf, answersRejected, flagOf, inputOf, textOf, type NotStarted } from "../lib/input.ts";
@@ -142,11 +143,11 @@ async function ground(d: Run, story: string): Promise<string> {
   ] as const;
   const [library, ...found] = await parallel([
     () =>
-      agent(
+      dispatch(
         brief(
           "Report what the project library already supports about this question, citing each claim to its file and heading, and name its gaps. Make no internet requests.",
         ),
-        { agentType: "slopify:library-reader", label: "library", phase: "Ground", schema: LIBRARY_SCHEMA },
+        { agentType: "slopify:library-reader", phase: "Ground", schema: LIBRARY_SCHEMA },
       ),
     ...scouts.map(
       ([name, task]) =>
@@ -166,7 +167,7 @@ async function ground(d: Run, story: string): Promise<string> {
 async function plan(d: Run, story: string, evidence: string) {
   phase("Plan");
   return must(
-    await agent(
+    await dispatch(
       `${d.WHERE}
 Plan the answer to this spike's question from the evidence below, and return each assumption you make.
 
@@ -196,7 +197,7 @@ Write only inside that worktree. If a claim can't be measured as asked, return p
 
 async function confirm(d: Run, worktree: string, measurements: readonly Measurement[]) {
   return must(
-    await agent(
+    await dispatch(
       `${d.WHERE}
 In the worktree ${worktree}, rerun each measurement below and say whether you reproduce its value. A value that depends on the machine is confirmed when your rerun agrees within the variation the claim allows. Change nothing.
 ${JSON.stringify(measurements)}`,
@@ -305,7 +306,7 @@ async function prototype(d: Run, slug: string, claims: readonly Claim[]): Promis
 async function writeFindings(d: Run, story: string, docRel: string, evidence: string, notes: string): Promise<void> {
   phase("Findings");
   const w = must(
-    await agent(
+    await dispatch(
       `${d.WHERE}
 In the worktree ${d.state.worktree}, write the spike's findings document at ${docRel}.
 
@@ -385,7 +386,7 @@ async function checkDocument(d: Run, story: string, docRel: string): Promise<Pro
 
 async function reviseDocument(d: Run, docRel: string, problems: readonly string[]): Promise<string[]> {
   const w = must(
-    await agent(
+    await dispatch(
       `${d.WHERE}
 In the worktree ${d.state.worktree}, revise the spike's findings document at ${docRel} to fix these problems.
 ${list(problems)}
