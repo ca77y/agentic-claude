@@ -46,7 +46,6 @@ jobs:
           # Tag mode posts the progress comment that docs/FORGE.md's review status reads. It passes the prompt as
           # instructions rather than as a slash command, so the prompt asks for the command through the Skill tool.
           track_progress: true
-          show_full_output: true
           prompt: "Run the `code-review:code-review` command with the Skill tool, with the arguments `--comment ${{ github.repository }}/pull/${{ github.event.pull_request.number || github.event.issue.number }}`."
           # The action sets up the inline-comment tool only when it is allowed here.
           claude_args: >-
