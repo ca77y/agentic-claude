@@ -1,6 +1,6 @@
 import { STRINGS } from "../lib/family.ts";
 import { callPusher, createDeliver, list, type Stopped } from "../lib/deliver.ts";
-import { answersOf, flagOf, inputOf, textOf, type NotStarted } from "../lib/input.ts";
+import { answersOf, flagOf, inputOf, textOf, unplainAnswers, type NotStarted } from "../lib/input.ts";
 import { confirmedProblems, type Reported } from "../lib/judge.ts";
 import { must, pushed, reportOf, runLoop, stopOf, type LoopResult, type Problem, type Run } from "../lib/loop.ts";
 import { MAX_FIX_ROUNDS } from "../lib/rules.ts";
@@ -345,6 +345,8 @@ async function repair(c: Ctx, problems: readonly string[]): Promise<string[]> {
 
 export default async function run(): Promise<ResearchResult> {
   const input = inputOf(args, "question");
+  const rejected = unplainAnswers(input["answers"]);
+  if (rejected) return rejected;
   const arg = textOf(input["question"]);
   if (!arg)
     return { status: "not-started", next: "Ask the user for the Linear issue or the question, then invoke again." };

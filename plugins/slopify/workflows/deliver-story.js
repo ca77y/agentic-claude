@@ -2129,12 +2129,19 @@ function inputOf(a, primary, numbers = false) {
 }
 var flagOf = (v) => v === true;
 var textOf = (v) => typeof v === "string" ? v.trim() : "";
-function answerValue(x) {
-  const text = String(x);
-  return x === null || x === void 0 || typeof x === "string" || typeof x === "number" || typeof x === "boolean" ? x : text;
-}
+var isPlain = (x) => typeof x === "string" || typeof x === "number" || typeof x === "boolean";
+var answerMap = (v) => isRecord(v) && !Array.isArray(v) ? v : {};
 function answersOf(v) {
-  return isRecord(v) && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, answerValue(x)])) : {};
+  return Object.fromEntries(
+    Object.entries(answerMap(v)).filter((e) => isPlain(e[1]))
+  );
+}
+function unplainAnswers(v) {
+  const ids = Object.entries(answerMap(v)).filter(([, x]) => isRecord(x)).map(([id]) => id);
+  return ids.length === 0 ? null : {
+    status: "not-started",
+    next: `The answer to ${ids.join(", ")} must be plain text, not an object or a list. Invoke again with each of those answers given as text.`
+  };
 }
 
 // src/slopify/lib/resume.ts
@@ -2273,6 +2280,8 @@ ARG>>>`,
 }
 async function run() {
   const input = inputOf(args, "story");
+  const rejected = unplainAnswers(input["answers"]);
+  if (rejected) return rejected;
   const storyArg = textOf(input["story"]);
   if (!storyArg) {
     return { status: "not-started", next: "Ask the user for the Linear issue to deliver, then invoke again." };

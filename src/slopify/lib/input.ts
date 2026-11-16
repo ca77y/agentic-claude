@@ -37,19 +37,30 @@ export const flagOf = (v: unknown): boolean => v === true;
 /** A string field trimmed; '' for anything else. */
 export const textOf = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
 
-// An answer as answerOf reads it: a primitive as given, anything else as its string form.
-function answerValue(x: unknown): Answers[string] {
-  const text = String(x);
-  return x === null || x === undefined || typeof x === "string" || typeof x === "number" || typeof x === "boolean"
-    ? x
-    : text;
+// An answer is plain text: a string, or a number or boolean read as its text. null is no answer.
+const isPlain = (x: unknown): x is string | number | boolean =>
+  typeof x === "string" || typeof x === "number" || typeof x === "boolean";
+
+const answerMap = (v: unknown): Input => (isRecord(v) && !Array.isArray(v) ? v : {});
+
+/** The answers arg, by need id; an array is no answers, and a null answer is unanswered. */
+export function answersOf(v: unknown): Answers {
+  return Object.fromEntries(
+    Object.entries(answerMap(v)).filter((e): e is [string, string | number | boolean] => isPlain(e[1])),
+  );
 }
 
-/** The answers arg, by need id; an array is no answers. */
-export function answersOf(v: unknown): Answers {
-  return isRecord(v) && !Array.isArray(v)
-    ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, answerValue(x)]))
-    : {};
+/** A not-started result naming each answer that is an object or a list, which no agent may see; null when there is none. */
+export function unplainAnswers(v: unknown): NotStarted | null {
+  const ids = Object.entries(answerMap(v))
+    .filter(([, x]) => isRecord(x))
+    .map(([id]) => id);
+  return ids.length === 0
+    ? null
+    : {
+        status: "not-started",
+        next: `The answer to ${ids.join(", ")} must be plain text, not an object or a list. Invoke again with each of those answers given as text.`,
+      };
 }
 
 /** The brief line that says where the project is. */

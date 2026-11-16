@@ -1,6 +1,6 @@
 import { STRINGS, defectsOf, lens, scout, type LensResult } from "../lib/family.ts";
 import { NO_WRITES, callCoder, callPusher, createDeliver, list, opRef, show, type Stopped } from "../lib/deliver.ts";
-import { answersOf, flagOf, inputOf, textOf, type NotStarted } from "../lib/input.ts";
+import { answersOf, flagOf, inputOf, textOf, unplainAnswers, type NotStarted } from "../lib/input.ts";
 import { must, pushed, reportOf, runLoop, stopOf, type LoopResult, type Problem, type Run } from "../lib/loop.ts";
 import { MAX_INNER_TRIES } from "../lib/rules.ts";
 import { libraryReaderSchema } from "../lib/schemas.ts";
@@ -422,6 +422,8 @@ function prototypeReport(claims: readonly Claim[], m: Measured): string {
 
 export default async function run(): Promise<SpikeResult> {
   const input = inputOf(args, "question");
+  const rejected = unplainAnswers(input["answers"]);
+  if (rejected) return rejected;
   const arg = textOf(input["question"]);
   if (!arg) {
     return { status: "not-started", next: "Ask the user for the Linear issue or the question, then invoke again." };
