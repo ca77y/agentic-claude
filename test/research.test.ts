@@ -3,30 +3,9 @@ import assert from "node:assert/strict";
 import { beforeEach, describe, test } from "node:test";
 
 import research from "../src/slopify/workflows/research.ts";
+import { calls, current, installAgents, type Reply, type Script } from "./harness.ts";
 
-type Reply = Record<string, unknown> | null;
-type Script = (type: string, label: string, prompt: string) => Reply;
-
-const calls: { type: string; label: string; prompt: string }[] = [];
-const current: { script: Script } = { script: () => null };
-
-async function runAll(thunks: (() => Promise<unknown>)[]): Promise<unknown[]> {
-  const settle = async (t: () => Promise<unknown>): Promise<unknown> => {
-    try {
-      return await t();
-    } catch {
-      return null;
-    }
-  };
-  return Promise.all(thunks.map((t) => settle(t)));
-}
-function fakeAgent(prompt: string, opts: { agentType?: string; label?: string }): Promise<Reply> {
-  const type = (opts.agentType ?? "").replace("slopify:", "");
-  const label = opts.label ?? "";
-  calls.push({ type, label, prompt });
-  return Promise.resolve(current.script(type, label, prompt));
-}
-Object.assign(globalThis, { phase: () => null, parallel: runAll, agent: fakeAgent });
+installAgents();
 
 const CARD = {
   answer: "a",

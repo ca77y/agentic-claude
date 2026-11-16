@@ -7,7 +7,7 @@ import tseslint from "typescript-eslint";
 
 export default defineConfig(
   // Built workflows are generated from src/; lint the source.
-  { ignores: [".tmp/", ".worktrees/", "plugins/"] },
+  { ignores: [".tmp/", ".worktrees/", "plugins/", ".obsidian/plugins/"] },
   js.configs.recommended,
   tseslint.configs.strictTypeChecked,
   tseslint.configs.stylisticTypeChecked,

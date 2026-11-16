@@ -1,6 +1,6 @@
 ---
 paths:
-  - "plugins/*/evals/**/*.yaml"
+  - "plugins/*/evals/**"
 ---
 
 # Eval cases

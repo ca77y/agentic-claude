@@ -20,6 +20,8 @@ check:
 	npm run --silent lint:format
 	npm run --silent lint:dead
 	npm run --silent lint:dup
+	npm run --silent lint:pins
+	npm run --silent lint:sh
 	npm run --silent lint:types
 	npm run --silent test:unit
 	claude plugin validate --strict .

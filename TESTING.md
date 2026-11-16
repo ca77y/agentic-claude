@@ -16,7 +16,7 @@ CLI: a Claude Code plugin marketplace. There is no running app; plugins are chec
 
 - Where the env file comes from: none; nothing reads an env file.
 - Seed data: none; each smoke case's `scaffold.sh` builds its own throwaway repository.
-- Where the test account comes from, never a personal logged-in session: none exists yet. Smoke runs call models through the Claude Code CLI login of whoever runs them. This is an open gap.
+- Where the test account comes from, never a personal logged-in session: by the user's choice, eval runs call models through the Claude Code CLI login of whoever runs them, locally. No separate test account exists.
 
 ## Boot
 
@@ -30,7 +30,7 @@ CLI: a Claude Code plugin marketplace. There is no running app; plugins are chec
 Each command is expected to exit 0. `make check` runs all of them; `make format` rewrites files and is never a check.
 
 - Format: `npx --no-install prettier --check .`
-- Lint: `npm run --silent build:check && npm run --silent lint:ts && npm run --silent lint:md && npm run --silent lint:dead && npm run --silent lint:dup && npm run --silent lint:types && claude plugin validate --strict . && claude plugin validate --strict plugins/slopify`
+- Lint: `npm run --silent build:check && npm run --silent lint:ts && npm run --silent lint:md && npm run --silent lint:dead && npm run --silent lint:dup && npm run --silent lint:pins && npm run --silent lint:sh && npm run --silent lint:types && claude plugin validate --strict . && claude plugin validate --strict plugins/slopify`
 - Typecheck: `npm run --silent typecheck`
 - Unit tests: `npm run --silent test:unit`, or `node --test <file>` for one test file.
 
@@ -48,14 +48,14 @@ The kinds of change this project recognizes. Every acceptance criterion is filed
 ### Smoke eval
 
 - Covers, the paths or kinds of change: criteria about how a workflow, skill, or agent behaves when run with a model that only a smoke case shows: that a workflow starts, dispatches its agents, and reaches its first milestones.
-- Validation path: run `make smoke` (about ten minutes, all cases at once) and read the result of the case for the affected workflow.
+- Validation path: run `make smoke` locally, only when the user asks (about ten minutes, all cases at once), and read the result of the case for the affected workflow. CI never runs it.
 - Required evidence: each case's pass or fail and its report under `plugins/slopify/evals/results/`.
 - When a criterion in this category can't be verified, the pull request is `ready` or stays `draft`: `draft`
 
 ### Full eval
 
 - Covers, the paths or kinds of change: claims about cost, accuracy, or quality across many runs.
-- Validation path: a full eval run the user performs by hand. No command exists.
+- Validation path: run `make eval` locally, only when the user asks; CI never runs it. The target is in development under SMR-364 and doesn't exist yet, so until it lands a full eval run is the user's by hand.
 - Required evidence: the user's run report.
 - When a criterion in this category can't be verified, the pull request is `ready` or stays `draft`: `draft`
 
