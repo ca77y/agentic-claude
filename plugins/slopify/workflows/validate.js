@@ -179,7 +179,7 @@ function arrayOf(items, description) {
 function pusherSchema(notes = {}) {
   return {
     type: "object",
-    required: ["done", "operations", "unmet"],
+    required: ["done", "operations", "unmet", "hookRejection"],
     properties: {
       done: { type: "boolean" },
       operations: arrayOf({
@@ -191,7 +191,11 @@ function pusherSchema(notes = {}) {
           reference: described({ type: "string" }, notes.reference)
         }
       }),
-      unmet: described(STRINGS, notes.unmet)
+      unmet: described(STRINGS, notes.unmet),
+      hookRejection: {
+        type: "string",
+        description: "The failing output of a commit hook that rejected a commit; empty when no hook rejected one"
+      }
     }
   };
 }
@@ -201,6 +205,11 @@ var PUSHER_SCHEMA = pusherSchema({ reference: "A commit sha, PR URL or path, car
 var list = (items) => items?.length ? items.map((x) => `- ${x}`).join("\n") : "- none";
 var clean = (v) => absent(v) ? "" : (v ?? "").trim();
 var val = (res, key) => clean(fact(res, key));
+var REPAIR_SCHEMA = {
+  type: "object",
+  required: ["changed"],
+  properties: { changed: { ...STRINGS, description: "Paths changed, relative to the worktree root" } }
+};
 
 // src/slopify/lib/input.ts
 function isRecord(v) {

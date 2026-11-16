@@ -31,7 +31,7 @@ How to prove it, one entry per criterion:
 
 ## `RATIONALE.md`
 
-Why, and it only ever grows: append, and never rewrite what is there. It holds the designs considered, each advisor's view and whether it was adopted, what was rejected and why, the rulings, and the risks. An agent reads it when something breaks in production, so name the reasoning a later reader couldn't get from the code.
+Why the spec is what it is now. On each revision, update it to state the reasoning behind the spec as it stands, and remove what the revision made untrue. It holds the designs considered and why the chosen one won, each advisor's view and whether it was adopted, what was rejected and why, the rulings in force, and the open risks. An agent reads it when something breaks in production, so name the reasoning a later reader couldn't get from the code.
 
 ## Working rules
 

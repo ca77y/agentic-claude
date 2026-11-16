@@ -168,6 +168,9 @@ function blocked(workflow, step, needs, extra = {}) {
   return { status: "blocked", workflow, step, needs, rerun: rerunText(workflow, needs), ...extra };
 }
 
+// src/slopify/lib/rules.ts
+var MAX_FIX_ROUNDS = 3;
+
 // src/slopify/lib/schemas.ts
 function described(schema, description) {
   return description === void 0 ? schema : { ...schema, description };
@@ -189,7 +192,7 @@ function libraryReaderSchema(subject2) {
 function pusherSchema(notes = {}) {
   return {
     type: "object",
-    required: ["done", "operations", "unmet"],
+    required: ["done", "operations", "unmet", "hookRejection"],
     properties: {
       done: { type: "boolean" },
       operations: arrayOf({
@@ -201,7 +204,11 @@ function pusherSchema(notes = {}) {
           reference: described({ type: "string" }, notes.reference)
         }
       }),
-      unmet: described(STRINGS, notes.unmet)
+      unmet: described(STRINGS, notes.unmet),
+      hookRejection: {
+        type: "string",
+        description: "The failing output of a commit hook that rejected a commit; empty when no hook rejected one"
+      }
     }
   };
 }
@@ -231,6 +238,11 @@ function show(label, r) {
 ${ev}` : ""}${gaps}`;
 }
 var pushOk = (r) => !!r && r.done && r.unmet.length === 0;
+var REPAIR_SCHEMA = {
+  type: "object",
+  required: ["changed"],
+  properties: { changed: { ...STRINGS, description: "Paths changed, relative to the worktree root" } }
+};
 var opRef = (r, name) => {
   const o = (r?.operations ?? []).find((x) => x.op.toLowerCase() === name);
   return o ? o.reference.trim() : "";
@@ -328,9 +340,6 @@ function inputOf(a, primary, numbers = false) {
   return { [primary]: text };
 }
 var textOf = (v) => typeof v === "string" ? v.trim() : "";
-
-// src/slopify/lib/rules.ts
-var MAX_FIX_ROUNDS = 3;
 
 // src/slopify/lib/spec.ts
 var TASK = {

@@ -7,12 +7,15 @@ import {
   callCoder,
   callDocsWriter,
   callPusher,
+  commitRepairing,
   list,
   need,
   opRef,
   pushOk,
   unique,
+  REPAIR_SCHEMA,
   type Deliver,
+  type HookRepair,
   type PusherResult,
   type Stopped,
 } from "./deliver.ts";
@@ -349,18 +352,26 @@ export function pushed(r: PusherResult | null, what: string): PusherResult {
   throw new Halt("push", what, unmet ?? "pusher didn't return");
 }
 
-async function commit(l: Loop, paths: readonly string[], message: string): Promise<string> {
-  const r = await inOrder(l, () =>
-    callPusher(
-      l.d.pushBrief(
-        `Commit exactly these paths as they stand, staged by explicit path, with a message in the convention docs/FORGE.md declares, saying: ${message}. Name the issue ${l.cardId} in it. Do not push.\n${list(paths)}`,
+async function commit(l: Loop, paths: readonly string[], message: string, repair: HookRepair): Promise<string> {
+  const send = () =>
+    inOrder(l, () =>
+      callPusher(
+        l.d.pushBrief(
+          `Commit exactly these paths as they stand, staged by explicit path, with a message in the convention docs/FORGE.md declares, saying: ${message}. Name the issue ${l.cardId} in it. Do not push.\n${list(paths)}`,
+        ),
+        `commit: ${message}`,
+        "Build",
       ),
-      `commit: ${message}`,
-      "Build",
-    ),
-  );
+    );
+  const r = await commitRepairing(paths, send, repair);
   return opRef(pushed(r, `A commit of ${paths.join(", ")}.`), "commit");
 }
+
+// The coder that wrote a change fixes what a commit hook reported in it.
+const coderRepair =
+  (l: Loop, c: Change): HookRepair =>
+  (brief) =>
+    callCoder(`${changeBrief(l, c)}\n\n${brief}`, `${c.id}: fix the commit hook's report`, "Build", REPAIR_SCHEMA);
 
 // ---- Inner loop -------------------------------------------------------------
 
@@ -411,7 +422,7 @@ Write a new test or change an existing one, so that it states the required behav
   if (t.specProblem) return { paths: [], commit: "", noTest: "", specProblem: t.specProblem };
   if (t.noTest || t.tests.length === 0) return { paths: [], commit: "", noTest: t.noTest, specProblem: "" };
   l.testChanges.push(...t.tests);
-  const sha = await commit(l, t.tests, `add a failing test for ${c.id}`);
+  const sha = await commit(l, t.tests, `add a failing test for ${c.id}`, coderRepair(l, c));
   return { paths: t.tests, commit: sha, noTest: "", specProblem: "" };
 }
 
@@ -503,7 +514,7 @@ async function tryFix(l: Loop, c: Change, cycle: CycleTest, lastFailure: string,
   l.manualActions.push(...fix.manualActions);
   if (fix.specProblem) return specStopped(l, c, fix.specProblem);
   if (fix.testProblem) return { reason: fix.testProblem, rewriteTest: true };
-  if (fix.changed.length > 0) await commit(l, fix.changed, `implement ${c.id}`);
+  if (fix.changed.length > 0) await commit(l, fix.changed, `implement ${c.id}`, coderRepair(l, c));
   l.changedThisRound.push(...fix.changed);
   const failing = await failingChecks(l);
   if (failing) return { reason: failing, rewriteTest: false };
@@ -615,7 +626,16 @@ ${NO_WRITES}`,
     "build",
     "Updated documentation.",
   );
-  if (w.changed.length > 0) await commit(l, w.changed, "update the docs the change affects");
+  if (w.changed.length > 0) {
+    await commit(l, w.changed, "update the docs the change affects", (brief) =>
+      callDocsWriter(
+        `${l.where}\nIn the worktree ${worktreeOf(l)}:\n${brief}\n${NO_WRITES}`,
+        "fix the commit hook's report",
+        "Build",
+        REPAIR_SCHEMA,
+      ),
+    );
+  }
 }
 
 function firstChanges(l: Loop): Change[] {
@@ -640,7 +660,7 @@ async function reviseDocument(l: Loop, doc: LoopDocument, items: readonly OpenIt
   if (items.length === 0) return;
   const changed = await doc.revise(items.map((i) => `${i.problem.location}: ${i.problem.text}`));
   l.changedThisRound.push(...changed);
-  if (changed.length > 0) await commit(l, changed, "revise the findings");
+  if (changed.length > 0) await commit(l, changed, "revise the findings", (brief) => doc.revise([brief]));
 }
 
 async function buildRound(l: Loop): Promise<void> {

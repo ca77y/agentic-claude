@@ -1,6 +1,6 @@
 import { dispatch } from "../lib/dispatch.ts";
 import { STRINGS } from "../lib/family.ts";
-import { callPusher, createDeliver, list, type Stopped } from "../lib/deliver.ts";
+import { REPAIR_SCHEMA, callPusher, commitRepairing, createDeliver, list, type Stopped } from "../lib/deliver.ts";
 import { answersOf, answersRejected, flagOf, inputOf, textOf, type NotStarted } from "../lib/input.ts";
 import { confirmedProblems, type Reported } from "../lib/judge.ts";
 import { must, pushed, reportOf, runLoop, stopOf, type LoopResult, type Problem, type Run } from "../lib/loop.ts";
@@ -282,19 +282,25 @@ async function persist(c: Ctx, evidence: readonly Evidence[], limits: readonly s
     "persist",
     "The integrated wiki pages.",
   );
-  const paths = list([...new Set([...raw.map((r) => r.path), ...integrated.changed])]);
+  const paths = [...new Set([...raw.map((r) => r.path), ...integrated.changed])];
   const doneLine = `done findings ${integrated.pages.join(" ")}`;
-  pushed(
-    await callPusher(
+  const send = () =>
+    callPusher(
       c.d.pushBrief(
-        `Commit exactly these paths as they stand, staged by explicit path, with a message in the convention docs/FORGE.md declares, saying: add the research on this question. Do not push.\n${paths}`,
+        `Commit exactly these paths as they stand, staged by explicit path, with a message in the convention docs/FORGE.md declares, saying: add the research on this question. Do not push.\n${list(paths)}`,
         [doneLine],
       ),
       "commit: add the research",
       "Persist",
-    ),
-    "A commit of the research.",
-  );
+    );
+  const repair = (brief: string) =>
+    scribe(
+      `${c.d.WHERE}\n${BOUNDS}\nAssignment: the paths below, in the worktree ${c.worktree}.\n${brief}`,
+      "fix the commit hook's report",
+      "Persist",
+      REPAIR_SCHEMA,
+    );
+  pushed(await commitRepairing(paths, send, repair), "A commit of the research.");
   return integrated.pages;
 }
 

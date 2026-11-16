@@ -11,7 +11,17 @@ import {
   type LensResult,
   type ScoutResult,
 } from "./family.ts";
-import { NO_WRITES, callPusher, callSpecWriter, list, opRef, pushOk, show, unique } from "./deliver.ts";
+import {
+  NO_WRITES,
+  callPusher,
+  callSpecWriter,
+  commitRepairing,
+  list,
+  opRef,
+  pushOk,
+  show,
+  unique,
+} from "./deliver.ts";
 import { Halt, must, type Run } from "./loop.ts";
 import { MAX_CHALLENGE_ROUNDS, MAX_DESIGN_TRIES } from "./rules.ts";
 import { BUILD, VALIDATE, type Build, type Task, type Validate } from "./spec.ts";
@@ -315,7 +325,7 @@ ${advice}`,
 // ---- Spec -------------------------------------------------------------------
 
 const SPEC_FILES = (o: HowInput): string =>
-  `Spec folder: ${worktree(o)}/${o.specDir}. It holds build.json, validate.json, and RATIONALE.md, which only ever grows.`;
+  `Spec folder: ${worktree(o)}/${o.specDir}. It holds build.json, validate.json, and RATIONALE.md, which says why the spec is what it is now.`;
 
 async function writeSpec(o: HowInput, instruction: string): Promise<SpecResult> {
   phase("Spec");
@@ -338,18 +348,30 @@ Return build and validate exactly as you wrote them. ${NO_WRITES}`,
   );
 }
 
-async function commitSpec(o: HowInput, message: string, phaseTitle: string): Promise<void> {
-  const r = await callPusher(
-    o.d.pushBrief(
-      `Commit the folder ${o.specDir} as it stands, staged by explicit path, with a message in the convention docs/FORGE.md declares, saying: ${message}. Name the issue ${o.cardId} in it. Do not push.`,
-      [`done spec ${o.specDir} story ${o.storyRevision}`],
-    ),
-    "commit the spec",
-    phaseTitle,
-  );
+// The writer fixes what a commit hook reports, so the spec returned is the one committed.
+async function writeAndCommit(
+  o: HowInput,
+  instruction: string,
+  message: string,
+  phaseTitle: string,
+): Promise<SpecResult> {
+  let spec = await writeSpec(o, instruction);
+  const send = () =>
+    callPusher(
+      o.d.pushBrief(
+        `Commit the folder ${o.specDir} as it stands, staged by explicit path, with a message in the convention docs/FORGE.md declares, saying: ${message}. Name the issue ${o.cardId} in it. Do not push.`,
+        [`done spec ${o.specDir} story ${o.storyRevision}`],
+      ),
+      "commit the spec",
+      phaseTitle,
+    );
+  const r = await commitRepairing([o.specDir], send, async (brief) => {
+    spec = await writeSpec(o, brief);
+  });
   if (!pushOk(r) || !opRef(r, "commit")) {
     throw new Halt("how", "A commit of the spec folder.", r?.unmet.join("; ") || "pusher didn't commit it");
   }
+  return spec;
 }
 
 // ---- Challenge --------------------------------------------------------------
@@ -502,19 +524,21 @@ async function challenge(o: HowInput, first: SpecResult): Promise<{ spec: SpecRe
     ];
     if (open.length === 0) return { spec, blockers: [] };
     if (n === MAX_CHALLENGE_ROUNDS) break;
-    spec = await writeSpec(
+    spec = await writeAndCommit(
       o,
-      `Revise the spec for these problems, and append each one and its reason to RATIONALE.md:\n${list(problemLines(open))}`,
+      `Revise the spec for these problems, and update RATIONALE.md with each one and its reason:\n${list(problemLines(open))}`,
+      "revise the spec after its challenge",
+      "Challenge",
     );
-    await commitSpec(o, "revise the spec after its challenge", "Challenge");
   }
   const stillBlocking = problemLines(open.filter((p) => p.severity === "blocker"));
   if (stillBlocking.length === 0) {
-    spec = await writeSpec(
+    spec = await writeAndCommit(
       o,
       `Record these open problems as risks in RATIONALE.md, changing nothing else:\n${list(problemLines(open))}`,
+      "record the spec's open risks",
+      "Challenge",
     );
-    await commitSpec(o, "record the spec's open risks", "Challenge");
   }
   return { spec, blockers: stillBlocking };
 }
@@ -548,7 +572,7 @@ export async function runHow(o: HowInput): Promise<HowResult | HowExhausted> {
   const chosen = await chooseDesign(o, gathered);
   if ("exhausted" in chosen) return chosen;
   const { decided, designs } = chosen;
-  const spec = await writeSpec(
+  const spec = await writeAndCommit(
     o,
     `Write the spec folder from this decision. Copy each criterion's wording from the issue word for word, and file each under a TESTING.md category, or uncategorized when none fits. Record the designs, the advice, and what was rejected in RATIONALE.md.
 
@@ -560,8 +584,9 @@ ${JSON.stringify(designs)}
 
 What the scouts found:
 ${gathered}`,
+    "add the spec",
+    "Spec",
   );
-  await commitSpec(o, "add the spec", "Spec");
   const challenged = await challenge(o, spec);
   return challenged.blockers.length > 0
     ? { exhausted: challenged.blockers }
@@ -573,11 +598,12 @@ export function specReviser(o: HowInput) {
   return async (problems: readonly string[]): Promise<HowResult & { rerun: Task[] }> => {
     phase("Advise");
     const before = await attackFor(o, problems);
-    const spec = await writeSpec(
+    const spec = await writeAndCommit(
       o,
-      `Building showed the spec is wrong. Revise it for these problems, and append them and the advice to RATIONALE.md:\n${list(problems)}\n\nThe advisors' views:\n${list(before)}`,
+      `Building showed the spec is wrong. Revise it for these problems, and update RATIONALE.md with them and the advice:\n${list(problems)}\n\nThe advisors' views:\n${list(before)}`,
+      "revise the spec",
+      "Spec",
     );
-    await commitSpec(o, "revise the spec", "Spec");
     // The writer's task list is the whole spec, so every task whose files or criteria a problem names runs again.
     const named = (t: Task): boolean =>
       problems.some((p) => [t.id, ...t.files, ...t.criteria].some((x) => p.includes(x)));

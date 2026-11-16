@@ -32,7 +32,7 @@ export function libraryReaderSchema(subject: string) {
 export function pusherSchema(notes: { reference?: string; unmet?: string } = {}) {
   return {
     type: "object",
-    required: ["done", "operations", "unmet"],
+    required: ["done", "operations", "unmet", "hookRejection"],
     properties: {
       done: { type: "boolean" },
       operations: arrayOf({
@@ -45,6 +45,10 @@ export function pusherSchema(notes: { reference?: string; unmet?: string } = {})
         },
       }),
       unmet: described(STRINGS, notes.unmet),
+      hookRejection: {
+        type: "string",
+        description: "The failing output of a commit hook that rejected a commit; empty when no hook rejected one",
+      },
     },
   } as const;
 }

@@ -314,6 +314,23 @@ describe("the how phase", () => {
     assert.ok(attacks[1]?.prompt.includes("gone"));
   });
 
+  test("has the spec writer fix what a commit hook reported, then commits again", async () => {
+    let commits = 0;
+    const r = await how(
+      happy({
+        pusher: () => {
+          commits += 1;
+          return commits === 1
+            ? { done: false, unmet: ["commit"], operations: [], hookRejection: "RATIONALE.md:9 MD024" }
+            : OK_PUSH;
+        },
+      }),
+    );
+    assert.ok("build" in r);
+    assert.equal(count("writer-spec"), 2);
+    assert.ok(calls.some((c) => c.type === "writer-spec" && c.prompt.includes("RATIONALE.md:9 MD024")));
+  });
+
   test("sends nothing a passing lens lists to a judge", async () => {
     const noted = { ...LENS_PASS, findings: [{ location: "build.json", problem: "Covered.", blocking: false }] };
     const r = await how(happy({ "lens-scope": () => noted, "lens-consistency": () => noted }));

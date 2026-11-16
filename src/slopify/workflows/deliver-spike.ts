@@ -1,6 +1,17 @@
 import { dispatch } from "../lib/dispatch.ts";
 import { STRINGS, defectsOf, lens, scout, type LensResult } from "../lib/family.ts";
-import { NO_WRITES, callCoder, callPusher, createDeliver, list, opRef, show, type Stopped } from "../lib/deliver.ts";
+import {
+  NO_WRITES,
+  REPAIR_SCHEMA,
+  callCoder,
+  callPusher,
+  commitRepairing,
+  createDeliver,
+  list,
+  opRef,
+  show,
+  type Stopped,
+} from "../lib/deliver.ts";
 import { answersOf, answersRejected, flagOf, inputOf, textOf, type NotStarted } from "../lib/input.ts";
 import { must, pushed, reportOf, runLoop, stopOf, type LoopResult, type Problem, type Run } from "../lib/loop.ts";
 import { MAX_INNER_TRIES } from "../lib/rules.ts";
@@ -323,18 +334,23 @@ ${NO_WRITES}`,
     "findings",
     "The findings document.",
   );
-  const paths = list(w.changed);
-  pushed(
-    await callPusher(
+  const send = () =>
+    callPusher(
       d.pushBrief(
-        `Commit exactly these paths as they stand, staged by explicit path, with a message in the convention docs/FORGE.md declares, saying: add the spike's findings. Do not push.\n${paths}`,
+        `Commit exactly these paths as they stand, staged by explicit path, with a message in the convention docs/FORGE.md declares, saying: add the spike's findings. Do not push.\n${list(w.changed)}`,
         [`done findings ${docRel}`],
       ),
       "commit: add the spike's findings",
       "Findings",
-    ),
-    "A commit of the findings document.",
-  );
+    );
+  const repair = (brief: string) =>
+    dispatch(`${d.WHERE}\nIn the worktree ${d.state.worktree}:\n${brief}\n\n${NO_WRITES}`, {
+      agentType: "slopify:writer-findings",
+      label: "fix the commit hook's report",
+      phase: "Findings",
+      schema: REPAIR_SCHEMA,
+    });
+  pushed(await commitRepairing(w.changed, send, repair), "A commit of the findings document.");
 }
 
 function planNotes(claims: readonly Claim[], measured: Measured, planAssumptions: readonly string[]): string {

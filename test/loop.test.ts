@@ -186,6 +186,44 @@ describe("a delivery with nothing wrong", () => {
   });
 });
 
+describe("a commit a hook rejects", () => {
+  const REJECTED = {
+    done: false,
+    unmet: ["commit: the hook failed"],
+    operations: [],
+    hookRejection: "a.test.ts:1 lint error",
+  };
+
+  test("has the coder fix what the hook reported, then commits again", async () => {
+    let tries = 0;
+    use(
+      happy({
+        pusher: (_t, label, prompt) => {
+          if (!label.startsWith("commit: add a failing test")) return pusher(prompt);
+          tries += 1;
+          return tries === 1 ? REJECTED : OK_PUSH;
+        },
+      }),
+    );
+    const r = await runLoop(inputFor(freshRun()));
+    assert.equal(r.status, "ready");
+    assert.equal(tries, 2);
+    const repair = calls.find((c) => c.label === "t1: fix the commit hook's report");
+    assert.ok(repair?.prompt.includes("a.test.ts:1 lint error"));
+  });
+
+  test("halts when the hook still rejects it after two fixes", async () => {
+    use(
+      happy({
+        pusher: (_t, label, prompt) => (label.startsWith("commit: add a failing test") ? REJECTED : pusher(prompt)),
+      }),
+    );
+    const input = inputFor(freshRun());
+    await assert.rejects(runLoop(input));
+    assert.equal(count("coder", "fix the commit hook's report"), 2);
+  });
+});
+
 describe("the inner loop", () => {
   test("sends a qa failure back to the coder without rewriting the test", async () => {
     let qa = 0;

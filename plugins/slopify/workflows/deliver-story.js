@@ -240,6 +240,116 @@ function blocked(workflow, step, needs, extra = {}) {
   return { status: "blocked", workflow, step, needs, rerun: rerunText(workflow, needs), ...extra };
 }
 
+// src/slopify/lib/rules.ts
+var MAX_FIX_ROUNDS = 3;
+var MAX_INNER_TRIES = 3;
+var MAX_DESIGN_TRIES = 2;
+var MAX_CHALLENGE_ROUNDS = 3;
+var MAX_HOOK_REPAIRS = 2;
+var DELIVERABLE_LABEL = "Deliverable";
+var isBlocking = (r) => r.severity === "blocker" || r.severity === "major";
+function routeOf(r, priorFixes, differentlyUsed, hasSpec) {
+  if (r.verdict === "dismissed") return "dismiss";
+  if (r.verdict === "unverified") return "unverified";
+  if (r.kind === "cannot-verify") return "not-validated";
+  if (r.kind === "decision") return "needs-confirmation";
+  if (r.severity === "pre-existing") return "new-issue";
+  if (!isBlocking(r)) return "suggestion";
+  if (priorFixes > 0) {
+    const recurring = recurrenceRoute(r, differentlyUsed);
+    if (recurring) return recurring;
+  }
+  if (r.kind === "docs") return "writer";
+  if (r.kind === "test") return "correct-test";
+  return r.kind === "spec" && hasSpec ? "revise-spec" : "coder";
+}
+function recurrenceRoute(r, differentlyUsed) {
+  if (r.ruling === "accept-as-debt") return r.severity === "major" ? "known-debt" : "escalate";
+  if (r.ruling === "split-to-issue") return r.severity === "major" ? "split-issue" : "escalate";
+  if (r.ruling === "fix-differently") return differentlyUsed ? "escalate" : null;
+  return "escalate";
+}
+var FIX_ROUTES = ["coder", "correct-test", "writer", "revise-spec"];
+function gate(s) {
+  if (!s.prOpen || !s.reviewClean || s.open > 0) return "fix";
+  return s.held > 0 ? "held" : "clean";
+}
+function noProgress(openByRound) {
+  const [a, b, c] = openByRound.slice(-3);
+  return a !== void 0 && b !== void 0 && c !== void 0 && b >= a && c >= b;
+}
+var allowsReady = (setting) => setting?.trim() === "ready";
+function isDeliverable(labels) {
+  return labels.split(/[,\n]/).map((l) => l.trim()).includes(DELIVERABLE_LABEL);
+}
+var samePath = (a, b) => a === b || a.startsWith(`${b}/`) || b.startsWith(`${a}/`);
+var filesOverlap = (x, y) => x.files.some((a) => y.files.some((b) => samePath(a, b)));
+function waves(tasks) {
+  const out = [];
+  const finished = /* @__PURE__ */ new Set();
+  let left = [...tasks];
+  while (left.length > 0) {
+    const ready = left.filter((t) => t.dependsOn.every((d) => finished.has(d)));
+    const pool = ready.length > 0 ? ready : left;
+    const group = [];
+    for (const t of pool) {
+      if (group.every((g) => !filesOverlap(g, t))) group.push(t);
+    }
+    out.push(group);
+    for (const t of group) finished.add(t.id);
+    left = left.filter((t) => !group.includes(t));
+  }
+  return out;
+}
+var items = (list2) => list2.map((x) => `- ${x.text}${x.detail ? `
+  ${x.detail}` : ""}`).join("\n");
+var cell = (s) => s.replaceAll("|", String.raw`\|`).replaceAll("\n", " ");
+var section = (title, body2) => body2 ? `## ${title}
+
+${body2}` : "";
+function criteriaTable(rows) {
+  if (rows.length === 0) return "";
+  const lines = rows.map(
+    (c) => `| ${cell(c.wording)} | ${cell(c.category)} | ${cell(c.path)} | ${cell(c.result)} | ${cell(c.evidence.join(", "))} |`
+  );
+  return [
+    "| Criterion | Category | Validation path | Result | Evidence |",
+    "| --- | --- | --- | --- | --- |",
+    ...lines
+  ].join("\n");
+}
+function renderBody(b) {
+  return [
+    `Issue: ${b.issue}${b.specDir ? `
+
+Spec: \`${b.specDir}\`` : ""}${b.documents?.length ? `
+
+Findings: ${b.documents.map((p) => `\`${p}\``).join(", ")}` : ""}`,
+    section("Why this is a draft", items(b.draftReasons)),
+    section("Needs confirmation", items(b.needsConfirmation)),
+    section("Manual actions", b.manualActions.map((a) => `- ${a}`).join("\n")),
+    section("Reproduced", items(b.reproduced ?? [])),
+    section("Criteria", criteriaTable(b.criteria)),
+    section("Assumptions", b.assumptions.map((a) => `- ${a}`).join("\n")),
+    section("Unverified findings", items(b.unverified)),
+    section("Not validated", items(b.notValidated)),
+    section("Known debt", items(b.knownDebt)),
+    section("Suggestions", items(b.suggestions)),
+    section("Test changes", b.testChanges.map((t) => `- ${t}`).join("\n"))
+  ].filter(Boolean).join("\n\n");
+}
+var isReproduction = (v) => typeof v === "object" && v !== null && "steps" in v && Array.isArray(v.steps) && "observed" in v;
+function parseReproduction(line) {
+  const at = line.indexOf("{");
+  if (at === -1) return null;
+  try {
+    const v = JSON.parse(line.slice(at));
+    return isReproduction(v) ? v : null;
+  } catch {
+    return null;
+  }
+}
+
 // src/slopify/lib/schemas.ts
 function described(schema, description) {
   return description === void 0 ? schema : { ...schema, description };
@@ -250,7 +360,7 @@ function arrayOf(items2, description) {
 function pusherSchema(notes = {}) {
   return {
     type: "object",
-    required: ["done", "operations", "unmet"],
+    required: ["done", "operations", "unmet", "hookRejection"],
     properties: {
       done: { type: "boolean" },
       operations: arrayOf({
@@ -262,7 +372,11 @@ function pusherSchema(notes = {}) {
           reference: described({ type: "string" }, notes.reference)
         }
       }),
-      unmet: described(STRINGS, notes.unmet)
+      unmet: described(STRINGS, notes.unmet),
+      hookRejection: {
+        type: "string",
+        description: "The failing output of a commit hook that rejected a commit; empty when no hook rejected one"
+      }
     }
   };
 }
@@ -289,6 +403,27 @@ function show(label, r) {
 ${ev}` : ""}${gaps}`;
 }
 var pushOk = (r) => !!r && r.done && r.unmet.length === 0;
+var REPAIR_SCHEMA = {
+  type: "object",
+  required: ["changed"],
+  properties: { changed: { ...STRINGS, description: "Paths changed, relative to the worktree root" } }
+};
+async function commitRepairing(paths, send, repair) {
+  let r = await send();
+  for (let n = 0; n < MAX_HOOK_REPAIRS && r?.hookRejection; n += 1) {
+    await repair(
+      `The project's commit hook rejected the commit of these paths:
+${list(paths)}
+
+It reported:
+${r.hookRejection}
+
+Fix exactly what it reports, changing only these paths, and nothing else about what they say or do.`
+    );
+    r = await send();
+  }
+  return r;
+}
 var opRef = (r, name) => {
   const o = (r?.operations ?? []).find((x) => x.op.toLowerCase() === name);
   return o ? o.reference.trim() : "";
@@ -480,115 +615,6 @@ async function workspace(d, o) {
   }
   if (!state.ledger) state.ledger = `${state.worktree}/.tmp/ledger.md`;
   return null;
-}
-
-// src/slopify/lib/rules.ts
-var MAX_FIX_ROUNDS = 3;
-var MAX_INNER_TRIES = 3;
-var MAX_DESIGN_TRIES = 2;
-var MAX_CHALLENGE_ROUNDS = 3;
-var DELIVERABLE_LABEL = "Deliverable";
-var isBlocking = (r) => r.severity === "blocker" || r.severity === "major";
-function routeOf(r, priorFixes, differentlyUsed, hasSpec) {
-  if (r.verdict === "dismissed") return "dismiss";
-  if (r.verdict === "unverified") return "unverified";
-  if (r.kind === "cannot-verify") return "not-validated";
-  if (r.kind === "decision") return "needs-confirmation";
-  if (r.severity === "pre-existing") return "new-issue";
-  if (!isBlocking(r)) return "suggestion";
-  if (priorFixes > 0) {
-    const recurring = recurrenceRoute(r, differentlyUsed);
-    if (recurring) return recurring;
-  }
-  if (r.kind === "docs") return "writer";
-  if (r.kind === "test") return "correct-test";
-  return r.kind === "spec" && hasSpec ? "revise-spec" : "coder";
-}
-function recurrenceRoute(r, differentlyUsed) {
-  if (r.ruling === "accept-as-debt") return r.severity === "major" ? "known-debt" : "escalate";
-  if (r.ruling === "split-to-issue") return r.severity === "major" ? "split-issue" : "escalate";
-  if (r.ruling === "fix-differently") return differentlyUsed ? "escalate" : null;
-  return "escalate";
-}
-var FIX_ROUTES = ["coder", "correct-test", "writer", "revise-spec"];
-function gate(s) {
-  if (!s.prOpen || !s.reviewClean || s.open > 0) return "fix";
-  return s.held > 0 ? "held" : "clean";
-}
-function noProgress(openByRound) {
-  const [a, b, c] = openByRound.slice(-3);
-  return a !== void 0 && b !== void 0 && c !== void 0 && b >= a && c >= b;
-}
-var allowsReady = (setting) => setting?.trim() === "ready";
-function isDeliverable(labels) {
-  return labels.split(/[,\n]/).map((l) => l.trim()).includes(DELIVERABLE_LABEL);
-}
-var samePath = (a, b) => a === b || a.startsWith(`${b}/`) || b.startsWith(`${a}/`);
-var filesOverlap = (x, y) => x.files.some((a) => y.files.some((b) => samePath(a, b)));
-function waves(tasks) {
-  const out = [];
-  const finished = /* @__PURE__ */ new Set();
-  let left = [...tasks];
-  while (left.length > 0) {
-    const ready = left.filter((t) => t.dependsOn.every((d) => finished.has(d)));
-    const pool = ready.length > 0 ? ready : left;
-    const group = [];
-    for (const t of pool) {
-      if (group.every((g) => !filesOverlap(g, t))) group.push(t);
-    }
-    out.push(group);
-    for (const t of group) finished.add(t.id);
-    left = left.filter((t) => !group.includes(t));
-  }
-  return out;
-}
-var items = (list2) => list2.map((x) => `- ${x.text}${x.detail ? `
-  ${x.detail}` : ""}`).join("\n");
-var cell = (s) => s.replaceAll("|", String.raw`\|`).replaceAll("\n", " ");
-var section = (title, body2) => body2 ? `## ${title}
-
-${body2}` : "";
-function criteriaTable(rows) {
-  if (rows.length === 0) return "";
-  const lines = rows.map(
-    (c) => `| ${cell(c.wording)} | ${cell(c.category)} | ${cell(c.path)} | ${cell(c.result)} | ${cell(c.evidence.join(", "))} |`
-  );
-  return [
-    "| Criterion | Category | Validation path | Result | Evidence |",
-    "| --- | --- | --- | --- | --- |",
-    ...lines
-  ].join("\n");
-}
-function renderBody(b) {
-  return [
-    `Issue: ${b.issue}${b.specDir ? `
-
-Spec: \`${b.specDir}\`` : ""}${b.documents?.length ? `
-
-Findings: ${b.documents.map((p) => `\`${p}\``).join(", ")}` : ""}`,
-    section("Why this is a draft", items(b.draftReasons)),
-    section("Needs confirmation", items(b.needsConfirmation)),
-    section("Manual actions", b.manualActions.map((a) => `- ${a}`).join("\n")),
-    section("Reproduced", items(b.reproduced ?? [])),
-    section("Criteria", criteriaTable(b.criteria)),
-    section("Assumptions", b.assumptions.map((a) => `- ${a}`).join("\n")),
-    section("Unverified findings", items(b.unverified)),
-    section("Not validated", items(b.notValidated)),
-    section("Known debt", items(b.knownDebt)),
-    section("Suggestions", items(b.suggestions)),
-    section("Test changes", b.testChanges.map((t) => `- ${t}`).join("\n"))
-  ].filter(Boolean).join("\n\n");
-}
-var isReproduction = (v) => typeof v === "object" && v !== null && "steps" in v && Array.isArray(v.steps) && "observed" in v;
-function parseReproduction(line) {
-  const at = line.indexOf("{");
-  if (at === -1) return null;
-  try {
-    const v = JSON.parse(line.slice(at));
-    return isReproduction(v) ? v : null;
-  } catch {
-    return null;
-  }
 }
 
 // src/slopify/lib/spec.ts
@@ -860,8 +886,8 @@ function pushed(r, what) {
   if (pushOk(r)) return r;
   throw new Halt("push", what, unmet ?? "pusher didn't return");
 }
-async function commit(l, paths, message) {
-  const r = await inOrder(
+async function commit(l, paths, message, repair) {
+  const send = () => inOrder(
     l,
     () => callPusher(
       l.d.pushBrief(
@@ -872,8 +898,12 @@ ${list(paths)}`
       "Build"
     )
   );
+  const r = await commitRepairing(paths, send, repair);
   return opRef(pushed(r, `A commit of ${paths.join(", ")}.`), "commit");
 }
+var coderRepair = (l, c) => (brief) => callCoder(`${changeBrief(l, c)}
+
+${brief}`, `${c.id}: fix the commit hook's report`, "Build", REPAIR_SCHEMA);
 var answersText = (l) => Object.keys(l.answers).length > 0 ? `The user answered these earlier questions:
 ${JSON.stringify(l.answers)}` : "";
 function changeBrief(l, c) {
@@ -922,7 +952,7 @@ An earlier attempt showed the test has to change: ${reason}` : ""}`,
   if (t.specProblem) return { paths: [], commit: "", noTest: "", specProblem: t.specProblem };
   if (t.noTest || t.tests.length === 0) return { paths: [], commit: "", noTest: t.noTest, specProblem: "" };
   l.testChanges.push(...t.tests);
-  const sha = await commit(l, t.tests, `add a failing test for ${c.id}`);
+  const sha = await commit(l, t.tests, `add a failing test for ${c.id}`, coderRepair(l, c));
   return { paths: t.tests, commit: sha, noTest: "", specProblem: "" };
 }
 function qaBrief(l, c, test) {
@@ -1001,7 +1031,7 @@ async function tryFix(l, c, cycle, lastFailure, attempt) {
   l.manualActions.push(...fix.manualActions);
   if (fix.specProblem) return specStopped(l, c, fix.specProblem);
   if (fix.testProblem) return { reason: fix.testProblem, rewriteTest: true };
-  if (fix.changed.length > 0) await commit(l, fix.changed, `implement ${c.id}`);
+  if (fix.changed.length > 0) await commit(l, fix.changed, `implement ${c.id}`, coderRepair(l, c));
   l.changedThisRound.push(...fix.changed);
   const failing = await failingChecks(l);
   if (failing) return { reason: failing, rewriteTest: false };
@@ -1103,7 +1133,22 @@ ${NO_WRITES}`,
     "build",
     "Updated documentation."
   );
-  if (w.changed.length > 0) await commit(l, w.changed, "update the docs the change affects");
+  if (w.changed.length > 0) {
+    await commit(
+      l,
+      w.changed,
+      "update the docs the change affects",
+      (brief) => callDocsWriter(
+        `${l.where}
+In the worktree ${worktreeOf(l)}:
+${brief}
+${NO_WRITES}`,
+        "fix the commit hook's report",
+        "Build",
+        REPAIR_SCHEMA
+      )
+    );
+  }
 }
 function firstChanges(l) {
   if (!l.small) return (l.build?.tasks ?? []).map((t) => changeOfTask(l, t));
@@ -1130,7 +1175,7 @@ async function reviseDocument(l, doc, items2) {
   if (items2.length === 0) return;
   const changed = await doc.revise(items2.map((i) => `${i.problem.location}: ${i.problem.text}`));
   l.changedThisRound.push(...changed);
-  if (changed.length > 0) await commit(l, changed, "revise the findings");
+  if (changed.length > 0) await commit(l, changed, "revise the findings", (brief) => doc.revise([brief]));
 }
 async function buildRound(l) {
   phase("Build");
@@ -1903,7 +1948,7 @@ ${advice}`,
     "A decision on the designs."
   );
 }
-var SPEC_FILES = (o) => `Spec folder: ${worktree(o)}/${o.specDir}. It holds build.json, validate.json, and RATIONALE.md, which only ever grows.`;
+var SPEC_FILES = (o) => `Spec folder: ${worktree(o)}/${o.specDir}. It holds build.json, validate.json, and RATIONALE.md, which says why the spec is what it is now.`;
 async function writeSpec(o, instruction) {
   phase("Spec");
   return must(
@@ -1924,8 +1969,9 @@ Return build and validate exactly as you wrote them. ${NO_WRITES}`,
     "A spec folder."
   );
 }
-async function commitSpec(o, message, phaseTitle) {
-  const r = await callPusher(
+async function writeAndCommit(o, instruction, message, phaseTitle) {
+  let spec = await writeSpec(o, instruction);
+  const send = () => callPusher(
     o.d.pushBrief(
       `Commit the folder ${o.specDir} as it stands, staged by explicit path, with a message in the convention docs/FORGE.md declares, saying: ${message}. Name the issue ${o.cardId} in it. Do not push.`,
       [`done spec ${o.specDir} story ${o.storyRevision}`]
@@ -1933,9 +1979,13 @@ async function commitSpec(o, message, phaseTitle) {
     "commit the spec",
     phaseTitle
   );
+  const r = await commitRepairing([o.specDir], send, async (brief) => {
+    spec = await writeSpec(o, brief);
+  });
   if (!pushOk(r) || !opRef(r, "commit")) {
     throw new Halt("how", "A commit of the spec folder.", r?.unmet.join("; ") || "pusher didn't commit it");
   }
+  return spec;
 }
 var check = (name, label, brief) => () => dispatch(brief, { agentType: `slopify:${name}`, label, phase: "Challenge", schema: CHECK_SCHEMA });
 var findingsOf = (v) => defectsOf(v).map((f) => ({ location: f.location, problem: f.problem }));
@@ -2061,21 +2111,23 @@ async function challenge(o, first) {
     ];
     if (open.length === 0) return { spec, blockers: [] };
     if (n === MAX_CHALLENGE_ROUNDS) break;
-    spec = await writeSpec(
+    spec = await writeAndCommit(
       o,
-      `Revise the spec for these problems, and append each one and its reason to RATIONALE.md:
-${list(problemLines(open))}`
+      `Revise the spec for these problems, and update RATIONALE.md with each one and its reason:
+${list(problemLines(open))}`,
+      "revise the spec after its challenge",
+      "Challenge"
     );
-    await commitSpec(o, "revise the spec after its challenge", "Challenge");
   }
   const stillBlocking = problemLines(open.filter((p) => p.severity === "blocker"));
   if (stillBlocking.length === 0) {
-    spec = await writeSpec(
+    spec = await writeAndCommit(
       o,
       `Record these open problems as risks in RATIONALE.md, changing nothing else:
-${list(problemLines(open))}`
+${list(problemLines(open))}`,
+      "record the spec's open risks",
+      "Challenge"
     );
-    await commitSpec(o, "record the spec's open risks", "Challenge");
   }
   return { spec, blockers: stillBlocking };
 }
@@ -2097,7 +2149,7 @@ async function runHow(o) {
   const chosen = await chooseDesign(o, gathered);
   if ("exhausted" in chosen) return chosen;
   const { decided, designs } = chosen;
-  const spec = await writeSpec(
+  const spec = await writeAndCommit(
     o,
     `Write the spec folder from this decision. Copy each criterion's wording from the issue word for word, and file each under a TESTING.md category, or uncategorized when none fits. Record the designs, the advice, and what was rejected in RATIONALE.md.
 
@@ -2108,9 +2160,10 @@ The designs:
 ${JSON.stringify(designs)}
 
 What the scouts found:
-${gathered}`
+${gathered}`,
+    "add the spec",
+    "Spec"
   );
-  await commitSpec(o, "add the spec", "Spec");
   const challenged = await challenge(o, spec);
   return challenged.blockers.length > 0 ? { exhausted: challenged.blockers } : { build: challenged.spec.build, validate: challenged.spec.validate };
 }
@@ -2118,15 +2171,16 @@ function specReviser(o) {
   return async (problems) => {
     phase("Advise");
     const before = await attackFor(o, problems);
-    const spec = await writeSpec(
+    const spec = await writeAndCommit(
       o,
-      `Building showed the spec is wrong. Revise it for these problems, and append them and the advice to RATIONALE.md:
+      `Building showed the spec is wrong. Revise it for these problems, and update RATIONALE.md with them and the advice:
 ${list(problems)}
 
 The advisors' views:
-${list(before)}`
+${list(before)}`,
+      "revise the spec",
+      "Spec"
     );
-    await commitSpec(o, "revise the spec", "Spec");
     const named = (t) => problems.some((p) => [t.id, ...t.files, ...t.criteria].some((x) => p.includes(x)));
     const rerun = spec.build.tasks.filter((t) => named(t));
     return { build: spec.build, validate: spec.validate, rerun: rerun.length > 0 ? rerun : spec.build.tasks };

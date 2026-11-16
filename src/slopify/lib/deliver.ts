@@ -1,7 +1,8 @@
 // What every delivery shares: the pusher schema, the dispatchers, and one run's state with the helpers that read and
 // change it.
 import { dispatch } from "./dispatch.ts";
-import { absent, blocked, fact, type Blocked, type Need, type NeedKind, type ScoutResult } from "./family.ts";
+import { STRINGS, absent, blocked, fact, type Blocked, type Need, type NeedKind, type ScoutResult } from "./family.ts";
+import { MAX_HOOK_REPAIRS } from "./rules.ts";
 import { pusherSchema } from "./schemas.ts";
 
 const PUSHER_SCHEMA = pusherSchema({ reference: "A commit sha, PR URL or path, card id, or worktree path" });
@@ -61,6 +62,32 @@ export function show(label: string, r: ScoutResult | null | undefined): string {
 }
 
 export const pushOk = (r: PusherResult | null): r is PusherResult => !!r && r.done && r.unmet.length === 0;
+
+export const REPAIR_SCHEMA = {
+  type: "object",
+  required: ["changed"],
+  properties: { changed: { ...STRINGS, description: "Paths changed, relative to the worktree root" } },
+} as const;
+
+/** Asks a producer to fix what a commit hook reported in the paths it produced; it returns once the fix is made. */
+export type HookRepair = (brief: string) => Promise<unknown>;
+
+// A hook that rejects a commit reports a problem in the produced files, such as a lint error. The producer of those
+// files fixes it, and the same commit is sent again.
+export async function commitRepairing(
+  paths: readonly string[],
+  send: () => Promise<PusherResult | null>,
+  repair: HookRepair,
+): Promise<PusherResult | null> {
+  let r = await send();
+  for (let n = 0; n < MAX_HOOK_REPAIRS && r?.hookRejection; n += 1) {
+    await repair(
+      `The project's commit hook rejected the commit of these paths:\n${list(paths)}\n\nIt reported:\n${r.hookRejection}\n\nFix exactly what it reports, changing only these paths, and nothing else about what they say or do.`,
+    );
+    r = await send();
+  }
+  return r;
+}
 export const opRef = (r: PusherResult | null, name: string): string => {
   const o = (r?.operations ?? []).find((x) => x.op.toLowerCase() === name);
   return o ? o.reference.trim() : "";
