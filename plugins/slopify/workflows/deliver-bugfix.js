@@ -363,8 +363,16 @@ function answerValue(x) {
   const text = String(x);
   return x === null || x === void 0 || typeof x === "string" || typeof x === "number" || typeof x === "boolean" ? x : text;
 }
+var isMap = (v) => isRecord(v) && !Array.isArray(v);
 function answersOf(v) {
-  return isRecord(v) && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, answerValue(x)])) : {};
+  return isMap(v) ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, answerValue(x)])) : {};
+}
+function answersRejected(v) {
+  if (v === void 0 || v === null || isMap(v)) return null;
+  return {
+    status: "not-started",
+    next: 'The answers argument must be a map from a decision id to its answer, such as {"q1": "a"}. Ask the user for the answers as a map, then invoke again.'
+  };
 }
 
 // src/slopify/lib/rules.ts
@@ -1878,6 +1886,8 @@ Observed before the fix: ${r.observed}`,
 async function run() {
   const input = inputOf(args, "story");
   const arg = textOf(input["story"]);
+  const rejected = answersRejected(input["answers"]);
+  if (rejected) return rejected;
   if (!arg) return { status: "not-started", next: "Ask the user for the bug: a Linear issue or a report." };
   const d = createDeliver({
     workflow: WORKFLOW,
