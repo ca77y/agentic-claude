@@ -32,7 +32,10 @@ const VIABLE = { viable: true, chosen: "smallest", grafts: [], rejected: [], rea
 const OK_PUSH = { done: true, unmet: [], operations: [{ op: "commit", reference: "abc" }] };
 
 const isAdvisor = (type: string): boolean => type.startsWith("advisor-");
-const adviceOrAttack = (label: string): Reply => (label.startsWith("attack") ? LENS_PASS : { views: [] });
+const NO_FINDINGS = { findings: [] };
+const adviceOrAttack = (label: string): Reply => (label.startsWith("attack") ? NO_FINDINGS : { views: [] });
+const problem = (severity: string) => ({ location: "a.ts", problem: "gone", severity, reason: "r" });
+const rulings = (...problems: Reply[]): Reply => ({ problems });
 
 const DEFAULTS: Record<string, Script> = {
   designer: () => DESIGN,
@@ -42,13 +45,13 @@ const DEFAULTS: Record<string, Script> = {
   "check-criterion": () => ({ holds: true, location: "c1", problem: "" }),
   "lens-scope": () => LENS_PASS,
   "lens-consistency": () => LENS_PASS,
-  judge: (_t, label) => (label === "decide" ? VIABLE : { verdict: "confirmed", severity: "major", reason: "r" }),
+  judge: (_t, label) => (label === "decide" ? VIABLE : rulings(problem("major"))),
   "library-reader": () => ({ summary: "s", supported: [], gaps: [] }),
 };
 const happy = (over: Partial<Record<string, Script>> = {}): Script => {
   const agents = { ...DEFAULTS, ...over };
   return (type, label, prompt) => {
-    if (isAdvisor(type)) return adviceOrAttack(label);
+    if (isAdvisor(type)) return agents[type]?.(type, label, prompt) ?? adviceOrAttack(label);
     return type.startsWith("scout-") ? SCOUT : (agents[type]?.(type, label, prompt) ?? null);
   };
 };
@@ -213,8 +216,7 @@ describe("the how phase", () => {
     const r = await how(
       happy({
         "check-claim": () => ({ holds: false, location: "a.ts", problem: "gone" }),
-        judge: (_t, label) =>
-          label === "decide" ? VIABLE : { verdict: "confirmed", severity: "blocker", reason: "fatal" },
+        judge: (_t, label) => (label === "decide" ? VIABLE : rulings(problem("blocker"))),
       }),
     );
     assert.ok("exhausted" in r);
@@ -228,15 +230,50 @@ describe("the how phase", () => {
     assert.ok(calls.some((c) => c.type === "writer-spec" && c.prompt.includes("Record these open problems")));
   });
 
-  test("ignores a dismissed problem", async () => {
+  test("ignores a finding the judge doesn't uphold", async () => {
     const r = await how(
       happy({
         "check-claim": () => ({ holds: false, location: "a.ts", problem: "gone" }),
-        judge: (_t, label) => (label === "decide" ? VIABLE : { verdict: "dismissed", severity: "minor", reason: "no" }),
+        judge: (_t, label) => (label === "decide" ? VIABLE : rulings()),
       }),
     );
     assert.ok("build" in r);
     assert.equal(count("writer-spec"), 1);
+  });
+
+  test("rules on every finding of a round in one judge, which sees the advisors' findings", async () => {
+    let attacks = 0;
+    await how(
+      happy({
+        "check-claim": () => ({ holds: false, location: "a.ts", problem: "no such file" }),
+        "check-criterion": () => ({ holds: false, location: "c1", problem: "wrong category" }),
+        "advisor-risk": (_t, label) => {
+          if (!label.startsWith("attack")) return { views: [] };
+          attacks += 1;
+          return attacks === 1 ? { findings: [{ ...problem("major"), problem: "no rollback" }] } : NO_FINDINGS;
+        },
+        judge: (_t, label) => (label === "decide" ? VIABLE : rulings()),
+      }),
+    );
+    const judged = calls.filter((c) => c.type === "judge" && c.label !== "decide").map((c) => c.prompt);
+    assert.equal(judged.length, 2);
+    assert.ok(["no such file", "wrong category", "no rollback"].every((p) => judged[0]?.includes(p)));
+  });
+
+  test("sends an advisor's finding to the writer without a judge", async () => {
+    let attacks = 0;
+    const r = await how(
+      happy({
+        "advisor-risk": (_t, label) => {
+          if (!label.startsWith("attack")) return { views: [] };
+          attacks += 1;
+          return attacks === 1 ? { findings: [problem("major")] } : NO_FINDINGS;
+        },
+      }),
+    );
+    assert.ok("build" in r);
+    assert.equal(count("writer-spec"), 2);
+    assert.equal(calls.filter((c) => c.type === "judge" && c.label !== "decide").length, 0);
   });
 
   test("sends nothing a passing lens lists to a judge", async () => {

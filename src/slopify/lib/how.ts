@@ -14,7 +14,6 @@ import {
 import { NO_WRITES, callPusher, callSpecWriter, list, opRef, pushOk, show, unique } from "./deliver.ts";
 import { Halt, must, type Run } from "./loop.ts";
 import { MAX_CHALLENGE_ROUNDS, MAX_DESIGN_TRIES } from "./rules.ts";
-import { RULING_SCHEMA } from "./schemas.ts";
 import { BUILD, VALIDATE, type Build, type Task, type Validate } from "./spec.ts";
 
 const STANCES = [
@@ -124,7 +123,48 @@ const CHECK_SCHEMA = {
   },
 } as const;
 
+// A spec problem the challenge acts on. Nothing acts on a minor one, so no agent reports or confirms it.
+const SPEC_PROBLEM = {
+  type: "object",
+  required: ["location", "problem", "severity", "reason"],
+  properties: {
+    location: { type: "string", description: "The spec file and item, or path:line" },
+    problem: { type: "string", description: "What is wrong and what would fix it" },
+    severity: {
+      type: "string",
+      enum: ["blocker", "major"],
+      description: "blocker: building this spec can't deliver the issue. major: a real flaw to fix before building",
+    },
+    reason: { type: "string", description: "The evidence it rests on, path:line or source" },
+  },
+} as const;
+
+const ATTACK_SCHEMA = {
+  type: "object",
+  required: ["findings"],
+  properties: {
+    findings: {
+      type: "array",
+      description: "Each blocker or major way the spec fails; empty when there is none",
+      items: SPEC_PROBLEM,
+    },
+  },
+} as const;
+
+const CHALLENGE_RULING_SCHEMA = {
+  type: "object",
+  required: ["problems"],
+  properties: {
+    problems: {
+      type: "array",
+      description: "Each distinct blocker or major problem the reported findings show; empty when none holds",
+      items: SPEC_PROBLEM,
+    },
+  },
+} as const;
+
 type SpecResult = Infer<typeof SPEC_SCHEMA>;
+type RuledSpecProblem = Infer<typeof SPEC_PROBLEM>;
 type Design = Infer<typeof DESIGN_SCHEMA> & { stance: string };
 type Decided = Infer<typeof DECISION_SCHEMA>;
 
@@ -365,7 +405,7 @@ async function runChecks(o: HowInput, spec: SpecResult): Promise<SpecProblem[]> 
   ];
 }
 
-async function runAttack(o: HowInput): Promise<SpecProblem[]> {
+async function runAttack(o: HowInput): Promise<RuledSpecProblem[]> {
   const views = await parallel(
     HOW_ADVISORS.map(
       (name) => () =>
@@ -375,48 +415,43 @@ ${STORY_BLOCK(o)}
 
 ${SPEC_FILES(o)} Read all three files.
 
-Try to break this finished spec from your one angle, reading the code it touches. Report each way it fails, as a finding with its location. Change nothing.`,
+Try to break this finished spec from your one angle, reading the code it touches. Report only what must change before building: a blocker or a major, each with its location and evidence. Leave out anything minor, because nothing acts on it. Change nothing.`,
           {
             agentType: `slopify:${name}`,
             label: "attack the spec",
             phase: "Challenge",
-            schema: LENS_SCHEMA,
+            schema: ATTACK_SCHEMA,
           },
         ),
     ),
   );
-  return views.flatMap((v) => findingsOf(must(v, "how", "An advisor's attack on the spec.")));
+  return views.flatMap((v) => must(v, "how", "An advisor's attack on the spec.").findings);
 }
 
-interface RuledSpecProblem extends SpecProblem {
-  severity: string;
-  reason: string;
-}
-
-async function ruleOn(o: HowInput, problems: readonly SpecProblem[]): Promise<RuledSpecProblem[]> {
-  const rulings = await parallel(
-    problems.map(
-      (p, i) => () =>
-        dispatch(
-          `${o.where}
+// One judge rules on every finding the cheap checks reported in a round, so it reads the spec and the code once and
+// can merge findings that report the same problem. The advisors' findings need no judge.
+async function ruleOn(
+  o: HowInput,
+  reported: readonly SpecProblem[],
+  advised: readonly RuledSpecProblem[],
+): Promise<RuledSpecProblem[]> {
+  if (reported.length === 0) return [];
+  const r = await dispatch(
+    `${o.where}
 ${STORY_BLOCK(o)}
 
 ${SPEC_FILES(o)}
 
-Rule on one problem reported against the spec, checking it against the code. blocker: building this spec can't deliver the issue. major: a real flaw that should be fixed before building. minor: real but low impact.
+Cheap checks reported these findings against the spec. Rule on all of them, checking each against the code, and merge findings that report the same problem. Return each distinct problem that holds as a blocker or a major. Leave out what doesn't hold, what is minor (real but low impact), and what an advisor's finding below already covers.
 
-At ${p.location}:
-${p.problem}`,
-          { agentType: "slopify:judge", label: `rule ${String(i + 1)}`, phase: "Challenge", schema: RULING_SCHEMA },
-        ),
-    ),
+Reported findings:
+${list(reported.map((p) => `${p.location}: ${p.problem}`))}
+
+The advisors' findings, which the spec is revised for already:
+${list(advised.map((p) => `${p.location}: ${p.problem}`))}`,
+    { agentType: "slopify:judge", label: "rule on the findings", phase: "Challenge", schema: CHALLENGE_RULING_SCHEMA },
   );
-  const confirmed: RuledSpecProblem[] = [];
-  for (const [i, p] of problems.entries()) {
-    const r = must(rulings[i], "how", `A ruling on ${p.location}.`);
-    if (r.verdict === "confirmed") confirmed.push({ ...p, severity: r.severity, reason: r.reason });
-  }
-  return confirmed;
+  return must(r, "how", "The rulings on the spec's findings.").problems;
 }
 
 const problemLines = (problems: readonly RuledSpecProblem[]): string[] =>
@@ -442,28 +477,25 @@ async function challenge(o: HowInput, first: SpecResult): Promise<{ spec: SpecRe
   for (let n = 1; n <= MAX_CHALLENGE_ROUNDS; n += 1) {
     phase("Challenge");
     const [checked, attacked] = await parallel([() => runChecks(o, spec), () => runAttack(o)]);
+    const advised = must(attacked, "how", "The advisors' attack on the spec.");
     open = [
       ...unpermitted(spec.build),
-      ...(await ruleOn(o, [
-        ...must(checked, "how", "The spec's checks."),
-        ...must(attacked, "how", "The advisors' attack on the spec."),
-      ])),
+      ...advised,
+      ...(await ruleOn(o, must(checked, "how", "The spec's checks."), advised)),
     ];
-    const toFix = open.filter((p) => p.severity !== "minor");
-    if (toFix.length === 0) return { spec, blockers: [] };
+    if (open.length === 0) return { spec, blockers: [] };
     if (n === MAX_CHALLENGE_ROUNDS) break;
     spec = await writeSpec(
       o,
-      `Revise the spec for these confirmed problems, and append each ruling to RATIONALE.md:\n${list(problemLines(toFix))}`,
+      `Revise the spec for these problems, and append each one and its reason to RATIONALE.md:\n${list(problemLines(open))}`,
     );
     await commitSpec(o, "revise the spec after its challenge", "Challenge");
   }
-  const leftOver = problemLines(open.filter((p) => p.severity !== "minor"));
   const stillBlocking = problemLines(open.filter((p) => p.severity === "blocker"));
-  if (stillBlocking.length === 0 && leftOver.length > 0) {
+  if (stillBlocking.length === 0) {
     spec = await writeSpec(
       o,
-      `Record these open problems as risks in RATIONALE.md, changing nothing else:\n${list(leftOver)}`,
+      `Record these open problems as risks in RATIONALE.md, changing nothing else:\n${list(problemLines(open))}`,
     );
     await commitSpec(o, "record the spec's open risks", "Challenge");
   }

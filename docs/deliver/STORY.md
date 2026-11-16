@@ -31,8 +31,8 @@ A delivery ends in a PR unless one of the halt conditions below holds. Anything 
  │   └── none viable  DECIDE     judge (opus) picks one and grafts the best of the others  ⛔ H3
  │                    SPEC       writer-spec (opus) writes the spec folder → pusher commits it
  │   ▲  ≤3 rounds     CHALLENGE  check-claim × N, check-criterion × N, lens-scope, lens-consistency (haiku)
- │   │                           the 5 advisors, fresh, try to break the spec
- │   └── confirmed →             judge × N (opus) → writer-spec revises                         ⛔ H3
+ │   │                           the 5 advisors, fresh, try to break the spec: blocker or major only
+ │   └── problems →              judge × 1 (opus) rules on the checks' findings → writer-spec revises  ⛔ H3
  ▼
  4 BUILD AND VALIDATE  outer loop: the first build, then ≤3 fix rounds
  │
@@ -90,8 +90,9 @@ The issue says why and what. This stage decides how, and it deserves more time a
    - One `check-claim` per file, symbol, or API claim checks that it is true of the code.
    - One `check-criterion` per criterion checks that its category matches what `TESTING.md` says that category covers, and that the category's path can check it.
    - `lens-scope` checks that the spec adds and drops no scope. `lens-consistency` checks it against the project's rules and documents.
-   - The same five advisors, in fresh dispatches, try to break the finished spec.
-   - One `judge` per problem rules on it, and `writer-spec` revises for each confirmed `blocker` or `major`. The rulings go in `RATIONALE.md`.
+   - The same five advisors, in fresh dispatches, try to break the finished spec. Each reports only a `blocker` or a `major`, with its evidence, because nothing acts on a minor problem. Their findings need no judge.
+   - One `judge` rules on all the checks' and lenses' findings of the round together. It merges findings that report the same problem, leaves out what an advisor already reported, and returns each problem that holds as a `blocker` or a `major`.
+   - `writer-spec` revises for every advisor finding and every problem the judge returns, and appends each one and its reason to `RATIONALE.md`.
 
    A `major` still open after the last round is recorded and the run continues. A `blocker` still open halts the run.
 
