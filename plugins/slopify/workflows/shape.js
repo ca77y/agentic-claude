@@ -410,10 +410,17 @@ function stopOf(d, error) {
 }
 var TEST_SCHEMA = {
   type: "object",
-  required: ["tests", "failingOutput", "noTest", "specProblem", "assumptions", "manualActions"],
+  required: ["tests", "stubs", "failingOutput", "noTest", "specProblem", "assumptions", "manualActions"],
   properties: {
     tests: { ...STRINGS, description: "Test paths written or changed, relative to the worktree root" },
-    failingOutput: { type: "string", description: "The test's failing output on the current code" },
+    stubs: {
+      ...STRINGS,
+      description: "Production paths where you added a stub so the test compiles, relative to the worktree root; empty when none"
+    },
+    failingOutput: {
+      type: "string",
+      description: "The Checks commands' output on the current code, failing only on the new test's assertions"
+    },
     noTest: { type: "string", description: "Why the behavior can't be expressed as a test; empty when it can" },
     specProblem: {
       type: "string",

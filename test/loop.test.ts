@@ -27,6 +27,7 @@ const VALIDATE: Validate = {
 const OK_PUSH = { done: true, unmet: [], operations: [{ op: "commit", reference: "abc" }] };
 const OK_TEST = {
   tests: ["a.test.ts"],
+  stubs: [],
   failingOutput: "red",
   noTest: "",
   specProblem: "",
@@ -184,6 +185,16 @@ describe("a delivery with nothing wrong", () => {
     assert.ok(fix?.prompt.includes("protected"));
     assert.ok(fix?.prompt.includes("a.test.ts"));
   });
+
+  test("commits a test's stubs with it and leaves them unprotected", async () => {
+    const withStub = { ...OK_TEST, stubs: ["src/stub.ts"] };
+    use(happy({ coder: (_t, label) => (label.endsWith(": test") ? withStub : OK_FIX) }));
+    await runLoop(inputFor(freshRun()));
+    const testCommit = calls.find((c) => c.label === "commit: add a failing test for t1");
+    assert.ok(testCommit?.prompt.includes("src/stub.ts"));
+    const fix = calls.find((c) => c.label === "t1: fix");
+    assert.ok(!fix?.prompt.includes("src/stub.ts"));
+  });
 });
 
 describe("a commit a hook rejects", () => {
@@ -212,15 +223,30 @@ describe("a commit a hook rejects", () => {
     assert.ok(repair?.prompt.includes("a.test.ts:1 lint error"));
   });
 
-  test("halts when the hook still rejects it after two fixes", async () => {
+  test("leaves a commit the hook still rejects after two fixes open for the next round", async () => {
+    let rejected = 0;
+    const prompts: string[] = [];
+    const laterTest = { ...OK_TEST, tests: ["b.test.ts"] };
     use(
       happy({
-        pusher: (_t, label, prompt) => (label.startsWith("commit: add a failing test") ? REJECTED : pusher(prompt)),
+        coder: (_t, label) => {
+          if (label === "t1: test") return OK_TEST;
+          return label.endsWith(": test") ? laterTest : OK_FIX;
+        },
+        pusher: (_t, label, prompt) => {
+          if (!label.startsWith("commit:")) return pusher(prompt);
+          prompts.push(prompt);
+          if (!label.startsWith("commit: add a failing test") || rejected >= 3) return OK_PUSH;
+          rejected += 1;
+          return REJECTED;
+        },
       }),
     );
-    const input = inputFor(freshRun());
-    await assert.rejects(runLoop(input));
+    const r = await runLoop(inputFor(freshRun()));
     assert.equal(count("coder", "fix the commit hook's report"), 2);
+    assert.equal(count("qa"), 1);
+    assert.ok(prompts[3]?.includes("a.test.ts"), "the next commit carries the rejected paths");
+    assert.notEqual(r.status, "blocked");
   });
 });
 

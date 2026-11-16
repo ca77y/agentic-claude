@@ -63,10 +63,18 @@ export function stopOf(d: Run, error: unknown): Stopped {
 
 const TEST_SCHEMA = {
   type: "object",
-  required: ["tests", "failingOutput", "noTest", "specProblem", "assumptions", "manualActions"],
+  required: ["tests", "stubs", "failingOutput", "noTest", "specProblem", "assumptions", "manualActions"],
   properties: {
     tests: { ...STRINGS, description: "Test paths written or changed, relative to the worktree root" },
-    failingOutput: { type: "string", description: "The test's failing output on the current code" },
+    stubs: {
+      ...STRINGS,
+      description:
+        "Production paths where you added a stub so the test compiles, relative to the worktree root; empty when none",
+    },
+    failingOutput: {
+      type: "string",
+      description: "The Checks commands' output on the current code, failing only on the new test's assertions",
+    },
     noTest: { type: "string", description: "Why the behavior can't be expressed as a test; empty when it can" },
     specProblem: {
       type: "string",
@@ -317,6 +325,8 @@ interface Loop extends LoopInput {
   testChanges: string[];
   review: ReviewOutcome;
   changedThisRound: string[];
+  /** Paths whose commit the hook still rejected after repairs; the next commit carries them. */
+  uncommitted: string[];
   openByRound: number[];
   commits: Promise<unknown>;
   halted: Halt | null;
@@ -352,19 +362,35 @@ export function pushed(r: PusherResult | null, what: string): PusherResult {
   throw new Halt("push", what, unmet ?? "pusher didn't return");
 }
 
-async function commit(l: Loop, paths: readonly string[], message: string, repair: HookRepair): Promise<string> {
+// A hook rejection its producer couldn't repair is a problem like any other, so it stays open for the next round
+// instead of ending the delivery. Returns the commit, or null when the hook rejected it.
+async function commit(l: Loop, paths: readonly string[], message: string, repair: HookRepair): Promise<string | null> {
+  const all = [...new Set([...l.uncommitted, ...paths])];
   const send = () =>
     inOrder(l, () =>
       callPusher(
         l.d.pushBrief(
-          `Commit exactly these paths as they stand, staged by explicit path, with a message in the convention docs/FORGE.md declares, saying: ${message}. Name the issue ${l.cardId} in it. Do not push.\n${list(paths)}`,
+          `Commit exactly these paths as they stand, staged by explicit path, with a message in the convention docs/FORGE.md declares, saying: ${message}. Name the issue ${l.cardId} in it. Do not push.\n${list(all)}`,
         ),
         `commit: ${message}`,
         "Build",
       ),
     );
-  const r = await commitRepairing(paths, send, repair);
-  return opRef(pushed(r, `A commit of ${paths.join(", ")}.`), "commit");
+  const r = await commitRepairing(all, send, repair);
+  if (r?.hookRejection) {
+    l.uncommitted = all;
+    l.open.push({
+      problem: { source: "the commit hook", location: all.join(", "), text: r.hookRejection },
+      route: "coder",
+      severity: "blocker",
+      fingerprint: `hook|${all.join(",")}`,
+      reason: "The commit hook rejects these paths, so they are not committed.",
+    });
+    return null;
+  }
+  const sha = opRef(pushed(r, `A commit of ${all.join(", ")}.`), "commit");
+  l.uncommitted = l.uncommitted.filter((x) => !all.includes(x));
+  return sha;
 }
 
 // The coder that wrote a change fixes what a commit hook reported in it.
@@ -399,7 +425,8 @@ function changeBrief(l: Loop, c: Change): string {
 
 interface CycleTest {
   paths: string[];
-  commit: string;
+  /** Null when the hook rejected the test's commit. */
+  commit: string | null;
   noTest: string;
   specProblem: string;
 }
@@ -409,7 +436,7 @@ async function writeTest(l: Loop, c: Change, reason: string): Promise<CycleTest>
     await callCoder(
       `${changeBrief(l, c)}
 
-Write a new test or change an existing one, so that it states the required behavior. Change no production code. It must fail on the current code: run it and return the failing output. When the behavior can't be expressed as a test, return noTest with the reason instead.${reason ? `\n\nAn earlier attempt showed the test has to change: ${reason}` : ""}`,
+Write a new test or change an existing one, so that it states the required behavior. It must fail on the current code on its merit: an assertion about the behavior fails, never a compile, type, or import error. When the test names code that doesn't exist yet, add the smallest stub that lets it compile and run, such as a declaration with the right signature that doesn't do the work, and list it in stubs; change no other production code. End by running the Checks commands TESTING.md declares: each must pass except for the new test's failing assertions. Return that output. When the behavior can't be expressed as a test, return noTest with the reason instead.${reason ? `\n\nAn earlier attempt showed the test has to change: ${reason}` : ""}`,
       `${c.id}: test`,
       "Build",
       TEST_SCHEMA,
@@ -422,14 +449,14 @@ Write a new test or change an existing one, so that it states the required behav
   if (t.specProblem) return { paths: [], commit: "", noTest: "", specProblem: t.specProblem };
   if (t.noTest || t.tests.length === 0) return { paths: [], commit: "", noTest: t.noTest, specProblem: "" };
   l.testChanges.push(...t.tests);
-  const sha = await commit(l, t.tests, `add a failing test for ${c.id}`, coderRepair(l, c));
+  const sha = await commit(l, [...t.tests, ...t.stubs], `add a failing test for ${c.id}`, coderRepair(l, c));
   return { paths: t.tests, commit: sha, noTest: "", specProblem: "" };
 }
 
 function qaBrief(l: Loop, c: Change, test: CycleTest): string {
   const history = test.commit
     ? `The test commit is ${test.commit}, and its protected paths are:\n${list(test.paths)}
-Check in a temporary copy that the test fails at that commit and passes at HEAD. Check that nothing after that commit touches a protected path, and that nothing skips, weakens, or excludes the test, for example by loosening a tolerance, regenerating a snapshot, or changing the test config.`
+Check in a temporary copy that the test fails at that commit on one of its assertions, not on a compile, type, or import error, and that it passes at HEAD. Check that nothing after that commit touches a protected path, and that nothing skips, weakens, or excludes the test, for example by loosening a tolerance, regenerating a snapshot, or changing the test config.`
     : `This change has no test, because: ${test.noTest}. Judge that reason.`;
   return `${changeBrief(l, c)}
 
@@ -478,6 +505,7 @@ async function failingChecks(l: Loop): Promise<string> {
   return lines.join("\n");
 }
 
+const DONE: TryResult = { reason: "", rewriteTest: false };
 interface TryResult {
   /** What is still wrong; empty when this try delivered the change. */
   reason: string;
@@ -514,8 +542,9 @@ async function tryFix(l: Loop, c: Change, cycle: CycleTest, lastFailure: string,
   l.manualActions.push(...fix.manualActions);
   if (fix.specProblem) return specStopped(l, c, fix.specProblem);
   if (fix.testProblem) return { reason: fix.testProblem, rewriteTest: true };
-  if (fix.changed.length > 0) await commit(l, fix.changed, `implement ${c.id}`, coderRepair(l, c));
   l.changedThisRound.push(...fix.changed);
+  // A rejected commit is already an open problem, and qa can't judge what isn't committed.
+  if (fix.changed.length > 0 && !(await commit(l, fix.changed, `implement ${c.id}`, coderRepair(l, c)))) return DONE;
   const failing = await failingChecks(l);
   if (failing) return { reason: failing, rewriteTest: false };
   // A small flow's qa runs once, on its first change; a review fix there has only the checks.
@@ -533,6 +562,7 @@ async function runChange(l: Loop, c: Change): Promise<string> {
   for (let attempt = 1; attempt <= MAX_INNER_TRIES; attempt += 1) {
     if (last.rewriteTest) test = await writeTest(l, c, last.reason);
     if (test.specProblem) return specStopped(l, c, test.specProblem).reason;
+    if (test.commit === null) return "";
     last = await tryFix(l, c, test, last.rewriteTest ? "" : last.reason, attempt);
     if (!last.reason) return "";
   }
@@ -1165,6 +1195,7 @@ function freshLoop(input: LoopInput): Loop {
     testChanges: [],
     review: { clean: false, note: "" },
     changedThisRound: [],
+    uncommitted: [],
     openByRound: [],
     commits: Promise.resolve(),
     halted: null,

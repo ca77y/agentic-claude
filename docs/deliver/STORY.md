@@ -213,16 +213,16 @@ The description is rendered from the run state and updated after every round. It
 This is the inner loop. Every code change runs through it, from the first build to each later fix, whichever check found the problem. The tests are fixed before the code, and the code is validated against tests it couldn't touch. It gets at most three tries.
 
 1. **Test.** A `coder` dispatch writes a new test or changes an existing one, so that the test states the required behavior: its task's criteria in the first build, or one problem in a later round.
-   - It changes no production code.
-   - The test must fail on the current code. The dispatch returns the test paths and the failing output.
-   - `pusher` commits the test in a commit of its own. The commit stays local until the push.
+   - The test must fail on the current code on its merit: an assertion fails, never a compile, type, or import error. When it names code that doesn't exist yet, the dispatch adds the smallest stub that lets it compile, and changes no other production code.
+   - It ends by running the `Checks` commands `TESTING.md` declares, which pass except for the new test's assertions, so the commit hook accepts the test. The dispatch returns the test paths, the stubs, and that output.
+   - `pusher` commits the test and its stubs in a commit of their own. Only the test paths are protected, so the fix can replace the stubs. The commit stays local until the push.
    - When the behavior can't be expressed as a test, the dispatch returns `noTest` with a reason instead. An example is a CI setting. `qa` then judges the reason.
 2. **Fix.** A fresh `coder` dispatch makes the test pass.
    - The paths in the test commit are protected, and it changes none of them.
    - If it finds the test wrong, it returns `testProblem` with the reason and stops. The cycle then restarts at step 1 with that reason, which counts as one try.
    - `pusher` commits the fix.
 3. **Validate.** A fresh `qa` checks the change and its history:
-   - The test fails at the test commit and passes at HEAD.
+   - The test fails at the test commit on one of its assertions, not on a compile, type, or import error, and passes at HEAD.
    - Nothing after the test commit touches a protected path. Nothing skips, weakens, or excludes the test, for example by loosening a tolerance, regenerating a snapshot, or changing the test config.
    - The fix delivers the behavior the criterion or problem asks for. It doesn't merely satisfy the test, for example by special-casing the test's input.
    - The change stays within its criterion or problem.
