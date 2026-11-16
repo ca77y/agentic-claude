@@ -54,7 +54,7 @@ updated: 2026-11-15
 > - Docs are mostly undated and were read at current main with no version pin. Inspect eval-logs and promptfoo command-line pages were examined by grep, not end to end; the Inspect EvalSpec section was not read in detail, and lm-eval's evaluator (where git hash is added) was not checked.
 > - No source was found for a static report showing variance or confidence intervals, or a bare-versus-scaffold comparison table. This is absence of retrieval, not evidence of absence; no search for it was run.
 > - Not fetched: SWE-bench sb-cli, Inspect eval-sets, Braintrust or Langfuse, artificialanalysis.ai/agents/coding-agents, arXiv 2505.18286, and the AWS methodology docs and aws-samples `metrics.json` schema. No source defines how to normalise tool-call counts across multi-agent and single runs. No empirical study of caching bias between arms was found.
-> - Kapoor et al. recommend dollar cost; AWS notes self-hosted cost is GPU time and not comparable with metered bills. Not an issue for two arms on one API.
+> - Kapoor et al. recommend dollar cost. Whether self-hosted cost (for example GPU time) is comparable with metered bills is not covered by any retrieved note, including the AWS one; the question does not arise for two arms on one API (inference).
 > - The Claude docs page is undated (mentions v2.1.277).
 
 ## Sources

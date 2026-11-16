@@ -2,7 +2,7 @@
 title: Inspect AI Log Viewer
 type: raw
 summary: Inspect AI (UK AISI) log viewer docs - what the viewer shows per log and sample, and how logs are bundled into a static site.
-tags: [reliability, operations]
+tags: [evaluation, operations]
 aliases: []
 source: https://inspect.aisi.org.uk/log-viewer.html
 accessed: 2026-11-15

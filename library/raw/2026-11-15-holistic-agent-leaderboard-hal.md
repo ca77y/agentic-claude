@@ -2,7 +2,7 @@
 title: Holistic Agent Leaderboard (HAL) abstract
 type: raw
 summary: HAL abstract (arXiv:2510.11977) on a standardized, cost-controlled harness across models, scaffolds, and benchmarks, with log-inspection and reasoning-effort findings.
-tags: [reliability]
+tags: [evaluation, benchmarking]
 aliases: [HAL, Holistic Agent Leaderboard]
 source: https://arxiv.org/abs/2510.11977
 accessed: 2026-11-15

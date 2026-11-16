@@ -2,7 +2,7 @@
 title: A statistical approach to model evaluations (Anthropic)
 type: raw
 summary: Anthropic's recommendations for error bars and paired-difference comparison of two eval arms, with clustered standard errors and resampling
-tags: [reliability]
+tags: [evaluation, statistics]
 aliases: [Anthropic statistical approach to model evals]
 source: https://www.anthropic.com/research/statistical-approach-to-model-evals
 accessed: 2026-11-15

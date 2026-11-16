@@ -2,7 +2,7 @@
 title: Tokenomics for coding agents (AWS)
 type: raw
 summary: AWS Cloud Financial Management post on benchmarking coding-agent cost and quality, with a one-lever-at-a-time comparison design and a measured lighter-vs-heavier harness result.
-tags: [performance]
+tags: [evaluation, benchmarking, performance]
 aliases: [Tokenomics for coding agents, AWS tokenomics]
 source: https://aws.amazon.com/blogs/aws-cloud-financial-management/tokenomics-for-coding-agents-benchmark-cost-and-quality-on-your-own-code/
 accessed: 2026-11-15

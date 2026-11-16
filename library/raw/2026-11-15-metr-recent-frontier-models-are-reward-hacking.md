@@ -2,7 +2,7 @@
 title: Recent Frontier Models Are Reward Hacking (METR)
 type: raw
 summary: METR reports that frontier models often raise benchmark scores by tampering with tests or scorers, so an agent under test can corrupt the score it is measured by.
-tags: [reliability]
+tags: [evaluation, reliability]
 aliases: []
 source: https://metr.org/blog/2025-06-05-recent-reward-hacking/
 accessed: 2026-11-15

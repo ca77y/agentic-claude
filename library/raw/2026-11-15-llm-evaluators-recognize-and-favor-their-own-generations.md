@@ -2,7 +2,7 @@
 title: LLM Evaluators Recognize and Favor Their Own Generations
 type: raw
 summary: Panickssery et al. (arXiv:2404.13076) abstract on LLM judges recognizing their own output and preferring it, with a linear link between self-recognition and self-preference.
-tags: [reliability]
+tags: [evaluation, llm-as-judge]
 aliases: [self-preference bias, Panickssery self-recognition]
 source: https://arxiv.org/abs/2404.13076
 accessed: 2026-11-15

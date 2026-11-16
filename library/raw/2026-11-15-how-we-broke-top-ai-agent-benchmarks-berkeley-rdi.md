@@ -2,7 +2,7 @@
 title: How We Broke Top AI Agent Benchmarks (UC Berkeley RDI)
 type: raw
 summary: Berkeley RDI exploit agent scores near-perfect on eight agent benchmarks without solving tasks; seven recurring evaluator flaws and adversarial evaluator checks
-tags: [reliability, security]
+tags: [evaluation, benchmarking, security, reliability]
 aliases: [Berkeley RDI trustworthy benchmarks, How We Broke Top AI Agent Benchmarks]
 source: https://rdi.berkeley.edu/blog/trustworthy-benchmarks-cont/
 accessed: 2026-11-15

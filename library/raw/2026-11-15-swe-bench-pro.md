@@ -2,7 +2,7 @@
 title: SWE-Bench Pro (arXiv:2509.16941)
 type: raw
 summary: Contamination-resistant coding benchmark of 1,865 long-horizon tasks split into public, held-out and commercial sets
-tags: []
+tags: [evaluation, benchmarking]
 aliases: [SWE-Bench Pro, Deng et al. 2025]
 source: https://arxiv.org/abs/2509.16941
 accessed: 2026-11-15

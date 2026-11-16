@@ -2,7 +2,7 @@
 title: Quantifying infrastructure noise in agentic coding evals (Anthropic)
 type: raw
 summary: Anthropic measures how eval resource configuration shifts agentic coding scores by several points, enough to swamp small differences between arms.
-tags: [reliability]
+tags: [evaluation, benchmarking, reliability]
 aliases: []
 source: https://www.anthropic.com/research/infrastructure-noise
 accessed: 2026-11-15

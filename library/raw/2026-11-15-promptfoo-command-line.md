@@ -2,7 +2,7 @@
 title: promptfoo Command Line
 type: raw
 summary: How promptfoo identifies, repeats, resumes and retries eval runs, and how its response cache affects repeat independence
-tags: [reliability]
+tags: [evaluation, operations]
 aliases: []
 source: https://www.promptfoo.dev/docs/usage/command-line/
 accessed: 2026-11-15

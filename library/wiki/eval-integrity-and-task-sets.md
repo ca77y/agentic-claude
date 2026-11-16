@@ -1,7 +1,7 @@
 ---
 title: Eval integrity and task sets
 type: wiki
-summary: Evidence on building a small custom task set and on failure modes that corrupt agent evals: contamination, flawed tests, grader leakage, reward hacking, and overfitting.
+summary: "Evidence on building a small custom task set and on failure modes that corrupt agent evals: contamination, flawed tests, grader leakage, reward hacking, and overfitting."
 status: active
 confidence: medium
 tags: [evaluation, benchmarking, reliability]
@@ -51,7 +51,7 @@ updated: 2026-11-15
 
 > [!warning]
 > - Not fetched: Berkeley RDI paper arXiv:2605.12673, ImpossibleBench arXiv:2510.20270, GDPval paper arXiv:2510.04374, LiveCodeBench. The 276-task commercial-set figure for SWE-Bench Pro came only from a search snippet and is not used here.
-> - Single-source figures: Terminal-Bench resource experiment (Anthropic), Berkeley exploit scores (Berkeley), 59.4% audit (OpenAI). OpenAI's contamination probe used GPT-5 and excluded reasoning models. arXiv:2611.13541 is a single-version preprint. Search results from devtake.dev, thoughtworks, morphllm and others were not fetched.
+> - Single-source figures: Terminal-Bench resource experiment (Anthropic), Berkeley exploit scores (Berkeley), 59.4% audit (OpenAI). OpenAI's contamination probe was an automated red-team in which GPT-5 ran 15 turns of prompt and prefill variation [[raw/2026-11-15-openai-why-we-no-longer-evaluate-swe-bench-verified#^e1]]; the raw note says nothing about reasoning models being excluded. arXiv:2611.13541 is a single-version preprint. Search results from devtake.dev, thoughtworks, morphllm and others were not fetched.
 > - "Comparing on tasks the workflow was tuned on" and "reporting only best runs" have almost no direct post-mortems; they rest on Kapoor et al. (2024-07) and inference.
 
 ## Sources

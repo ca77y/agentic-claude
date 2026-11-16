@@ -2,7 +2,7 @@
 title: "Agent Evaluation Reliability: More Tasks Won't (Always) Fix An Agent Leaderboard"
 type: raw
 summary: arXiv abstract by Hardy et al. reporting that fixed model-scaffold systems rank far more reliably than underlying models, and that more similar tasks cannot fix scaffold-coverage uncertainty.
-tags: [reliability]
+tags: [evaluation, benchmarking, statistics, reliability]
 aliases: [arXiv:2610.00651]
 source: https://arxiv.org/abs/2610.00651
 accessed: 2026-11-15

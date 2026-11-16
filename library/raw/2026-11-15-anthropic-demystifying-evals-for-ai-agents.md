@@ -2,7 +2,7 @@
 title: Demystifying evals for AI agents (Anthropic Engineering)
 type: raw
 summary: Anthropic engineering guidance on agent eval design, task count, task quality, saturation, trial isolation, and pass@k versus pass^k.
-tags: [reliability]
+tags: [evaluation, benchmarking, reliability]
 aliases: []
 source: https://www.anthropic.com/research/demystifying-evals-for-ai-agents
 accessed: 2026-11-15

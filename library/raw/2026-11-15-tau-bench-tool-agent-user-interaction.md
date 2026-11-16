@@ -2,7 +2,7 @@
 title: "tau-bench: A Benchmark for Tool-Agent-User Interaction in Real-World Domains"
 type: raw
 summary: tau-bench (Yao et al., arXiv 2406.12045) defines pass^k, the all-k-trials-succeed reliability metric with unbiased estimators from n trials, and reports run-to-run inconsistency of a gpt-4o-era agent.
-tags: [reliability]
+tags: [evaluation, benchmarking]
 aliases: [tau-bench, τ-bench, 2406.12045]
 source: https://arxiv.org/html/2406.12045v1
 accessed: 2026-11-15

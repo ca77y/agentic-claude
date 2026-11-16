@@ -2,7 +2,7 @@
 title: lm-evaluation-harness evaluation_tracker.py
 type: raw
 summary: How EleutherAI's lm-evaluation-harness names and lays out result files and what reproducibility metadata it records in the results JSON
-tags: []
+tags: [evaluation, operations]
 aliases: [lm-eval evaluation tracker, EvaluationTracker]
 source: https://raw.githubusercontent.com/EleutherAI/lm-evaluation-harness/main/lm_eval/loggers/evaluation_tracker.py
 accessed: 2026-11-15

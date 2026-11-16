@@ -2,7 +2,7 @@
 title: OpenAI GDPval, measuring model performance on real-world tasks
 type: raw
 summary: OpenAI's description of how GDPval, an expert-written set of document-producing tasks, was built and graded
-tags: []
+tags: [evaluation, benchmarking]
 aliases: [GDPval]
 source: https://openai.com/index/gdpval/
 accessed: 2026-11-15

@@ -7,7 +7,7 @@ tags:
 aliases:
   - Library Index
 created: 2026-11-15
-updated: 2026-11-15
+updated: 2026-11-16
 ---
 
 # Library Index
@@ -43,6 +43,15 @@ One line per page: `- [[path|title]] — summary (updated YYYY-MM-DD)`.
 - [[library/wiki/eval-integrity-and-task-sets|Eval integrity and task sets]] — Evidence on building a small custom task set and on failure modes that corrupt agent evals: contamination, flawed tests, grader leakage, reward hacking, and overfitting. (updated 2026-11-15)
 - [[library/wiki/eval-statistics-for-small-agent-comparisons|Eval statistics for small agent comparisons]] — Evidence on task counts, repeats, paired comparison, and reporting statistics when comparing two eval arms on a small task set. (updated 2026-11-15)
 - [[library/wiki/llm-judge-bias-and-rubric-scoring|LLM judge bias and rubric scoring]] — Evidence on position, length, and self-preference bias in LLM judges, and on per-requirement and reference-guided judging, for scoring non-test outputs. (updated 2026-11-15)
+
+### Topic maps
+
+- [[library/wiki/topic-evaluation|Evaluation topic map]] — Map of library pages tagged evaluation (36 pages at creation). (updated 2026-11-16)
+- [[library/wiki/topic-benchmarking|Benchmarking topic map]] — Map of library pages tagged benchmarking (18 pages at creation). (updated 2026-11-16)
+- [[library/wiki/topic-llm-as-judge|LLM as judge topic map]] — Map of library pages tagged llm-as-judge (7 pages at creation). (updated 2026-11-16)
+- [[library/wiki/topic-statistics|Statistics topic map]] — Map of library pages tagged statistics (6 pages at creation). (updated 2026-11-16)
+- [[library/wiki/topic-reliability|Reliability topic map]] — Map of library pages tagged reliability (13 pages at creation). (updated 2026-11-16)
+- [[library/wiki/topic-operations|Operations topic map]] — Map of library pages tagged operations (7 pages at creation). (updated 2026-11-16)
 
 ### Raw notes
 

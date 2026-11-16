@@ -2,7 +2,7 @@
 title: Demystifying evals for AI agents
 type: raw
 summary: Anthropic Engineering guidance on agent evals - harness plus model, trial isolation, grader choice, sample size, pass@k, and harness bugs as a confound.
-tags: [reliability]
+tags: [evaluation, benchmarking, reliability]
 aliases: [Anthropic demystifying evals]
 source: https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents
 accessed: 2026-11-15

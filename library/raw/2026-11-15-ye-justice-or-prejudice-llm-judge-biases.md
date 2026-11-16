@@ -2,7 +2,7 @@
 title: Justice or Prejudice? Quantifying Biases in LLM-as-a-Judge
 type: raw
 summary: Ye et al. propose a taxonomy of 12 LLM-judge biases and the CALM attack-and-detect framework; abstract-level record only
-tags: []
+tags: [evaluation, llm-as-judge]
 aliases: [CALM, Justice or Prejudice]
 source: https://arxiv.org/abs/2410.02736
 accessed: 2026-11-15

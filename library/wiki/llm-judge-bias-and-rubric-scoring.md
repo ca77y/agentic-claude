@@ -39,7 +39,7 @@ updated: 2026-11-15
 
 > [!warning]
 > - Only abstracts were read for Panickssery, Shi, Dubois, Zhuge, and Ye; their effect sizes were not retrieved. Zheng et al. was read from the saved HTML by grep (tables 2-5 and the self-enhancement and swapping passages), not end to end.
-> - No source covers rubric design (analytic versus holistic, granularity, scales), a blind pairwise protocol in agent or workflow settings (hiding which arm produced which output), or mixing deterministic checks with a judge. Leads not searched: Anthropic eval guidance, G-Eval, Prometheus.
+> - No source covers rubric design in depth (analytic versus holistic, granularity, scales) or a blind pairwise protocol in agent or workflow settings (hiding which arm produced which output). Anthropic's eval guidance was read and gives only short grader advice (calibrate against humans, an "Unknown" way out, one isolated judge per rubric dimension; [[raw/2026-11-15-anthropic-demystifying-evals-for-ai-agents#^e8]]). It also prefers deterministic graders for coding and LLM rubrics for subjective output, and describes grader mixes for research agents and state checks plus a rubric for tau-bench ([[raw/2026-11-15-demystifying-evals-for-ai-agents#^e4]], [[raw/2026-11-15-demystifying-evals-for-ai-agents#^e6]]). That is indirect, descriptive evidence on mixing deterministic checks with a judge, with no protocol or measurement. Leads not searched: G-Eval, Prometheus.
 > - No source scores specs, research, or review documents specifically. Every key source is from 2023-2024 and near or past the 18-month bar.
 > - Evidence bar (two independent sources) is met for position bias and length bias only.
 

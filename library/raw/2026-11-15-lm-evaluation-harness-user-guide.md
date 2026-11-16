@@ -2,7 +2,7 @@
 title: lm-evaluation-harness User Guide (interface.md)
 type: raw
 summary: How lm-evaluation-harness exposes seeds, config files and a testing-only sample limit on its command line
-tags: [reliability]
+tags: [evaluation, operations]
 aliases: []
 source: https://raw.githubusercontent.com/EleutherAI/lm-evaluation-harness/main/docs/interface.md
 accessed: 2026-11-15

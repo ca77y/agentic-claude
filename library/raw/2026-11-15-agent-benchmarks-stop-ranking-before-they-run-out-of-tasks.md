@@ -2,7 +2,7 @@
 title: Agent Benchmarks Stop Ranking Before They Run Out of Tasks
 type: raw
 summary: Preprint on the statistical power of agent benchmarks - SWE-bench Verified's 500 tasks resolve about 6 points, neighbouring agents are not separable, and graded credit beats a higher bar.
-tags: [reliability]
+tags: [evaluation, benchmarking, statistics]
 aliases: [Dong Zhan Hu agent benchmarks ranking]
 source: https://arxiv.org/abs/2611.13541
 accessed: 2026-11-15

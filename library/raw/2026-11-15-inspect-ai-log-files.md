@@ -2,7 +2,7 @@
 title: Inspect AI Log Files
 type: raw
 summary: How Inspect AI (UK AISI) names, retains, and structures eval log files, with status, results, and per-sample detail in one log
-tags: []
+tags: [evaluation, operations]
 aliases: [Inspect eval logs, inspect.aisi.org.uk eval-logs]
 source: https://inspect.aisi.org.uk/eval-logs.html
 accessed: 2026-11-15

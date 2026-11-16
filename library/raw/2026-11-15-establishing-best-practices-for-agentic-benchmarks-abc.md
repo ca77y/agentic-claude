@@ -2,7 +2,7 @@
 title: Establishing Best Practices for Building Rigorous Agentic Benchmarks (ABC)
 type: raw
 summary: Paper and checklist (ABC) showing ten popular agent benchmarks have validity flaws that mis-estimate agent performance by up to 100% in relative terms, with mitigations such as trivial-agent baselines and oracle solvers
-tags: [reliability]
+tags: [evaluation, benchmarking, reliability]
 aliases: [Agentic Benchmark Checklist, ABC, Zhu et al. 2025, arXiv 2507.02825]
 source: https://arxiv.org/html/2507.02825
 accessed: 2026-11-15

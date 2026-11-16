@@ -2,7 +2,7 @@
 title: Length-Controlled AlpacaEval (Dubois et al., 2024)
 type: raw
 summary: Dubois et al. remove LLM-judge length bias with a GLM fit, raising AlpacaEval's Spearman correlation with Chatbot Arena from 0.94 to 0.98.
-tags: [reliability]
+tags: [evaluation, llm-as-judge, statistics]
 aliases: [Length-Controlled AlpacaEval, AlpacaEval LC]
 source: https://arxiv.org/abs/2404.04475
 accessed: 2026-11-15

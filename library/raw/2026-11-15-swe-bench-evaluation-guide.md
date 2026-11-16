@@ -2,7 +2,7 @@
 title: SWE-bench Evaluation Guide
 type: raw
 summary: How SWE-bench lays out run output, caches results by run_id, separates errors from failures, and pins reproducibility
-tags: [reliability]
+tags: [evaluation, benchmarking, operations]
 aliases: []
 source: https://github.com/SWE-bench/SWE-bench/blob/main/docs/guides/evaluation.md
 accessed: 2026-11-15

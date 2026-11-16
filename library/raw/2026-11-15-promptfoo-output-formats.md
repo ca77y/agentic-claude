@@ -2,7 +2,7 @@
 title: promptfoo Output Formats
 type: raw
 summary: promptfoo can write a standalone self-contained HTML report or JSON, CSV, YAML, JUnit output that embeds config, prompts, outputs, per-assertion results and cost stats.
-tags: [reliability]
+tags: [evaluation, operations]
 aliases: []
 source: https://www.promptfoo.dev/docs/configuration/outputs/
 accessed: 2026-11-15

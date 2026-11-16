@@ -2,7 +2,7 @@
 title: AI Agents That Matter (Kapoor et al.)
 type: raw
 summary: Paper arguing agent evaluations must report accuracy and dollar cost together, and store token counts so cost can be recomputed at current prices
-tags: [performance]
+tags: [evaluation, benchmarking, performance]
 aliases: [Kapoor et al. 2024, arXiv 2407.01502]
 source: https://arxiv.org/html/2407.01502v1
 accessed: 2026-11-15

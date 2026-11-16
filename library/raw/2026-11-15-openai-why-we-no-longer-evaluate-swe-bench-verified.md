@@ -2,7 +2,7 @@
 title: Why SWE-bench Verified no longer measures frontier coding capabilities (OpenAI)
 type: raw
 summary: OpenAI's account of contamination and flawed tests in SWE-bench Verified, and why it stopped reporting the benchmark.
-tags: [reliability]
+tags: [evaluation, benchmarking, reliability]
 aliases: [Why we no longer evaluate SWE-bench Verified]
 source: https://openai.com/index/why-we-no-longer-evaluate-swe-bench-verified/
 accessed: 2026-11-15

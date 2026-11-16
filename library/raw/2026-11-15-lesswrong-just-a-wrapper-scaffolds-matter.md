@@ -2,7 +2,7 @@
 title: Just a Wrapper? How Much Do Scaffolds Matter?
 type: raw
 summary: Gundlach et al. (2026) analysis of HAL data finding that scaffold effects are large and model-dependent, with guidance on fixing versus varying the scaffold.
-tags: [reliability]
+tags: [evaluation, benchmarking]
 aliases: []
 source: https://www.lesswrong.com/posts/jXLi3dhSpSMd7B6z8/just-a-wrapper-how-much-do-scaffolds-matter-1
 accessed: 2026-11-15
