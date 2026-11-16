@@ -364,17 +364,24 @@ const check = (name: string, label: string, brief: string) => () =>
 const findingsOf = (v: LensResult): SpecProblem[] =>
   defectsOf(v).map((f) => ({ location: f.location, problem: f.problem }));
 
-async function runChecks(o: HowInput, spec: SpecResult): Promise<SpecProblem[]> {
+// The claims and criteria that held in an earlier round. The code doesn't change during the challenge, so one that held
+// and kept its wording holds still and isn't checked again.
+const claimKey = (claim: string): string => `claim ${claim}`;
+const criterionKey = (c: SpecResult["validate"]["criteria"][number]): string => `criterion ${JSON.stringify(c)}`;
+
+async function runChecks(o: HowInput, spec: SpecResult, held: Set<string>): Promise<SpecProblem[]> {
   const specText = JSON.stringify({ build: spec.build, validate: spec.validate });
+  const claims = spec.claims.filter((c) => !held.has(claimKey(c)));
+  const criteria = spec.validate.criteria.filter((c) => !held.has(criterionKey(c)));
   const results = await parallel([
-    ...spec.claims.map((claim, i) =>
+    ...claims.map((claim, i) =>
       check(
         "check-claim",
         `claim ${String(i + 1)}`,
         `${o.where}\nIn the worktree ${worktree(o)}, check that this claim is true of the code: ${claim}`,
       ),
     ),
-    ...spec.validate.criteria.map((c) =>
+    ...criteria.map((c) =>
       check(
         "check-criterion",
         `criterion ${c.id}`,
@@ -396,16 +403,24 @@ async function runChecks(o: HowInput, spec: SpecResult): Promise<SpecProblem[]> 
         { phase: "Challenge" },
       ),
   ]);
+  const checked = results.map((r) => must(r, "how", "A check on the spec."));
+  const keys = [...claims.map((c) => claimKey(c)), ...criteria.map((c) => criterionKey(c))];
+  for (const [i, r] of checked.entries()) if (r.holds) held.add(keys[i] ?? "");
   return [
-    ...results
-      .map((r) => must(r, "how", "A check on the spec."))
-      .filter((r) => !r.holds)
-      .map((r) => ({ location: r.location, problem: r.problem })),
+    ...checked.filter((r) => !r.holds).map((r) => ({ location: r.location, problem: r.problem })),
     ...lenses.flatMap((v) => findingsOf(must(v, "how", "A lens on the spec."))),
   ];
 }
 
-async function runAttack(o: HowInput): Promise<RuledSpecProblem[]> {
+const FULL_ATTACK =
+  "Try to break this finished spec from your one angle, reading the code it touches. Report only what must change before building: a blocker or a major, each with its location and evidence.";
+
+// After a revision, the advisors check the revision rather than attack the whole spec again.
+const revisionCheck = (revisedFor: readonly RuledSpecProblem[]): string =>
+  `The spec was revised for these problems:\n${list(problemLines(revisedFor))}\n\nFrom your one angle, reading the code it touches, report each of them the revision didn't fix, and each blocker or major the revision itself introduced, each with its location and evidence. Don't attack again what the revision left unchanged.`;
+
+async function runAttack(o: HowInput, revisedFor: readonly RuledSpecProblem[]): Promise<RuledSpecProblem[]> {
+  const ask = revisedFor.length > 0 ? revisionCheck(revisedFor) : FULL_ATTACK;
   const views = await parallel(
     HOW_ADVISORS.map(
       (name) => () =>
@@ -415,10 +430,10 @@ ${STORY_BLOCK(o)}
 
 ${SPEC_FILES(o)} Read all three files.
 
-Try to break this finished spec from your one angle, reading the code it touches. Report only what must change before building: a blocker or a major, each with its location and evidence. Leave out anything minor, because nothing acts on it. Change nothing.`,
+${ask} Leave out anything minor, because nothing acts on it. Change nothing.`,
           {
             agentType: `slopify:${name}`,
-            label: "attack the spec",
+            label: revisedFor.length > 0 ? "check the revision" : "attack the spec",
             phase: "Challenge",
             schema: ATTACK_SCHEMA,
           },
@@ -474,9 +489,11 @@ function unpermitted(build: Build): RuledSpecProblem[] {
 async function challenge(o: HowInput, first: SpecResult): Promise<{ spec: SpecResult; blockers: string[] }> {
   let spec = first;
   let open: RuledSpecProblem[] = [];
+  const held = new Set<string>();
   for (let n = 1; n <= MAX_CHALLENGE_ROUNDS; n += 1) {
     phase("Challenge");
-    const [checked, attacked] = await parallel([() => runChecks(o, spec), () => runAttack(o)]);
+    const revisedFor = open;
+    const [checked, attacked] = await parallel([() => runChecks(o, spec, held), () => runAttack(o, revisedFor)]);
     const advised = must(attacked, "how", "The advisors' attack on the spec.");
     open = [
       ...unpermitted(spec.build),

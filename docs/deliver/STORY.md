@@ -32,6 +32,7 @@ A delivery ends in a PR unless one of the halt conditions below holds. Anything 
  │                    SPEC       writer-spec (opus) writes the spec folder → pusher commits it
  │   ▲  ≤3 rounds     CHALLENGE  check-claim × N, check-criterion × N, lens-scope, lens-consistency (haiku)
  │   │                           the 5 advisors, fresh, try to break the spec: blocker or major only
+ │   │                           later rounds: only failed or changed checks; advisors check the revision
  │   └── problems →              judge × 1 (opus) rules on the checks' findings → writer-spec revises  ⛔ H3
  ▼
  4 BUILD AND VALIDATE  outer loop: the first build, then ≤3 fix rounds
@@ -93,6 +94,7 @@ The issue says why and what. This stage decides how, and it deserves more time a
    - The same five advisors, in fresh dispatches, try to break the finished spec. Each reports only a `blocker` or a `major`, with its evidence, because nothing acts on a minor problem. Their findings need no judge.
    - One `judge` rules on all the checks' and lenses' findings of the round together. It merges findings that report the same problem, leaves out what an advisor already reported, and returns each problem that holds as a `blocker` or a `major`.
    - `writer-spec` revises for every advisor finding and every problem the judge returns, and appends each one and its reason to `RATIONALE.md`.
+   - After a revision, the next round checks the revision. The code doesn't change during the challenge, so a claim or criterion that held and kept its wording isn't checked again. The advisors report each problem the revision didn't fix and each `blocker` or `major` it introduced, rather than attacking the whole spec again.
 
    A `major` still open after the last round is recorded and the run continues. A `blocker` still open halts the run.
 

@@ -33,7 +33,8 @@ const OK_PUSH = { done: true, unmet: [], operations: [{ op: "commit", reference:
 
 const isAdvisor = (type: string): boolean => type.startsWith("advisor-");
 const NO_FINDINGS = { findings: [] };
-const adviceOrAttack = (label: string): Reply => (label.startsWith("attack") ? NO_FINDINGS : { views: [] });
+const isAttack = (label: string): boolean => label === "attack the spec" || label === "check the revision";
+const adviceOrAttack = (label: string): Reply => (isAttack(label) ? NO_FINDINGS : { views: [] });
 const problem = (severity: string) => ({ location: "a.ts", problem: "gone", severity, reason: "r" });
 const rulings = (...problems: Reply[]): Reply => ({ problems });
 
@@ -248,7 +249,7 @@ describe("the how phase", () => {
         "check-claim": () => ({ holds: false, location: "a.ts", problem: "no such file" }),
         "check-criterion": () => ({ holds: false, location: "c1", problem: "wrong category" }),
         "advisor-risk": (_t, label) => {
-          if (!label.startsWith("attack")) return { views: [] };
+          if (!isAttack(label)) return { views: [] };
           attacks += 1;
           return attacks === 1 ? { findings: [{ ...problem("major"), problem: "no rollback" }] } : NO_FINDINGS;
         },
@@ -265,7 +266,7 @@ describe("the how phase", () => {
     const r = await how(
       happy({
         "advisor-risk": (_t, label) => {
-          if (!label.startsWith("attack")) return { views: [] };
+          if (!isAttack(label)) return { views: [] };
           attacks += 1;
           return attacks === 1 ? { findings: [problem("major")] } : NO_FINDINGS;
         },
@@ -274,6 +275,43 @@ describe("the how phase", () => {
     assert.ok("build" in r);
     assert.equal(count("writer-spec"), 2);
     assert.equal(calls.filter((c) => c.type === "judge" && c.label !== "decide").length, 0);
+  });
+
+  test("after a revision, checks again only what failed or changed", async () => {
+    let criteria = 0;
+    await how(
+      happy({
+        "check-criterion": () => {
+          criteria += 1;
+          return criteria === 1
+            ? { holds: false, location: "c1", problem: "wrong category" }
+            : { holds: true, location: "c1", problem: "" };
+        },
+      }),
+    );
+    assert.equal(count("writer-spec"), 2);
+    assert.equal(count("check-claim"), 1);
+    assert.equal(count("check-criterion"), 2);
+  });
+
+  test("after a revision, has the advisors check it rather than attack the whole spec again", async () => {
+    let claims = 0;
+    await how(
+      happy({
+        "check-claim": () => {
+          claims += 1;
+          return claims === 1
+            ? { holds: false, location: "a.ts", problem: "no such file" }
+            : { holds: true, location: "a.ts", problem: "" };
+        },
+      }),
+    );
+    const attacks = calls.filter((c) => c.type === "advisor-risk" && isAttack(c.label));
+    assert.deepEqual(
+      attacks.map((c) => c.label),
+      ["attack the spec", "check the revision"],
+    );
+    assert.ok(attacks[1]?.prompt.includes("gone"));
   });
 
   test("sends nothing a passing lens lists to a judge", async () => {

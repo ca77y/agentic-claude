@@ -1939,10 +1939,14 @@ async function commitSpec(o, message, phaseTitle) {
 }
 var check = (name, label, brief) => () => dispatch(brief, { agentType: `slopify:${name}`, label, phase: "Challenge", schema: CHECK_SCHEMA });
 var findingsOf = (v) => defectsOf(v).map((f) => ({ location: f.location, problem: f.problem }));
-async function runChecks(o, spec) {
+var claimKey = (claim) => `claim ${claim}`;
+var criterionKey = (c) => `criterion ${JSON.stringify(c)}`;
+async function runChecks(o, spec, held) {
   const specText = JSON.stringify({ build: spec.build, validate: spec.validate });
+  const claims = spec.claims.filter((c) => !held.has(claimKey(c)));
+  const criteria = spec.validate.criteria.filter((c) => !held.has(criterionKey(c)));
   const results = await parallel([
-    ...spec.claims.map(
+    ...claims.map(
       (claim, i) => check(
         "check-claim",
         `claim ${String(i + 1)}`,
@@ -1950,7 +1954,7 @@ async function runChecks(o, spec) {
 In the worktree ${worktree(o)}, check that this claim is true of the code: ${claim}`
       )
     ),
-    ...spec.validate.criteria.map(
+    ...criteria.map(
       (c) => check(
         "check-criterion",
         `criterion ${c.id}`,
@@ -1978,12 +1982,21 @@ ${specText}`,
       { phase: "Challenge" }
     )
   ]);
+  const checked = results.map((r) => must(r, "how", "A check on the spec."));
+  const keys = [...claims.map((c) => claimKey(c)), ...criteria.map((c) => criterionKey(c))];
+  for (const [i, r] of checked.entries()) if (r.holds) held.add(keys[i] ?? "");
   return [
-    ...results.map((r) => must(r, "how", "A check on the spec.")).filter((r) => !r.holds).map((r) => ({ location: r.location, problem: r.problem })),
+    ...checked.filter((r) => !r.holds).map((r) => ({ location: r.location, problem: r.problem })),
     ...lenses.flatMap((v) => findingsOf(must(v, "how", "A lens on the spec.")))
   ];
 }
-async function runAttack(o) {
+var FULL_ATTACK = "Try to break this finished spec from your one angle, reading the code it touches. Report only what must change before building: a blocker or a major, each with its location and evidence.";
+var revisionCheck = (revisedFor) => `The spec was revised for these problems:
+${list(problemLines(revisedFor))}
+
+From your one angle, reading the code it touches, report each of them the revision didn't fix, and each blocker or major the revision itself introduced, each with its location and evidence. Don't attack again what the revision left unchanged.`;
+async function runAttack(o, revisedFor) {
+  const ask = revisedFor.length > 0 ? revisionCheck(revisedFor) : FULL_ATTACK;
   const views = await parallel(
     HOW_ADVISORS.map(
       (name) => () => dispatch(
@@ -1992,10 +2005,10 @@ ${STORY_BLOCK(o)}
 
 ${SPEC_FILES(o)} Read all three files.
 
-Try to break this finished spec from your one angle, reading the code it touches. Report only what must change before building: a blocker or a major, each with its location and evidence. Leave out anything minor, because nothing acts on it. Change nothing.`,
+${ask} Leave out anything minor, because nothing acts on it. Change nothing.`,
         {
           agentType: `slopify:${name}`,
-          label: "attack the spec",
+          label: revisedFor.length > 0 ? "check the revision" : "attack the spec",
           phase: "Challenge",
           schema: ATTACK_SCHEMA
         }
@@ -2035,9 +2048,11 @@ function unpermitted(build) {
 async function challenge(o, first) {
   let spec = first;
   let open = [];
+  const held = /* @__PURE__ */ new Set();
   for (let n = 1; n <= MAX_CHALLENGE_ROUNDS; n += 1) {
     phase("Challenge");
-    const [checked, attacked] = await parallel([() => runChecks(o, spec), () => runAttack(o)]);
+    const revisedFor = open;
+    const [checked, attacked] = await parallel([() => runChecks(o, spec, held), () => runAttack(o, revisedFor)]);
     const advised = must(attacked, "how", "The advisors' attack on the spec.");
     open = [
       ...unpermitted(spec.build),

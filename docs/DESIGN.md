@@ -30,7 +30,7 @@ How the plugins are built, within the principles in [`.claude/rules/architecture
 - **`qa`** runs on sonnet. It validates one `coder` change against what that change was meant to do, for example one fix against its finding.
 - **`validator`** runs on sonnet. It drives the running app as the project's `TESTING.md` describes, and returns per-criterion verdicts with evidence.
 - **Operations agents** act on the world outside the files. `pusher` performs every write the declarations bind. `watcher` waits on an external event.
-- **Advisors** give one view each and don't decide. In `shape`, they run on sonnet and judge the why and the what. In delivery, they run on opus at high effort and do the heavy lifting on the how: they compare the designs, then try to break the finished spec. When they attack the spec, they report only a `blocker` or a `major`, and their findings go to `writer-spec` without a judge, because a judge on the same tier adds little.
+- **Advisors** give one view each and don't decide. In `shape`, they run on sonnet and judge the why and the what. In delivery, they run on opus at high effort and do the heavy lifting on the how: they compare the designs, then try to break the finished spec. When they attack the spec, or check a revision of it, they report only a `blocker` or a `major`, and their findings go to `writer-spec` without a judge, because a judge on the same tier adds little.
 - A workflow passes each dispatch the schema its output must follow. An agent's model and effort come from its frontmatter, and a workflow never overrides them.
 
 ## Severity and problem kinds
