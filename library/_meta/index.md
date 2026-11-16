@@ -50,7 +50,7 @@ One line per page: `- [[path|title]] — summary (updated YYYY-MM-DD)`.
 - [[library/wiki/topic-benchmarking|Benchmarking topic map]] — Map of library pages tagged benchmarking (18 pages at creation). (updated 2026-11-16)
 - [[library/wiki/topic-llm-as-judge|LLM as judge topic map]] — Map of library pages tagged llm-as-judge (7 pages at creation). (updated 2026-11-16)
 - [[library/wiki/topic-statistics|Statistics topic map]] — Map of library pages tagged statistics (6 pages at creation). (updated 2026-11-16)
-- [[library/wiki/topic-reliability|Reliability topic map]] — Map of library pages tagged reliability (13 pages at creation). (updated 2026-11-16)
+- [[library/wiki/topic-reliability|Reliability topic map]] — Map of library pages tagged reliability (21 pages: 5 wiki, 16 raw). (updated 2026-11-16)
 - [[library/wiki/topic-operations|Operations topic map]] — Map of library pages tagged operations (7 pages at creation). (updated 2026-11-16)
 
 ### Raw notes

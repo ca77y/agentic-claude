@@ -2,7 +2,7 @@
 title: Judging the Judges - Position Bias in LLM-as-a-Judge
 type: raw
 summary: Shi et al. study of position bias across 15 LLM judges; bias is non-random, varies by judge and task, and grows when two answers are close in quality.
-tags: [evaluation, llm-as-judge]
+tags: [evaluation, llm-as-judge, reliability]
 aliases: []
 source: https://arxiv.org/abs/2406.07791
 accessed: 2026-11-15

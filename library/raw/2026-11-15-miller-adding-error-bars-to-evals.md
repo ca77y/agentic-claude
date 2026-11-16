@@ -2,7 +2,7 @@
 title: Adding Error Bars to Evals (Miller, arXiv 2411.00640)
 type: raw
 summary: "Statistical treatment of eval scores: variance decomposition, repeats versus tasks, paired comparison, and a sample-size formula."
-tags: [evaluation, statistics]
+tags: [evaluation, statistics, reliability]
 aliases: [Miller error bars, arXiv 2411.00640]
 source: https://arxiv.org/html/2411.00640v1
 accessed: 2026-11-15

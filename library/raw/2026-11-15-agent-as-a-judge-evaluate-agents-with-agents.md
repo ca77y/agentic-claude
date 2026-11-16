@@ -2,7 +2,7 @@
 title: Agent-as-a-Judge abstract
 type: raw
 summary: Abstract of Agent-as-a-Judge (arXiv:2410.10934, Zhuge et al.), which judges code-producing agents per requirement on DevAI with an agent that inspects the project.
-tags: [evaluation, llm-as-judge]
+tags: [evaluation, llm-as-judge, reliability]
 aliases: [Agent-as-a-Judge, DevAI]
 source: https://arxiv.org/abs/2410.10934
 accessed: 2026-11-15
