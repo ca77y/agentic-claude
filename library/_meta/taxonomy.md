@@ -26,7 +26,10 @@ updated: 2026-11-15
 
 ## Domain tags
 
-<!-- Domain tags start empty. -->
+- `evaluation`
+- `benchmarking`
+- `llm-as-judge`
+- `statistics`
 
 ## Rules
 
