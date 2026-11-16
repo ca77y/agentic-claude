@@ -184,6 +184,15 @@ describe("research", () => {
     assert.equal(count("library-researcher"), 0);
   });
 
+  test("recovers only an open PR, so a closed PR on the same branch name is never taken as the run's", async () => {
+    await run("SMR-30", happy());
+    const brief = calls.find((c) => c.type === "scout-checkpoint")?.prompt ?? "";
+    assert.match(
+      brief,
+      /- pr: the reference of the branch's open PR; leave it out when the branch's only PRs are closed/,
+    );
+  });
+
   test("asks for the question when given nothing", async () => {
     const r = await run("", happy());
     assert.equal(r.status, "not-started");

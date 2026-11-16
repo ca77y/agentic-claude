@@ -46,7 +46,9 @@ jobs:
           # Tag mode posts the progress comment that docs/FORGE.md's review status reads. It passes the prompt as
           # instructions rather than as a slash command, so the prompt asks for the command through the Skill tool.
           track_progress: true
-          prompt: "Run the `code-review:code-review` command with the Skill tool, with the arguments `--comment ${{ github.repository }}/pull/${{ github.event.pull_request.number || github.event.issue.number }}`."
+          # Every run was asked for: deliveries open drafts and re-fire the review after each round, so the command's own
+          # skips for a draft or an earlier Claude comment would leave the PR unreviewed.
+          prompt: "Run the `code-review:code-review` command with the Skill tool, with the arguments `--comment ${{ github.repository }}/pull/${{ github.event.pull_request.number || github.event.issue.number }}`. This review was requested: review the PR even if it is a draft or Claude has commented on it before."
           # The action sets up the inline-comment tool only when it is allowed here.
           claude_args: >-
             --model claude-opus-5-5 --effort xhigh
