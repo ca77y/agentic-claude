@@ -7,7 +7,6 @@ Configuration does not authorize execution; the user's request does. An operatio
 - Remote and permitted push destinations: `origin` (`git@github.com:ca77y/agentic-claude.git`, over SSH); only story branches are pushed, and only to `origin`.
 - Forge and how it is reached, without credentials: GitHub `ca77y/agentic-claude`, through the `gh` CLI authenticated as `ca77y`.
 - Target branch and its protection: `master`, unprotected; every PR targets it.
-- Default working checkout: work happens on `master` in the repository root and is committed only when the user asks. Only a delivery request creates a story branch in its own worktree and ends in a PR.
 
 ## Workspace
 
