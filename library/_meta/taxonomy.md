@@ -4,13 +4,13 @@ type: moc
 summary: Controlled tag vocabulary
 tags: []
 created: 2026-11-15
-updated: 2026-11-15
+updated: 2026-11-16
 ---
 
 # Library Taxonomy
 
 **Status**: Active
-**Last Updated**: 2026-11-15
+**Last Updated**: 2026-11-16
 **Document Scope**: Controlled tags for agentic-slop research
 
 ---
@@ -26,7 +26,8 @@ updated: 2026-11-15
 
 ## Domain tags
 
-<!-- Domain tags start empty. -->
+- `evaluation`
+- `agent-harness`
 
 ## Rules
 
