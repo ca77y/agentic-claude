@@ -14,7 +14,6 @@ CLI: a Claude Code plugin marketplace. There is no running app; plugins are chec
 
 ## Setup
 
-- Installing dependencies: `make install`
 - Where the env file comes from: none; nothing reads an env file.
 - Seed data: none; each smoke case's `scaffold.sh` builds its own throwaway repository.
 - Where the test account comes from, never a personal logged-in session: none exists yet. Smoke runs call models through the Claude Code CLI login of whoever runs them. This is an open gap.

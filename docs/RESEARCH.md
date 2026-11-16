@@ -9,7 +9,7 @@ How `research` answers a question from new sources and adds the answer to the pr
  │
  1 READ ──────── scout-card (haiku) reads the issue
  │               a prompt gets a new card from pusher, as in deliver-trivial                ⛔ H1
- 2 WORKSPACE ─── pusher (sonnet) creates the worktree and branch, starts the issue
+ 2 WORKSPACE ─── pusher (sonnet) creates and prepares the worktree, starts the issue
  3 GROUND ────── library-reader (sonnet): what the library already supports
  4 PLAN ──────── library-scribe (sonnet) writes the plan to .tmp/research/<slug>.plan.md:
  │   ▲ ≤3 rounds the sub-questions, and how good the evidence must be

@@ -14,7 +14,6 @@ Each tool, with a pinned install line, for example Playwright, Maestro, or a sim
 
 ## Setup
 
-- Installing dependencies: {{INSTALL_COMMAND}}
 - Where the env file comes from: {{ENV_SOURCE}}
 - Seed data: {{SEED_DATA}}
 - Where the test account comes from, never a personal logged-in session: {{TEST_ACCOUNT}}

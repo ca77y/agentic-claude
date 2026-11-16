@@ -11,6 +11,8 @@ Ask the user for what the repository can't show:
 
 Propose categories from the kinds of change the repository holds, and let the user correct them. A validation path names a flow, a test suite, or a command, so someone who has never seen the project can run it. Keep at least one category.
 
+Setup holds what running the app needs in a checkout that is already prepared: installing dependencies belongs to the "Worktree preparation" line in `docs/FORGE.md`, not here.
+
 Don't invent a command or a flow. A value nobody can supply yet stays as a stated gap in the file and in your report. Write "none" where a section has nothing to declare, such as blind spots or saved flows. Write `draft` for any `ready` or `draft` setting the user doesn't decide.
 
 Name no agent, skill, slash command, or model. Keep project customizations in an existing `TESTING.md`, and fix only what is wrong, missing, or unclear.

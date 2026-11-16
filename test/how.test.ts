@@ -412,12 +412,36 @@ describe("the small workflows", () => {
     Object.assign(globalThis, { args: { story: "Add mul to calc.py" } });
     await deliverTrivial();
     assert.ok(!createBrief().includes("create no worktree"));
+    assert.ok(createBrief().includes('"Worktree preparation"'));
     calls.length = 0;
     Object.assign(globalThis, { args: { story: "Add mul to calc.py", branchOnly: true } });
     await deliverTrivial();
     assert.ok(createBrief().includes("check it out in the main checkout"));
     assert.ok(createBrief().includes("create no worktree"));
     assert.ok(calls.find((c) => c.label === "read checkpoints")?.prompt.includes("there is no worktree"));
+  });
+
+  test("a rerun prepares the worktree it recovers, and starts the card in the same dispatch", async () => {
+    current.script = card("Feature");
+    Object.assign(globalThis, { args: "SMR-1" });
+    await deliverTrivial();
+    assert.equal(calls.filter((c) => c.label === "create the worktree").length, 0);
+    const prepare = calls.find((c) => c.label === "prepare the worktree")?.prompt ?? "";
+    assert.ok(prepare.includes("In the checkout /p/wt"));
+    assert.ok(prepare.includes('"Worktree preparation"'));
+    assert.ok(prepare.includes("done board-start SMR-1"));
+  });
+
+  test("a preparation that fails stops the run before any work in the worktree", async () => {
+    current.script = (type, label, prompt) =>
+      label === "prepare the worktree"
+        ? { done: false, unmet: ["prepare: make install exited 2"], operations: [] }
+        : card("Feature")(type, label, prompt);
+    Object.assign(globalThis, { args: "SMR-1" });
+    const r = await deliverTrivial();
+    assert.equal(r.status, "blocked");
+    assert.ok(JSON.stringify(r).includes("make install exited 2"));
+    assert.equal(count("coder"), 0);
   });
 
   test("deliver-bugfix reproduces the bug, records it, and uses it as the first test", async () => {

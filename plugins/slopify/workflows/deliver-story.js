@@ -9,7 +9,7 @@ export const meta = {
     },
     {
       "title": "Workspace",
-      "detail": "pusher creates or recovers the worktree and branch, and starts the issue"
+      "detail": "pusher creates or recovers the worktree and branch, prepares it, and starts the issue"
     },
     {
       "title": "Ground",
@@ -360,7 +360,7 @@ ${instruction}
 ${ln.length > 0 ? `Append these lines, in this order, to the ledger (create it, with its directory, if absent). Stamp each with the current time in front and fill every <placeholder> from what you just did:
 ${ln.map((l) => `- ${l}`).join("\n")}` : "Append no ledger lines."}
 
-Report each operation you performed as an operations entry whose op is exactly one of worktree, branch, delivery-start, card, commit, push, pr, review-trigger, or ledger, with its reference: the identifier, sha, path, or URL alone. Set done only when every operation this brief asks for is complete. List in unmet only an operation this brief asks for that is unbound or failed; one it doesn't ask for is neither performed nor unmet.`;
+Report each operation you performed as an operations entry whose op is exactly one of worktree, branch, prepare, delivery-start, card, commit, push, pr, review-trigger, or ledger, with its reference: the identifier, sha, path, or URL alone. Set done only when every operation this brief asks for is complete. List in unmet only an operation this brief asks for that is unbound or failed; one it doesn't ask for is neither performed nor unmet.`;
   }
   function pushStop(step, r) {
     return stop(step, [
@@ -429,6 +429,7 @@ function locate(d, cardRes, storyArg, fallbackSlug, ask) {
   const specRel = specRelOf(cardRes, cardId, read.storySource, read.story, slug);
   return { ...read, cardId, boardBranch, slug, specRel };
 }
+var PREPARE = `prepare that checkout as docs/FORGE.md's "Worktree preparation" line declares`;
 async function createWorktree(d, o) {
   const { state, stop, done, pushBrief, pushStop } = d;
   const { cardId, boardBranch } = o;
@@ -436,7 +437,7 @@ async function createWorktree(d, o) {
   const where = d.branchOnly ? `Create or recover the branch that docs/FORGE.md declares for ${o.subject}${named}, and check it out in the main checkout; the user asked for a branch only, so create no worktree, and report the main checkout's absolute path as the operation worktree.` : `Create or recover ${o.worktree} and branch that docs/FORGE.md declares for ${o.subject}${named}.`;
   const r = await callPusher(
     pushBrief(
-      `${where} Then perform the delivery-start operation docs/BOARD.md declares for the card (for example its status transition), only as bound. Change no card content. Append the board-start line only once the delivery-start operation is done.`,
+      `${where} Then ${PREPARE}. Then perform the delivery-start operation docs/BOARD.md declares for the card (for example its status transition), only as bound. Change no card content. Append the board-start line only once the delivery-start operation is done.`,
       [...o.lines ?? [], `done board-start ${cardId}`],
       d.branchOnly ? "<main checkout>/.tmp/ledger.md at the root of the main checkout" : "<worktree>/.tmp/ledger.md at the root of the worktree you create or recover"
     ),
@@ -459,25 +460,22 @@ async function workspace(d, o) {
   const { state, done, skip, pushBrief, pushStop } = d;
   const { cardId } = o;
   phase("Workspace");
-  let boardStartRecorded = false;
   if (state.worktree) {
     skip("workspace");
+    const start = o.boardStartDone ? "" : ` Then perform the delivery-start operation docs/BOARD.md declares for card ${cardId} (for example its status transition), only as bound and only if the card does not already show it. Change no card content.`;
+    const r = await callPusher(
+      pushBrief(
+        `In the checkout ${state.worktree}, ${PREPARE}.${start} Do nothing else.`,
+        o.boardStartDone ? [] : [`done board-start ${cardId}`]
+      ),
+      "prepare the worktree",
+      "Workspace"
+    );
+    if (!pushOk(r)) return pushStop("workspace", r);
+    if (!o.boardStartDone) done("board-start");
   } else {
     const created = await createWorktree(d, o);
     if (created) return created;
-    boardStartRecorded = true;
-  }
-  if (!o.boardStartDone && !boardStartRecorded) {
-    const b = await callPusher(
-      pushBrief(
-        `Perform the delivery-start operation docs/BOARD.md declares for card ${cardId} (for example its status transition), only as bound and only if the card does not already show it. Do nothing else, and change no card content.`,
-        [`done board-start ${cardId}`]
-      ),
-      "start the card",
-      "Workspace"
-    );
-    if (!pushOk(b)) return pushStop("workspace", b);
-    done("board-start");
   }
   if (!state.ledger) state.ledger = `${state.worktree}/.tmp/ledger.md`;
   return null;

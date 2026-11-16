@@ -123,6 +123,7 @@ describe("deliver-spike", () => {
     assert.match(r.report, /deleted; it was never pushed or merged/);
     assert.match(r.report, /confirmed by a separate qa:\n- add sums a million pairs in under a second\. 0\.02 s/);
     assert.ok(calls.some((c) => c.label === "delete the prototype"));
+    assert.ok(briefOf("create the prototype").includes('"Worktree preparation"'));
   });
 
   test("says no prototype was needed when the evidence settled every claim", async () => {

@@ -91,6 +91,7 @@ Configuration does not authorize execution; the user's request does.
 ## Workspace
 
 - Branch name: `feat/smoke`. Story worktree: `.worktrees/smoke`, created with `git worktree add .worktrees/smoke -b feat/smoke main`, or `git worktree add .worktrees/smoke feat/smoke` when the branch exists.
+- Worktree preparation: none.
 
 ## Commits and push
 
@@ -118,7 +119,7 @@ Python 3, already installed.
 
 ## Setup
 
-Nothing to install.
+Nothing to set up.
 
 ## Boot
 

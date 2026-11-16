@@ -15,7 +15,10 @@ export const meta = {
     "Run only when the user invokes /slopify:deliver-story or asks for the slopify deliver-story workflow. Args: {story, projectRoot?, branchOnly?, answers?}, or the story as a plain string; story is a card identifier or URL for an issue labelled Deliverable; projectRoot defaults to the session project directory; branchOnly: true, when the user asks for a branch without a worktree, checks the branch out in the main checkout and creates no worktree; answers maps a decision id from a draft or blocked result to its answer when rerunning.",
   phases: [
     { title: "Locate", detail: "scout-card reads the issue and its labels; scout-checkpoint reads the run state" },
-    { title: "Workspace", detail: "pusher creates or recovers the worktree and branch, and starts the issue" },
+    {
+      title: "Workspace",
+      detail: "pusher creates or recovers the worktree and branch, prepares it, and starts the issue",
+    },
     { title: "Ground", detail: "scouts and the library gather evidence" },
     { title: "Design", detail: "three independent designers, then upstream docs and known issues per dependency" },
     { title: "Advise", detail: "five advisors compare the designs" },

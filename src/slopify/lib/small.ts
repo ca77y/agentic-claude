@@ -106,7 +106,7 @@ export async function findCard(d: Run, arg: string, cardType: string): Promise<F
 
 export const resumeOf = (d: Run, f: Found): Promise<Resume> => readResume(d, `card ${f.cardId}`, "");
 
-/** Create or recover the worktree and start the card; lines go on the ledger the worktree's creation starts. */
+/** Create or recover the worktree, prepare it, and start the card; lines go on the ledger the worktree's creation starts. */
 export function openWork(d: Run, f: Found, resume: Resume, lines: readonly string[] = []): Promise<Stopped | null> {
   return workspace(d, {
     cardId: f.cardId,

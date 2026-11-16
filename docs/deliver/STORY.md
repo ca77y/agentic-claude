@@ -21,7 +21,7 @@ A delivery ends in a PR unless one of the halt conditions below holds. Anything 
  1 INTAKE ─────────── scout-card (haiku) reads the issue and its labels       ⛔ H1 H2
  │                    scout-checkpoint (haiku) reads the run state
  ▼
- 2 WORKSPACE ──────── pusher (sonnet) creates the worktree and branch, starts the issue
+ 2 WORKSPACE ──────── pusher (sonnet) creates and prepares the worktree, starts the issue
  ▼
  3 HOW ────────────── GROUND     scout-code, scout-tests, scout-docs, scout-history (haiku), library-reader
  │   ▲  ≤2 tries      DESIGN     designer × 3 (opus), independent: smallest fit, best structure, most robust
@@ -75,7 +75,7 @@ The script reads the `Deliverable` label from what `scout-card` returned. `shape
 
 ### 2. Workspace
 
-`pusher` creates or recovers the story worktree and branch, and moves the issue to its started status.
+`pusher` creates or recovers the story worktree and branch, prepares it as `docs/FORGE.md`'s "Worktree preparation" line declares, and moves the issue to its started status. A recovered worktree is prepared again, since an earlier run may have stopped before preparing it. Work in the worktree starts only after that, because its first commit runs the project's hooks; a failed preparation stops the run.
 
 ### 3. How
 

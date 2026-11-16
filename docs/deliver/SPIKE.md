@@ -9,13 +9,13 @@ How `deliver-spike` answers a bounded technical question with a findings documen
  │
  1 READ ──────── scout-card (haiku) reads the issue
  │               a prompt gets a new spike card from pusher, so every spike is on the board  ⛔ H1
- 2 WORKSPACE ─── pusher (sonnet) creates the worktree and branch, starts the issue
+ 2 WORKSPACE ─── pusher (sonnet) creates and prepares the worktree, starts the issue
  3 GROUND ────── in parallel: library-reader, scout-code, scout-feasibility,
  │               scout-upstream-docs, scout-known-issues, scout-prior-art (haiku)
  4 PLAN ──────── writer-findings (opus) lists the claims the answer rests on: supported, contested,
  │               or unknown, and the measurement that would settle each one that can be measured
  5 PROTOTYPE ─── only when a claim needs a measurement
- │   ▲ ≤3 tries  pusher creates the prototype worktree that docs/FORGE.md names
+ │   ▲ ≤3 tries  pusher creates and prepares the prototype worktree docs/FORGE.md names
  │   │           coder (opus) builds the prototype and runs each measurement
  │   └────────── qa (sonnet) reruns each command and confirms the value
  │               pusher deletes the prototype worktree and branch

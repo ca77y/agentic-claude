@@ -162,7 +162,7 @@ ${
     : "Append no ledger lines."
 }
 
-Report each operation you performed as an operations entry whose op is exactly one of worktree, branch, delivery-start, card, commit, push, pr, review-trigger, or ledger, with its reference: the identifier, sha, path, or URL alone. Set done only when every operation this brief asks for is complete. List in unmet only an operation this brief asks for that is unbound or failed; one it doesn't ask for is neither performed nor unmet.`;
+Report each operation you performed as an operations entry whose op is exactly one of worktree, branch, prepare, delivery-start, card, commit, push, pr, review-trigger, or ledger, with its reference: the identifier, sha, path, or URL alone. Set done only when every operation this brief asks for is complete. List in unmet only an operation this brief asks for that is unbound or failed; one it doesn't ask for is neither performed nor unmet.`;
   }
   function pushStop(step: string, r: PusherResult | null): Stopped {
     return stop(step, [

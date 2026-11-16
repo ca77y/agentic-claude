@@ -14,7 +14,7 @@ export const meta = {
     'Run only when the user invokes /slopify:deliver-spike or asks for the slopify deliver-spike workflow, for a bounded technical question that needs findings, measurements, or a throwaway prototype. Open-ended outside research ("what is the best X") belongs to /slopify:research. Args: {question, projectRoot?, branchOnly?, answers?}, or the question as a plain string; question is a card identifier or URL, or the question as a prompt; projectRoot defaults to the session project directory; branchOnly: true, when the user asks for a branch without a worktree, checks the branch out in the main checkout and creates no worktree; answers maps a decision id from a draft or blocked result to its answer when rerunning.',
   phases: [
     { title: "Locate", detail: "scout-card reads the issue, or pusher files a spike card for a prompt" },
-    { title: "Workspace", detail: "pusher creates or recovers the worktree and branch" },
+    { title: "Workspace", detail: "pusher creates or recovers the worktree and branch, and prepares it" },
     { title: "Ground", detail: "library-reader and five scouts in parallel" },
     { title: "Plan", detail: "writer-findings lists the claims and the measurements that would settle them" },
     { title: "Prototype", detail: "coder measures and qa confirms, up to three tries, then pusher deletes it" },
@@ -266,8 +266,8 @@ async function prototype(d: Run, slug: string, claims: readonly Claim[]): Promis
     await callPusher(
       d.pushBrief(
         d.branchOnly
-          ? `${PROTOTYPE_AUTH} Create the prototype branch that docs/FORGE.md's "Spike prototypes" line names for the slug ${slug}, from the target branch, and check it out in the main checkout; the user asked for branches only, so create no worktree, and report the main checkout's absolute path as the operation worktree. If that line says none, create nothing and report the operation worktree with the reference none.`
-          : `${PROTOTYPE_AUTH} Create the prototype branch and worktree that docs/FORGE.md's "Spike prototypes" line names for the slug ${slug}, from the target branch. If that line says none, create nothing and report the operation worktree with the reference none.`,
+          ? `${PROTOTYPE_AUTH} Create the prototype branch that docs/FORGE.md's "Spike prototypes" line names for the slug ${slug}, from the target branch, and check it out in the main checkout; the user asked for branches only, so create no worktree, and report the main checkout's absolute path as the operation worktree. Then prepare that checkout as docs/FORGE.md's "Worktree preparation" line declares. If the "Spike prototypes" line says none, create nothing and report the operation worktree with the reference none.`
+          : `${PROTOTYPE_AUTH} Create the prototype branch and worktree that docs/FORGE.md's "Spike prototypes" line names for the slug ${slug}, from the target branch, then prepare it as docs/FORGE.md's "Worktree preparation" line declares. If the "Spike prototypes" line says none, create nothing and report the operation worktree with the reference none.`,
       ),
       "create the prototype",
       "Prototype",

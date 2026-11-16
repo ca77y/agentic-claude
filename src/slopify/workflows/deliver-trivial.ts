@@ -10,7 +10,7 @@ export const meta = {
     "Run only when the user invokes /slopify:deliver-trivial or asks for the slopify deliver-trivial workflow. Args: {story, projectRoot?, branchOnly?, answers?}, or the work as a plain string; story is a card identifier or URL, or a prompt saying what to change; projectRoot defaults to the session project directory; branchOnly: true, when the user asks for a branch without a worktree, checks the branch out in the main checkout and creates no worktree; answers maps a decision id from a draft or blocked result to its answer when rerunning.",
   phases: [
     { title: "Locate", detail: "scout-card reads the issue, or takes the prompt as written" },
-    { title: "Workspace", detail: "pusher creates or recovers the worktree and branch" },
+    { title: "Workspace", detail: "pusher creates or recovers the worktree and branch, and prepares it" },
     {
       title: "Build",
       detail: "failing test, fix, checks, and qa, then writer-docs fixes any docs a scout finds affected",

@@ -77,6 +77,7 @@ Configuration does not authorize execution; the user's request does.
 ## Workspace
 
 - Branch name: `research/smoke`. Worktree: `.worktrees/smoke`, created with `git worktree add .worktrees/smoke -b research/smoke main`, or `git worktree add .worktrees/smoke research/smoke` when the branch exists.
+- Worktree preparation: none.
 
 ## Commits and push
 

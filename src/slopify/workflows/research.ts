@@ -15,7 +15,7 @@ export const meta = {
     "Run only when the user invokes /slopify:research or asks for the slopify research workflow. Answers from the existing library belong to the ask skill. Args: {question, projectRoot?, branchOnly?, answers?}, or the question as a plain string; question is a card identifier or URL, or the question as a prompt; projectRoot defaults to the session project directory; branchOnly: true, when the user asks for a branch without a worktree, checks the branch out in the main checkout and creates no worktree.",
   phases: [
     { title: "Locate", detail: "scout-card reads the issue, or pusher files a card for a prompt" },
-    { title: "Workspace", detail: "pusher creates or recovers the worktree and branch" },
+    { title: "Workspace", detail: "pusher creates or recovers the worktree and branch, and prepares it" },
     { title: "Ground", detail: "library-reader reports what the library already supports" },
     {
       title: "Plan",

@@ -15,7 +15,7 @@ How `deliver-bugfix` fixes a bug on its own, from a Linear issue or a prompt to 
  │   └────────── a try that fails passes its reason to the next one
  │               can't reproduce → the card gets the Unreproducible label and a comment
  │               saying why, and the run stops: no worktree, no PR
- 4 WORKSPACE ─── pusher creates the worktree and branch, starts the issue, and records
+ 4 WORKSPACE ─── pusher creates and prepares the worktree, starts the issue, and records
  │               the reproduction on the ledger
  ▼
  5 DELIVER ───── the flow in TRIVIAL.md, except:

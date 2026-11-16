@@ -18,7 +18,7 @@ export const meta = {
     { title: "Locate", detail: "scout-card reads the issue, or pusher files a Bug card for a report" },
     { title: "Ground", detail: "scout-code, scout-tests, and scout-history" },
     { title: "Reproduce", detail: "coder reproduces the bug outside the production code, and lens-repro checks it" },
-    { title: "Workspace", detail: "pusher creates or recovers the worktree and branch" },
+    { title: "Workspace", detail: "pusher creates or recovers the worktree and branch, and prepares it" },
     { title: "Build", detail: "the reproduction as a failing test, the fix, checks, and qa, then any affected docs" },
     { title: "Validate", detail: "validator runs the reproduction again in the app" },
     { title: "Push", detail: "pusher pushes, opens or updates the PR, and fires the review" },

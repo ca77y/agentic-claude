@@ -42,7 +42,7 @@ Python 3, already installed.
 
 ## Setup
 
-Nothing to install.
+Nothing to set up.
 
 ## Boot
 
@@ -106,6 +106,7 @@ Configuration does not authorize execution; the user's request does.
 ## Workspace
 
 - Branch name: `story/smoke`. Story worktree: `.worktrees/smoke`, created with `git worktree add .worktrees/smoke -b story/smoke main`, or `git worktree add .worktrees/smoke story/smoke` when the branch exists.
+- Worktree preparation: none.
 - Spike prototypes: the local branch `spike/<slug>` and the worktree `.worktrees/spike-<slug>`, from the spike's slug; the prototype is never pushed, and deleting a never-pushed prototype is allowed.
 
 ## Commits and push

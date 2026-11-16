@@ -9,7 +9,7 @@ How `deliver-trivial` takes a trivial story from a Linear issue or a prompt to a
  │
  1 READ ──────── scout-card (haiku) reads the issue
  │               a prompt gets a new card from pusher, so all work is on the board  ⛔ H1
- 2 WORKSPACE ─── pusher (sonnet) creates the worktree and branch, starts the issue
+ 2 WORKSPACE ─── pusher (sonnet) creates and prepares the worktree, starts the issue
  3 BUILD ─────── coder (opus) writes a failing test → commit
  │   ▲ ≤3 tries  coder (opus) makes it pass → commit
  │   │           checks (haiku) runs the TESTING.md checks

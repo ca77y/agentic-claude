@@ -36,7 +36,7 @@ Python 3, already installed.
 
 ## Setup
 
-Nothing to install.
+Nothing to set up.
 
 ## Boot
 
@@ -119,6 +119,7 @@ Configuration does not authorize execution; the user's request does.
 ## Workspace
 
 - Branch name: `fix/smoke`. Story worktree: `.worktrees/smoke`, created with `git worktree add .worktrees/smoke -b fix/smoke main`, or `git worktree add .worktrees/smoke fix/smoke` when the branch exists.
+- Worktree preparation: none.
 
 ## Commits and push
 

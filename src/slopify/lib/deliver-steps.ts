@@ -124,7 +124,10 @@ interface WorkspaceOpts {
   lines?: readonly string[];
 }
 
-// Create or recover the worktree; the same dispatch starts the card.
+// Work in a checkout needs what its preparation installs: the first commit runs the project's hooks.
+const PREPARE = `prepare that checkout as docs/FORGE.md's "Worktree preparation" line declares`;
+
+// Create or recover the worktree and prepare it; the same dispatch starts the card.
 async function createWorktree(d: Run, o: WorkspaceOpts): Promise<Stopped | null> {
   const { state, stop, done, pushBrief, pushStop } = d;
   const { cardId, boardBranch } = o;
@@ -135,7 +138,7 @@ async function createWorktree(d: Run, o: WorkspaceOpts): Promise<Stopped | null>
     : `Create or recover ${o.worktree} and branch that docs/FORGE.md declares for ${o.subject}${named}.`;
   const r = await callPusher(
     pushBrief(
-      `${where} Then perform the delivery-start operation docs/BOARD.md declares for the card (for example its status transition), only as bound. Change no card content. Append the board-start line only once the delivery-start operation is done.`,
+      `${where} Then ${PREPARE}. Then perform the delivery-start operation docs/BOARD.md declares for the card (for example its status transition), only as bound. Change no card content. Append the board-start line only once the delivery-start operation is done.`,
       [...(o.lines ?? []), `done board-start ${cardId}`],
       d.branchOnly
         ? "<main checkout>/.tmp/ledger.md at the root of the main checkout"
@@ -162,27 +165,26 @@ export async function workspace(d: Run, o: WorkspaceOpts): Promise<Stopped | nul
   const { state, done, skip, pushBrief, pushStop } = d;
   const { cardId } = o;
   phase("Workspace");
-  let boardStartRecorded = false; // the create dispatch records the board operation in the same dispatch
   if (state.worktree) {
     skip("workspace");
+    // A checkpoint's worktree may not be prepared: an earlier run can stop between creating and preparing it.
+    // The delivery-start board operation follows the worktree, so a rerun without its ledger line does it now.
+    const start = o.boardStartDone
+      ? ""
+      : ` Then perform the delivery-start operation docs/BOARD.md declares for card ${cardId} (for example its status transition), only as bound and only if the card does not already show it. Change no card content.`;
+    const r = await callPusher(
+      pushBrief(
+        `In the checkout ${state.worktree}, ${PREPARE}.${start} Do nothing else.`,
+        o.boardStartDone ? [] : [`done board-start ${cardId}`],
+      ),
+      "prepare the worktree",
+      "Workspace",
+    );
+    if (!pushOk(r)) return pushStop("workspace", r);
+    if (!o.boardStartDone) done("board-start");
   } else {
     const created = await createWorktree(d, o);
     if (created) return created;
-    boardStartRecorded = true;
-  }
-  // The delivery-start board operation follows the worktree; a rerun that finds the worktree but no
-  // ledger line for the operation does it now, since it may have failed after the worktree was made.
-  if (!o.boardStartDone && !boardStartRecorded) {
-    const b = await callPusher(
-      pushBrief(
-        `Perform the delivery-start operation docs/BOARD.md declares for card ${cardId} (for example its status transition), only as bound and only if the card does not already show it. Do nothing else, and change no card content.`,
-        [`done board-start ${cardId}`],
-      ),
-      "start the card",
-      "Workspace",
-    );
-    if (!pushOk(b)) return pushStop("workspace", b);
-    done("board-start");
   }
   if (!state.ledger) state.ledger = `${state.worktree}/.tmp/ledger.md`;
   return null;

@@ -13,6 +13,7 @@ Configuration does not authorize execution; the user's request does. An operatio
 
 - Branch name: {{BRANCH_DERIVATION}}
 - Story worktree path and its ignore rule: {{WORKTREE_PATH_AND_IGNORE}}
+- Worktree preparation: {{WORKTREE_PREPARATION_OR_NONE}}
 - Cleanup after merge: {{CLEANUP_OWNER}}
 - Spike prototypes: {{SPIKE_PROTOTYPES_OR_NONE}}
 
