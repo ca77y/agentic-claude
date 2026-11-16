@@ -350,7 +350,10 @@ var TASK = {
     dependsOn: { ...STRINGS, description: "Ids of the tasks this one needs finished first" },
     files: { ...STRINGS, description: "Files or directories this task may write, relative to the worktree root" },
     criteria: { ...STRINGS, description: "Ids of the criteria this task delivers" },
-    todo: { type: "string", description: "What to do, including anything only this task needs" },
+    todo: {
+      type: "string",
+      description: "The requirements this task meets, as behavior and interfaces rather than code, including anything only this task needs"
+    },
     reuse: { ...STRINGS, description: "What already exists and must be used, not rebuilt" },
     create: { ...STRINGS, description: "What this task creates" }
   }
@@ -428,7 +431,7 @@ var TEST_SCHEMA = {
     },
     assumptions: {
       ...STRINGS,
-      description: "Each trivial question you settled yourself, as the question and your choice"
+      description: "Each implementation choice a reviewer would want to know, as the question and your choice"
     },
     manualActions: {
       ...STRINGS,
@@ -449,7 +452,7 @@ var FIX_SCHEMA = {
     },
     assumptions: {
       ...STRINGS,
-      description: "Each trivial question you settled yourself, as the question and your choice"
+      description: "Each implementation choice a reviewer would want to know, as the question and your choice"
     },
     manualActions: {
       ...STRINGS,

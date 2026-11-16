@@ -82,7 +82,7 @@ const TEST_SCHEMA = {
     },
     assumptions: {
       ...STRINGS,
-      description: "Each trivial question you settled yourself, as the question and your choice",
+      description: "Each implementation choice a reviewer would want to know, as the question and your choice",
     },
     manualActions: {
       ...STRINGS,
@@ -104,7 +104,7 @@ const FIX_SCHEMA = {
     },
     assumptions: {
       ...STRINGS,
-      description: "Each trivial question you settled yourself, as the question and your choice",
+      description: "Each implementation choice a reviewer would want to know, as the question and your choice",
     },
     manualActions: {
       ...STRINGS,
@@ -313,7 +313,7 @@ interface Loop extends LoopInput {
   differently: Set<string>;
   rulings: string[];
   decisions: RecordedDecision[];
-  /** Trivial questions the coder settled itself. */
+  /** Implementation choices the coder made itself. */
   assumptions: string[];
   /** Irreversible steps nothing permits, left for a person. */
   manualActions: string[];
@@ -416,7 +416,7 @@ function changeBrief(l: Loop, c: Change): string {
     criteria ? `The criteria it delivers:\n${criteria}` : "",
     c.item ? `The problem to fix, at ${c.item.problem.location}:\n${c.item.problem.text}\n${c.item.reason}` : "",
     answersText(l),
-    "Make no irreversible change, such as a migration on shared data, deleting a public API, or changing production config, unless this explicitly permits it: build its reversible part, and return the rest in manualActions. Implement what this says. Settle a trivial question yourself, such as a name, local structure, or an obvious default that changes no behavior this describes, and return it in assumptions. If it leaves open anything else, or can't be delivered as written, return specProblem and stop.",
+    "Make no irreversible change, such as a migration on shared data, deleting a public API, or changing production config, unless this explicitly permits it: build its reversible part, and return the rest in manualActions. Meet what this requires. How to implement it in your paths is your decision; return each choice a reviewer would want to know in assumptions. If a requirement is unclear or can't be met, or meeting it would change behavior this describes or an interface another task relies on, return specProblem and stop.",
     NO_WRITES,
   ]
     .filter(Boolean)
@@ -512,7 +512,7 @@ interface TryResult {
   rewriteTest: boolean;
 }
 
-// A coder settles only trivial questions, so anything else its brief leaves open goes back to whoever writes the brief: the spec's writer, or,
+// A coder decides only how, so a question about what to build goes back to whoever writes the brief: the spec's writer, or,
 // with no spec, the person reading the draft.
 function specStopped(l: Loop, c: Change, problem: string): TryResult {
   const route: Route = l.reviseSpec ? "revise-spec" : "escalate";

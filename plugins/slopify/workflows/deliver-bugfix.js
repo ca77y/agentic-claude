@@ -524,7 +524,10 @@ var TASK = {
     dependsOn: { ...STRINGS, description: "Ids of the tasks this one needs finished first" },
     files: { ...STRINGS, description: "Files or directories this task may write, relative to the worktree root" },
     criteria: { ...STRINGS, description: "Ids of the criteria this task delivers" },
-    todo: { type: "string", description: "What to do, including anything only this task needs" },
+    todo: {
+      type: "string",
+      description: "The requirements this task meets, as behavior and interfaces rather than code, including anything only this task needs"
+    },
     reuse: { ...STRINGS, description: "What already exists and must be used, not rebuilt" },
     create: { ...STRINGS, description: "What this task creates" }
   }
@@ -619,7 +622,7 @@ var TEST_SCHEMA = {
     },
     assumptions: {
       ...STRINGS,
-      description: "Each trivial question you settled yourself, as the question and your choice"
+      description: "Each implementation choice a reviewer would want to know, as the question and your choice"
     },
     manualActions: {
       ...STRINGS,
@@ -640,7 +643,7 @@ var FIX_SCHEMA = {
     },
     assumptions: {
       ...STRINGS,
-      description: "Each trivial question you settled yourself, as the question and your choice"
+      description: "Each implementation choice a reviewer would want to know, as the question and your choice"
     },
     manualActions: {
       ...STRINGS,
@@ -830,7 +833,7 @@ ${criteria}` : "",
 ${c.item.problem.text}
 ${c.item.reason}` : "",
     answersText(l),
-    "Make no irreversible change, such as a migration on shared data, deleting a public API, or changing production config, unless this explicitly permits it: build its reversible part, and return the rest in manualActions. Implement what this says. Settle a trivial question yourself, such as a name, local structure, or an obvious default that changes no behavior this describes, and return it in assumptions. If it leaves open anything else, or can't be delivered as written, return specProblem and stop.",
+    "Make no irreversible change, such as a migration on shared data, deleting a public API, or changing production config, unless this explicitly permits it: build its reversible part, and return the rest in manualActions. Meet what this requires. How to implement it in your paths is your decision; return each choice a reviewer would want to know in assumptions. If a requirement is unclear or can't be met, or meeting it would change behavior this describes or an interface another task relies on, return specProblem and stop.",
     NO_WRITES
   ].filter(Boolean).join("\n\n");
 }

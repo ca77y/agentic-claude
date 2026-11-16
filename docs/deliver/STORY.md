@@ -30,7 +30,8 @@ A delivery ends in a PR unless one of the halt conditions below holds. Anything 
  │   │                           each compares all 3 designs
  │   └── none viable  DECIDE     judge (opus) picks one and grafts the best of the others  ⛔ H3
  │                    SPEC       writer-spec (opus) writes the spec folder → pusher commits it
- │   ▲  ≤3 rounds     CHALLENGE  check-claim × N, check-criterion × N, lens-scope, lens-consistency (haiku)
+ │   ▲  ≤3 rounds     CHALLENGE  check-claim × N, check-criterion × N, lens-scope (haiku),
+ │   │                           lens-consistency (sonnet)
  │   │                           the 5 advisors, fresh, try to break the spec: blocker or major only
  │   │                           later rounds: only failed or changed checks; advisors check the revision
  │   └── problems →              judge × 1 (opus) rules on the checks' findings → writer-spec revises  ⛔ H3
@@ -133,7 +134,7 @@ This stage is two nested loops. The inner loop makes one change correct, and onl
 1. **Build.** Each change runs its own inner loop, the [test-first cycle](#test-first).
    - In the first round, each task in `build.json` is one change. The script works out dependency waves from `dependsOn`. Tasks in a wave whose files don't overlap run in parallel, and the others run one after another. When a criterion's category validates with a flow, the flow is the test, for example a Playwright spec or a Maestro file.
    - In later rounds, each open `code` or `test` problem is one change, and an open `spec` problem first goes to the advisors and `writer-spec`, who revise the spec. `pusher` commits the revision, and the tasks it changes run again.
-   - `coder` implements what its brief says. It settles trivial questions itself, such as a name or an obvious default that changes no described behavior, and lists them under Assumptions. If the brief leaves anything else open, it returns a spec problem, which goes to `writer-spec`.
+   - `coder` meets what its brief requires, and decides how: structure, names, helpers, and algorithms. It lists the choices worth knowing under Assumptions. A requirement that is unclear or can't be met, or that would change described behavior or an interface another task relies on, comes back as a spec problem, which goes to `writer-spec`.
    - An inner loop that runs out of tries doesn't stop the round. Its problem stays open as a `blocker`.
    - After the inner loops, `writer-docs` updates the documents on the `docs` list, so they describe the code as built. It runs in every round that changed code or has an open `docs` problem, and when the list isn't empty. `pusher` commits its work. Documentation needs no failing test, so it stays out of the inner loop.
 2. **Validate.** `checks` runs the `Checks` commands from `TESTING.md` and returns the exit codes and failing lines. `validator` then follows each criterion's category path, as defined below. In the first round it runs every criterion. In later rounds it runs the criteria whose code paths changed, or every criterion when a fix touched boot or config files. It runs even when `checks` fails. Boot is its first step, so a broken build fails there and is judged like any other problem. One `lens-docs` per listed document checks that its claims are true against the code.

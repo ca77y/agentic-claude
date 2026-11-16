@@ -306,14 +306,15 @@ describe("the inner loop", () => {
   });
 });
 
-describe("a coder settles only trivial questions", () => {
+describe("a coder decides how, not what", () => {
   const OPEN = "the spec doesn't say which store to use";
 
-  test("tells the coder to settle only trivial questions", async () => {
+  test("leaves how to the coder, and sends a question about what back", async () => {
     use(happy());
     await statusOf();
     const fix = calls.find((c) => c.label === "t1: fix");
-    assert.ok(fix?.prompt.includes("Settle a trivial question yourself"));
+    assert.ok(fix?.prompt.includes("How to implement it in your paths is your decision"));
+    assert.ok(fix?.prompt.includes("return specProblem"));
   });
 
   test("sends what the brief leaves open to the spec's writer, then builds the revised task", async () => {

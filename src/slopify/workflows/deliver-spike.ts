@@ -85,7 +85,7 @@ const PROTOTYPE_SCHEMA = {
     measurements: { type: "array", items: MEASUREMENT },
     assumptions: {
       ...STRINGS,
-      description: "Each trivial question you settled yourself, as the question and your choice",
+      description: "Each implementation choice a reviewer would want to know, as the question and your choice",
     },
     problem: { type: "string", description: "Why these claims can't be measured as asked; empty when they can" },
   },
