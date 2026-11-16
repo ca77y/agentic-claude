@@ -1,6 +1,6 @@
 PLUGINS ?= $(wildcard plugins/*/)
 
-.PHONY: install build check format test smoke
+.PHONY: install build lint check format test smoke
 
 # Once per clone: dev tools and the pre-commit hook.
 install:
@@ -11,8 +11,9 @@ install:
 build:
 	npm run --silent build
 
-# Every fast check, on the whole repo: what the pre-commit hook and CI run.
-check:
+# Every fast check except the unit tests, on the whole repo: what the pre-commit hook runs. The hook leaves the tests
+# out so a delivery can commit a failing test before its fix.
+lint:
 	npm run --silent build:check
 	npm run --silent typecheck
 	npm run --silent lint:ts
@@ -23,9 +24,11 @@ check:
 	npm run --silent lint:pins
 	npm run --silent lint:sh
 	npm run --silent lint:types
-	npm run --silent test:unit
 	claude plugin validate --strict .
 	for p in $(PLUGINS); do claude plugin validate --strict "$$p" || exit 1; done
+
+# Every fast check and the unit tests: what CI runs.
+check: lint test
 
 format:
 	npx --no-install prettier --write .

@@ -1,5 +1,5 @@
 #!/bin/sh
-# Check the commit without changing any file. Build and format by hand with `make build` and `make format`.
+# Check the commit without changing any file or running the unit tests, so a failing test can be committed before its fix. Build and format by hand with `make build` and `make format`.
 set -e
 cd "$(git rev-parse --show-toplevel)"
 
@@ -8,4 +8,4 @@ if [ ! -x node_modules/.bin/eslint ]; then
   exit 1
 fi
 
-make --no-print-directory check
+make --no-print-directory lint
