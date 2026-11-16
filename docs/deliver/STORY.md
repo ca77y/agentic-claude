@@ -232,7 +232,7 @@ These are the only conditions that stop the run:
 
 | #   | Condition                                                                                         | Found at | What the user gets                                                                   |
 | --- | ------------------------------------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------ |
-| H1  | The Linear issue can't be read                                                                    | Intake   | `not-started`, no board write                                                        |
+| H1  | The Linear issue can't be read, or `answers` is given but isn't a map                             | Intake   | `not-started`, no board write                                                        |
 | H2  | The issue doesn't have the `Deliverable` label                                                    | Intake   | `not-started`, and an issue comment saying to run `shape`                            |
 | H3  | The how phase's loops are exhausted: no design survives, or a `blocker` stays open in the spec    | How      | `blocked`, and an issue comment saying the workflow is broken, with everything tried |
 | H4  | The push is denied, or PR creation fails                                                          | Push     | `blocked`; finished work stays committed on the local branch                         |

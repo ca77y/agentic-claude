@@ -55,6 +55,6 @@ One file, `docs/spikes/<id>-<slug>.md`, named like a spec folder. Unlike a spec 
 
 | #   | Condition                                                                                         | Found at | What the user gets                                          |
 | --- | ------------------------------------------------------------------------------------------------- | -------- | ----------------------------------------------------------- |
-| H1  | The issue can't be read, or the argument says nothing                                             | Read     | `not-started`, no board write                               |
+| H1  | The issue can't be read, the argument says nothing, or `answers` is given but isn't a map         | Read     | `not-started`, no board write                               |
 | H2  | The push is denied, or PR creation fails                                                          | Push     | `blocked`; the document stays committed on the local branch |
 | H3  | Infrastructure: a stop signal, a required tool denied, or a budget, usage, or agent limit reached | Any      | `blocked`, with the state reported on the issue             |
