@@ -129,6 +129,20 @@ describe("the how phase", () => {
     assert.ok(briefs.every((b) => !b.includes('"approach"')));
   });
 
+  test("scouts only new dependencies, once per name whichever designs name it", async () => {
+    let n = 0;
+    const designer = () => {
+      n += 1;
+      const zod = { name: n === 1 ? "Zod" : " zod", reliesOn: `parse ${String(n)}`, new: true };
+      return { ...DESIGN, dependencies: [zod, { name: "GitHub", reliesOn: "gh pr create", new: false }] };
+    };
+    await how(happy({ designer }));
+    assert.equal(count("scout-upstream-docs"), 1);
+    assert.equal(count("scout-known-issues"), 1);
+    const docs = calls.find((c) => c.type === "scout-upstream-docs")?.prompt ?? "";
+    for (const part of ["parse 1", "parse 2", "parse 3"]) assert.ok(docs.includes(part), part);
+  });
+
   test("commits the spec before it is challenged", async () => {
     await how(happy());
     const firstCommit = calls.findIndex((c) => c.label === "commit the spec");

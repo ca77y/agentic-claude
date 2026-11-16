@@ -200,8 +200,7 @@ async function plan(c: Ctx, context: string): Promise<{ subQuestions: SubQuestio
     const problems = await checkPlan(c);
     const confirmed = await confirmedProblems(
       problems,
-      (p) =>
-        `${c.d.WHERE}\nRule on one problem reported against the research plan at ${c.plan}, in the worktree ${c.worktree}. blocker: research by this plan can't answer the question. major: a real flaw that should be fixed first. minor: real but low impact.\n\n${p.text}`,
+      `${c.d.WHERE}\nThe checks reported problems in the research plan at ${c.plan}, in the worktree ${c.worktree}. blocker: research by this plan can't answer the question. major: a real flaw that should be fixed first. minor: real but low impact.`,
       "Plan",
     );
     if (confirmed.length === 0) return { subQuestions, limits: [] };

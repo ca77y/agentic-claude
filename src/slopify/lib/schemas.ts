@@ -52,14 +52,3 @@ export function pusherSchema(notes: { reference?: string; unmet?: string } = {})
     },
   } as const;
 }
-
-// A judge's ruling on one problem reported against a spec or a card draft.
-export const RULING_SCHEMA = {
-  type: "object",
-  required: ["verdict", "severity", "reason"],
-  properties: {
-    verdict: { type: "string", enum: ["confirmed", "dismissed"] },
-    severity: { type: "string", enum: ["blocker", "major", "minor"] },
-    reason: { type: "string" },
-  },
-} as const;

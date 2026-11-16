@@ -1743,7 +1743,22 @@ var DESIGN_SCHEMA = {
     create: { ...STRINGS, description: "What gets created" },
     interfaces: STRINGS,
     data: STRINGS,
-    dependencies: { ...STRINGS, description: "Each outside library or service it needs; empty when none" },
+    dependencies: {
+      type: "array",
+      description: "Each outside library or service it relies on, never the project's own code, tools, or agents; empty when none",
+      items: {
+        type: "object",
+        required: ["name", "reliesOn", "new"],
+        properties: {
+          name: { type: "string", description: "Its name alone, such as its package name" },
+          reliesOn: { type: "string", description: "The part of it the design relies on, such as an API or feature" },
+          new: {
+            type: "boolean",
+            description: "True when the project doesn't use it yet, or doesn't use that part of it yet"
+          }
+        }
+      }
+    },
     risks: STRINGS
   }
 };
@@ -1904,27 +1919,43 @@ ${list(rejectedBefore)}` : ""}`,
   }
   return returned;
 }
+function newDependencies(designs) {
+  const byName = {};
+  const named = designs.flatMap((x) => x.dependencies);
+  for (const dep of named) {
+    if (!dep.new) continue;
+    const name = dep.name.trim().toLowerCase();
+    byName[name] = unique([...byName[name] ?? [], dep.reliesOn]);
+  }
+  return byName;
+}
 async function researchDependencies(o, designs) {
-  const deps = unique(designs.flatMap((x) => x.dependencies));
+  const byName = newDependencies(designs);
+  const deps = Object.keys(byName);
   if (deps.length === 0) return "";
+  const usage = (dep) => `The designs rely on:
+${list(byName[dep])}`;
   const found = await parallel(
     deps.flatMap((dep) => [
       () => scout(
         "scout-upstream-docs",
         `${o.where}
-Find the official docs for ${dep}: versions, limits, and deprecations relevant to this issue:
+Find the official docs for ${dep}: versions, limits, and deprecations relevant to this issue.
+${usage(dep)}
+
+The issue:
 ${o.story}`,
         { label: `docs: ${dep}`, phase: "Design" }
       ),
       () => scout(
         "scout-known-issues",
         `${o.where}
-Find the pitfalls and open bugs in ${dep} relevant to this issue:
+Find the pitfalls and open bugs in ${dep} relevant to this issue.
+${usage(dep)}
+
+The issue:
 ${o.story}`,
-        {
-          label: `issues: ${dep}`,
-          phase: "Design"
-        }
+        { label: `issues: ${dep}`, phase: "Design" }
       )
     ])
   );

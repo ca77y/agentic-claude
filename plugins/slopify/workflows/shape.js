@@ -21,7 +21,7 @@ export const meta = {
     },
     {
       "title": "Check",
-      "detail": "lenses by kind, then one judge per finding; writer-card revises, up to three rounds"
+      "detail": "lenses by kind, then one judge rules on the round's findings; writer-card revises, up to three rounds"
     },
     {
       "title": "File",
@@ -212,15 +212,6 @@ function pusherSchema(notes = {}) {
     }
   };
 }
-var RULING_SCHEMA = {
-  type: "object",
-  required: ["verdict", "severity", "reason"],
-  properties: {
-    verdict: { type: "string", enum: ["confirmed", "dismissed"] },
-    severity: { type: "string", enum: ["blocker", "major", "minor"] },
-    reason: { type: "string" }
-  }
-};
 
 // src/slopify/lib/deliver.ts
 var PUSHER_SCHEMA = pusherSchema({ reference: "A commit sha, PR URL or path, card id, or worktree path" });
@@ -517,23 +508,39 @@ function pushed(r, what) {
 }
 
 // src/slopify/lib/judge.ts
-async function confirmedProblems(problems, brief, phaseTitle) {
-  const rulings = await parallel(
-    problems.map(
-      (p, i) => () => dispatch(brief(p), {
-        agentType: "slopify:judge",
-        label: `rule ${String(i + 1)}`,
-        phase: phaseTitle,
-        schema: RULING_SCHEMA
-      })
-    )
-  );
-  const confirmed = [];
-  for (const [i, p] of problems.entries()) {
-    const r = must(rulings[i], phaseTitle.toLowerCase(), `A ruling on ${p.location}.`);
-    if (r.verdict === "confirmed" && r.severity !== "minor") confirmed.push(`${p.location}: ${p.text} (${r.reason})`);
+var RULED_SCHEMA = {
+  type: "object",
+  required: ["problems"],
+  properties: {
+    problems: {
+      type: "array",
+      description: "Each distinct blocker or major problem the reported findings show; empty when none holds",
+      items: {
+        type: "object",
+        required: ["location", "problem", "severity", "reason"],
+        properties: {
+          location: { type: "string", description: "Where the problem is" },
+          problem: { type: "string", description: "What is wrong and what would fix it" },
+          severity: { type: "string", enum: ["blocker", "major"] },
+          reason: { type: "string", description: "The evidence it rests on" }
+        }
+      }
+    }
   }
-  return confirmed;
+};
+async function confirmedProblems(problems, brief, phaseTitle) {
+  if (problems.length === 0) return [];
+  const r = await dispatch(
+    `${brief}
+
+Rule on all of these findings, checking each against the evidence, and merge findings that report the same problem. Return each distinct problem that holds as a blocker or a major. Leave out what doesn't hold and what is minor.
+
+Reported findings:
+${list(problems.map((p) => `${p.source} at ${p.location}: ${p.text}`))}`,
+    { agentType: "slopify:judge", label: "rule on the findings", phase: phaseTitle, schema: RULED_SCHEMA }
+  );
+  const ruled = must(r, phaseTitle.toLowerCase(), "The rulings on the reported findings.");
+  return ruled.problems.map((p) => `${p.location}: ${p.problem} (${p.reason})`);
 }
 
 // src/slopify/workflows/shape.ts
@@ -691,11 +698,8 @@ The card draft is ${c.draft}, a ${c.kind}.`, { label: name, phase: "Check" })
 }
 var rule = (d, c, problems) => confirmedProblems(
   problems,
-  (p) => `${d.WHERE}
-Rule on one problem ${p.source} reported in the card draft ${c.draft}, a ${c.kind}, checking it against the draft and the card template. blocker: a delivery can't take the card as it is. major: a real flaw that should be fixed before filing. minor: real but low impact.
-
-At ${p.location}:
-${p.text}`,
+  `${d.WHERE}
+The checks reported problems in the card draft ${c.draft}, a ${c.kind}; check them against the draft and the card template. blocker: a delivery can't take the card as it is. major: a real flaw that should be fixed before filing. minor: real but low impact.`,
   "Check"
 );
 async function refine(d, c, firstOpen) {

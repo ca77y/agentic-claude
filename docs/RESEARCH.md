@@ -13,7 +13,7 @@ How `research` answers a question from new sources and adds the answer to the pr
  3 GROUND ────── library-reader (sonnet): what the library already supports
  4 PLAN ──────── library-scribe (sonnet) writes the plan to .tmp/research/<slug>.plan.md:
  │   ▲ ≤3 rounds the sub-questions, and how good the evidence must be
- │   │           library-clerk (sonnet) checks it → judge × N (opus)
+ │   │           library-clerk (sonnet) checks it → judge × 1 (opus) rules on its findings
  │   └────────── library-scribe revises; what is still wrong becomes a stated limit
  5 RETRIEVE ──── library-researcher (sonnet) × N, one per sub-question, in parallel
  6 PERSIST ───── library-scribe × N, one raw note per source, in parallel

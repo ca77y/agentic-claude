@@ -16,7 +16,7 @@ const FAIL = {
   limits: "",
 };
 const VIEW = { judgement: "proceed", reasons: [], risks: [], conditions: [] };
-const CONFIRMED = { verdict: "confirmed", severity: "major", reason: "seen" };
+const CONFIRMED = { problems: [{ location: "x", problem: "vague", severity: "major", reason: "seen" }] };
 const FILED = { done: true, unmet: [], operations: [{ op: "card", reference: "SMR-60" }] };
 
 const DEFAULTS: Record<string, Script> = {
@@ -107,11 +107,19 @@ describe("shape", () => {
     assert.equal(count("writer-card", "revise"), 1);
   });
 
+  test("rules on a round's findings with one judge, and skips it when nothing is reported", async () => {
+    let checks = 0;
+    const failOnce = () => {
+      checks += 1;
+      return checks <= 2 ? FAIL : PASS;
+    };
+    await run("Let users multiply", happy({ "lens-criteria": failOnce, "lens-template": failOnce }));
+    assert.equal(count("judge"), 1);
+    assert.equal(calls.find((c) => c.type === "judge")?.label, "rule on the findings");
+  });
+
   test("ignores a problem the judge dismisses", async () => {
-    const r = await run(
-      "Let users multiply",
-      happy({ "lens-criteria": () => FAIL, judge: () => ({ ...CONFIRMED, verdict: "dismissed" }) }),
-    );
+    const r = await run("Let users multiply", happy({ "lens-criteria": () => FAIL, judge: () => ({ problems: [] }) }));
     assert.ok("deliverable" in r && r.deliverable);
     assert.equal(count("writer-card"), 1);
   });

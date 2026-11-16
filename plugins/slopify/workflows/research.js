@@ -373,15 +373,6 @@ function pusherSchema(notes = {}) {
     }
   };
 }
-var RULING_SCHEMA = {
-  type: "object",
-  required: ["verdict", "severity", "reason"],
-  properties: {
-    verdict: { type: "string", enum: ["confirmed", "dismissed"] },
-    severity: { type: "string", enum: ["blocker", "major", "minor"] },
-    reason: { type: "string" }
-  }
-};
 
 // src/slopify/lib/deliver.ts
 var PUSHER_SCHEMA = pusherSchema({ reference: "A commit sha, PR URL or path, card id, or worktree path" });
@@ -1617,23 +1608,39 @@ ${r.draftReasons.map((x) => `- ${x.text}`).join("\n")}` : "",
 }
 
 // src/slopify/lib/judge.ts
-async function confirmedProblems(problems, brief, phaseTitle) {
-  const rulings = await parallel(
-    problems.map(
-      (p, i) => () => dispatch(brief(p), {
-        agentType: "slopify:judge",
-        label: `rule ${String(i + 1)}`,
-        phase: phaseTitle,
-        schema: RULING_SCHEMA
-      })
-    )
-  );
-  const confirmed = [];
-  for (const [i, p] of problems.entries()) {
-    const r = must(rulings[i], phaseTitle.toLowerCase(), `A ruling on ${p.location}.`);
-    if (r.verdict === "confirmed" && r.severity !== "minor") confirmed.push(`${p.location}: ${p.text} (${r.reason})`);
+var RULED_SCHEMA = {
+  type: "object",
+  required: ["problems"],
+  properties: {
+    problems: {
+      type: "array",
+      description: "Each distinct blocker or major problem the reported findings show; empty when none holds",
+      items: {
+        type: "object",
+        required: ["location", "problem", "severity", "reason"],
+        properties: {
+          location: { type: "string", description: "Where the problem is" },
+          problem: { type: "string", description: "What is wrong and what would fix it" },
+          severity: { type: "string", enum: ["blocker", "major"] },
+          reason: { type: "string", description: "The evidence it rests on" }
+        }
+      }
+    }
   }
-  return confirmed;
+};
+async function confirmedProblems(problems, brief, phaseTitle) {
+  if (problems.length === 0) return [];
+  const r = await dispatch(
+    `${brief}
+
+Rule on all of these findings, checking each against the evidence, and merge findings that report the same problem. Return each distinct problem that holds as a blocker or a major. Leave out what doesn't hold and what is minor.
+
+Reported findings:
+${list(problems.map((p) => `${p.source} at ${p.location}: ${p.text}`))}`,
+    { agentType: "slopify:judge", label: "rule on the findings", phase: phaseTitle, schema: RULED_SCHEMA }
+  );
+  const ruled = must(r, phaseTitle.toLowerCase(), "The rulings on the reported findings.");
+  return ruled.problems.map((p) => `${p.location}: ${p.problem} (${p.reason})`);
 }
 
 // src/slopify/lib/deliver-steps.ts
@@ -1999,10 +2006,8 @@ ${context}`,
     const problems = await checkPlan(c);
     const confirmed = await confirmedProblems(
       problems,
-      (p) => `${c.d.WHERE}
-Rule on one problem reported against the research plan at ${c.plan}, in the worktree ${c.worktree}. blocker: research by this plan can't answer the question. major: a real flaw that should be fixed first. minor: real but low impact.
-
-${p.text}`,
+      `${c.d.WHERE}
+The checks reported problems in the research plan at ${c.plan}, in the worktree ${c.worktree}. blocker: research by this plan can't answer the question. major: a real flaw that should be fixed first. minor: real but low impact.`,
       "Plan"
     );
     if (confirmed.length === 0) return { subQuestions, limits: [] };

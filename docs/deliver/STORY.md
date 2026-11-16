@@ -25,7 +25,7 @@ A delivery ends in a PR unless one of the halt conditions below holds. Anything 
  ▼
  3 HOW ────────────── GROUND     scout-code, scout-tests, scout-docs, scout-history (haiku), library-reader
  │   ▲  ≤2 tries      DESIGN     designer × 3 (opus), independent: smallest fit, best structure, most robust
- │   │                           scout-upstream-docs, scout-known-issues per dependency (haiku)
+ │   │                           scout-upstream-docs, scout-known-issues per new dependency (haiku)
  │   │                ADVISE     architecture, performance, risk, security, testability (opus, high)
  │   │                           each compares all 3 designs
  │   └── none viable  DECIDE     judge (opus) picks one and grafts the best of the others  ⛔ H3
@@ -84,7 +84,7 @@ The script reads the `Deliverable` label from what `scout-card` returned. `shape
 The issue says why and what. This stage decides how, and it deserves more time and tokens than anything else in the workflow. It never stops on a choice about how: those choices are ours, so they are made and recorded. Each step feeds the next.
 
 1. **Ground.** The scouts and `library-reader` return file and line pointers, existing symbols, tests, documentation claims, history, and earlier research.
-2. **Design.** Three independent `designer` dispatches each produce a full approach, and none sees the others. The script gives each a fixed stance: the smallest change that fits the existing patterns, the best long-term structure, and the most robust under failure. Each reads the project's full architecture and design documents, and marks what it reuses and what it creates. `scout-upstream-docs` and `scout-known-issues` then run once for each dependency any design names.
+2. **Design.** Three independent `designer` dispatches each produce a full approach, and none sees the others. The script gives each a fixed stance: the smallest change that fits the existing patterns, the best long-term structure, and the most robust under failure. Each reads the project's full architecture and design documents, and marks what it reuses and what it creates. Each design lists the outside libraries and services it relies on, never the project's own code or tools, and marks what is new: a dependency the project doesn't use yet, or a part of it the project doesn't use yet. `scout-upstream-docs` and `scout-known-issues` then run once for each new dependency, by name, whichever designs name it.
 3. **Advise.** Five advisors each compare all three designs from one angle: `advisor-architecture`, `advisor-performance`, `advisor-risk`, `advisor-security`, and `advisor-testability`. The last asks whether each criterion can be proved through its `TESTING.md` validation path. Each claim cites the code, and each concern says what would fix it.
 4. **Decide.** One `judge` picks a design, grafts in the best of the others, and records what was rejected and why. If it rules no design viable, Design runs again with its reasons, at most once more. If none survives that, the run halts.
 5. **Spec.** `writer-spec` writes the [spec folder](#the-spec), and `pusher` commits it before any code exists.

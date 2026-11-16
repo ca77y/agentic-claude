@@ -21,7 +21,10 @@ export const meta = {
     { title: "Ground", detail: "library-reader and scouts, by kind" },
     { title: "Advise", detail: "advisors, by kind" },
     { title: "Draft", detail: "writer-card writes the card from its kind's template" },
-    { title: "Check", detail: "lenses by kind, then one judge per finding; writer-card revises, up to three rounds" },
+    {
+      title: "Check",
+      detail: "lenses by kind, then one judge rules on the round's findings; writer-card revises, up to three rounds",
+    },
     { title: "File", detail: "pusher creates or updates the card, and its Deliverable label" },
   ],
 } as const satisfies WorkflowMeta;
@@ -214,8 +217,7 @@ async function checkDraft(d: Run, c: Card): Promise<Problem[]> {
 const rule = (d: Run, c: Card, problems: readonly Problem[]): Promise<string[]> =>
   confirmedProblems(
     problems,
-    (p) =>
-      `${d.WHERE}\nRule on one problem ${p.source} reported in the card draft ${c.draft}, a ${c.kind}, checking it against the draft and the card template. blocker: a delivery can't take the card as it is. major: a real flaw that should be fixed before filing. minor: real but low impact.\n\nAt ${p.location}:\n${p.text}`,
+    `${d.WHERE}\nThe checks reported problems in the card draft ${c.draft}, a ${c.kind}; check them against the draft and the card template. blocker: a delivery can't take the card as it is. major: a real flaw that should be fixed before filing. minor: real but low impact.`,
     "Check",
   );
 
