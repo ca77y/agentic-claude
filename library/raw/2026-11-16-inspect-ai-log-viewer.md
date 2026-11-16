@@ -8,7 +8,7 @@ source: https://inspect.aisi.org.uk/log-viewer.html
 accessed: 2026-11-16
 published: unknown
 provider: UK AI Security Institute (Inspect AI)
-up: "[[library/_meta/index|Library Index]]"
+up: "[[library/wiki/operations|Operations]]"
 related: ["[[library/raw/2026-11-16-inspect-ai-eval-logs|Inspect AI Eval Logs]]", "[[library/raw/2026-11-16-promptfoo-output-formats|promptfoo Output Formats]]"]
 created: 2026-11-16
 updated: 2026-11-16

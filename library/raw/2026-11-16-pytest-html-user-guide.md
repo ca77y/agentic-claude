@@ -8,7 +8,7 @@ source: https://pytest-html.readthedocs.io/en/latest/user_guide.html
 accessed: 2026-11-16
 published: unknown
 provider: pytest-html documentation (Read the Docs)
-up: "[[library/_meta/index|Library Index]]"
+up: "[[library/wiki/operations|Operations]]"
 related: []
 created: 2026-11-16
 updated: 2026-11-16

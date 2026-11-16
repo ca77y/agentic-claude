@@ -8,7 +8,7 @@ source: https://inspect.aisi.org.uk/dataframe.html
 accessed: 2026-11-16
 published: unknown
 provider: UK AI Security Institute (Inspect AI), via context7 /websites/inspect_aisi_uk
-up: "[[library/_meta/index|Library Index]]"
+up: "[[library/wiki/operations|Operations]]"
 related: []
 created: 2026-11-16
 updated: 2026-11-16

@@ -8,7 +8,7 @@ source: https://raw.githubusercontent.com/Qihoo360/harness-bench/main/docs/TASK_
 accessed: 2026-11-16
 published: unknown
 provider: Qihoo360 (Harness-Bench)
-up: "[[library/_meta/index|Library Index]]"
+up: "[[library/wiki/operations|Operations]]"
 related: []
 created: 2026-11-16
 updated: 2026-11-16
@@ -29,7 +29,7 @@ updated: 2026-11-16
   > "Oracles score only the final artifacts and workspace state." / "No LLM judge in scoring"
 - It is the only set found that compares agent harnesses on the same tasks (the Claude Code harness is among 7), and it records token usage and API cost per trial. ^e3
 - Tasks are prompts plus a workspace, with no Linear card. Setup needs Python 3.10+ and uv, and each harness runs in its own Docker image. ^e4
-- Its tasks target agent-harness and model configurations, not plugin workflows, and it has no spike, shape or validate categories. ^e5 (inference from the category list)
+- Its tasks target agent-harness and model configurations, not plugin workflows, and it has no spike, shape or validate categories (inference from the category list). ^e5
 
 ## Limitations
 

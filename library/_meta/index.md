@@ -39,6 +39,7 @@ One line per page: `- [[path|title]] — summary (updated YYYY-MM-DD)`.
 ### Wiki pages
 
 - [[library/wiki/slopify-benchmark-tooling-options|Tooling options for benchmarking slopify against bare Opus]] — Which eval frameworks, harnesses, task sets and reporting tools could run slopify and bare Opus on the same tasks, store runs and write an HTML report, with what each costs to adopt and what is unverified. (updated 2026-11-16)
+- [[library/wiki/operations|Operations]] — Map of the library pages tagged operations, about running, benchmarking and reporting on the plugins' workflows (updated 2026-11-16)
 
 ### Raw notes (indexed for navigation; synthesized in the wiki page above)
 
@@ -93,7 +94,7 @@ One line per page: `- [[path|title]] — summary (updated YYYY-MM-DD)`.
 - [[library/raw/2026-11-16-pytest-html-user-guide|pytest-html User Guide]] — The pytest-html guide shows a pytest plugin that writes one HTML report per invocation, with hooks to add summary text, environment rows, extra content and columns. (updated 2026-11-16)
 - [[library/raw/2026-11-16-qa-codes-eval-platform-decision|qa.codes eval platform decision (Braintrust vs Langfuse vs Laminar vs Arize Phoenix)]] — Search-snippet listing of hosted eval and observability platforms; no evidence retrieved of per-run static HTML export from them. (updated 2026-11-16)
 - [[library/raw/2026-11-16-repo-makefile-smoke-target|Repo Makefile (make smoke target)]] — The agentic-slop Makefile lists install, build, lint, check, format, test and smoke targets, with no benchmark or eval target; make smoke runs claude plugin eval with --ablation none over smoke-tagged cases. (updated 2026-11-16)
-- [[library/raw/2026-11-16-repo-package-json-node-only-tooling|Repo package.json (Node-only dev tooling)]] — The repo's package.json lists only npm dev dependencies, so a benchmark runner that adds Python, uv or docker would be a new kind of dependency (updated 2026-11-16)
+- [[library/raw/2026-11-16-repo-package-json-node-only-tooling|Repo package.json (Node-only dev tooling)]] — The repo's package.json lists only npm dev dependencies, so a benchmark runner that adds Python, uv or docker would be a new kind of dev dependency (updated 2026-11-16)
 - [[library/raw/2026-11-16-repo-testing-md|Repo TESTING.md]] — The repo's TESTING.md says eval runs use the local Claude Code CLI login with no test account or env file, results stay gitignored, and a full eval target (make eval, SMR-364) does not exist yet. (updated 2026-11-16)
 - [[library/raw/2026-11-16-slopify-existing-smoke-eval-cases|Existing slopify smoke eval cases]] — The six smoke eval cases under plugins/slopify/evals and the local smoke run results (aggregate-result.json, report.html, cost per run), as task material and cost floor for benchmarking slopify workflows. (updated 2026-11-16)
 - [[library/raw/2026-11-16-slopify-plugin-eval-results|slopify local plugin eval results (aggregate-result.json, report.html)]] — Layout, fields and recorded spend of this repo's existing `claude plugin eval` smoke result directories under plugins/slopify/evals/results, a floor for benchmark cost and a model for per-run output. (updated 2026-11-16)

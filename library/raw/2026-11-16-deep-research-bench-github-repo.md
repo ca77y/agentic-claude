@@ -8,7 +8,7 @@ source: https://github.com/Ayanami0730/deep_research_bench
 accessed: 2026-11-16
 published: unknown
 provider: Ayanami0730 and contributors (DeepResearch Bench)
-up: "[[library/_meta/index|Library Index]]"
+up: "[[library/wiki/operations|Operations]]"
 related: []
 created: 2026-11-16
 updated: 2026-11-16

@@ -35,4 +35,4 @@ updated: 2026-11-16
 
 ## Relevance
 
-- Informs whether Inspect AI with inspect_swe is a workable harness for a bare-model versus slopify-workflow benchmark. Two points stand out: it needs a Python and docker toolchain that the repo, which is Node-only, does not currently use, and it has no plugin-loading option in the option table.
+- Informs whether Inspect AI with inspect_swe is a workable harness for a bare-model versus slopify-workflow benchmark. Two points stand out: it needs a Python toolchain beyond the `python3` the smoke scaffolds already call, and Docker, which the repo does not use, and it has no plugin-loading option in the option table.

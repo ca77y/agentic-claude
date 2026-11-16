@@ -8,7 +8,7 @@ source: https://arxiv.org/abs/2506.11763
 accessed: 2026-11-16
 published: 2025-06-13
 provider: arXiv (paper) and the Ayanami0730/deep_research_bench GitHub repository
-up: "[[library/_meta/index|Library Index]]"
+up: "[[library/wiki/operations|Operations]]"
 related: []
 created: 2026-11-16
 updated: 2026-11-16

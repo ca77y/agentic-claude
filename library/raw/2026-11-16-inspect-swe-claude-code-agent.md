@@ -8,7 +8,7 @@ source: https://meridianlabs-ai.github.io/inspect_swe/claude_code.html
 accessed: 2026-11-16
 published: unknown
 provider: meridianlabs-ai (Inspect SWE documentation)
-up: "[[library/_meta/index|Library Index]]"
+up: "[[library/wiki/operations|Operations]]"
 related: []
 created: 2026-11-16
 updated: 2026-11-16
@@ -45,4 +45,4 @@ updated: 2026-11-16
 
 ## Relevance
 
-- Candidate C in the SMR-361 comparison of benchmark tools: it gives per-arm model and Claude Code version control and per-sample version provenance, but needs a Python/Docker toolchain the repo does not otherwise use, and its lack of a plugin option is the main gap for a bare-versus-slopify comparison.
+- Candidate C in the SMR-361 comparison of benchmark tools: it gives per-arm model and Claude Code version control and per-sample version provenance, but needs a Python toolchain beyond the `python3` the smoke scaffolds already call, and Docker, which the repo does not use, and its lack of a plugin option is the main gap for a bare-versus-slopify comparison.

@@ -8,7 +8,7 @@ source: https://inspect.aisi.org.uk/agent-bridge.html
 accessed: 2026-11-16
 published: unknown
 provider: UK AI Security Institute (Inspect AI)
-up: "[[library/_meta/index|Library Index]]"
+up: "[[library/wiki/operations|Operations]]"
 related: []
 created: 2026-11-16
 updated: 2026-11-16

@@ -4,7 +4,7 @@ type: raw
 summary: Layout, fields and recorded spend of this repo's existing `claude plugin eval` smoke result directories under plugins/slopify/evals/results, a floor for benchmark cost and a model for per-run output.
 tags: []
 aliases: [slopify eval results, claude plugin eval output]
-source: /Users/catty/Workspace/agentic-claude/plugins/slopify/evals/results
+source: plugins/slopify/evals/results
 accessed: 2026-11-16
 published: unknown
 provider: local files
@@ -17,7 +17,7 @@ updated: 2026-11-16
 # slopify local plugin eval results (aggregate-result.json, report.html)
 
 > [!quote] Source
-> **URL**: /Users/catty/Workspace/agentic-claude/plugins/slopify/evals/results (local directory, not a web URL; the repo gitignores `plugins/*/evals/results/`)
+> **URL**: `plugins/slopify/evals/results` in the repo (local directory, not a web URL; the repo gitignores `plugins/*/evals/results/`)
 > **Accessed**: 2026-11-16
 > **Method/Context**: Local result directories written by earlier `claude plugin eval` runs (smoke tagged, `--ablation none`), read while researching SMR-361 (benchmarking the slopify workflows against a bare model). Repo HEAD 1c5aefd. The finding below is an inference from the file listing and the JSON fields, not a quotation.
 

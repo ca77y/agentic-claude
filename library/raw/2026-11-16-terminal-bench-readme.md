@@ -8,7 +8,7 @@ source: https://raw.githubusercontent.com/laude-institute/terminal-bench/main/RE
 accessed: 2026-11-16
 published: unknown
 provider: Laude Institute (Terminal-Bench)
-up: "[[library/_meta/index|Library Index]]"
+up: "[[library/wiki/operations|Operations]]"
 related: []
 created: 2026-11-16
 updated: 2026-11-16

@@ -8,7 +8,7 @@ source: https://github.com/Qihoo360/harness-bench
 accessed: 2026-11-16
 published: unknown
 provider: Qihoo360
-up: "[[library/_meta/index|Library Index]]"
+up: "[[library/wiki/operations|Operations]]"
 related: []
 created: 2026-11-16
 updated: 2026-11-16
@@ -31,7 +31,7 @@ updated: 2026-11-16
 - Comparison design: it is the only set found that compares agent harnesses on the same tasks. The Claude Code harness is among 7 compared. It records token usage and API cost per trial. ^e3
 - Setup: Python 3.10+ and uv; each harness runs in its own Docker image. ^e4
 - Task format: prompts plus a workspace, with no Linear card. ^e5
-- Fit to slopify: the tasks target agent-harness and model configurations, not plugin workflows, and the set has no spike, shape or validate categories. ^e6 (inference from the taxonomy)
+- Fit to slopify: the tasks target agent-harness and model configurations, not plugin workflows, and the set has no spike, shape or validate categories (inference from the taxonomy). ^e6
 
 ## Limitations
 

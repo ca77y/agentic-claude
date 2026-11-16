@@ -8,7 +8,7 @@ source: https://huggingface.co/datasets/harborframework/terminal-bench-2.1
 accessed: 2026-11-16
 published: unknown
 provider: Harbor Framework (Hugging Face dataset)
-up: "[[library/_meta/index|Library Index]]"
+up: "[[library/wiki/operations|Operations]]"
 related: []
 created: 2026-11-16
 updated: 2026-11-16

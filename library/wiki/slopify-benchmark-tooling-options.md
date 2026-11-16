@@ -11,7 +11,7 @@ tags:
 aliases:
   - slopify benchmark tooling
   - SMR-361 research
-up: "[[library/_meta/index|Library Index]]"
+up: "[[library/wiki/operations|Operations]]"
 related:
   - "[[library/raw/2026-11-16-claude-plugin-eval-help]]"
   - "[[library/raw/2026-11-16-repo-testing-md]]"
@@ -119,11 +119,11 @@ Each row is explained below.
 - For coding agents the Anthropic guide names deterministic graders such as unit tests as natural, with an optional LLM rubric; research agents have no binary pass/fail and need rubrics "frequently calibrated against expert human judgment" ([[library/raw/2026-11-16-demystifying-evals-for-ai-agents#^e3]]).
 - LLM judges: strong judges agree with humans over 80% of the time but show position, verbosity and self-enhancement bias ([[library/raw/2026-11-16-judging-llm-as-a-judge-mt-bench-arxiv#^e1]]). The source is about chat answers, not agentic or coding output, and no agent-specific judge-reliability source was retrieved. DeepResearch Bench reports judge alignment of 71.82 against a 68.78 human baseline, from the benchmark's authors ([[library/raw/2026-11-16-deep-research-bench-github-repo#^e4]]).
 - Comparing two arms: Anthropic recommends paired differences, standard errors, 95% confidence intervals, resampling and power analysis ([[library/raw/2026-11-16-anthropic-statistical-approach-to-model-evals#^e1]]), because frontier-model question scores correlate between 0.3 and 0.7 ([[library/raw/2026-11-16-anthropic-statistical-approach-to-model-evals#^e2]]).
-- No candidate was found to compute a paired two-arm confidence interval. Only per-arm repeat handling was found: promptfoo `repeatStability` ([[library/raw/2026-11-16-promptfoo-evaluate-llm-temperature#^e2]]) and Inspect epochs reducers and `stderr`. `claude plugin eval` reports a "score delta" for its baseline arm ([[library/raw/2026-11-16-claude-plugin-eval-help#^e2]]); whether it includes any interval was not checked. These absences are from retrieved excerpts only.
+- No candidate was found to compute a paired two-arm confidence interval. Only per-arm repeat handling was found: promptfoo `repeatStability` ([[library/raw/2026-11-16-promptfoo-evaluate-llm-temperature#^e1]]) and Inspect epochs reducers and `stderr`. `claude plugin eval` reports a "score delta" for its baseline arm ([[library/raw/2026-11-16-claude-plugin-eval-help#^e2]]); whether it includes any interval was not checked. These absences are from retrieved excerpts only.
 
 ## Reporting tools outside the frameworks
 
-- pytest-html writes one HTML file per invocation with `--html=report.html --self-contained-html`, with hooks for summary text, environment rows and extra content; images added as files stay external ([[library/raw/2026-11-16-pytest-html-user-guide#^e2]], [[library/raw/2026-11-16-pytest-html-user-guide#^e3]], [[library/raw/2026-11-16-pytest-html-user-guide#^e4]]). It applies only if the benchmark runs under pytest, which a Node-only repo does not currently do.
+- pytest-html writes one HTML file per invocation with `--html=report.html --self-contained-html`, with hooks for summary text, environment rows and extra content; images added as files stay external ([[library/raw/2026-11-16-pytest-html-user-guide#^e2]], [[library/raw/2026-11-16-pytest-html-user-guide#^e3]], [[library/raw/2026-11-16-pytest-html-user-guide#^e4]]). It applies only if the benchmark runs under pytest, which the repo's tests don't use today.
 - Plotly's `write_html` writes an interactive figure, embedding plotly.js or loading it from a CDN ([[library/raw/2026-11-16-plotly-write-html#^e1]], [[library/raw/2026-11-16-plotly-write-html#^e2]]). Search snippet only.
 - A static report generated from a template library such as Jinja2 was not researched; its docs were not fetched.
 

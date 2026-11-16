@@ -8,7 +8,7 @@ source: https://docs.harborframework.com/jobs/loading-trajectories
 accessed: 2026-11-16
 published: unknown
 provider: Harbor (harbor-framework)
-up: "[[library/_meta/index|Library Index]]"
+up: "[[library/wiki/operations|Operations]]"
 related: []
 created: 2026-11-16
 updated: 2026-11-16

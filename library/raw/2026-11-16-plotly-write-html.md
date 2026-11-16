@@ -8,7 +8,7 @@ source: https://plotly.github.io/plotly.py-docs/generated/plotly.io.write_html.h
 accessed: 2026-11-16
 published: unknown
 provider: Plotly
-up: "[[library/_meta/index|Library Index]]"
+up: "[[library/wiki/operations|Operations]]"
 related: []
 created: 2026-11-16
 updated: 2026-11-16

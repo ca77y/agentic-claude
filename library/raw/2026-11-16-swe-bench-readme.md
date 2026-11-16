@@ -8,7 +8,7 @@ source: https://raw.githubusercontent.com/SWE-bench/SWE-bench/main/README.md
 accessed: 2026-11-16
 published: unknown
 provider: SWE-bench (Princeton NLP and contributors)
-up: "[[library/_meta/index|Library Index]]"
+up: "[[library/wiki/operations|Operations]]"
 related: []
 created: 2026-11-16
 updated: 2026-11-16
