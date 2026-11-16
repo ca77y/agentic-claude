@@ -33,9 +33,7 @@ jobs:
           fetch-depth: 1
 
       - name: Run Claude Code Review
-        # Pinned to v1.0.253, the last release whose reviews finished: later releases end the run while the review's
-        # background agents are still working (anthropics/claude-code-action#1852).
-        uses: anthropics/claude-code-action@5eb090f3c3afd701a0672cd32981197ca27688f6 # v1.0.253
+        uses: anthropics/claude-code-action@f3b070c88125d33dbae5653df5f143101d4ea9dc # v1.0.276
         env:
           # The review fans out to subagents that can outlast a headless session's 10-minute wait for background work.
           CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS: "0"
@@ -43,9 +41,14 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           additional_permissions: |
             actions: read
-          plugin_marketplaces: "https://github.com/anthropics/claude-code.git"
-          plugins: "code-review@claude-code-plugins"
-          # Tag mode gives the review agents the GitHub commenting tools.
+          plugin_marketplaces: "https://github.com/anthropics/claude-plugins-official.git"
+          plugins: "code-review@claude-plugins-official"
+          # Tag mode posts the progress comment that docs/FORGE.md's review status reads. It passes the prompt as
+          # instructions rather than as a slash command, so the prompt asks for the command through the Skill tool.
           track_progress: true
-          prompt: "/code-review:code-review --comment ${{ github.repository }}/pull/${{ github.event.pull_request.number || github.event.issue.number }}"
-          claude_args: "--model claude-opus-5-5 --effort xhigh"
+          show_full_output: true
+          prompt: "Run the `code-review:code-review` command with the Skill tool, with the arguments `--comment ${{ github.repository }}/pull/${{ github.event.pull_request.number || github.event.issue.number }}`."
+          # The action sets up the inline-comment tool only when it is allowed here.
+          claude_args: >-
+            --model claude-opus-5-5 --effort xhigh
+            --allowedTools "Skill,mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*)"
