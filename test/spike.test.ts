@@ -3,7 +3,16 @@ import assert from "node:assert/strict";
 import { beforeEach, describe, test } from "node:test";
 
 import deliverSpike from "../src/slopify/workflows/deliver-spike.ts";
-import { calls, current, installAgents, type Reply, type Script } from "./harness.ts";
+import {
+  PR_AGENTS,
+  calls,
+  current,
+  describedBeforeEachPosting,
+  installAgents,
+  isPosting,
+  type Reply,
+  type Script,
+} from "./harness.ts";
 
 installAgents();
 
@@ -64,6 +73,7 @@ const DEFAULTS: Record<string, Script> = {
   checks: () => ({ commands: [{ command: "lint", exitCode: 0, failingLines: "" }] }),
   watcher: () => ({ outcome: "not-declared", waitingFor: "none", limitMinutes: 60, reference: "r", findings: [] }),
   pusher: (_t, label, prompt) => pusher(label, prompt),
+  ...PR_AGENTS,
 };
 const happy = (over: Partial<Record<string, Script>> = {}): Script => {
   const agents = { ...DEFAULTS, ...over };
@@ -124,6 +134,13 @@ describe("deliver-spike", () => {
     const push = briefOf("push the round");
     assert.ok(push.includes("When docs/FORGE.md declares no review, fire nothing: that is not unmet."));
     assert.ok(push.includes("fired <the trigger time, or none when docs/FORGE.md declares no review>"));
+  });
+
+  test("every push that opens or updates the PR runs writer-pr, then lens-pr, then pusher (deliver-spike)", async () => {
+    const r = await run(happy());
+    assert.equal(r.status, "ready");
+    assert.ok(calls.filter((c) => isPosting(c)).length >= 2);
+    assert.ok(describedBeforeEachPosting());
   });
 
   test("tells pusher that an operation the brief doesn't ask for is not unmet", async () => {

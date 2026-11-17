@@ -10,7 +10,16 @@ import deliverSpike from "../src/slopify/workflows/deliver-spike.ts";
 import deliverStory from "../src/slopify/workflows/deliver-story.ts";
 import deliverTrivial from "../src/slopify/workflows/deliver-trivial.ts";
 import research from "../src/slopify/workflows/research.ts";
-import { calls, current, installAgents, type Reply, type Script } from "./harness.ts";
+import {
+  PR_AGENTS,
+  calls,
+  current,
+  describedBeforeEachPosting,
+  installAgents,
+  isPosting,
+  type Reply,
+  type Script,
+} from "./harness.ts";
 
 installAgents();
 
@@ -57,6 +66,7 @@ const DEFAULTS: Record<string, Script> = {
   "lens-consistency": () => LENS_PASS,
   judge: (_t, label) => (label === "decide" ? VIABLE : rulings(problem("major"))),
   "library-reader": () => ({ summary: "s", supported: [], gaps: [] }),
+  ...PR_AGENTS,
 };
 const happy = (over: Partial<Record<string, Script>> = {}): Script => {
   const agents = { ...DEFAULTS, ...over };
@@ -419,6 +429,16 @@ describe("deliver-story's intake", () => {
     assert.ok(count("designer") > 0);
   });
 
+  test("every push that opens or updates the PR runs writer-pr, then lens-pr, then pusher (deliver-story)", async () => {
+    current.script = storyRun;
+    Object.assign(globalThis, { args: "SMR-1" });
+    const r = await deliverStory();
+    assert.equal(r.status, "ready");
+    assert.ok(calls.filter((c) => isPosting(c)).length >= 2);
+    assert.ok(describedBeforeEachPosting());
+    assert.match(calls.findLast((c) => c.type === "writer-pr")?.prompt ?? "", /Spec: docs\/specs\/\S+/);
+  });
+
   test("asks for the issue when the argument is empty", async () => {
     current.script = happy();
     Object.assign(globalThis, { args: "" });
@@ -514,6 +534,28 @@ const bugRun =
       ? { done: true, unmet: [], operations: [{ op: "worktree", reference: "/p/wt" }] }
       : promptRun(type, label, prompt);
   };
+// A Deliverable story whose spec is already committed, so the run goes straight to the loop.
+const storyRun: Script = (type, label, prompt) => {
+  if (type === "scout-checkpoint") {
+    return {
+      ...SCOUT,
+      evidence: [
+        { source: "worktree", location: "x", excerpt: "/p/wt" },
+        { source: "build-json", location: "x", excerpt: JSON.stringify(SPEC.build) },
+        { source: "validate-json", location: "x", excerpt: JSON.stringify(SPEC.validate) },
+      ],
+    };
+  }
+  if (type === "validator") {
+    return {
+      results: [{ id: "c1", result: "pass", ran: "p", evidence: ["e.png"], detail: "", setting: "draft" }],
+      uncategorizedSetting: "draft",
+    };
+  }
+  return type === "judge" && label === "gateway"
+    ? { missed: [], docsToAdd: [] }
+    : (SMALL_AGENTS[type]?.(type, label, prompt) ?? card("Feature, Deliverable")(type, label, prompt));
+};
 const createBrief = (): string => calls.find((c) => c.label === "create the worktree")?.prompt ?? "";
 const failedReport = (): string => calls.find((c) => c.label === "report the failed reproduction")?.prompt ?? "";
 
@@ -606,9 +648,27 @@ describe("the small workflows", () => {
     await deliverBugfix();
     const validator = calls.find((c) => c.type === "validator");
     assert.ok(validator?.prompt.includes("run add(1, 1)"));
-    const opened = calls.find((c) => c.label === "push the round");
-    assert.ok(opened?.prompt.includes("## Reproduced"));
-    assert.ok(opened?.prompt.includes("Before the fix: got 0"));
+    const described = calls.find((c) => c.type === "writer-pr")?.prompt ?? "";
+    assert.ok(described.includes("run add(1, 1)"), "writer-pr is told the reproduction");
+    assert.ok(described.includes("got 0"), "writer-pr is told how the bug behaved before the fix");
+  });
+
+  test("every push that opens or updates the PR runs writer-pr, then lens-pr, then pusher (deliver-trivial)", async () => {
+    current.script = promptRun;
+    Object.assign(globalThis, { args: "Add mul to calc.py" });
+    const r = await deliverTrivial();
+    assert.equal(r.status, "ready");
+    assert.ok(calls.filter((c) => isPosting(c)).length >= 2);
+    assert.ok(describedBeforeEachPosting());
+  });
+
+  test("every push that opens or updates the PR runs writer-pr, then lens-pr, then pusher (deliver-bugfix)", async () => {
+    current.script = bugRun(REPRO_OK);
+    Object.assign(globalThis, { args: "SMR-13" });
+    const r = await deliverBugfix();
+    assert.equal(r.status, "ready");
+    assert.ok(calls.filter((c) => isPosting(c)).length >= 2);
+    assert.ok(describedBeforeEachPosting());
   });
 
   test("deliver-bugfix labels the card Unreproducible after three tries, saying why, and opens no worktree", async () => {

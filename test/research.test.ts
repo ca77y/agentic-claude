@@ -3,7 +3,17 @@ import assert from "node:assert/strict";
 import { beforeEach, describe, test } from "node:test";
 
 import research from "../src/slopify/workflows/research.ts";
-import { calls, current, installAgents, type Reply, type Script } from "./harness.ts";
+import {
+  PR_AGENTS,
+  calls,
+  current,
+  describedBeforeEachPosting,
+  installAgents,
+  isPosting,
+  scriptOf,
+  type Reply,
+  type Script,
+} from "./harness.ts";
 
 installAgents();
 
@@ -74,11 +84,9 @@ const DEFAULTS: Record<string, Script> = {
   checks: () => ({ commands: [{ command: "lint", exitCode: 0, failingLines: "" }] }),
   watcher: () => ({ outcome: "finished", waitingFor: "none", limitMinutes: 60, reference: "r", findings: [] }),
   pusher: (_t, _l, prompt) => (prompt.includes("open the branch's PR") ? PR : OK_PUSH),
+  ...PR_AGENTS,
 };
-const happy = (over: Partial<Record<string, Script>> = {}): Script => {
-  const agents = { ...DEFAULTS, ...over };
-  return (type, label, prompt) => agents[type]?.(type, label, prompt) ?? null;
-};
+const happy = (over: Partial<Record<string, Script>> = {}): Script => scriptOf(DEFAULTS, over);
 const count = (type: string, label?: string): number =>
   calls.filter((c) => c.type === type && (label === undefined || c.label.includes(label))).length;
 const integratePrompt = (): string => calls.find((c) => c.label === "integrate")?.prompt ?? "";
@@ -107,9 +115,17 @@ describe("research", () => {
       ),
     );
     assert.ok(
-      calls.some((c) => c.label === "push the round" && c.prompt.includes("Findings: `library/wiki/parser-speed.md`")),
+      calls.some((c) => c.type === "writer-pr" && c.prompt.includes("library/wiki/parser-speed.md")),
+      "writer-pr is told the main page",
     );
     assert.ok(calls.find((c) => c.label === "plan")?.prompt.includes(".tmp/research/smr-30.plan.md"));
+  });
+
+  test("every push that opens or updates the PR runs writer-pr, then lens-pr, then pusher (research)", async () => {
+    const r = await run("SMR-30", happy());
+    assert.equal(r.status, "ready");
+    assert.ok(calls.filter((c) => isPosting(c)).length >= 2);
+    assert.ok(describedBeforeEachPosting());
   });
 
   test("writes one raw note for a source two sub-questions share", async () => {

@@ -30,6 +30,7 @@ import {
   routeOf,
   waves,
   type CriterionRow,
+  type DeliveryKind,
   type Kind,
   type Listed,
   type Route,
@@ -305,6 +306,7 @@ interface LoopDocument {
 
 export interface LoopInput {
   d: Run;
+  kind?: DeliveryKind;
   where: string;
   /** The issue's why and what, for agents that judge against it. */
   story: string;
