@@ -38,7 +38,14 @@ const CONFIRMED = {
   fingerprint: "f",
 };
 const PR = { done: true, unmet: [], operations: [{ op: "pr", reference: "PR-3" }] };
-const OK_PUSH = { done: true, unmet: [], operations: [{ op: "commit", reference: "abc" }] };
+const OK_PUSH = {
+  done: true,
+  unmet: [],
+  operations: [
+    { op: "commit", reference: "abc" },
+    { op: "card", reference: "comment" },
+  ],
+};
 
 const scribe = (label: string): Reply => {
   if (label === "plan" || label.startsWith("revise")) {

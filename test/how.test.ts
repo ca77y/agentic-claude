@@ -31,7 +31,14 @@ const DESIGN = { approach: "a", reuse: [], create: [], interfaces: [], data: [],
 const SCOUT = { answer: "a", evidence: [], gaps: [] };
 const LENS_PASS = { verdict: "pass", evaluated: "x", findings: [], limits: "none" };
 const VIABLE = { viable: true, chosen: "smallest", grafts: [], rejected: [], reasons: ["fits"] };
-const OK_PUSH = { done: true, unmet: [], operations: [{ op: "commit", reference: "abc" }] };
+const OK_PUSH = {
+  done: true,
+  unmet: [],
+  operations: [
+    { op: "commit", reference: "abc" },
+    { op: "card", reference: "comment" },
+  ],
+};
 
 const isAdvisor = (type: string): boolean => type.startsWith("advisor-");
 const NO_FINDINGS = { findings: [] };

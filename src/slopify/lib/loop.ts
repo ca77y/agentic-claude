@@ -268,6 +268,8 @@ interface OpenItem {
   severity: Severity;
   fingerprint: string;
   reason: string;
+  /** What has to change: a test-kind problem leaves the production code as it is. */
+  kind?: Kind;
 }
 /** One change the inner loop makes correct: a task from the spec, or one problem. */
 interface Change {
@@ -469,12 +471,20 @@ interface CycleTest {
   specProblem: string;
 }
 
+// A test-kind problem is in the tests, so its test may pass on the current code, and fail-first can't be asked of it.
+const testOnly = (c: Change): boolean => c.item?.kind === "test";
+
+const FAIL_FIRST =
+  "It must fail on the current code on its merit: an assertion about the behavior fails, never a compile, type, or import error. When the test names code that doesn't exist yet, add the smallest stub that lets it compile and run, such as a declaration with the right signature that doesn't do the work, and list it in stubs; change no other production code. End by running the Checks commands TESTING.md declares: each must pass except for the new test's failing assertions.";
+const GUARD =
+  "The problem is in the tests, so the test may already pass on the current code; that is expected, not a problem. It must fail on its merit if the behavior it states broke: check this by breaking the behavior in a temporary copy. Change no production code; when the current code doesn't do what the test states, the test fails and the fix makes it pass. End by running the Checks commands TESTING.md declares, and return their output.";
+
 async function writeTest(l: Loop, c: Change, reason: string): Promise<CycleTest> {
   const t = must(
     await callCoder(
       `${changeBrief(l, c)}
 
-Write a new test or change an existing one, so that it states the required behavior. It must fail on the current code on its merit: an assertion about the behavior fails, never a compile, type, or import error. When the test names code that doesn't exist yet, add the smallest stub that lets it compile and run, such as a declaration with the right signature that doesn't do the work, and list it in stubs; change no other production code. End by running the Checks commands TESTING.md declares: each must pass except for the new test's failing assertions. Return that output. When the behavior can't be expressed as a test, return noTest with the reason instead.${reason ? `\n\nAn earlier attempt showed the test has to change: ${reason}` : ""}`,
+Write a new test or change an existing one, so that it states the required behavior. ${testOnly(c) ? GUARD : FAIL_FIRST} Return that output. When the behavior can't be expressed as a test, return noTest with the reason instead.${reason ? `\n\nAn earlier attempt showed the test has to change: ${reason}` : ""}`,
       `${c.id}: test`,
       "Build",
       TEST_SCHEMA,
@@ -487,14 +497,18 @@ Write a new test or change an existing one, so that it states the required behav
   if (t.specProblem) return { paths: [], commit: "", noTest: "", specProblem: t.specProblem };
   if (t.noTest || t.tests.length === 0) return { paths: [], commit: "", noTest: t.noTest, specProblem: "" };
   l.testChanges.push(...t.tests);
-  const sha = await commit(l, [...t.tests, ...t.stubs], `add a failing test for ${c.id}`, coderRepair(l, c));
+  const message = `add a ${testOnly(c) ? "" : "failing "}test for ${c.id}`;
+  const sha = await commit(l, [...t.tests, ...t.stubs], message, coderRepair(l, c));
   return { paths: t.tests, commit: sha, noTest: "", specProblem: "" };
 }
 
 function qaBrief(l: Loop, c: Change, test: CycleTest): string {
+  const fails = testOnly(c)
+    ? "Check in a temporary copy that the test fails on one of its assertions when the behavior it states is broken, and that it passes at HEAD."
+    : "Check in a temporary copy that the test fails at that commit on one of its assertions, not on a compile, type, or import error, and that it passes at HEAD.";
   const history = test.commit
     ? `The test commit is ${test.commit}, and its protected paths are:\n${list(test.paths)}
-Check in a temporary copy that the test fails at that commit on one of its assertions, not on a compile, type, or import error, and that it passes at HEAD. Check that nothing after that commit touches a protected path, and that nothing skips, weakens, or excludes the test, for example by loosening a tolerance, regenerating a snapshot, or changing the test config.`
+${fails} Check that nothing after that commit touches a protected path, and that nothing skips, weakens, or excludes the test, for example by loosening a tolerance, regenerating a snapshot, or changing the test config.`
     : `This change has no test, because: ${test.noTest}. Judge that reason.`;
   return `${changeBrief(l, c)}
 
@@ -548,7 +562,28 @@ interface TryResult {
   /** What is still wrong; empty when this try delivered the change. */
   reason: string;
   rewriteTest: boolean;
+  /** The simplifier found the test holds more than it needs. */
+  trim?: boolean;
 }
+/** What one change's tries have settled so far. */
+interface ChangeState {
+  /** The simplifier finding the current test was last rewritten for, or empty. */
+  trim: string;
+  /** What a judge ruled between the simplifier and the coder, which later tries keep to. */
+  rulings: string[];
+}
+
+const TRIM_SCHEMA = {
+  type: "object",
+  required: ["keep", "reason"],
+  properties: {
+    keep: {
+      type: "boolean",
+      description: "true when the trimmed test stands; false when the test needs what the coder asks for",
+    },
+    reason: { type: "string", description: "What the evidence shows" },
+  },
+} as const;
 
 // A coder decides only how, so a question about what to build goes back to whoever writes the brief: the spec's writer, or,
 // with no spec, the person reading the draft.
@@ -570,7 +605,14 @@ function specStopped(l: Loop, c: Change, problem: string): TryResult {
 }
 
 // One fix, and whatever validates it.
-async function tryFix(l: Loop, c: Change, cycle: CycleTest, lastFailure: string, attempt: number): Promise<TryResult> {
+async function tryFix(
+  l: Loop,
+  c: Change,
+  cycle: CycleTest,
+  lastFailure: string,
+  attempt: number,
+  state: ChangeState,
+): Promise<TryResult> {
   const fix = must(
     await callCoder(
       fixPrompt(l, c, cycle, lastFailure),
@@ -587,50 +629,103 @@ async function tryFix(l: Loop, c: Change, cycle: CycleTest, lastFailure: string,
   // What the coder changed is committed even when it also reports a problem, so no later change builds on it uncommitted.
   const sha = fix.changed.length === 0 ? "" : await commit(l, fix.changed, `implement ${c.id}`, coderRepair(l, c));
   if (fix.specProblem) return specStopped(l, c, fix.specProblem);
-  if (fix.testProblem) return { reason: fix.testProblem, rewriteTest: true };
+  if (fix.testProblem)
+    return state.trim ? ruleOnTrim(l, c, state, fix.testProblem) : { reason: fix.testProblem, rewriteTest: true };
   // A rejected commit is already an open problem, and qa can't judge what isn't committed.
   if (sha === null) return DONE;
   const failing = await failingChecks(l);
   if (failing) return { reason: failing, rewriteTest: false };
-  // A small flow's qa runs once, on its first change; a review fix there has only the checks.
-  if (l.small && l.round > 0) return { reason: "", rewriteTest: false };
+  // A small flow's qa runs once, on its first change; a review fix there has only the checks, unless it is a test whose
+  // only proof is qa breaking the behavior it states.
+  if (l.small && l.round > 0 && !testOnly(c)) return DONE;
   const verdict = await qaOf(l, c, cycle);
   if (verdict.verdict !== "pass") {
     const reason = verdict.findings.map((f) => `${f.location}: ${f.problem}`).join("\n") || verdict.limits;
     return { reason, rewriteTest: verdict.testAtFault };
   }
-  return { reason: await unneeded(l, c, cycle, sha), rewriteTest: false };
+  return unneeded(l, c, cycle, sha, state);
 }
 
-// Once qa passes, a fresh simplifier looks for code the change adds but doesn't need; what it finds goes back to the coder.
-async function unneeded(l: Loop, c: Change, cycle: CycleTest, fixCommit: string): Promise<string> {
+// Once qa passes, a fresh simplifier looks for code the change adds but doesn't need. Each finding goes to whoever can
+// act on it: one in the change's test to the test's writer, since the coder can't touch a protected path, and any other
+// to the coder.
+async function unneeded(
+  l: Loop,
+  c: Change,
+  cycle: CycleTest,
+  fixCommit: string,
+  state: ChangeState,
+): Promise<TryResult> {
   const base = cycle.commit || fixCommit;
   const diff = base ? `the diff from the parent of ${base} to HEAD` : "the change's uncommitted diff";
+  const settled =
+    state.rulings.length > 0
+      ? `\n\nA judge already ruled on these, so report nothing against them:\n${list(state.rulings)}`
+      : "";
   const v = must(
     await dispatch(
-      `${changeBrief(l, c)}\n\nJudge ${diff}, in the worktree ${worktreeOf(l)}, for code it adds but doesn't need.${cycle.paths.length > 0 ? ` Its test is in:\n${list(cycle.paths)}` : ""}`,
+      `${changeBrief(l, c)}\n\nJudge ${diff}, in the worktree ${worktreeOf(l)}, for code it adds but doesn't need.${cycle.paths.length > 0 ? ` Its test is in:\n${list(cycle.paths)}` : ""}${settled}`,
       { agentType: "slopify:simplifier", label: `${c.id}: simplify`, phase: "Build", schema: LENS_SCHEMA },
     ),
     "build",
     `A simplifier verdict on ${c.id}.`,
   );
-  return defectsOf(v)
-    .map((f) => `${f.location}: ${f.problem}`)
-    .join("\n");
+  const found = defectsOf(v);
+  const inTest = (location: string): boolean => cycle.paths.some((p) => location.startsWith(p));
+  const text = (fs: typeof found): string => fs.map((f) => `${f.location}: ${f.problem}`).join("\n");
+  const test = text(found.filter((f) => inTest(f.location)));
+  return test ? { reason: test, rewriteTest: true, trim: true } : { reason: text(found), rewriteTest: false };
 }
 
-// Test, fix, validate. Returns what's still wrong after the last try, or an empty string.
-async function runChange(l: Loop, c: Change): Promise<string> {
-  let test = await writeTest(l, c, "");
-  let last: TryResult = { reason: "", rewriteTest: false };
-  for (let attempt = 1; attempt <= MAX_INNER_TRIES; attempt += 1) {
-    if (last.rewriteTest) test = await writeTest(l, c, last.reason);
-    if (test.specProblem) return specStopped(l, c, test.specProblem).reason;
-    if (test.commit === null) return "";
-    last = await tryFix(l, c, test, last.rewriteTest ? "" : last.reason, attempt);
-    if (!last.reason) return "";
+// The coder asks to put back what the simplifier trimmed from the test. Trying both in turn would only loop, so one judge
+// rules, and every later try keeps to that ruling.
+async function ruleOnTrim(l: Loop, c: Change, state: ChangeState, problem: string): Promise<TryResult> {
+  const ruled = must(
+    await dispatch(
+      `${changeBrief(l, c)}
+
+In the worktree ${worktreeOf(l)}, the simplifier found the change's test held more than it needs, and the test was rewritten without it:
+<<<SIMPLIFIER
+${state.trim}
+SIMPLIFIER>>>
+The coder now says the test needs it:
+<<<CODER
+${problem}
+CODER>>>
+Rule against the code and the change's criteria which stands. The trimmed test stands unless the coder shows a behavior the change must handle that it no longer checks.`,
+      { agentType: "slopify:judge", label: `${c.id}: rule on the test`, phase: "Build", schema: TRIM_SCHEMA },
+    ),
+    "build",
+    `A ruling on ${c.id}'s test.`,
+  );
+  state.trim = "";
+  if (ruled.keep) {
+    state.rulings.push(`The test stays without what the simplifier removed: ${ruled.reason}`);
+    return {
+      reason: `A judge ruled the test stands as it is: ${ruled.reason} Make it pass without asking to change it.`,
+      rewriteTest: false,
+    };
   }
-  return last.reason;
+  state.rulings.push(`The test keeps what the coder asked for: ${problem} (${ruled.reason})`);
+  return { reason: `${problem}\nA judge ruled the test needs this: ${ruled.reason}`, rewriteTest: true };
+}
+
+// Test, fix, validate. Returns what's still wrong after the last try; its reason is empty when the change is done.
+async function runChange(l: Loop, c: Change): Promise<TryResult> {
+  const state: ChangeState = { trim: "", rulings: [] };
+  let test = await writeTest(l, c, "");
+  let last: TryResult = DONE;
+  for (let attempt = 1; attempt <= MAX_INNER_TRIES; attempt += 1) {
+    if (last.rewriteTest) {
+      test = await writeTest(l, c, last.reason);
+      state.trim = last.trim ? last.reason : "";
+    }
+    if (test.specProblem) return specStopped(l, c, test.specProblem);
+    if (test.commit === null) return DONE;
+    last = await tryFix(l, c, test, last.rewriteTest ? "" : last.reason, attempt, state);
+    if (!last.reason) return DONE;
+  }
+  return last;
 }
 
 // ---- Build ------------------------------------------------------------------
@@ -655,13 +750,13 @@ function changeOfItem(l: Loop, item: OpenItem, index: number): Change {
 }
 
 // parallel() turns a throw into null, so a halt in one inner loop waits here until its wave has finished.
-async function changeHoldingHalt(l: Loop, c: Change): Promise<string> {
+async function changeHoldingHalt(l: Loop, c: Change): Promise<TryResult> {
   try {
     return await runChange(l, c);
   } catch (error) {
     if (!(error instanceof Halt)) throw error;
     l.halted ??= error;
-    return "";
+    return DONE;
   }
 }
 
@@ -678,14 +773,17 @@ async function runChanges(l: Loop, changes: readonly Change[]): Promise<void> {
     if (l.halted) throw l.halted;
     for (const [i, c] of wave.entries()) {
       const remaining = left[i];
-      if (remaining === "") continue;
-      // An inner loop that runs out of tries doesn't stop the round: its problem stays open as a blocker.
+      if (remaining?.reason === "") continue;
+      const reason = remaining?.reason ?? "the inner loop didn't return";
+      // An inner loop that runs out of tries doesn't stop the round: its problem stays open as a blocker, and one that
+      // ended on the test is a test-kind problem.
       l.open.push({
-        problem: c.item?.problem ?? { source: "qa", location: c.id, text: remaining ?? "the inner loop didn't return" },
+        problem: c.item?.problem ?? { source: "qa", location: c.id, text: reason },
         route: "coder",
         severity: "blocker",
         fingerprint: c.item?.fingerprint ?? c.id,
-        reason: remaining ?? "the inner loop didn't return",
+        reason,
+        kind: remaining?.rewriteTest ? "test" : (c.item?.kind ?? "code"),
       });
     }
   }
@@ -1003,7 +1101,7 @@ async function judgeProblems(l: Loop, problems: readonly Problem[], phaseTitle: 
     listRouted(
       l,
       route,
-      { problem: p, route, severity: v.severity, fingerprint: v.fingerprint, reason: v.reason },
+      { problem: p, route, severity: v.severity, fingerprint: v.fingerprint, reason: v.reason, kind: v.kind },
       v.kind,
     );
   }
@@ -1196,13 +1294,13 @@ async function finish(l: Loop, ready: boolean): Promise<void> {
     ...draftReasons(l).map((x) => x.text),
   ];
   const card = ready
-    ? `Perform the operations docs/BOARD.md declares for when the PR's review is clean on card ${l.cardId} (for example moving it to In Review), and comment on the card with the evidence and assumptions:\n${list(questions)}`
+    ? `Perform each operation docs/BOARD.md declares for when the PR's review is clean on card ${l.cardId}, such as a status move, and comment on the card with the evidence and assumptions:\n${list(questions)}`
     : `Comment on card ${l.cardId} with what is open:\n${list(questions)}`;
   pushed(
     await inOrder(l, () =>
       callPusher(
         l.d.pushBrief(
-          `Update the PR ${state.pr}. ${bodyInstruction(l)}\n${ready ? "Mark the PR ready for review if it is a draft, as docs/FORGE.md declares.\n" : "Convert the PR to a draft, as docs/FORGE.md declares, so it shows the work is unfinished.\n"}${issues}${card}`,
+          `Update the PR ${state.pr}. ${bodyInstruction(l)}\n${ready ? "Mark the PR ready for review if it is a draft, as docs/FORGE.md declares.\n" : "Convert the PR to a draft, as docs/FORGE.md declares, so it shows the work is unfinished.\n"}${issues}`,
           [`delivery ${ready ? "ready" : "draft"}`],
         ),
         ready ? "mark the PR ready" : "report the draft",
@@ -1211,6 +1309,20 @@ async function finish(l: Loop, ready: boolean): Promise<void> {
     ),
     "The final PR update.",
   );
+  // The card gets its own brief, since a pusher handed it after the PR work tends to stop once the PR is done.
+  const updated = pushed(
+    await inOrder(l, () =>
+      callPusher(
+        l.d.pushBrief(
+          `${card}\nRead docs/BOARD.md first. Report each card operation you performed, the comment included, as an operation named card.`,
+        ),
+        "update the card",
+        "Push",
+      ),
+    ),
+    "The card update.",
+  );
+  if (!opRef(updated, "card")) throw new Halt("push", "The card update.", "pusher reported no card operation");
 }
 
 // ---- The outer loop ---------------------------------------------------------

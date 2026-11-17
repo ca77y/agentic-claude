@@ -24,7 +24,14 @@ const VALIDATE: Validate = {
   criteria: [{ id: "c1", wording: "it works", category: "UI", path: "flow", evidence: "shot", firstTest: "t" }],
 };
 
-const OK_PUSH = { done: true, unmet: [], operations: [{ op: "commit", reference: "abc" }] };
+const OK_PUSH = {
+  done: true,
+  unmet: [],
+  operations: [
+    { op: "commit", reference: "abc" },
+    { op: "card", reference: "comment" },
+  ],
+};
 const OK_TEST = {
   tests: ["a.test.ts"],
   stubs: [],
@@ -149,6 +156,31 @@ async function statusOf(over: Partial<LoopInput> = {}): Promise<string> {
   const { status } = await runLoop(inputFor(freshRun(), over));
   return status;
 }
+
+// The simplifier trims the test, then the coder's next try asks to put the trimmed part back.
+const trimmedThenObjected = (keep: boolean): Script => {
+  let simplified = 0;
+  let fixes = 0;
+  return happy({
+    simplifier: () => {
+      simplified += 1;
+      return simplified === 1
+        ? {
+            ...QA_PASS,
+            verdict: "fail",
+            findings: [{ location: "a.test.ts:4", problem: "unused fixture", blocking: true }],
+          }
+        : QA_PASS;
+    },
+    coder: (_t, label) => {
+      if (label.endsWith(": test")) return OK_TEST;
+      fixes += 1;
+      return fixes === 2 ? { ...OK_FIX, changed: [], testProblem: "the trim dropped the URL case" } : OK_FIX;
+    },
+    judge: (_t, label) =>
+      label.endsWith("rule on the test") ? { keep, reason: "seen" } : label === "gateway" ? GATEWAY_OK : ruling(),
+  });
+};
 
 beforeEach(() => {
   calls.length = 0;
@@ -299,6 +331,61 @@ describe("the inner loop", () => {
     assert.equal(count("coder", ": fix"), 2);
     assert.equal(count("simplifier"), 2);
     assert.ok(calls.findLast((c) => c.label.includes(": fix"))?.prompt.includes("helper used once"));
+  });
+
+  test("sends a simplifier finding in the test to the test's writer, not the coder", async () => {
+    let simplified = 0;
+    use(
+      happy({
+        simplifier: () => {
+          simplified += 1;
+          return simplified === 1
+            ? {
+                ...QA_PASS,
+                verdict: "fail",
+                findings: [{ location: "a.test.ts:4", problem: "unused fixture", blocking: true }],
+              }
+            : QA_PASS;
+        },
+      }),
+    );
+    const r = await runLoop(inputFor(freshRun()));
+    assert.equal(r.status, "ready");
+    assert.equal(count("coder", ": test"), 2);
+    assert.ok(calls.findLast((c) => c.label.endsWith(": test"))?.prompt.includes("unused fixture"));
+    assert.ok(calls.every((c) => !c.label.includes(": fix") || !c.prompt.includes("unused fixture")));
+  });
+
+  test("has one judge rule when the coder asks to put back what the simplifier trimmed, and keeps the trim", async () => {
+    use(trimmedThenObjected(true));
+    await runLoop(inputFor(freshRun()));
+    assert.equal(count("judge", "rule on the test"), 1);
+    assert.equal(count("coder", ": test"), 2);
+    assert.ok(calls.findLast((c) => c.label.includes(": fix"))?.prompt.includes("the test stands"));
+    assert.ok(calls.findLast((c) => c.type === "simplifier")?.prompt.includes("A judge already ruled"));
+  });
+
+  test("rewrites the test for the coder when the judge rules the trim went too far", async () => {
+    use(trimmedThenObjected(false));
+    await runLoop(inputFor(freshRun()));
+    assert.equal(count("judge", "rule on the test"), 1);
+    assert.equal(count("coder", ": test"), 3);
+    assert.ok(calls.findLast((c) => c.label.endsWith(": test"))?.prompt.includes("the trim dropped the URL case"));
+  });
+
+  test("lets a test-kind problem's test pass on the current code, and has qa break the behavior instead", async () => {
+    use(fallingReviews([1, 0]));
+    const base = current.script;
+    current.script = (type, label, prompt) =>
+      type === "judge" && label !== "gateway"
+        ? ruling({ kind: "test", fingerprint: "cov" })
+        : base(type, label, prompt);
+    await runLoop(inputFor(freshRun()));
+    const test = calls.find((c) => c.label === "fix-1: test")?.prompt ?? "";
+    assert.ok(test.includes("may already pass on the current code"));
+    assert.ok(!test.includes("must fail on the current code"));
+    assert.ok(calls.find((c) => c.label === "fix-1: qa")?.prompt.includes("when the behavior it states is broken"));
+    assert.ok(calls.some((c) => c.label === "commit: add a test for fix-1"));
   });
 
   test("doesn't ask the simplifier while qa still fails", async () => {
@@ -914,6 +1001,23 @@ describe("parallel inner loops", () => {
     const order = calls.filter((c) => c.type === "coder").map((c) => c.label);
     assert.ok(order.includes("fix-1: fix") && order.includes("fix-2: test"));
     assert.ok(order.lastIndexOf("fix-1: fix") < order.indexOf("fix-2: test"));
+  });
+
+  test("updates the card in its own brief, and halts when pusher reports no card operation", async () => {
+    use(
+      happy({
+        pusher: (_t, label, prompt) =>
+          label === "update the card" ? { done: true, unmet: [], operations: [] } : pusher(prompt),
+      }),
+    );
+    const d = freshRun();
+    await assert.rejects(runLoop(inputFor(d)), (error: unknown) => {
+      assert.ok(JSON.stringify(stopOf(d, error).needs).includes("no card operation"));
+      return error instanceof Halt;
+    });
+    const card = calls.find((c) => c.label === "update the card")?.prompt ?? "";
+    assert.ok(card.includes("such as a status move"));
+    assert.ok(!(calls.find((c) => c.label === "mark the PR ready")?.prompt ?? "").includes("comment on the card"));
   });
 
   test("turns a refused commit into a halt, even inside a wave", async () => {
