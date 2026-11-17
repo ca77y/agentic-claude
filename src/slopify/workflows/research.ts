@@ -133,6 +133,10 @@ interface Ctx {
   question: string;
   plan: string;
   worktree: string;
+  /** The distinct sources this run retrieved; null when the pages were already committed. */
+  sources: number | null;
+  /** Each final check's latest verdict, by its label. */
+  verdicts: Map<string, string>;
 }
 
 export type ResearchResult = NotStarted | Stopped | (LoopResult & { workflow: "research"; report: string });
@@ -333,6 +337,7 @@ async function checkLibrary(c: Ctx, pages: readonly string[]): Promise<Problem[]
   );
   return checks.flatMap((k, i) => {
     const v = must(verdicts[i], "validate", `A verdict on ${k.label}.`);
+    c.verdicts.set(k.label, v.verdict === "pass" ? "passed" : v.verdict === "fail" ? "failed" : "could not run");
     const found = (v.verdict === "pass" ? [] : v.findings).map((f) => ({
       source: "library-clerk",
       location: k.label,
@@ -384,13 +389,17 @@ export default async function run(): Promise<ResearchResult> {
       question: found.story,
       plan: `.tmp/research/${found.slug}.plan.md`,
       worktree: d.state.worktree,
+      sources: null,
+      verdicts: new Map(),
     };
     let pages = resume.findings;
     // Committed pages are the checkpoint: a rerun goes straight to the loop.
     if (pages.length === 0) {
       const context = await ground(c);
       const planned = await plan(c, context);
-      pages = await persist(c, await retrieve(c, planned.subQuestions), planned.limits);
+      const evidence = await retrieve(c, planned.subQuestions);
+      c.sources = bySource(evidence).size;
+      pages = await persist(c, evidence, planned.limits);
     }
     const result = await runLoop({
       d,
@@ -409,6 +418,14 @@ export default async function run(): Promise<ResearchResult> {
         check: () => checkLibrary(c, pages),
         revise: (problems) => repair(c, problems),
         severity: "severity-research.md",
+        trust: () => [
+          ...[...c.verdicts].map(([label, verdict]) => `The library-clerk check "${label}" ${verdict}.`),
+          ...(c.sources === null
+            ? []
+            : [
+                `This run retrieved ${String(c.sources)} source${c.sources === 1 ? "" : "s"}, each recorded in its raw note.`,
+              ]),
+        ],
       },
     });
     return { ...result, workflow: WORKFLOW, report: reportOf(WORKFLOW, result) };

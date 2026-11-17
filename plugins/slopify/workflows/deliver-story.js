@@ -1686,6 +1686,8 @@ ${fenced("CARD", l.story)}`,
 Spec: ${l.specDir}` : "",
     l.document ? `The documents the PR adds:
 ${list(l.document.paths)}` : "",
+    l.document?.trust ? `What Why trust it rests on:
+${list(l.document.trust())}` : "",
     l.small?.reproduced ? `The bug's reproduction, before the fix:
 ${list(l.small.reproduced.map((x) => entryText(x)))}` : "",
     renderState({ criteria: rowsOf(l), open }) || "No criterion results and no open items.",

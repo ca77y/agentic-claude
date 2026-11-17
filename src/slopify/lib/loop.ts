@@ -313,6 +313,8 @@ interface LoopDocument {
   revise: (problems: readonly string[]) => Promise<string[]>;
   /** The reference under the plugin's references/ that defines blocker and major for the document. */
   severity: string;
+  /** What the description's Why trust it rests on besides criterion results, as the run stands now. */
+  trust?: () => readonly string[];
 }
 
 export interface LoopInput {
@@ -1160,6 +1162,7 @@ function describeContext(l: Loop, target: boolean | null): string {
       ? `What changes holds this line exactly once, plain, after the card's outcome:\nSpec: ${l.specDir}`
       : "",
     l.document ? `The documents the PR adds:\n${list(l.document.paths)}` : "",
+    l.document?.trust ? `What Why trust it rests on:\n${list(l.document.trust())}` : "",
     l.small?.reproduced
       ? `The bug's reproduction, before the fix:\n${list(l.small.reproduced.map((x) => entryText(x)))}`
       : "",

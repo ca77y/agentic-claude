@@ -1586,6 +1586,8 @@ ${fenced("CARD", l.story)}`,
 Spec: ${l.specDir}` : "",
     l.document ? `The documents the PR adds:
 ${list(l.document.paths)}` : "",
+    l.document?.trust ? `What Why trust it rests on:
+${list(l.document.trust())}` : "",
     l.small?.reproduced ? `The bug's reproduction, before the fix:
 ${list(l.small.reproduced.map((x) => entryText(x)))}` : "",
     renderState({ criteria: rowsOf(l), open }) || "No criterion results and no open items.",
@@ -2470,6 +2472,7 @@ ${quoted(c.question)}`, {
   );
   return checks.flatMap((k, i) => {
     const v = must(verdicts[i], "validate", `A verdict on ${k.label}.`);
+    c.verdicts.set(k.label, v.verdict === "pass" ? "passed" : v.verdict === "fail" ? "failed" : "could not run");
     const found = (v.verdict === "pass" ? [] : v.findings).map((f) => ({
       source: "library-clerk",
       location: k.label,
@@ -2519,13 +2522,17 @@ async function run() {
       d,
       question: found.story,
       plan: `.tmp/research/${found.slug}.plan.md`,
-      worktree: d.state.worktree
+      worktree: d.state.worktree,
+      sources: null,
+      verdicts: /* @__PURE__ */ new Map()
     };
     let pages = resume.findings;
     if (pages.length === 0) {
       const context = await ground(c);
       const planned = await plan(c, context);
-      pages = await persist(c, await retrieve(c, planned.subQuestions), planned.limits);
+      const evidence = await retrieve(c, planned.subQuestions);
+      c.sources = bySource(evidence).size;
+      pages = await persist(c, evidence, planned.limits);
     }
     const result = await runLoop({
       d,
@@ -2543,7 +2550,13 @@ async function run() {
         paths: pages,
         check: () => checkLibrary(c, pages),
         revise: (problems) => repair(c, problems),
-        severity: "severity-research.md"
+        severity: "severity-research.md",
+        trust: () => [
+          ...[...c.verdicts].map(([label, verdict]) => `The library-clerk check "${label}" ${verdict}.`),
+          ...c.sources === null ? [] : [
+            `This run retrieved ${String(c.sources)} source${c.sources === 1 ? "" : "s"}, each recorded in its raw note.`
+          ]
+        ]
       }
     });
     return { ...result, workflow: WORKFLOW, report: reportOf(WORKFLOW, result) };
