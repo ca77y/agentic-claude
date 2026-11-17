@@ -354,6 +354,19 @@ describe("checkDescription's leak rules", () => {
     );
   });
 
+  test("passes a route named as one whose first segment is a filesystem root", () => {
+    passes(
+      storyBody(
+        "## Why trust it\n\n- c1: pass, The /home route renders the feed.\n- c2: pass, The /tmp/upload endpoint takes a multipart body.",
+      ),
+    );
+  });
+
+  test("flags a path named as a directory or file under a root the list does not hold", () => {
+    leaks("The cache is in the /data/cache directory.");
+    leaks("The worker writes the /scratch/out/report file.");
+  });
+
   test("passes a link to a URL or a repo-relative file", () => {
     passes(
       storyBody(
