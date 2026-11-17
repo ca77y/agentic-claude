@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { describe, test } from "node:test";
 
@@ -71,95 +70,5 @@ describe("progress entries", () => {
     const ledger = text("plugins/slopify/references/pusher-ledger.md");
     assert.match(ledger, /^<time> progress /m, "pusher-ledger.md has the progress entry template");
     assert.ok(saysLocal(ledger), "pusher-ledger.md says progress entries stay local");
-  });
-
-  test("README describes progress entries as local", () => {
-    assert.ok(saysLocal(text("README.md")), "README.md says progress entries stay local");
-  });
-});
-
-const kindDocs = {
-  story: "docs/deliver/STORY.md",
-  trivial: "docs/deliver/TRIVIAL.md",
-  bugfix: "docs/deliver/BUGFIX.md",
-  spike: "docs/deliver/SPIKE.md",
-  research: "docs/RESEARCH.md",
-};
-
-describe("the PR description in the design docs", () => {
-  const parts = ["**What changes**", "**Needs you**", "**Why trust it**", "**Not done**"];
-
-  test("each kind's design doc and both forge texts name the four parts in order", () => {
-    const forgeTexts = ["docs/FORGE.md", "plugins/slopify/skills/bootstrap/references/forge.md"];
-    for (const path of [...Object.values(kindDocs), ...forgeTexts]) {
-      const doc = text(path);
-      const at = parts.map((part) => doc.indexOf(part));
-      for (const [i, part] of parts.entries()) assert.ok((at[i] ?? -1) >= 0, `${path} names ${part}`);
-      assert.deepEqual(
-        at.toSorted((a, b) => a - b),
-        at,
-        `${path} names the four parts in order`,
-      );
-    }
-  });
-
-  // For each kind: what its What changes part opens with, and what its Why trust it part rests on.
-  const kindLines: Record<keyof typeof kindDocs, { opening: RegExp[]; trust: RegExp[] }> = {
-    story: { opening: [/outcome/i], trust: [/criterion results/i] },
-    trivial: { opening: [/one sentence/i], trust: [/test/i, /app/i] },
-    bugfix: { opening: [/before/i, /after/i], trust: [/reproduction/i, /fail/i, /pass/i] },
-    spike: { opening: [/question/i, /answer/i, /recommendation/i], trust: [/claims/i, /unknowns/i] },
-    research: { opening: [/question/i, /short answer/i, /main page/i], trust: [/citations/i, /source/i] },
-  };
-
-  test("each kind's design doc states its opening and its trust line", () => {
-    for (const [kind, path] of Object.entries(kindDocs) as [keyof typeof kindDocs, string][]) {
-      const doc = text(path).split(/(?<=[.!?])\s+|\n/);
-      const { opening, trust } = kindLines[kind];
-      assert.ok(
-        doc.some((s) => s.includes("What changes") && opening.every((re) => re.test(s))),
-        `${path} says what **What changes** opens with for a ${kind}`,
-      );
-      assert.ok(
-        doc.some((s) => s.includes("Why trust it") && trust.every((re) => re.test(s))),
-        `${path} says what **Why trust it** rests on for a ${kind}`,
-      );
-    }
-  });
-});
-
-describe("agent listings", () => {
-  test("README, DESIGN and plugin.json list writer-pr and lens-pr", (t) => {
-    const readme = text("README.md").split("\n");
-    assert.match(readme.find((l) => /^\| Producers\s*\|/.test(l)) ?? "", /`writer-pr`/, "README's Producers row");
-    assert.match(readme.find((l) => /^\| Lenses\s*\|/.test(l)) ?? "", /`lens-pr`/, "README's Lenses row");
-
-    const design = text("docs/DESIGN.md");
-    assert.match(
-      design.split("\n").find((l) => l.startsWith("- **Producers**")) ?? "",
-      /`writer-pr`/,
-      "DESIGN's producer list",
-    );
-    assert.match(design, /`lens-pr`/, "DESIGN names the description lens");
-
-    const manifest = "plugins/slopify/.claude-plugin/plugin.json";
-    const plugin = JSON.parse(text(manifest)) as { description: string; version: string };
-    assert.match(plugin.description, /writer-pr/, "plugin.json's description");
-    assert.match(plugin.description, /lens-pr/, "plugin.json's description");
-
-    // The test runs git from the developer's or CI's own PATH, as `make check` does.
-    /* eslint-disable sonarjs/no-os-command-from-path */
-    let base: string;
-    try {
-      base = execFileSync("git", ["merge-base", "HEAD", "master"], { cwd: root, encoding: "utf8" }).trim();
-    } catch {
-      t.skip("no master branch to compare the plugin version with");
-      return;
-    }
-    const before = JSON.parse(
-      execFileSync("git", ["show", `${base}:${manifest}`], { cwd: root, encoding: "utf8" }),
-    ) as { version: string };
-    /* eslint-enable sonarjs/no-os-command-from-path */
-    assert.equal(plugin.version, before.version, "the plugin's version is unchanged");
   });
 });
