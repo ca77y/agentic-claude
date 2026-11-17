@@ -1479,7 +1479,9 @@ export async function runLoop(input: LoopInput): Promise<LoopResult> {
 }
 
 const reviewSummary = (suggestions: number): string =>
-  suggestions > 0 ? `no blocking findings, ${String(suggestions)} suggestion(s) in the PR description` : "clean";
+  suggestions > 0
+    ? `no blocking findings, ${String(suggestions)} minor finding(s) under Not done in the PR description`
+    : "clean";
 
 // Only the final description decides readiness: a clean run whose description failed its check ends a draft.
 async function endLoop(l: Loop, clean: boolean): Promise<LoopResult> {

@@ -1971,7 +1971,7 @@ async function runLoop(input) {
   }
   return endLoop(l, nextStep(l) === "clean");
 }
-var reviewSummary = (suggestions) => suggestions > 0 ? `no blocking findings, ${String(suggestions)} suggestion(s) in the PR description` : "clean";
+var reviewSummary = (suggestions) => suggestions > 0 ? `no blocking findings, ${String(suggestions)} minor finding(s) under Not done in the PR description` : "clean";
 async function endLoop(l, clean2) {
   await fileCards(l);
   const final = await describe(l, clean2);
