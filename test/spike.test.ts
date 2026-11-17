@@ -25,6 +25,7 @@ const pusher = (label: string, prompt: string): Reply => {
   if (label === "file the card") return ok("card", "SPIKE-1");
   if (label === "create the worktree") return ok("worktree", "/p/wt");
   if (label === "create the prototype") return ok("worktree", "/p/proto");
+  if (label === "update the card") return ok("card", "comment");
   return ok(prompt.includes("open the branch's PR") ? "pr" : "commit", "PR-7");
 };
 const DEFAULTS: Record<string, Script> = {
@@ -62,7 +63,7 @@ const DEFAULTS: Record<string, Script> = {
   qa: () => ({ results: [{ claim: "c1", confirmed: true, reason: "" }] }),
   judge: () => CONFIRMED,
   checks: () => ({ commands: [{ command: "lint", exitCode: 0, failingLines: "" }] }),
-  watcher: () => ({ outcome: "not-declared", waitingFor: "", limitMinutes: 60, reference: "r", findings: [] }),
+  watcher: () => ({ outcome: "not-declared", waitingFor: "none", limitMinutes: 60, reference: "r", findings: [] }),
   pusher: (_t, label, prompt) => pusher(label, prompt),
 };
 const happy = (over: Partial<Record<string, Script>> = {}): Script => {

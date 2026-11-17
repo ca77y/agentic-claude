@@ -11,7 +11,7 @@ How `deliver-spike` answers a bounded technical question with a findings documen
  │               a prompt gets a new spike card from pusher, so every spike is on the board  ⛔ H1
  2 WORKSPACE ─── pusher (sonnet) creates and prepares the worktree, starts the issue
  3 GROUND ────── in parallel: library-reader, scout-code, scout-feasibility,
- │               scout-upstream-docs, scout-known-issues, scout-prior-art (haiku)
+ │               scout-upstream-docs, scout-known-issues, scout-prior-art (sonnet)
  4 PLAN ──────── writer-findings (opus) lists the claims the answer rests on: supported, contested,
  │               or unknown, and the measurement that would settle each one that can be measured
  5 PROTOTYPE ─── only when a claim needs a measurement
@@ -23,13 +23,13 @@ How `deliver-spike` answers a bounded technical question with a findings documen
  7 VALIDATE ──── checks (haiku) runs the TESTING.md checks
  │               lens-evidence, lens-question, lens-neutrality (haiku), on the document
  │               judge × 1 (opus) rules on every problem
- 8 PUSH ──────── pusher pushes, opens a draft PR, which fires the review               ⛔ H2
+ 8 PUSH ──────── pusher pushes, opens the PR ready, which fires the review              ⛔ H2
  9 REVIEW ────── watcher (haiku) reads the findings
  │   ▲ ≤3 fix    judge × 1 (opus) rules on every finding
  │   │  rounds   writer revises the document → commit, then step 7 again
  │   └────────── pusher pushes and requests the review
  ▼
- clean → PR ready, issue In Review            not clean → PR stays draft, saying why
+ clean → PR ready, issue In Review            not clean → PR turns draft, saying why
 ```
 
 ## The findings document

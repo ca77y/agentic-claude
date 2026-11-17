@@ -2,7 +2,7 @@
 name: advisor-risk
 description: Judges an approach's failure modes, its operational risk, and what would make it a wrong choice.
 model: opus
-effort: high
+effort: medium
 disallowedTools: Edit, Write, NotebookEdit
 ---
 

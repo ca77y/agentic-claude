@@ -13,18 +13,19 @@ How `deliver-trivial` takes a trivial story from a card or a prompt to a reviewe
  3 BUILD ─────── coder (opus) writes a failing test → commit
  │   ▲ ≤3 tries  coder (opus) makes it pass → commit
  │   │           checks (haiku) runs the TESTING.md checks
- │   └────────── qa (sonnet) checks the change and its history
+ │   │           qa (sonnet) checks the change and its history
+ │   └────────── simplifier (opus) finds code the change doesn't need
  │               scout-docs (haiku) finds docs the diff affects
- │               writer-docs (opus) fixes them, only if it found any → commit
+ │               writer-docs (sonnet) fixes them, only if it found any → commit
  4 VALIDATE ──── validator (sonnet) runs the app as TESTING.md says, once
- 5 PUSH ──────── pusher pushes, opens a draft PR, which fires the review             ⛔ H2
+ 5 PUSH ──────── pusher pushes, opens the PR ready, which fires the review            ⛔ H2
  6 REVIEW ────── watcher (haiku) reads the findings
  │   ▲ ≤3 fix    judge × 1 (opus) rules on every finding
  │   │  rounds   each blocker/major: failing test → commit → coder → commit → checks
  │   │           scout-docs, then writer-docs if it found any
  │   └────────── pusher pushes and requests the review
  ▼
- clean → PR ready, issue In Review            not clean → PR stays draft, saying why
+ clean → PR ready, issue In Review            not clean → PR turns draft, saying why
 ```
 
 ## What differs from `deliver-story`
@@ -32,7 +33,7 @@ How `deliver-trivial` takes a trivial story from a card or a prompt to a reviewe
 - **No how phase:** no designs, advisors, spec, or challenge.
 - **No label:** this flow doesn't need `Deliverable`, so it can start from a prompt. A prompt always gets a card first.
 - **Checks inside the inner loop:** a fix isn't validated until the project's checks pass.
-- **`qa` runs once**, on the first change. A review fix has only the checks.
+- **`qa` and `simplifier` run once**, on the first change. A review fix has only the checks, except a `test`-kind fix, whose test may pass on the current code: `qa` proves it by breaking the behavior it states.
 - **The app runs once**, before the PR opens, and again only if that run failed. With no criteria, the validator treats the whole change as one, under whichever `TESTING.md` category covers it. When none fits, it reports `cannot-verify`, and `TESTING.md`'s **Uncategorized** setting decides whether the PR stays a draft.
 - **`judge` rules only on review findings.** A failing check or validator run goes straight back to `coder`.
 - **No gateway `judge`, and no recurrence rulings.** A finding that comes back stays open and keeps the PR a draft.

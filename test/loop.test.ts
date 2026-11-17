@@ -24,7 +24,14 @@ const VALIDATE: Validate = {
   criteria: [{ id: "c1", wording: "it works", category: "UI", path: "flow", evidence: "shot", firstTest: "t" }],
 };
 
-const OK_PUSH = { done: true, unmet: [], operations: [{ op: "commit", reference: "abc" }] };
+const OK_PUSH = {
+  done: true,
+  unmet: [],
+  operations: [
+    { op: "commit", reference: "abc" },
+    { op: "card", reference: "comment" },
+  ],
+};
 const OK_TEST = {
   tests: ["a.test.ts"],
   stubs: [],
@@ -46,7 +53,7 @@ const QA_FAIL = {
 const CHECKS_OK = { commands: [{ command: "lint", exitCode: 0, failingLines: "" }] };
 const PASS_ROW = { id: "c1", result: "pass", ran: "flow", evidence: ["shot.png"], detail: "", setting: "draft" };
 const VALIDATOR_PASS = { results: [PASS_ROW], uncategorizedSetting: "draft" };
-const CLEAN_REVIEW = { outcome: "finished", waitingFor: "", limitMinutes: 60, reference: "r", findings: [] };
+const CLEAN_REVIEW = { outcome: "finished", waitingFor: "none", limitMinutes: 60, reference: "r", findings: [] };
 const GATEWAY_OK = { missed: [], docsToAdd: [] };
 const finding = (text: string) => ({ ...CLEAN_REVIEW, findings: [{ id: "f1", location: "src/a.ts:3", text }] });
 const ruling = (over: Record<string, unknown> = {}) => ({
@@ -69,6 +76,7 @@ const DEFAULTS: Record<string, Script> = {
   pusher: (_t, _l, prompt) => pusher(prompt),
   coder: (_t, label) => (label.endsWith(": test") ? OK_TEST : OK_FIX),
   qa: () => QA_PASS,
+  simplifier: () => QA_PASS,
   checks: () => CHECKS_OK,
   validator: () => VALIDATOR_PASS,
   watcher: () => CLEAN_REVIEW,
@@ -107,6 +115,7 @@ function freshRun(): Run {
 const count = (type: string, label?: string): number =>
   calls.filter((c) => c.type === type && (label === undefined || c.label.includes(label))).length;
 const pushPrompts = (): string[] => calls.filter((c) => c.label === "push the round").map((c) => c.prompt);
+const judgePrompts = (): string[] => calls.filter((c) => c.type === "judge").map((c) => c.prompt);
 const finalPrompt = (): string => calls.find((c) => /mark the PR ready|report the draft/.test(c.label))?.prompt ?? "";
 
 // Each review has one finding fewer, so the open count keeps falling and only the round cap can end the loop.
@@ -148,14 +157,49 @@ async function statusOf(over: Partial<LoopInput> = {}): Promise<string> {
   return status;
 }
 
+// The simplifier trims the test, then the coder's next try asks to put the trimmed part back.
+const trimmedThenObjected = (keep: boolean): Script => {
+  let simplified = 0;
+  let fixes = 0;
+  return happy({
+    simplifier: () => {
+      simplified += 1;
+      return simplified === 1
+        ? {
+            ...QA_PASS,
+            verdict: "fail",
+            findings: [{ location: "a.test.ts:4", problem: "unused fixture", blocking: true }],
+          }
+        : QA_PASS;
+    },
+    coder: (_t, label) => {
+      if (label.endsWith(": test")) return OK_TEST;
+      fixes += 1;
+      return fixes === 2 ? { ...OK_FIX, changed: [], testProblem: "the trim dropped the URL case" } : OK_FIX;
+    },
+    judge: (_t, label) =>
+      label.endsWith("rule on the test") ? { keep, reason: "seen" } : label === "gateway" ? GATEWAY_OK : ruling(),
+  });
+};
+
 beforeEach(() => {
   calls.length = 0;
 });
 
 describe("a delivery with nothing wrong", () => {
-  test("builds, validates, opens a draft, and goes ready on a clean review", async () => {
+  test("rates blocker and major by the code severity reference", async () => {
+    use(happy({ watcher: () => finding("off by one") }));
+    await statusOf();
+    assert.match(
+      calls.find((c) => c.type === "judge" && c.label === "rule on the problems")?.prompt ?? "",
+      /blocker and major as the severity reference severity-code\.md defines them/,
+    );
+  });
+
+  test("builds, validates, opens the PR ready, and keeps it ready on a clean review", async () => {
     use(happy());
     const r = await runLoop(inputFor(freshRun()));
+    assert.match(pushPrompts().at(-1) ?? "", /open the branch's PR ready for review, not as a draft/);
     assert.equal(r.status, "ready");
     assert.equal(r.pr, "PR-1");
     assert.equal(r.rounds, 0);
@@ -267,6 +311,89 @@ describe("the inner loop", () => {
     assert.equal(count("coder", ": fix"), 2);
   });
 
+  test("sends code the simplifier finds unneeded back to the coder, only once qa passes", async () => {
+    let simplified = 0;
+    const UNNEEDED = {
+      ...QA_PASS,
+      verdict: "fail",
+      findings: [{ location: "src/a.ts:3", problem: "helper used once", blocking: true }],
+    };
+    use(
+      happy({
+        simplifier: () => {
+          simplified += 1;
+          return simplified === 1 ? UNNEEDED : QA_PASS;
+        },
+      }),
+    );
+    const r = await runLoop(inputFor(freshRun()));
+    assert.equal(r.status, "ready");
+    assert.equal(count("coder", ": fix"), 2);
+    assert.equal(count("simplifier"), 2);
+    assert.ok(calls.findLast((c) => c.label.includes(": fix"))?.prompt.includes("helper used once"));
+  });
+
+  test("sends a simplifier finding in the test to the test's writer, not the coder", async () => {
+    let simplified = 0;
+    use(
+      happy({
+        simplifier: () => {
+          simplified += 1;
+          return simplified === 1
+            ? {
+                ...QA_PASS,
+                verdict: "fail",
+                findings: [{ location: "a.test.ts:4", problem: "unused fixture", blocking: true }],
+              }
+            : QA_PASS;
+        },
+      }),
+    );
+    const r = await runLoop(inputFor(freshRun()));
+    assert.equal(r.status, "ready");
+    assert.equal(count("coder", ": test"), 2);
+    assert.ok(calls.findLast((c) => c.label.endsWith(": test"))?.prompt.includes("unused fixture"));
+    assert.ok(calls.every((c) => !c.label.includes(": fix") || !c.prompt.includes("unused fixture")));
+  });
+
+  test("has one judge rule when the coder asks to put back what the simplifier trimmed, and keeps the trim", async () => {
+    use(trimmedThenObjected(true));
+    await runLoop(inputFor(freshRun()));
+    assert.equal(count("judge", "rule on the test"), 1);
+    assert.equal(count("coder", ": test"), 2);
+    assert.ok(calls.findLast((c) => c.label.includes(": fix"))?.prompt.includes("the test stands"));
+    assert.ok(calls.findLast((c) => c.type === "simplifier")?.prompt.includes("A judge already ruled"));
+  });
+
+  test("rewrites the test for the coder when the judge rules the trim went too far", async () => {
+    use(trimmedThenObjected(false));
+    await runLoop(inputFor(freshRun()));
+    assert.equal(count("judge", "rule on the test"), 1);
+    assert.equal(count("coder", ": test"), 3);
+    assert.ok(calls.findLast((c) => c.label.endsWith(": test"))?.prompt.includes("the trim dropped the URL case"));
+  });
+
+  test("lets a test-kind problem's test pass on the current code, and has qa break the behavior instead", async () => {
+    use(fallingReviews([1, 0]));
+    const base = current.script;
+    current.script = (type, label, prompt) =>
+      type === "judge" && label !== "gateway"
+        ? ruling({ kind: "test", fingerprint: "cov" })
+        : base(type, label, prompt);
+    await runLoop(inputFor(freshRun()));
+    const test = calls.find((c) => c.label === "fix-1: test")?.prompt ?? "";
+    assert.ok(test.includes("may already pass on the current code"));
+    assert.ok(!test.includes("must fail on the current code"));
+    assert.ok(calls.find((c) => c.label === "fix-1: qa")?.prompt.includes("when the behavior it states is broken"));
+    assert.ok(calls.some((c) => c.label === "commit: add a test for fix-1"));
+  });
+
+  test("doesn't ask the simplifier while qa still fails", async () => {
+    use(happy({ qa: () => QA_FAIL }));
+    await runLoop(inputFor(freshRun()));
+    assert.equal(count("simplifier"), 0);
+  });
+
   test("rewrites the test when qa says the test is at fault", async () => {
     let qa = 0;
     use(
@@ -316,6 +443,7 @@ describe("the inner loop", () => {
     const r = await runLoop(inputFor(freshRun()));
     assert.equal(r.status, "draft");
     assert.ok(r.draftReasons.some((x) => x.text.includes("blocker")));
+    assert.ok(finalPrompt().includes("Convert the PR to a draft"));
     assert.ok(count("validator") >= 1);
     assert.equal(count("coder", "t1: fix"), 3);
   });
@@ -875,6 +1003,23 @@ describe("parallel inner loops", () => {
     assert.ok(order.lastIndexOf("fix-1: fix") < order.indexOf("fix-2: test"));
   });
 
+  test("updates the card in its own brief, and halts when pusher reports no card operation", async () => {
+    use(
+      happy({
+        pusher: (_t, label, prompt) =>
+          label === "update the card" ? { done: true, unmet: [], operations: [] } : pusher(prompt),
+      }),
+    );
+    const d = freshRun();
+    await assert.rejects(runLoop(inputFor(d)), (error: unknown) => {
+      assert.ok(JSON.stringify(stopOf(d, error).needs).includes("no card operation"));
+      return error instanceof Halt;
+    });
+    const card = calls.find((c) => c.label === "update the card")?.prompt ?? "";
+    assert.ok(card.includes("such as a status move"));
+    assert.ok(!(calls.find((c) => c.label === "mark the PR ready")?.prompt ?? "").includes("comment on the card"));
+  });
+
   test("turns a refused commit into a halt, even inside a wave", async () => {
     use(happy({ pusher: () => ({ done: false, unmet: ["push denied"], operations: [] }) }));
     const d = freshRun();
@@ -907,6 +1052,7 @@ describe("the document flow", () => {
           revisions.push(p);
           return Promise.resolve(["docs/spikes/smr-1.md"]);
         },
+        severity: "severity-spike.md",
       },
     };
   };
@@ -928,6 +1074,38 @@ describe("the document flow", () => {
     assert.deepEqual(revisions, [[`${UNCITED.location}: ${UNCITED.text}`]]);
     assert.equal(count("coder"), 0);
     assert.ok(calls.some((c) => c.label === "commit: revise the findings"));
+  });
+
+  const WORDING = { source: "lens-evidence", location: "docs/spikes/smr-1.md:9", text: "awkward wording" };
+  const minorWording: Script = (_t, label, prompt) =>
+    label === "gateway" ? GATEWAY_OK : ruling(prompt.includes(WORDING.text) ? { severity: "minor", kind: "docs" } : {});
+
+  test("rates blocker and major by the document's own severity reference", async () => {
+    use(happy({ judge: minorWording }));
+    await statusOf(DOC([[UNCITED]]));
+    assert.match(
+      judgePrompts()[0] ?? "",
+      /blocker and major as the severity reference severity-spike\.md defines them/,
+    );
+  });
+
+  test("lists a minor problem as a suggestion, starts no round for it, and says so in the result", async () => {
+    use(happy({ judge: minorWording }));
+    const r = await runLoop(inputFor(freshRun(), DOC([[WORDING]])));
+    assert.equal(r.status, "ready");
+    assert.equal(r.rounds, 0);
+    assert.deepEqual(revisions, []);
+    assert.equal(r.review, "no blocking findings, 1 suggestion(s) in the PR description");
+    assert.match(finalPrompt(), /## Suggestions \(1\)/);
+  });
+
+  test("applies a minor problem when a round runs for another, and drops it from the suggestions", async () => {
+    use(happy({ judge: minorWording }));
+    const r = await runLoop(inputFor(freshRun(), DOC([[UNCITED, WORDING]])));
+    assert.equal(r.status, "ready");
+    assert.deepEqual(revisions, [[`${UNCITED.location}: ${UNCITED.text}`, `${WORDING.location}: ${WORDING.text}`]]);
+    assert.equal(r.review, "clean");
+    assert.doesNotMatch(finalPrompt(), /## Suggestions/);
   });
 
   test("sends a review finding to the writer and checks the document again", async () => {

@@ -24,6 +24,7 @@ const DEFAULTS: Record<string, Script> = {
   "writer-card": () => ({ openQuestions: [] }),
   judge: () => CONFIRMED,
   pusher: () => FILED,
+  "advisor-simplify": (_t, label) => (label === "simplify the draft" ? PASS : VIEW),
 };
 const happy = (over: Partial<Record<string, Script>> = {}): Script => {
   const agents = { ...DEFAULTS, ...over };
@@ -62,7 +63,9 @@ describe("shape", () => {
       calls.filter((c) => c.type.startsWith("lens-")).map((c) => c.type),
       ["lens-template", "lens-criteria", "lens-solution-free"],
     );
+    assert.equal(count("advisor-simplify", "simplify the draft"), 1);
     assert.ok(filing().includes("has the label Deliverable"));
+    assert.ok(filing().includes("has the label Shaped"));
     assert.ok(filing().includes("create a card only when there is none"));
   });
 
@@ -76,19 +79,20 @@ describe("shape", () => {
   test("shapes a bug with the fit advisor and the template check only, and never labels it", async () => {
     const r = await run({ idea: "add returns the difference", kind: "bug" }, happy());
     assert.ok("deliverable" in r && !r.deliverable);
-    assert.equal(calls.filter((c) => c.type.startsWith("advisor-")).length, 1);
+    assert.equal(calls.filter((c) => c.type.startsWith("advisor-") && c.label !== "simplify the draft").length, 1);
     assert.equal(count("advisor-fit"), 1);
     assert.deepEqual(
       calls.filter((c) => c.type.startsWith("lens-")).map((c) => c.type),
       ["lens-template"],
     );
-    assert.ok(!filing().includes("Make sure the card"));
+    assert.ok(!filing().includes("Deliverable."));
+    assert.ok(filing().includes("has the label Shaped"));
   });
 
   test("shapes a spike with the scope advisor", async () => {
     await run({ idea: "Is the parser fast enough?", kind: "spike" }, happy());
     assert.equal(count("advisor-scope"), 1);
-    assert.equal(calls.filter((c) => c.type.startsWith("advisor-")).length, 1);
+    assert.equal(calls.filter((c) => c.type.startsWith("advisor-") && c.label !== "simplify the draft").length, 1);
     assert.ok(calls.find((c) => c.type === "writer-card")?.prompt.includes("a spike"));
   });
 
@@ -148,6 +152,39 @@ describe("shape", () => {
     await run({ card: "SMR-7" }, happy({ "scout-card": () => card }));
     assert.ok(calls.find((c) => c.label === "draft")?.prompt.includes("yes, integers"));
     assert.ok(filing().includes("Update card SMR-7"));
+    assert.equal(count("library-reader"), 1);
+  });
+
+  test("reshapes a Shaped card without grounding or advice, and still checks it", async () => {
+    const card: Reply = {
+      ...SCOUT,
+      evidence: [
+        { source: "card", location: "x", excerpt: "SMR-7" },
+        { source: "labels", location: "x", excerpt: "Feature, Shaped" },
+        { source: "text", location: "x", excerpt: "Multiply\n\nOpen question: integers only?\nComment: yes, integers" },
+      ],
+    };
+    const r = await run({ card: "SMR-7" }, happy({ "scout-card": () => card }));
+    assert.ok("deliverable" in r && r.deliverable);
+    assert.equal(count("library-reader") + count("scout-code") + count("scout-docs"), 0);
+    assert.equal(calls.filter((c) => c.type.startsWith("advisor-") && c.label !== "simplify the draft").length, 0);
+    assert.ok(calls.find((c) => c.label === "apply the answers")?.prompt.includes("yes, integers"));
+    assert.equal(calls.filter((c) => c.type.startsWith("lens-")).length, 3);
+    assert.equal(count("advisor-simplify", "simplify the draft"), 1);
+  });
+
+  test("grounds and advises a card that isn't Shaped, such as one written by hand", async () => {
+    const card: Reply = {
+      ...SCOUT,
+      evidence: [
+        { source: "card", location: "x", excerpt: "SMR-8" },
+        { source: "labels", location: "x", excerpt: "Feature" },
+        { source: "text", location: "x", excerpt: "Multiply" },
+      ],
+    };
+    await run({ card: "SMR-8" }, happy({ "scout-card": () => card }));
+    assert.equal(count("library-reader"), 1);
+    assert.equal(count("advisor-value"), 1);
   });
 
   test("halts when the card can't be filed", async () => {

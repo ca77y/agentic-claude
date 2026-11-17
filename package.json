@@ -15,7 +15,6 @@
     "knip": "6.42.1",
     "markdownlint-cli2": "0.23.3",
     "prettier": "3.9.10",
-    "shellcheck": "4.1.0",
     "type-coverage": "2.30.4",
     "typescript": "6.0.3",
     "typescript-eslint": "8.72.0",
@@ -33,6 +32,7 @@
     "lint:types": "type-coverage -p src/tsconfig.json --strict --at-least 100 && type-coverage -p src/slopify/skills/tsconfig.json --strict --at-least 100",
     "test:unit": "node --test \"test/**/*.test.ts\"",
     "lint:pins": "node scripts/check-pins.ts",
-    "lint:sh": "shellcheck .githooks/pre-commit plugins/*/evals/*/scaffold.sh"
+    "lint:blocks": "node scripts/check-blocks.ts",
+    "lint:index": "node scripts/check-index.ts"
   }
 }

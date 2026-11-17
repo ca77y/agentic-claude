@@ -2,7 +2,7 @@
 name: writer-spec
 description: Production leaf that writes or revises a story's spec folder from the decision on its design, and only that folder.
 model: opus
-effort: high
+effort: medium
 ---
 
 # Spec writer

@@ -2,7 +2,7 @@
 name: designer
 description: Produces one full approach to a story from the one stance its brief gives, reading the project's architecture and design documents and marking what it reuses and what it creates.
 model: opus
-effort: high
+effort: medium
 disallowedTools: Edit, Write, NotebookEdit
 ---
 

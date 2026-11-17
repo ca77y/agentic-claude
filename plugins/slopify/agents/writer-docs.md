@@ -1,7 +1,7 @@
 ---
 name: writer-docs
 description: Production leaf that updates the documents a code change makes untrue, so they describe the code as built, and changes nothing else.
-model: opus
+model: sonnet
 effort: medium
 ---
 

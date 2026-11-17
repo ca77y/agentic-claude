@@ -6,9 +6,10 @@ export const MAX_INNER_TRIES = 3;
 export const MAX_DESIGN_TRIES = 2;
 export const MAX_HOOK_REPAIRS = 3;
 const DELIVERABLE_LABEL = "Deliverable";
+export const SHAPED_LABEL = "Shaped";
 
 export type Severity = "blocker" | "major" | "minor" | "nit" | "pre-existing" | "none";
-type Kind = "code" | "test" | "docs" | "spec" | "cannot-verify" | "decision";
+export type Kind = "code" | "test" | "docs" | "spec" | "cannot-verify" | "decision";
 type Verdict = "confirmed" | "dismissed" | "unverified";
 type Ruling = "none" | "fix-differently" | "accept-as-debt" | "split-to-issue" | "escalate";
 
@@ -87,12 +88,15 @@ export function noProgress(openByRound: readonly number[]): boolean {
 // Only the literal word lets a criterion pass; anything else, including no statement, keeps the PR a draft.
 export const allowsReady = (setting: string | null | undefined): boolean => setting?.trim() === "ready";
 
-export function isDeliverable(labels: string): boolean {
+// labels is the comma- or line-separated list scout-card reports.
+export function hasLabel(labels: string, label: string): boolean {
   return labels
     .split(/[,\n]/)
     .map((l) => l.trim())
-    .includes(DELIVERABLE_LABEL);
+    .includes(label);
 }
+
+export const isDeliverable = (labels: string): boolean => hasLabel(labels, DELIVERABLE_LABEL);
 
 export interface Parallelizable {
   id: string;
@@ -188,7 +192,7 @@ export function renderBody(b: PrBody): string {
     section("Unverified findings", items(b.unverified)),
     section("Not validated", items(b.notValidated)),
     section("Known debt", items(b.knownDebt)),
-    section("Suggestions", items(b.suggestions)),
+    section(`Suggestions (${String(b.suggestions.length)})`, items(b.suggestions)),
     section("Test changes", b.testChanges.map((t) => `- ${t}`).join("\n")),
   ]
     .filter(Boolean)

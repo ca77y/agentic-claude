@@ -306,29 +306,45 @@ async function persist(c: Ctx, evidence: readonly Evidence[], limits: readonly s
 
 // ---- The loop's checks and repairs --------------------------------------------
 
-async function checkLibrary(c: Ctx): Promise<Problem[]> {
-  const scope = `In the worktree ${c.worktree}, check the library files this branch changes from the target branch docs/FORGE.md declares.`;
-  const assignments = ["answer and evidence support", "library integrity"] as const;
+// One clerk checks the evidence of each wiki page, line by line, because one clerk over the whole change skims; one
+// checks every changed raw note's summary against its own body, since the index repeats it to readers who never open
+// the note; and one more checks the integrity of every changed library file.
+async function checkLibrary(c: Ctx, pages: readonly string[]): Promise<Problem[]> {
+  const changed = `the library files this branch changes from the target branch docs/FORGE.md declares`;
+  const checks = [
+    ...pages.map((page) => ({
+      label: `evidence: ${page}`,
+      brief: `Assignment: answer and evidence support. In the worktree ${c.worktree}, check the wiki page ${page}, line by line, against the raw-note blocks it cites.`,
+    })),
+    {
+      label: "summaries",
+      brief: `Assignment: answer and evidence support. In the worktree ${c.worktree}, check the summary of each raw note among ${changed}, one note at a time, against that note's own key evidence and Limitations. A summary that claims more than its body records, or drops a hedge its body states, is a finding. Then check that each of their index lines carries the note's title and summary word for word.`,
+    },
+    {
+      label: "library integrity",
+      brief: `Assignment: library integrity. In the worktree ${c.worktree}, check ${changed}.`,
+    },
+  ];
   const verdicts = await parallel(
-    assignments.map(
-      (a) => () =>
-        dispatch(`${c.d.WHERE}\nAssignment: ${a}. ${scope}\n\n${quoted(c.question)}`, {
+    checks.map(
+      (k) => () =>
+        dispatch(`${c.d.WHERE}\n${k.brief}\n\n${quoted(c.question)}`, {
           agentType: "slopify:library-clerk",
-          label: a,
+          label: k.label,
           phase: "Validate",
           schema: CLERK_SCHEMA,
         }),
     ),
   );
-  return assignments.flatMap((a, i) => {
-    const v = must(verdicts[i], "validate", `A verdict on ${a}.`);
+  return checks.flatMap((k, i) => {
+    const v = must(verdicts[i], "validate", `A verdict on ${k.label}.`);
     const found = (v.verdict === "pass" ? [] : v.findings).map((f) => ({
       source: "library-clerk",
-      location: a,
+      location: k.label,
       text: f,
     }));
     if (v.verdict === "unverified" && found.length === 0) {
-      found.push({ source: "library-clerk", location: a, text: `The check couldn't run: ${v.evidence}` });
+      found.push({ source: "library-clerk", location: k.label, text: `The check couldn't run: ${v.evidence}` });
     }
     return found;
   });
@@ -392,7 +408,12 @@ export default async function run(): Promise<ResearchResult> {
       answers: answersOf(input["answers"]),
       startAtReview: d.state.pr ? Math.max(resume.reviewFired, 1) : 0,
       built: true,
-      document: { paths: pages, check: () => checkLibrary(c), revise: (problems) => repair(c, problems) },
+      document: {
+        paths: pages,
+        check: () => checkLibrary(c, pages),
+        revise: (problems) => repair(c, problems),
+        severity: "severity-research.md",
+      },
     });
     return { ...result, workflow: WORKFLOW, report: reportOf(WORKFLOW, result) };
   } catch (error) {

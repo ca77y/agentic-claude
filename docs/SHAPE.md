@@ -9,18 +9,20 @@ People own the issue. They say what kind of card they want, read it on the board
 ```text
  /slopify:shape "idea"   or   {idea?, card?, kind?}
  │
- 1 READ ──────── scout-card (haiku) reads the card, when one is named, with its comments
+ 1 READ ──────── scout-card (haiku) reads the card, when one is named, with its labels and comments
  │               scout-related-cards (haiku) finds duplicates, overlaps, and dependencies
+ │               a card labelled Shaped skips 2 and 3, and 4 applies the answers its comments give
  2 GROUND ────── in parallel, by kind: library-reader, scout-code, scout-docs, scout-history,
  │               and, for a story, TESTING.md's categories
  3 ADVISE ────── advisors (opus), by kind
- 4 DRAFT ─────── writer-card (opus) writes the card from the kind's template
+ 4 DRAFT ─────── writer-card (sonnet) writes the card from the kind's template
  │               it settles what doesn't change the outcome as a labelled assumption,
  │               and marks what does as an open question
- 5 CHECK ─────── checks by kind (haiku), then judge × 1 (opus) rules on the round's findings
+ 5 CHECK ─────── checks by kind (haiku) and advisor-simplify (opus),
+ │               then judge × 1 (opus) rules on the round's findings
  │   ▲ ≤3 revisions a confirmed problem goes back to writer-card
  │   └────────── what is still open after the last round becomes an open question
- 6 FILE ──────── pusher creates or updates the card on the board
+ 6 FILE ──────── pusher creates or updates the card on the board, and labels it Shaped
                  no open question → a story gets the Deliverable label
                  open questions   → listed on the card; answer them there and run shape on the card again
 ```
@@ -35,11 +37,12 @@ The kind comes from the user, and is `story` when they don't say. It picks the t
 | bug   | observed, expected, where or how, assumptions, references                          | `advisor-fit`, for duplicates and related cards                         | `lens-template`                                                            |
 | spike | the question, what counts as an answer, conditions, assumptions, references        | `advisor-scope`, for whether the question is bounded                    | `lens-template`                                                            |
 
-`lens-template` checks that every required part of the kind is there, and that nothing outside the template is. `lens-criteria` checks that each criterion passes or fails by a check `TESTING.md` declares for its category.
+`lens-template` checks that every required part of the kind is there, and that nothing outside the template is. For every kind, `advisor-simplify` reads each draft for what it could remove, merge, or narrow and still deliver its outcome, since the checks only ask what is missing; the judge rules on its findings with the rest, and writer-card revises by removing. `lens-criteria` checks that each criterion passes or fails by a check `TESTING.md` declares for its category.
 
 ## Decisions
 
 - **The card is the checkpoint, and the board is the conversation.** Open questions go on the card, in their own section. A person answers them on the card or in a comment, and runs `shape` on the card again. That run reads the answers, applies them, checks the card again, and updates it. Nothing waits in a session.
+- **`Shaped` means the card's grounding and advice are already in it.** `shape` adds it every time it files a card. A rerun on a `Shaped` card skips Ground and Advise and only applies the answers its comments give, then checks the card as fully as the first run did. A card written by hand doesn't have the label, so its first run goes through every phase; to ground a `Shaped` card again, remove the label.
 - **`Deliverable` means the card meets the story contract.** It goes on only when no open question is left and every check passed, and comes off when a rerun reopens one.
 - **Assumptions don't stop the run.** `shape` settles everything that doesn't change what the card delivers or whom it serves, and states it so a reader can object. Only what changes the outcome becomes an open question.
 - **Criteria follow `TESTING.md`.** The writer reads its categories and guidance, so every criterion is one that a category can check.

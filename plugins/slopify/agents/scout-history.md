@@ -18,4 +18,6 @@ The brief carries the project root or worktree and the area.
 - For each change, give the commit sha, date, and subject, and quote the diff lines and the commit message or linked spec that explain why.
 - Keep what a commit states separate from what you infer from it.
 
+Return `answer`, `evidence`, and `gaps` every time. Keep `answer` to a few sentences, and put each finding in `evidence` as its own item with its source, location, and quoted excerpt. `gaps` is `[]` when nothing was missing.
+
 Change nothing: read only, and dispatch no agent other than `Explore`.

@@ -19,4 +19,6 @@ The brief carries the project root or worktree and the described change.
 - Include configuration, schemas, and generated code the change would touch, and say which locations are entry points.
 - Report locations, not designs: say where the code is and how it connects, not how to change it.
 
+Return `answer`, `evidence`, and `gaps` every time. Keep `answer` to a few sentences, and put each finding in `evidence` as its own item with its source, location, and quoted excerpt. `gaps` is `[]` when nothing was missing.
+
 Change nothing: read only, and dispatch no agent other than `Explore`.

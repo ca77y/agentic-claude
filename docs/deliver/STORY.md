@@ -10,7 +10,7 @@ How `deliver-story` takes a card to a pull request (PR) whose review is clean. I
 4. The PR is reviewed. It is marked ready only when the review is clean.
 5. The change is validated by running the app, as the target project's `TESTING.md` describes. The workflow knows no platform, so a web app is driven in a browser and an iOS app in the simulator because `TESTING.md` says so.
 
-A delivery ends in a PR unless one of the halt conditions below holds. Anything still open goes into the PR, and the PR stays a draft. A human merges.
+A delivery ends in a PR unless one of the halt conditions below holds. Anything still open goes into the PR, and `pusher` converts the PR to a draft. A human merges.
 
 ## Flow
 
@@ -25,14 +25,14 @@ A delivery ends in a PR unless one of the halt conditions below holds. Anything 
  ▼
  3 HOW ────────────── GROUND     scout-code, scout-tests, scout-docs, scout-history (haiku), library-reader
  │   ▲  ≤2 tries      DESIGN     designer × 3 (opus), independent: smallest fit, best structure, most robust
- │   │                           scout-upstream-docs, scout-known-issues per new dependency (haiku)
- │   │                ADVISE     architecture, performance, risk, security, testability (opus, high)
+ │   │                           scout-upstream-docs, scout-known-issues per new dependency (sonnet)
+ │   │                ADVISE     architecture, performance, risk, security, testability (opus)
  │   │                           each compares all 3 designs
  │   └── none viable  DECIDE     judge (opus) picks one and grafts the best of the others  ⛔ H3
  │                    SPEC       writer-spec (opus) writes the spec folder → pusher commits it
- │   ▲  ≤3 revisions  CHALLENGE  check-claim × N, check-criterion × N, lens-scope (haiku),
- │   │                           lens-consistency (sonnet)
- │   │                           the 5 advisors, fresh, try to break the spec: blocker or major only
+ │   ▲  ≤3 revisions  CHALLENGE  check-claim × N, check-criterion × N (haiku),
+ │   │                           lens-scope, lens-consistency (sonnet), lens-altitude (haiku)
+ │   │                           the 6 advisors, fresh, try to break the spec: blocker or major only
  │   │                           later rounds: only failed or changed checks; an advisor checks the
  │   │                           revision only for its own findings; a criteria conflict → a decision
  │   └── problems →              judge × 1 (opus) rules on the checks' findings → writer-spec revises  ⛔ H3
@@ -45,9 +45,10 @@ A delivery ends in a PR unless one of the halt conditions below holds. Anything 
  │  │                  │ coder (opus) writes a failing test → commit   │
  │  │                  │ coder (opus) makes it pass → commit           │
  │  │                  │ qa (sonnet) checks the change and its history │
+ │  │                  │ simplifier (opus) finds code it doesn't need  │
  │  │                  │   fail → back to coder                        │
  │  │                  └───────────────────────────────────────────────┘
- │  │                  then writer-docs (opus) updates the listed docs against that code → commit
+ │  │                  then writer-docs (sonnet) updates the listed docs against that code → commit
  │  │   VALIDATE ───── checks (haiku) runs the TESTING.md checks
  │  │                  validator (sonnet) follows each criterion's category path
  │  │                  lens-docs (haiku) × N, one per listed doc: are its claims true?
@@ -55,14 +56,14 @@ A delivery ends in a PR unless one of the halt conditions below holds. Anything 
  │  │                  no proof → cannot-verify
  │  │   GATEWAY ────── judge (opus): anything missed? a doc not on the list → added
  │  │   PUSH ───────── pusher pushes (even if something is still flagged)                  ⛔ H4
- │  │                  no PR yet: opens a draft once nothing blocks, or on the last round
+ │  │                  no PR yet: opens it ready once nothing blocks, or on the last round
  │  │                  PR exists: requests the review
  │  │   REVIEW ─────── only if a PR exists: watcher (haiku) reads the findings
  │  │                  judge × 1 (opus) rules on every finding: severity and kind
  │  │   GATE (code) ── clean → exit
  │  └── code or test → inner loop     docs → writer-docs     spec → advisors and writer-spec
  ▼
- clean → PR ready, issue In Review            not clean → PR stays draft, issue gets questions
+ clean → PR ready, issue In Review            not clean → PR turns draft, issue gets questions
 ```
 
 ## Stages
@@ -86,14 +87,15 @@ The issue says why and what. This stage decides how, and it deserves more time a
 
 1. **Ground.** The scouts and `library-reader` return file and line pointers, existing symbols, tests, documentation claims, history, and earlier research.
 2. **Design.** Three independent `designer` dispatches each produce a full approach, and none sees the others. The script gives each a fixed stance: the smallest change that fits the existing patterns, the best long-term structure, and the most robust under failure. Each reads the project's full architecture and design documents, and marks what it reuses and what it creates. Each design lists the outside libraries and services it relies on, never the project's own code or tools, and marks what is new: a dependency the project doesn't use yet, or a part of it the project doesn't use yet. `scout-upstream-docs` and `scout-known-issues` then run once for each new dependency, by name, whichever designs name it.
-3. **Advise.** Five advisors each compare all three designs from one angle: `advisor-architecture`, `advisor-performance`, `advisor-risk`, `advisor-security`, and `advisor-testability`. The last asks whether each criterion can be proved through its `TESTING.md` validation path. Each claim cites the code, and each concern says what would fix it.
+3. **Advise.** Six advisors each compare all three designs from one angle: `advisor-architecture`, `advisor-performance`, `advisor-risk`, `advisor-security`, `advisor-testability`, and `advisor-simplify`. `advisor-testability` asks whether each criterion can be proved through its `TESTING.md` validation path. `advisor-simplify` asks only what each design could remove, merge, or narrow and still deliver, since every other angle asks what is missing. Each claim cites the code, and each concern says what would fix it.
 4. **Decide.** One `judge` picks a design, grafts in the best of the others, and records what was rejected and why. If it rules no design viable, Design runs again with its reasons, at most once more. If none survives that, the run halts.
 5. **Spec.** `writer-spec` writes the [spec folder](#the-spec), and `pusher` commits it before any code exists.
 6. **Challenge.** At most three revisions, each checked by the next round:
    - One `check-claim` per file, symbol, or API claim checks that it is true of the code.
    - One `check-criterion` per criterion checks that its category matches what `TESTING.md` says that category covers, and that the category's path can check it.
-   - `lens-scope` checks that the spec adds and drops no scope. `lens-consistency` checks it against the project's rules and documents.
-   - The same five advisors, in fresh dispatches, try to break the finished spec. Each reports only a `blocker` or a `major`, with its evidence, because nothing acts on a minor problem. Their findings need no judge.
+   - `lens-scope` checks that the spec adds and drops no scope. `lens-consistency` checks it against the project's rules and documents. `lens-altitude` (haiku) checks that the spec stops above the code and keeps to its size budget: no constant, pattern, string, or step-by-step logic inside one task, no task over 300 words, and `shared` within 600.
+   - How a task is implemented inside its own files is its coder's decision, so a finding that only asks for more precision there is out of scope for every advisor, lens, and the judge, and a revision fixes problems by removing detail rather than adding it.
+   - The same six advisors, in fresh dispatches, try to break the finished spec. Each reports only a `blocker` or a `major`, with its evidence, because nothing acts on a minor problem. Their findings need no judge.
    - One `judge` rules on all the checks' and lenses' findings of the round together. It merges findings that report the same problem, leaves out what an advisor already reported, and returns each problem that holds as a `blocker` or a `major`.
    - Each problem is of kind `spec`, which a revision can fix, or kind `decision`, when the issue's own criteria conflict or can be read more than one way, so only a person can settle what they mean.
    - `writer-spec` revises for every `spec` problem, and records each one and its reason in `RATIONALE.md`. It never revises around a `decision` problem: it picks the most reasonable reading and records it as a decision with `affectsAcceptance` set, which reaches the person under **Needs confirmation**. Advisors and the judge don't report a recorded decision again, and a round whose only problems are decisions ends the challenge.
@@ -147,11 +149,11 @@ This stage is two nested loops. The inner loop makes one change correct, and onl
    - A finding that conflicts with the spec's design is kind `spec`, which brings in the advisors. `coder` doesn't improvise around a wrong spec.
 4. **Gateway.** One `judge` (opus) reads every `qa` verdict, the validator's evidence, the `lens-docs` results, and the round's diff, and decides whether anything was missed. Whatever it flags is judged like any other problem and becomes open for the next round. A document the change affects that isn't on the `docs` list is added to it.
 5. **Push.** `pusher` commits and pushes the round's work, even when something is still flagged, so every attempt stays in git history.
-   - If no PR exists, `pusher` opens one as a draft once no `blocker` or `major` is open, or on the last round either way. Opening it fires the review. `pusher` then attaches it to the issue.
+   - If no PR exists, `pusher` opens one ready for review once no `blocker` or `major` is open, or on the last round either way. Opening it fires the review. It is never opened as a draft, because a review may skip drafts; when a PR is a draft, as after an earlier run, `pusher` marks it ready before firing the next review. `pusher` then attaches it to the issue.
    - If a PR exists, `pusher` updates its description and requests the review as `docs/FORGE.md` declares.
    - Anything still flagged goes under **Why this is a draft**, with its evidence and what was tried.
 6. **Review.** This step runs only when a PR exists. The review is the one `docs/FORGE.md` declares, with the trigger and the status it declares for it. The workflow doesn't review the code itself.
-   - `watcher` waits for the review run to finish and returns its findings. A review that ended without reviewing the change, such as one that skipped a draft, comes back `skipped`; it is not clean, though it has no findings, so the PR stays a draft.
+   - `watcher` waits for the review run to finish and returns its findings. A review that ended without reviewing the change, comes back `skipped`; it is not clean, though it has no findings, so the PR becomes a draft.
    - One `judge` rules on all the review's findings as in step 3. Each brief includes the earlier rulings for the same fingerprint (file, symbol, category), so a dismissed finding stays dismissed.
    - The judge filters out pre-existing issues, issues a linter would catch, and style. It runs a reproduction when it can, rather than only reading the code.
 7. **Gate.** This step is code, not an agent. It waits for every judge.
@@ -209,7 +211,7 @@ The description is rendered from the run state and updated after every round. It
 #### How the run exits
 
 - **Clean:** `pusher` marks the PR ready, moves the issue to In Review, and comments with the evidence and assumptions.
-- **Not clean:** the PR stays a draft, and **Why this is a draft** lists everything keeping it one. The issue gets a comment with the specific questions. The run returns `draft` with the decision ids. A rerun with `answers` resumes at the next outer round.
+- **Not clean:** `pusher` converts the PR to a draft, and **Why this is a draft** lists everything keeping it one. The issue gets a comment with the specific questions. The run returns `draft` with the decision ids. A rerun with `answers` resumes at the next outer round.
 
 ## Test first
 
@@ -231,6 +233,10 @@ This is the inner loop. Every code change runs through it, from the first build 
    - The change stays within its criterion or problem.
 
    Any failed check is a `blocker` and goes back to step 2, or to step 1 when the test itself is at fault.
+
+   A problem the `judge` rules `test`-kind is in the tests, such as missing coverage, so its test may already pass on the current code. For it, `qa` checks instead that the test fails when the behavior it states is broken.
+
+4. **Simplify.** Once `qa` passes, a fresh `simplifier` (opus) reads the change's diff for code it adds but doesn't need: a helper or file used once, an option nothing exercises, handling for a case that can't happen, or a new mechanism where an existing one does the job. Each finding names what to remove, merge, or narrow. A finding in the change's test goes back to step 1, since its test paths are protected from the `coder`, and any other goes back to step 2. When a `coder` then says the trimmed test needs what was removed, one `judge` rules between them, and later tries keep to that ruling instead of trading the test back and forth. `qa` judges whether the change is right; `simplifier` judges only whether it is bigger than it needs to be.
 
 ## Halt conditions
 

@@ -46,6 +46,7 @@ const run = (agents: AgentRun[], result: unknown = READY): RunData => ({
 const flagsOf = (r: RunData): string[] => flags(r, agentStats(r));
 // A scout dispatch with its own id and label, ending at the given second.
 const scout = (id: string, end = 10): AgentRun => agent({ agentId: id, label: id, end: at(end) });
+const ruling = (severity: string) => ({ verdict: "confirmed", severity });
 const haiku = (input: number): number => turnCost(turn("claude-haiku-5-5", { input }));
 
 describe("turnCost", () => {
@@ -101,7 +102,7 @@ describe("flags", () => {
 
   test("names a repeated dispatch and mostly dismissed rulings", () => {
     const judge = (id: string, verdict: string): AgentRun =>
-      agent({ agentId: id, type: "judge", label: `rule ${id}`, result: { verdict } });
+      agent({ agentId: id, type: "judge", label: `rule ${id}`, result: { rulings: [{ verdict, severity: "major" }] } });
     const f = flagsOf(
       run([
         judge("1", "dismissed"),
@@ -113,6 +114,18 @@ describe("flags", () => {
     );
     assert.ok(f.includes("2 of 3 judge rulings were dismissals."));
     assert.ok(f.includes('scout-code "scout" ran 2 times.'));
+  });
+
+  test("names confirmed findings mostly ruled minor or below", () => {
+    const rulings = [ruling("minor"), ruling("minor"), ruling("nit"), ruling("major")];
+    const f = flagsOf(run([agent({ type: "judge", label: "rule on the problems", result: { rulings } })]));
+    assert.ok(f.includes("3 of 4 confirmed findings were ruled minor or below, so nothing fixed them."));
+  });
+
+  test("names a review that skipped the change", () => {
+    const result = { outcome: "skipped", reference: "PR 79 is a draft", findings: [] };
+    const f = flagsOf(run([agent({ type: "watcher", label: "review 1 wait 1", result })]));
+    assert.ok(f.includes('watcher "review 1 wait 1" reported the review skipped: PR 79 is a draft'));
   });
 
   test("names an agent far slower than others of its type", () => {

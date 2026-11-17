@@ -1,7 +1,7 @@
 ---
 name: writer-card
 description: Production leaf that drafts or revises a story, bug, or spike card from supplied sources; a fresh validator judges it, and it never implements code.
-model: opus
+model: sonnet
 effort: medium
 ---
 

@@ -31,7 +31,14 @@ const DESIGN = { approach: "a", reuse: [], create: [], interfaces: [], data: [],
 const SCOUT = { answer: "a", evidence: [], gaps: [] };
 const LENS_PASS = { verdict: "pass", evaluated: "x", findings: [], limits: "none" };
 const VIABLE = { viable: true, chosen: "smallest", grafts: [], rejected: [], reasons: ["fits"] };
-const OK_PUSH = { done: true, unmet: [], operations: [{ op: "commit", reference: "abc" }] };
+const OK_PUSH = {
+  done: true,
+  unmet: [],
+  operations: [
+    { op: "commit", reference: "abc" },
+    { op: "card", reference: "comment" },
+  ],
+};
 
 const isAdvisor = (type: string): boolean => type.startsWith("advisor-");
 const NO_FINDINGS = { findings: [] };
@@ -53,6 +60,7 @@ const DEFAULTS: Record<string, Script> = {
   "check-claim": () => ({ holds: true, location: "a.ts:1", problem: "" }),
   "check-criterion": () => ({ holds: true, location: "c1", problem: "" }),
   "lens-scope": () => LENS_PASS,
+  "lens-altitude": () => LENS_PASS,
   "lens-consistency": () => LENS_PASS,
   judge: (_t, label) => (label === "decide" ? VIABLE : rulings(problem("major"))),
   "library-reader": () => ({ summary: "s", supported: [], gaps: [] }),
@@ -163,6 +171,7 @@ describe("the how phase", () => {
     assert.equal(count("check-claim"), 1);
     assert.equal(count("check-criterion"), 1);
     assert.equal(count("lens-scope"), 1);
+    assert.equal(count("lens-altitude"), 1);
   });
 
   test("designs again when none is viable, then reports it exhausted", async () => {
@@ -189,6 +198,8 @@ describe("the how phase", () => {
     );
     assert.ok("build" in r);
     assert.equal(count("writer-spec"), 2);
+    assert.match(calls.findLast((c) => c.type === "writer-spec")?.prompt ?? "", /Prefer removing detail to adding it/);
+    assert.match(calls.find((c) => c.label === "rule on the findings")?.prompt ?? "", /is its coder's decision/);
   });
 
   test("sends an irreversible choice the issue doesn't permit back to the writer, with no judge", async () => {
@@ -439,6 +450,7 @@ const SMALL_AGENTS: Record<string, Script> = {
       : { changed: ["calc.py"], ran: [], testProblem: "", specProblem: "", assumptions: [], manualActions: [] },
   checks: () => ({ commands: [{ command: "unit", exitCode: 0, failingLines: "" }] }),
   qa: () => ({ ...LENS_PASS, testAtFault: false }),
+  simplifier: () => LENS_PASS,
   validator: () => ({
     results: [{ id: "change", result: "pass", ran: "steps", evidence: ["out.txt"], detail: "", setting: "draft" }],
     uncategorizedSetting: "draft",
@@ -447,7 +459,7 @@ const SMALL_AGENTS: Record<string, Script> = {
     prompt.includes("open the branch's PR")
       ? { done: true, unmet: [], operations: [{ op: "pr", reference: "PR-1" }] }
       : OK_PUSH,
-  watcher: () => ({ outcome: "finished", waitingFor: "", limitMinutes: 60, reference: "r", findings: [] }),
+  watcher: () => ({ outcome: "finished", waitingFor: "none", limitMinutes: 60, reference: "r", findings: [] }),
 };
 
 // A prompt with no card: pusher files SMR-50 for it, and the card reads back with the prompt as its story.

@@ -3,16 +3,19 @@ import { describe, test } from "node:test";
 
 import {
   absent,
-  answerOf,
   decisionsOf,
   hashOf,
   parseSpec,
   rerunText,
   sameRev,
+  scout,
   shaped,
   slugged,
 } from "../src/slopify/lib/family.ts";
 import { answersOf } from "../src/slopify/lib/input.ts";
+import { calls, current, installAgents } from "./harness.ts";
+
+installAgents();
 
 describe("absent", () => {
   for (const v of [
@@ -97,11 +100,6 @@ describe("decisions and answers", () => {
   test("a repeated question is listed once", () => {
     assert.equal(decisionsOf("x", ["q?", "q?"]).length, 1);
   });
-  test("answerOf trims and treats null as unanswered", () => {
-    assert.equal(answerOf({ a: "  yes " }, "a"), "yes");
-    assert.equal(answerOf({ a: null }, "a"), "");
-    assert.equal(answerOf(undefined, "a"), "");
-  });
   test("answersOf reads an answers object and treats an array as no answers", () => {
     assert.deepEqual(answersOf({ a: "yes" }), { a: "yes" });
     assert.deepEqual(answersOf(["a", "b"]), {});
@@ -137,5 +135,28 @@ describe("rerunText", () => {
       rerunText("deliver-story", [{ id: "locate-1", kind: "input", what: "w", evidence: "", arg: "story" }]),
       /locate-1 in args\.story/,
     );
+  });
+});
+
+describe("scout", () => {
+  const ok = { answer: "a", evidence: [], gaps: [] };
+  test("a scout whose output never fits is tried once more, told what to return", async () => {
+    calls.length = 0;
+    current.script = (_type, label) => {
+      if (label === "q") throw new Error("StructuredOutput retry cap exceeded");
+      return ok;
+    };
+    assert.deepEqual(await scout("scout-code", "find it", { label: "q" }), ok);
+    assert.deepEqual(
+      calls.map((c) => c.label),
+      ["q", "q · retry"],
+    );
+    assert.match(calls[1]?.prompt ?? "", /^find it\n\nYour last try returned no valid output/);
+  });
+  test("a skipped scout is not tried again", async () => {
+    calls.length = 0;
+    current.script = () => null;
+    assert.equal(await scout("scout-code", "find it"), null);
+    assert.equal(calls.length, 1);
   });
 });
