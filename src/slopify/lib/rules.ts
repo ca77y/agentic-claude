@@ -216,3 +216,29 @@ export function parseReproduction(line: string): Reproduction | null {
     return null;
   }
 }
+
+export type DeliveryKind = "story" | "trivial" | "bugfix" | "spike" | "research";
+
+// What writer-pr is told about the run's current state: criterion results and open items, never fix-attempt counts.
+export interface PrState {
+  criteria: readonly CriterionRow[];
+  open: readonly Listed[];
+}
+
+// Stubs: the tests in test/rules.test.ts pin what each must do.
+export const renderState: (s: PrState) => string = () => "";
+
+export const checkDescription: (
+  body: string,
+  ctx: { kind: DeliveryKind; specDir: string },
+) => { leak: string[]; format: string[] } = () => ({ leak: [], format: [] });
+
+export const progressLine: (
+  round: number,
+  kind: "finding" | "ruling" | "tried" | "changed",
+  items: readonly string[],
+) => string = () => "";
+
+export type CheckpointKey = "done-board-start" | "done-round" | "done-findings" | "reproduced" | "review-fired";
+
+export const checkpointLine: (key: CheckpointKey, value: string) => string = () => "";
