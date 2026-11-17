@@ -1,7 +1,7 @@
 ---
 title: "Agyn: A Multi-Agent System for Team-Based Autonomous Software Engineering (arXiv 2602.01465)"
 type: raw
-summary: Paper claiming a role-based multi-agent team resolves 72.2% of SWE-bench Verified vs about 65% for single-agent baselines, with mixed models, role-specific tools and leaderboard baselines, so not a controlled comparison, and no tokens, cost or latency.
+summary: Paper claiming a role-based multi-agent team resolves 72.2% of SWE-bench Verified vs 65.0% for mini-SWE-agent with GPT-5 (71.8% for mini-SWE-agent with GPT-5.2 and for OpenHands with GPT-5), with mixed models, role-specific tools and leaderboard baselines, so not a controlled comparison, and no tokens, cost or latency.
 tags: [evaluation, architecture, agent-harness]
 aliases: []
 source: https://arxiv.org/html/2602.01465
