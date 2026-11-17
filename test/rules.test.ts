@@ -346,6 +346,14 @@ describe("checkDescription's leak rules", () => {
     );
   });
 
+  test("passes an HTTP route and a slash command, which are not filesystem paths", () => {
+    passes(
+      storyBody(
+        "## Why trust it\n\n- c1: pass, Adds a GET /health endpoint.\n- c2: pass, returns 404 for /api/users/42.\n- c3: pass, Run `/simplify` after.",
+      ),
+    );
+  });
+
   test("passes a link to a URL or a repo-relative file", () => {
     passes(
       storyBody(
