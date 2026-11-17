@@ -2439,7 +2439,7 @@ ${list(measured.unknowns)}
 Assumptions:
 ${list([...planAssumptions, ...measured.assumptions])}`;
 }
-async function checkDocument(d, story, docRel) {
+async function checkDocument(d, story, docRel, verdicts) {
   const doc = `${d.state.worktree}/${docRel}`;
   const lenses = [
     [
@@ -2454,14 +2454,15 @@ ${quoted(story)}`],
       `The findings document is ${doc}. Its Options and trade-offs section lists options with their costs and conditions; only ranking or advising one is a recommendation.`
     ]
   ];
-  const verdicts = await parallel(
+  const results = await parallel(
     lenses.map(
       ([name, brief]) => () => lens(name, `${d.WHERE}
 ${brief}`, { label: name, phase: "Validate" })
     )
   );
   return lenses.flatMap(([name], i) => {
-    const v = must(verdicts[i], "validate", `A verdict from ${name}.`);
+    const v = must(results[i], "validate", `A verdict from ${name}.`);
+    verdicts.set(name, v.verdict === "pass" ? "passed" : v.verdict === "fail" ? "failed" : "could not run");
     const problems = defectsOf(v).map((f) => ({ source: name, location: f.location, text: f.problem }));
     if (v.verdict === "unverified" && problems.length === 0) {
       problems.push({ source: name, location: docRel, text: `The check couldn't run: ${v.limits}` });
@@ -2518,11 +2519,18 @@ async function run() {
     const { story, cardId, slug, name, resume } = started;
     const docRel = resume.findings[0] ?? `docs/spikes/${name}.md`;
     let prototyped = "";
+    const verdicts = /* @__PURE__ */ new Map();
+    let settled2 = [];
     if (resume.findings.length === 0) {
       const evidence = await ground(d, story);
       const planned = await plan(d, story, evidence);
       const measured = await prototype(d, slug, planned.claims);
       prototyped = prototypeReport(planned.claims, measured);
+      const text = (id) => planned.claims.find((c) => c.id === id)?.claim ?? id;
+      settled2 = [
+        ...measured.measurements.map((x) => `Measured and confirmed by a separate qa: ${text(x.claim)} ${x.value}`),
+        ...measured.unknowns.map((u) => `Unknown: ${u}`)
+      ];
       await writeFindings(d, story, docRel, evidence, planNotes(planned.claims, measured, planned.assumptions));
     }
     const result = await runLoop({
@@ -2539,9 +2547,10 @@ async function run() {
       built: true,
       document: {
         paths: [docRel],
-        check: () => checkDocument(d, story, docRel),
+        check: () => checkDocument(d, story, docRel, verdicts),
         revise: (problems) => reviseDocument2(d, docRel, problems),
-        severity: "severity-spike.md"
+        severity: "severity-spike.md",
+        trust: () => [...[...verdicts].map(([name2, verdict]) => `The check "${name2}" ${verdict}.`), ...settled2]
       }
     });
     return {
