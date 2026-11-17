@@ -90,6 +90,21 @@ const happy = (over: Partial<Record<string, Script>> = {}): Script => scriptOf(D
 const count = (type: string, label?: string): number =>
   calls.filter((c) => c.type === type && (label === undefined || c.label.includes(label))).length;
 const integratePrompt = (): string => calls.find((c) => c.label === "integrate")?.prompt ?? "";
+const described = (type: string): string[] => calls.filter((c) => c.type === type).map((c) => c.prompt);
+const trustLine = (prompt: string, check: string, verdict: string): boolean =>
+  prompt.split("\n").some((line) => line.includes(`"${check}"`) && line.includes(` ${verdict}`));
+const RESUMED = {
+  answer: "a",
+  gaps: [],
+  evidence: [
+    { source: "worktree", location: "x", excerpt: "/p/wt" },
+    {
+      source: "done-findings",
+      location: "x",
+      excerpt: "2026-11-09T10:00:00Z done findings library/wiki/parser-speed.md",
+    },
+  ],
+};
 
 async function run(args: unknown, script: Script) {
   current.script = script;
@@ -143,6 +158,60 @@ describe("research", () => {
         }
         assert.match(prompt, /\b2 sources\b/i, `${type} is told the source count`);
       }
+    }
+  });
+
+  test("a resumed run gives writer-pr and lens-pr the source count, from the raw notes the committed pages cite", async () => {
+    const notes = ["library/raw/a.md", "library/raw/b.md", "library/raw/c.md"];
+    const r = await run(
+      "SMR-30",
+      happy({
+        "scout-checkpoint": () => RESUMED,
+        // The evidence check reads each committed page against the raw notes it cites, one note per source.
+        "library-clerk": (_t, label) => (label.startsWith("evidence: ") ? { ...PASS, notes } : PASS),
+      }),
+    );
+    assert.equal(r.status, "ready");
+    assert.equal(count("library-researcher"), 0);
+    for (const type of ["writer-pr", "lens-pr"]) {
+      const prompts = described(type);
+      assert.ok(prompts.length > 0, `${type} ran`);
+      for (const prompt of prompts) {
+        assert.ok(trustLine(prompt, "library integrity", "passed"), `${type} is told the integrity check passed`);
+        assert.match(prompt, /\b3 sources\b/i, `${type} is told the source count on a resumed run`);
+      }
+    }
+  });
+
+  test("says 1 source, not 1 sources, when the research rests on one source", async () => {
+    await run("SMR-30", happy({ "library-researcher": () => evidenceFor("https://same.example") }));
+    for (const prompt of [...described("writer-pr"), ...described("lens-pr")]) {
+      assert.match(prompt, /\b1 source\b/i);
+      assert.doesNotMatch(prompt, /\b1 sources\b/i);
+    }
+  });
+
+  test("tells writer-pr and lens-pr a clerk check that failed or could not run, not that it passed", async () => {
+    await run(
+      "SMR-30",
+      happy({
+        "library-clerk": (_t, label) =>
+          label === "library integrity"
+            ? { ...FAIL, findings: ["broken link in the index"] }
+            : label.startsWith("evidence: ")
+              ? { verdict: "unverified", findings: [], evidence: "the raw note is missing" }
+              : PASS,
+      }),
+    );
+    const prompts = [...described("writer-pr"), ...described("lens-pr")];
+    assert.ok(prompts.length > 0, "the PR is described");
+    for (const prompt of prompts) {
+      assert.ok(trustLine(prompt, "library integrity", "failed"), "the failed check is reported as failed");
+      assert.ok(
+        trustLine(prompt, "evidence: library/wiki/parser-speed.md", "could not run"),
+        "the unverified check is reported as could not run",
+      );
+      assert.ok(!trustLine(prompt, "library integrity", "passed"), "the failed check is never reported as passed");
     }
   });
 
