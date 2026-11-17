@@ -383,6 +383,35 @@ describe("checkDescription's leak rules", () => {
   });
 });
 
+const bugfix = { kind: "bugfix", specDir: "" } as const satisfies { kind: DeliveryKind; specDir: string };
+const bugfixBody = (before: string) =>
+  `## What changes\n\n${before}\n\n## Why trust it\n\n- The reproduction failed before the fix and passes after it.`;
+
+describe("checkDescription's leak rules keep to what they name", () => {
+  test("passes a bug's before and after that quotes a timestamp followed by text, which is not a ledger line", () => {
+    passes(bugfixBody("Before: `formatDate` printed `2026-03-01T12:00:00Z UTC` twice. After: once."), bugfix);
+    passes(bugfixBody("Logs now read `2026-03-01T12:00:00Z INFO started`."), bugfix);
+    passes(bugfixBody("Dates show as 2026-03-01T12:00:00Z now."), bugfix);
+  });
+
+  test("still flags each ledger line form", () => {
+    leaks("2026-11-09T10:00:00Z run 2: deliver-story SMR-1 | worktree w | branch b");
+    leaks("2026-11-09T10:00:00Z done publish #12");
+    leaks('2026-11-09T10:00:00Z reproduced {"steps": [], "observed": "x"}');
+    leaks("2026-11-09T10:00:00Z review 1 fired none");
+    leaks("2026-11-09T10:00:00Z delivery draft");
+  });
+
+  test("passes a root-relative markdown link, which is not an absolute filesystem path", () => {
+    passes(storyBody(trust, "## Not done\n\n- The rest is in [the guide](/docs/guide.md)."));
+  });
+
+  test("still flags a markdown link to a path under a home or filesystem root", () => {
+    leaks("See [the file](/Users/me/repo/x.md).");
+    leaks("See [the log](/tmp/run/out.log).");
+  });
+});
+
 describe("checkDescription's overflow rule", () => {
   test("passes grouped Why trust it lines", () => {
     passes(
