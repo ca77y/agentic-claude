@@ -1608,7 +1608,8 @@ function describeContext(l, target) {
     ...l.open.map((i) => openEntry(i)),
     ...l.unverified,
     ...l.knownDebt,
-    ...l.suggestions
+    ...l.suggestions,
+    ...l.unfiled
   ];
   const held = heldReasons(l).map((x) => entryText(x));
   const readiness = target ? "The PR is to be marked ready for review." : `The PR stays a draft.${held.length > 0 ? ` Besides the open items, because:
@@ -1791,10 +1792,11 @@ ${cards.join("\n\n")}`
     )
   );
   l.filed = opRefs(r, "card");
+  if (!pushOk(r)) l.unfiled = l.newIssues.map((i) => ({ ...i, text: `Follow-up card not confirmed filed: ${i.text}` }));
 }
 async function finish(l, ready, reasons) {
   const { state } = l.d;
-  const items2 = [...needsYou(l), ...reasons.map((x) => x.text)];
+  const items2 = [...needsYou(l), ...l.unfiled.map((x) => entryText(x)), ...reasons.map((x) => x.text)];
   const card = ready ? `Perform the operations docs/BOARD.md declares for when the PR's review is clean on card ${l.cardId} (for example moving it to In Review), and comment on the card with the evidence and assumptions:
 ${list(items2)}` : `Comment on card ${l.cardId} with what is open:
 ${list(items2)}`;
@@ -1870,6 +1872,7 @@ function freshLoop(input) {
     minors: [],
     newIssues: [],
     filed: [],
+    unfiled: [],
     progress: [],
     final: null,
     review: { clean: false, note: "" },
@@ -1924,6 +1927,7 @@ async function endLoop(l, clean2) {
     pr: l.d.state.pr,
     review: l.review.note || reviewSummary(l.suggestions.length),
     draftReasons: ready ? [] : reasons,
+    unfiled: l.unfiled,
     decisions: l.decisions.filter((d) => d.affectsAcceptance).map((d) => d.id)
   };
 }
@@ -1935,6 +1939,8 @@ function reportOf(workflowName, r, specDir = "") {
     `Fix rounds: ${String(r.rounds)}. Review: ${r.review}.`,
     r.draftReasons.length > 0 ? `Why it is a draft:
 ${r.draftReasons.map((x) => `- ${x.text}`).join("\n")}` : "",
+    r.unfiled.length > 0 ? `Open follow-ups:
+${r.unfiled.map((x) => `- ${x.text}`).join("\n")}` : "",
     r.decisions.length > 0 ? `Decisions to confirm: ${r.decisions.join(", ")}.` : ""
   ].filter(Boolean).join("\n");
 }

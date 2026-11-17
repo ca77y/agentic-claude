@@ -346,6 +346,8 @@ export interface LoopResult {
   pr: string;
   review: string;
   draftReasons: readonly Listed[];
+  /** Follow-ups whose card filing pusher didn't confirm, which stay open for a person to file. */
+  unfiled: readonly Listed[];
   decisions: readonly string[];
 }
 
@@ -377,6 +379,8 @@ interface Loop extends LoopInput {
   newIssues: Listed[];
   /** The follow-up cards filed for newIssues, which the final description names. */
   filed: { reference: string; link: string }[];
+  /** newIssues listed again when their filing wasn't confirmed, since nothing says which of them has a card. */
+  unfiled: Listed[];
   /** Ledger lines saying what each round found, ruled, tried, and changed, until a pusher dispatch writes them. */
   progress: string[];
   /** The final stage's description, which both the opening push and finish post. */
@@ -1150,6 +1154,7 @@ function describeContext(l: Loop, target: boolean | null): string {
     ...l.unverified,
     ...l.knownDebt,
     ...l.suggestions,
+    ...l.unfiled,
   ];
   const held = heldReasons(l).map((x) => entryText(x));
   const readiness = target
@@ -1348,13 +1353,14 @@ async function fileCards(l: Loop): Promise<void> {
       "Push",
     ),
   );
-  // A card that failed to file is still listed open; it doesn't stop the run.
+  // A failed filing doesn't stop the run, but nothing says which follow-ups got a card, so each stays listed open.
   l.filed = opRefs(r, "card");
+  if (!pushOk(r)) l.unfiled = l.newIssues.map((i) => ({ ...i, text: `Follow-up card not confirmed filed: ${i.text}` }));
 }
 
 async function finish(l: Loop, ready: boolean, reasons: readonly Listed[]): Promise<void> {
   const { state } = l.d;
-  const items = [...needsYou(l), ...reasons.map((x) => x.text)];
+  const items = [...needsYou(l), ...l.unfiled.map((x) => entryText(x)), ...reasons.map((x) => x.text)];
   const card = ready
     ? `Perform the operations docs/BOARD.md declares for when the PR's review is clean on card ${l.cardId} (for example moving it to In Review), and comment on the card with the evidence and assumptions:\n${list(items)}`
     : `Comment on card ${l.cardId} with what is open:\n${list(items)}`;
@@ -1437,6 +1443,7 @@ function freshLoop(input: LoopInput): Loop {
     minors: [],
     newIssues: [],
     filed: [],
+    unfiled: [],
     progress: [],
     final: null,
     review: { clean: false, note: "" },
@@ -1502,6 +1509,7 @@ async function endLoop(l: Loop, clean: boolean): Promise<LoopResult> {
     pr: l.d.state.pr,
     review: l.review.note || reviewSummary(l.suggestions.length),
     draftReasons: ready ? [] : reasons,
+    unfiled: l.unfiled,
     decisions: l.decisions.filter((d) => d.affectsAcceptance).map((d) => d.id),
   };
 }
@@ -1514,6 +1522,7 @@ export function reportOf(workflowName: string, r: LoopResult, specDir = ""): str
     specDir ? `Spec: ${specDir}.` : "",
     `Fix rounds: ${String(r.rounds)}. Review: ${r.review}.`,
     r.draftReasons.length > 0 ? `Why it is a draft:\n${r.draftReasons.map((x) => `- ${x.text}`).join("\n")}` : "",
+    r.unfiled.length > 0 ? `Open follow-ups:\n${r.unfiled.map((x) => `- ${x.text}`).join("\n")}` : "",
     r.decisions.length > 0 ? `Decisions to confirm: ${r.decisions.join(", ")}.` : "",
   ]
     .filter(Boolean)
