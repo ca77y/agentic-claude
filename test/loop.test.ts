@@ -867,6 +867,14 @@ describe("parallel inner loops", () => {
     assert.ok(order.indexOf("a: fix") < order.indexOf("b: test"));
   });
 
+  test("fixes one problem at a time, since a fix's test can land in any file", async () => {
+    use(fallingReviews([2, 0]));
+    await runLoop(inputFor(freshRun()));
+    const order = calls.filter((c) => c.type === "coder").map((c) => c.label);
+    assert.ok(order.includes("fix-1: fix") && order.includes("fix-2: test"));
+    assert.ok(order.lastIndexOf("fix-1: fix") < order.indexOf("fix-2: test"));
+  });
+
   test("turns a refused commit into a halt, even inside a wave", async () => {
     use(happy({ pusher: () => ({ done: false, unmet: ["push denied"], operations: [] }) }));
     const d = freshRun();

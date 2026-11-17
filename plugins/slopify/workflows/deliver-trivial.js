@@ -1082,16 +1082,14 @@ function criteriaOf(l, ids) {
 function changeOfTask(l, task) {
   return {
     id: task.id,
-    files: task.files,
     task,
     criteria: criteriaOf(l, task.criteria)
   };
 }
 function changeOfItem(l, item, index) {
-  const { location, criterion } = item.problem;
+  const { criterion } = item.problem;
   return {
     id: `fix-${String(index + 1)}`,
-    files: [location.replace(/:\d+(?:-\d+)?$/, "")],
     criteria: criteriaOf(l, criterion ? [criterion] : []),
     item
   };
@@ -1106,8 +1104,11 @@ async function changeHoldingHalt(l, c) {
   }
 }
 async function runChanges(l, changes) {
-  const asTasks = changes.map((c) => ({ ...c, dependsOn: c.task?.dependsOn ?? [] }));
-  for (const wave of waves(asTasks)) {
+  const tasks = changes.flatMap(
+    ({ task, ...c }) => task ? { ...c, task, files: task.files, dependsOn: task.dependsOn } : []
+  );
+  const alone = changes.filter((c) => !c.task).map((c) => [c]);
+  for (const wave of [...waves(tasks), ...alone]) {
     const left = await parallel(wave.map((c) => () => changeHoldingHalt(l, c)));
     if (l.halted) throw l.halted;
     for (const [i, c] of wave.entries()) {
@@ -1182,7 +1183,7 @@ ${l.story}
 ISSUE>>>
 
 The first test ${l.small.firstTest}`;
-  return [{ id: "change", files: [], criteria: [], assignment }];
+  return [{ id: "change", criteria: [], assignment }];
 }
 async function findDocs(l) {
   if (!l.small || l.changedThisRound.length === 0) return;

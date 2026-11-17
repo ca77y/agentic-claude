@@ -267,7 +267,6 @@ interface OpenItem {
 /** One change the inner loop makes correct: a task from the spec, or one problem. */
 interface Change {
   id: string;
-  files: readonly string[];
   task?: Task;
   criteria: readonly Criterion[];
   item?: OpenItem;
@@ -605,16 +604,14 @@ function criteriaOf(l: Loop, ids: readonly string[]): Criterion[] {
 function changeOfTask(l: Loop, task: Task): Change {
   return {
     id: task.id,
-    files: task.files,
     task,
     criteria: criteriaOf(l, task.criteria),
   };
 }
 function changeOfItem(l: Loop, item: OpenItem, index: number): Change {
-  const { location, criterion } = item.problem;
+  const { criterion } = item.problem;
   return {
     id: `fix-${String(index + 1)}`,
-    files: [location.replace(/:\d+(?:-\d+)?$/, "")],
     criteria: criteriaOf(l, criterion ? [criterion] : []),
     item,
   };
@@ -631,9 +628,15 @@ async function changeHoldingHalt(l: Loop, c: Change): Promise<string> {
   }
 }
 
+// A spec task declares every file it may write, so tasks whose files don't overlap run in parallel. Any other change
+// can't know where its test will go, and two coders in one worktree would build on each other's unfinished work, so
+// each runs alone, after the tasks.
 async function runChanges(l: Loop, changes: readonly Change[]): Promise<void> {
-  const asTasks = changes.map((c) => ({ ...c, dependsOn: c.task?.dependsOn ?? [] }));
-  for (const wave of waves(asTasks)) {
+  const tasks = changes.flatMap(({ task, ...c }) =>
+    task ? { ...c, task, files: task.files, dependsOn: task.dependsOn } : [],
+  );
+  const alone = changes.filter((c) => !c.task).map((c) => [c]);
+  for (const wave of [...waves(tasks), ...alone]) {
     const left = await parallel(wave.map((c) => () => changeHoldingHalt(l, c)));
     if (l.halted) throw l.halted;
     for (const [i, c] of wave.entries()) {
@@ -699,7 +702,7 @@ ${NO_WRITES}`,
 function firstChanges(l: Loop): Change[] {
   if (!l.small) return (l.build?.tasks ?? []).map((t) => changeOfTask(l, t));
   const assignment = `Deliver this:\n<<<ISSUE\n${l.story}\nISSUE>>>\n\nThe first test ${l.small.firstTest}`;
-  return [{ id: "change", files: [], criteria: [], assignment }];
+  return [{ id: "change", criteria: [], assignment }];
 }
 
 // With no spec to list them, a scout finds the documents this round's diff makes untrue, and an empty list skips the writer.
