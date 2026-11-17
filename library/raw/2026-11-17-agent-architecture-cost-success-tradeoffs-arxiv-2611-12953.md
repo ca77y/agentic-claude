@@ -55,7 +55,7 @@ updated: 2026-11-17
 - Significance and sample size. The unit of inference is the SOP (n=13). (sec 3.4, 4.1, 4.3, 4.5, Appendix E, Limitations; quotation and paraphrase) ^e8
   - Macro between-SOP standard errors of 6.3-7.8 points overlap across all arms, and no arm separates from baseline by a per-SOP sign test. Quoted: "no architecture is statistically separable in aggregate". Orch-v2 is the single exception (random-effects OR 1.72, p=0.007; see ^e6).
   - Pooled task-level standard error is about 1 point, but the authors refuse to read pooled p-values as a ranking and pair each with a per-SOP sign test.
-  - Skill-quality gap (CSE-high vs CSE-low, +13.3 points) is not significant by sign test (77 wins vs 44, 22 ties).
+  - Skill-quality gap (CSE-high vs CSE-low, +13.3 points) is not significant by sign test. The HTML text renders the counts as "77 wins vs 44, 22 ties"; read as 7 wins, 4 losses and 2 ties over the 13 SOPs, the same extraction artifact as in ^e7 (the scribe's inference).
   - Swarm-full vs swarm-descriptive: sign test p=1.00, while full costs 42% more tokens and 39% more latency.
   - Complexity analysis: median split into 6 simple and 7 complex SOPs; baseline 71.8 simple vs 63.6 complex; Orch-v2 78.7 vs 72.9. No Spearman correlation is significant (|rho| > 0.56 needed at n=13); framed as hypotheses.
   - One run per task at temperature 1, so only binomial uncertainty is reported.

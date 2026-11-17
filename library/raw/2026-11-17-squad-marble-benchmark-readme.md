@@ -24,7 +24,7 @@ updated: 2026-11-17
 ## Key evidence
 
 - **Eval D** (third-party tool author, self-run; mixed controlled and uncontrolled). Squad is a multi-agent coordination layer for GitHub Copilot CLI. ^e1
-- **SWE-bench Verified, 50 instances, controlled by the author's own label.** Matched model gpt-5.5 and matched WSL/Docker harness. Squad-on 36/50 (72%) versus Squad-off 36/50 (72%), a tie. The two arms resolve non-overlapping subsets (3 unique instances each). ^e2
+- **SWE-bench Verified, 50 instances, controlled by the author's own label.** Matched model gpt-5.5 and matched WSL/Docker harness. Squad-on 36/50 (72%) versus Squad-off 36/50 (72%), a tie. The two arms' solved sets overlap but differ: each resolves 3 instances the other does not. ^e2
   > [!quote] Author's words
   > "Squad-on and Squad-off both resolve 36/50 (72%) - an honest statistical tie at n=50"
 - **TerminalBench 2.0, 20 of 89 tasks.** Squad 16/20 (80%) versus baseline 15/20 (75%). Same model but different harness paths (host-side orchestrator versus native harness), so record it as uncontrolled. ^e3
