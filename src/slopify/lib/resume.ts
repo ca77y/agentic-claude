@@ -1,8 +1,8 @@
 // Where a delivery stands, from its durable checkpoints: the worktree, the PR, the ledger, and the committed spec.
-import { fact, scout, shaped } from "./family.ts";
+import { absent, fact, scout, shaped, type ScoutResult } from "./family.ts";
 import { val } from "./deliver.ts";
-import { must, type Run } from "./loop.ts";
-import { parseReproduction, type Reproduction } from "./rules.ts";
+import { Halt, must, type Run } from "./loop.ts";
+import { checkpointLine, parseReproduction, type CheckpointKey, type Reproduction } from "./rules.ts";
 import { parseBuild, parseValidate, type Build, type Validate } from "./spec.ts";
 
 export interface Resume {
@@ -20,6 +20,31 @@ export interface Resume {
   reproduced: Reproduction | null;
 }
 
+// A ledger line as a scout may return it: pusher's timestamp opens it, after any fence, list mark or quote around it.
+const LEDGER_LINE = /^(?:```[^\n]*\n)?[\s"`*-]*\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z /;
+
+// The ledger lines for a checkpoint key that hold its form, in ledger order. Every item the scout returned for the key
+// is read: a ledger line without the form, such as a progress entry or run line quoting it, is skipped, and an item
+// that is no ledger line at all halts, since the run can't tell where it stands.
+function accepted(cp: ScoutResult, key: CheckpointKey): string[] {
+  const lines: string[] = [];
+  for (const e of cp.evidence) {
+    if (e.source !== key) continue;
+    const item = (e.excerpt || e.location || "").trim();
+    if (absent(item, true)) continue;
+    if (!LEDGER_LINE.test(item)) {
+      throw new Halt(
+        "locate",
+        `a ${key} checkpoint read as a whole ledger line`,
+        `The scout returned "${item}" for ${key}, which is not a ledger line.`,
+      );
+    }
+    const line = checkpointLine(key, item);
+    if (line) lines.push(line);
+  }
+  return lines;
+}
+
 // Read the checkpoints into the run's state. identifies names the run; specDir is empty when only the PR knows it.
 export async function readResume(d: Run, identifies: string, specDir: string): Promise<Resume> {
   const cp = must(
@@ -27,15 +52,16 @@ export async function readResume(d: Run, identifies: string, specDir: string): P
       "scout-checkpoint",
       `${d.WHERE}
 Report where this run stands. It is the delivery of ${identifies}.
-Report these keys, each as an evidence item with source set to the key; leave out a key that does not exist:
+Report these keys, each as an evidence item with source set to the key; leave out a key that does not exist.
+For each ledger key below, return one evidence item for each ledger line that contains the key's form right after pusher's timestamp, with source set to the key and the whole line as its excerpt, in ledger order; return none when no line matches:
 ${d.branchOnly ? "- worktree: the main checkout, only when it has this run's branch checked out; there is no worktree\n- branch, ledger" : "- worktree, branch, ledger"}
 - pr: the reference of the branch's open PR; leave it out when the branch's only PRs are closed or merged, since a branch name can outlive its PR
-- done-board-start: the last "done board-start" ledger line
-- done-round: the last "done round" ledger line
-- done-findings: the paths in the last "done findings" ledger line, space-separated
-- reproduced: the last ledger line that contains "reproduced {"
-- review-fired: the highest <n> among the ledger's "review <n> fired" lines
-- spec-dir: ${specDir ? `the folder ${specDir}, if it exists in the worktree` : 'the spec folder the PR description names after "Spec:"'}, relative to the worktree root
+- done-board-start: \`done board-start\`
+- done-round: \`done round <n>\`
+- done-findings: \`done findings <paths>\`
+- reproduced: \`reproduced {...}\`
+- review-fired: \`review <n> fired\`
+- spec-dir: ${specDir ? `the folder ${specDir}, if it exists in the worktree` : 'the spec folder on the PR description\'s "Spec:" line'}, relative to the worktree root
 - build-json: the exact contents of build.json in that folder
 - validate-json: the exact contents of validate.json in that folder`,
       { label: "read checkpoints", phase: "Locate" },
@@ -50,17 +76,26 @@ ${d.branchOnly ? "- worktree: the main checkout, only when it has this run's bra
   state.branch = shaped("branch", val(cp, "branch"));
   state.ledger = shaped("path", val(cp, "ledger"));
   state.pr = shaped("ref", val(cp, "pr"));
+  const lastFindings = accepted(cp, "done-findings").at(-1) ?? "";
+  const lastRepro = accepted(cp, "reproduced").at(-1);
+  const spec = val(cp, "spec-dir")
+    .replace(/^Spec:\s*/i, "")
+    .replaceAll("`", "");
   return {
     build: parseBuild(fact(cp, "build-json")),
     validate: parseValidate(fact(cp, "validate-json")),
-    specDir: shaped("rel", val(cp, "spec-dir")) || specDir,
-    reviewFired: Number(/\d+/.exec(val(cp, "review-fired"))?.[0] ?? 0),
-    built: !!val(cp, "done-round"),
-    boardStartDone: !!val(cp, "done-board-start"),
-    findings: val(cp, "done-findings")
+    specDir: shaped("rel", spec) || specDir,
+    reviewFired: Math.max(
+      0,
+      ...accepted(cp, "review-fired").map((l) => Number(/review (\d+) fired/.exec(l)?.[1] ?? 0)),
+    ),
+    built: accepted(cp, "done-round").length > 0,
+    boardStartDone: accepted(cp, "done-board-start").length > 0,
+    findings: lastFindings
+      .replace(/^.*? done findings /, "")
       .split(/\s+/)
       .map((p) => shaped("rel", p))
       .filter(Boolean),
-    reproduced: parseReproduction(fact(cp, "reproduced")),
+    reproduced: lastRepro ? parseReproduction(lastRepro) : null,
   };
 }
