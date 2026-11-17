@@ -368,6 +368,11 @@ var CHECKPOINT_FORMS = {
   reproduced: String.raw`reproduced \{`,
   "review-fired": String.raw`review \d+ fired\b`
 };
+function checkpointLine(key, value) {
+  const line = value.trim().replace(/^```[^\n]*\n([\s\S]*?)\n?```$/, "$1").trim().replace(/^[-*]\s+/, "").replace(/^(["`])(.*)\1$/s, "$2").trim();
+  const re = new RegExp(`^${STAMP} ${CHECKPOINT_FORMS[key]}.*$`);
+  return re.test(line) ? line : "";
+}
 
 // src/slopify/lib/schemas.ts
 function described(schema, description) {
@@ -1823,21 +1828,40 @@ async function workspace(d, o) {
 }
 
 // src/slopify/lib/resume.ts
+var LEDGER_LINE = /^(?:```[^\n]*\n)?\s*(?:[-*]\s+)?["`]?\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z /;
+function accepted(cp, key) {
+  const lines = [];
+  for (const e of cp.evidence) {
+    if (e.source !== key) continue;
+    const item = e.excerpt.trim();
+    if (!LEDGER_LINE.test(item)) {
+      throw new Halt(
+        "locate",
+        `a ${key} checkpoint read as a whole ledger line`,
+        `The scout returned "${item}" for ${key}, which is not a ledger line.`
+      );
+    }
+    const line = checkpointLine(key, item);
+    if (line) lines.push(line);
+  }
+  return lines;
+}
 async function readResume(d, identifies, specDir) {
   const cp = must(
     await scout(
       "scout-checkpoint",
       `${d.WHERE}
 Report where this run stands. It is the delivery of ${identifies}.
-Report these keys, each as an evidence item with source set to the key; leave out a key that does not exist:
+Report these keys, each as an evidence item with source set to the key; leave out a key that does not exist.
+For each ledger key below, return one evidence item for each ledger line that contains the key's form right after pusher's timestamp, with source set to the key and the whole line as its excerpt, in ledger order; return none when no line matches:
 ${d.branchOnly ? "- worktree: the main checkout, only when it has this run's branch checked out; there is no worktree\n- branch, ledger" : "- worktree, branch, ledger"}
 - pr: the reference of the branch's open PR; leave it out when the branch's only PRs are closed or merged, since a branch name can outlive its PR
-- done-board-start: the last "done board-start" ledger line
-- done-round: the last "done round" ledger line
-- done-findings: the paths in the last "done findings" ledger line, space-separated
-- reproduced: the last ledger line that contains "reproduced {"
-- review-fired: the highest <n> among the ledger's "review <n> fired" lines
-- spec-dir: ${specDir ? `the folder ${specDir}, if it exists in the worktree` : 'the spec folder the PR description names after "Spec:"'}, relative to the worktree root
+- done-board-start: \`done board-start\`
+- done-round: \`done round <n>\`
+- done-findings: \`done findings <paths>\`
+- reproduced: \`reproduced {...}\`
+- review-fired: \`review <n> fired\`
+- spec-dir: ${specDir ? `the folder ${specDir}, if it exists in the worktree` : `the spec folder on the PR description's "Spec:" line`}, relative to the worktree root
 - build-json: the exact contents of build.json in that folder
 - validate-json: the exact contents of validate.json in that folder`,
       { label: "read checkpoints", phase: "Locate" }
@@ -1851,15 +1875,21 @@ ${d.branchOnly ? "- worktree: the main checkout, only when it has this run's bra
   state.branch = shaped("branch", val(cp, "branch"));
   state.ledger = shaped("path", val(cp, "ledger"));
   state.pr = shaped("ref", val(cp, "pr"));
+  const lastFindings = accepted(cp, "done-findings").at(-1) ?? "";
+  const lastRepro = accepted(cp, "reproduced").at(-1);
+  const spec = val(cp, "spec-dir").replace(/^Spec:\s*/i, "").replaceAll("`", "");
   return {
     build: parseBuild(fact(cp, "build-json")),
     validate: parseValidate(fact(cp, "validate-json")),
-    specDir: shaped("rel", val(cp, "spec-dir")) || specDir,
-    reviewFired: Number(/\d+/.exec(val(cp, "review-fired"))?.[0] ?? 0),
-    built: !!val(cp, "done-round"),
-    boardStartDone: !!val(cp, "done-board-start"),
-    findings: val(cp, "done-findings").split(/\s+/).map((p) => shaped("rel", p)).filter(Boolean),
-    reproduced: parseReproduction(fact(cp, "reproduced"))
+    specDir: shaped("rel", spec) || specDir,
+    reviewFired: Math.max(
+      0,
+      ...accepted(cp, "review-fired").map((l) => Number(/review (\d+) fired/.exec(l)?.[1] ?? 0))
+    ),
+    built: accepted(cp, "done-round").length > 0,
+    boardStartDone: accepted(cp, "done-board-start").length > 0,
+    findings: lastFindings.replace(/^.*? done findings /, "").split(/\s+/).map((p) => shaped("rel", p)).filter(Boolean),
+    reproduced: lastRepro ? parseReproduction(lastRepro) : null
   };
 }
 

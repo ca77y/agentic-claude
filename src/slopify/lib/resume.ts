@@ -20,8 +20,9 @@ export interface Resume {
   reproduced: Reproduction | null;
 }
 
-// A ledger line as a scout may return it: pusher's timestamp opens it, after any fence, list mark or quote around it.
-const LEDGER_LINE = /^(?:```[^\n]*\n)?[\s"`*-]*\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z /;
+// A ledger line as a scout may return it: pusher's timestamp opens it, after the wrappers checkpointLine strips (a
+// fence, a list mark, one opening quote), so a line read as one is never silently dropped as wrapped.
+const LEDGER_LINE = /^(?:```[^\n]*\n)?\s*(?:[-*]\s+)?["`]?\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z /;
 
 // The ledger lines for a checkpoint key that hold its form, in ledger order. Every item the scout returned for the key
 // is read: a ledger line without the form, such as a progress entry or run line quoting it, is skipped, and an item
