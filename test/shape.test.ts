@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { beforeEach, describe, test } from "node:test";
 
 import shape from "../src/slopify/workflows/shape.ts";
-import { calls, current, installAgents, type Reply, type Script } from "./harness.ts";
+import { calls, current, installAgents, linearBoard, linearSave, type Reply, type Script } from "./harness.ts";
 
 installAgents();
 
@@ -193,6 +193,44 @@ describe("shape", () => {
       happy({ pusher: () => ({ done: false, unmet: ["no create binding"], operations: [] }) }),
     );
     assert.equal(r.status, "blocked");
+  });
+
+  test("the board model rewrites an identifier in a hidden line as Linear stored it on SMR-371", () => {
+    const stored =
+      '<!-- shape split-out-of-<issue id="uuid-SMR-317" label="SMR-317" href="https://linear.app/ca77y/issue/SMR-317/x" />-see-1fljwme -->';
+    assert.equal(linearSave("<!-- shape split-out-of-smr-317-see-1fljwme -->"), stored);
+  });
+
+  for (const idea of [
+    "Compare which sessions reach Garmin and Strava",
+    "Split out of SMR-317: see which of the owner's sessions reach Garmin, Intervals.icu and Strava",
+  ]) {
+    test(`files a card on a board that rewrites saved text, and a rerun updates it: ${idea}`, async () => {
+      const board = linearBoard(371);
+      const script = happy({ pusher: (_t, _l, prompt) => board.pusher(prompt) });
+      const first = await run(idea, script);
+      const second = await run(idea, script);
+      assert.equal(first.status, "done");
+      assert.equal(second.status, "done");
+      assert.deepEqual(Object.keys(Object.fromEntries(board.cards)), ["SMR-371"]);
+    });
+  }
+
+  test("files a named card on a board that rewrites its identifier in saved text", async () => {
+    const board = linearBoard(371);
+    const card: Reply = {
+      ...SCOUT,
+      evidence: [
+        { source: "card", location: "x", excerpt: "SMR-7" },
+        { source: "text", location: "x", excerpt: "Multiply" },
+      ],
+    };
+    const r = await run(
+      { card: "SMR-7" },
+      happy({ "scout-card": () => card, pusher: (_t, _l, prompt) => board.pusher(prompt) }),
+    );
+    assert.equal(r.status, "done");
+    assert.deepEqual(Object.keys(Object.fromEntries(board.cards)), ["SMR-7"]);
   });
 
   test("asks for the idea when given nothing", async () => {

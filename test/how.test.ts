@@ -10,7 +10,7 @@ import deliverSpike from "../src/slopify/workflows/deliver-spike.ts";
 import deliverStory from "../src/slopify/workflows/deliver-story.ts";
 import deliverTrivial from "../src/slopify/workflows/deliver-trivial.ts";
 import research from "../src/slopify/workflows/research.ts";
-import { calls, current, installAgents, type Reply, type Script } from "./harness.ts";
+import { calls, current, installAgents, linearBoard, type Reply, type Script } from "./harness.ts";
 
 installAgents();
 
@@ -526,6 +526,17 @@ describe("the small workflows", () => {
     assert.ok(filing?.prompt.includes("Add mul to calc.py"));
     assert.ok(filing?.prompt.includes("deliver-small"));
     assert.ok(calls.some((c) => c.label === "push the round" && c.prompt.includes("SMR-50")));
+  });
+
+  test("deliver-trivial files a card for a prompt holding an identifier on a board that rewrites it, once", async () => {
+    const board = linearBoard(50);
+    current.script = (type, label, prompt) =>
+      label === "file the card" ? board.pusher(prompt) : promptRun(type, label, prompt);
+    Object.assign(globalThis, { args: "Fix the crash SMR-317 reports in sync" });
+    await deliverTrivial();
+    await deliverTrivial();
+    assert.equal(calls.filter((c) => c.label === "push the round" && c.prompt.includes("SMR-50")).length, 2);
+    assert.deepEqual(Object.keys(Object.fromEntries(board.cards)), ["SMR-50"]);
   });
 
   test("deliver-trivial doesn't file a card when the issue already has one", async () => {

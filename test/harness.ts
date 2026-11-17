@@ -40,3 +40,34 @@ function fakeAgent(prompt: string, opts: { agentType?: string; label?: string })
 export function installAgents(): void {
   Object.assign(globalThis, { phase: () => null, log: () => null, parallel: runAll, agent: fakeAgent });
 }
+
+// Linear's save: a card identifier, in any case, becomes an issue link, `-` bullets become `*`, and a bare URL is
+// wrapped in `<…>` (docs/BOARD.md). None of it is a content change.
+export function linearSave(body: string): string {
+  return body
+    .replaceAll(/^- /gm, "* ")
+    .replaceAll(/(?<![<(])(https?:\/\/\S+)/g, "<$1>")
+    .replaceAll(/\bsmr-\d+\b/gi, (m) => {
+      const id = m.toUpperCase();
+      return `<issue id="uuid-${id}" label="${id}" href="https://linear.app/ca77y/issue/${id}/x" />`;
+    });
+}
+
+// A board that saves through linearSave, and a pusher that files a card the way a filing brief tells it: it finds the
+// card the brief names, or searches the stored bodies for the brief's hidden line, writes the card with that line last,
+// and reads the write back, reporting unmet when the stored line isn't the line it wrote.
+export function linearBoard(first: number): { cards: Map<string, string>; pusher: (prompt: string) => Reply } {
+  const cards = new Map<string, string>();
+  let next = first;
+  const pusher = (prompt: string): Reply => {
+    const line = /<!--[^\n]*?-->/.exec(prompt)?.[0] ?? "";
+    const named = /Update card ([A-Z]+-\d+)/.exec(prompt)?.[1];
+    const found = named ?? [...cards].find(([, body]) => body.split("\n").includes(line))?.[0];
+    const id = found ?? `SMR-${String(next++)}`;
+    cards.set(id, linearSave(`## Question\n\n- a bullet\n\nSee https://example.com\n\n${line}`));
+    return cards.get(id)?.split("\n").includes(line)
+      ? { done: true, unmet: [], operations: [{ op: "card", reference: id }] }
+      : { done: false, unmet: [`read back ${id}: the stored line differs from ${line}`], operations: [] };
+  };
+  return { cards, pusher };
+}
