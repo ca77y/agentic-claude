@@ -152,7 +152,7 @@ const CHECK_SCHEMA = {
 // A spec problem the challenge acts on. Nothing acts on a minor one, so no agent reports or confirms it.
 const SPEC_PROBLEM = {
   type: "object",
-  required: ["location", "problem", "severity", "reason"],
+  required: ["location", "problem", "severity", "reason", "kind"],
   properties: {
     location: { type: "string", description: "The spec file and item, or path:line" },
     problem: { type: "string", description: "What is wrong and what would fix it" },
@@ -162,6 +162,12 @@ const SPEC_PROBLEM = {
       description: "blocker: building this spec can't deliver the issue. major: a real flaw to fix before building",
     },
     reason: { type: "string", description: "The evidence it rests on, path:line or source" },
+    kind: {
+      type: "string",
+      enum: ["spec", "decision"],
+      description:
+        "spec: a revision of the spec can fix it. decision: the issue's own criteria conflict or can be read more than one way, so only a person can settle what they mean",
+    },
   },
 } as const;
 
@@ -191,6 +197,8 @@ const CHALLENGE_RULING_SCHEMA = {
 
 type SpecResult = Infer<typeof SPEC_SCHEMA>;
 type RuledSpecProblem = Infer<typeof SPEC_PROBLEM>;
+// An advisor's finding remembers which advisor reported it, so only that advisor checks the revision for it.
+type OpenProblem = RuledSpecProblem & { by?: (typeof HOW_ADVISORS)[number] };
 type Design = Infer<typeof DESIGN_SCHEMA> & { stance: string };
 type Decided = Infer<typeof DECISION_SCHEMA>;
 
@@ -465,32 +473,39 @@ async function runChecks(o: HowInput, spec: SpecResult, held: Set<string>): Prom
 const FULL_ATTACK =
   "Try to break this finished spec from your one angle, reading the code it touches. Report only what must change before building: a blocker or a major, each with its location and evidence.";
 
-// After a revision, the advisors check the revision rather than attack the whole spec again.
-const revisionCheck = (revisedFor: readonly RuledSpecProblem[]): string =>
-  `The spec was revised for these problems:\n${list(problemLines(revisedFor))}\n\nFrom your one angle, reading the code it touches, report each of them the revision didn't fix, and each blocker or major the revision itself introduced, each with its location and evidence. Don't attack again what the revision left unchanged.`;
+// A conflict in the issue's own criteria is settled as a decision the person confirms, so it isn't reported again.
+const SETTLED =
+  "A problem the spec records as a decision with affectsAcceptance true is settled for the person to confirm; don't report it again.";
 
-async function runAttack(o: HowInput, revisedFor: readonly RuledSpecProblem[]): Promise<RuledSpecProblem[]> {
-  const ask = revisedFor.length > 0 ? revisionCheck(revisedFor) : FULL_ATTACK;
+// After a revision, an advisor checks the revision for its own findings rather than attack the whole spec again.
+const revisionCheck = (revisedFor: readonly RuledSpecProblem[]): string =>
+  `The spec was revised for these problems you reported:\n${list(problemLines(revisedFor))}\n\nFrom your one angle, reading the code it touches, report each of them the revision didn't fix, and each blocker or major the revision itself introduced, each with its location and evidence. Don't attack again what the revision left unchanged.`;
+
+// The first round has every advisor attack the spec. A later round has only the advisors whose findings the revision
+// was for check it; the cheap checks and the judge run every round and cover the rest.
+async function runAttack(o: HowInput, revisedFor: readonly OpenProblem[] | null): Promise<OpenProblem[]> {
+  const advisors = revisedFor ? HOW_ADVISORS.filter((name) => revisedFor.some((p) => p.by === name)) : HOW_ADVISORS;
   const views = await parallel(
-    HOW_ADVISORS.map(
-      (name) => () =>
-        dispatch(
-          `${o.where}
+    advisors.map((name) => async () => {
+      const own = revisedFor?.filter((p) => p.by === name);
+      const v = await dispatch(
+        `${o.where}
 ${STORY_BLOCK(o)}
 
 ${SPEC_FILES(o)} Read all three files.
 
-${ask} Leave out anything minor, because nothing acts on it. Change nothing.`,
-          {
-            agentType: `slopify:${name}`,
-            label: revisedFor.length > 0 ? "check the revision" : "attack the spec",
-            phase: "Challenge",
-            schema: ATTACK_SCHEMA,
-          },
-        ),
-    ),
+${own ? revisionCheck(own) : FULL_ATTACK} Leave out anything minor, because nothing acts on it. ${SETTLED} Change nothing.`,
+        {
+          agentType: `slopify:${name}`,
+          label: own ? "check the revision" : "attack the spec",
+          phase: "Challenge",
+          schema: ATTACK_SCHEMA,
+        },
+      );
+      return must(v, "how", "An advisor's attack on the spec.").findings.map((f) => ({ ...f, by: name }));
+    }),
   );
-  return views.flatMap((v) => must(v, "how", "An advisor's attack on the spec.").findings);
+  return views.flatMap((v) => must(v, "how", "An advisor's attack on the spec."));
 }
 
 // One judge rules on every finding the cheap checks reported in a round, so it reads the spec and the code once and
@@ -507,7 +522,7 @@ ${STORY_BLOCK(o)}
 
 ${SPEC_FILES(o)}
 
-Cheap checks reported these findings against the spec. Rule on all of them, checking each against the code, and merge findings that report the same problem. Return each distinct problem that holds as a blocker or a major. Leave out what doesn't hold, what is minor (real but low impact), and what an advisor's finding below already covers.
+Cheap checks reported these findings against the spec. Rule on all of them, checking each against the code, and merge findings that report the same problem. Return each distinct problem that holds as a blocker or a major. Leave out what doesn't hold, what is minor (real but low impact), and what an advisor's finding below already covers. ${SETTLED}
 
 Reported findings:
 ${list(reported.map((p) => `${p.location}: ${p.problem}`))}
@@ -532,29 +547,44 @@ function unpermitted(build: Build): RuledSpecProblem[] {
       problem: `"${d.choice}" can't be undone, and the issue doesn't explicitly permit it. Build only its reversible part, and move the rest to manualActions.`,
       severity: "blocker",
       reason: "An irreversible change needs explicit permission in the issue.",
+      kind: "spec",
     }));
 }
+
+// A problem that only a person can settle is escalated, never revised around: the writer picks the most reasonable
+// reading, and the decision reaches the person through the PR's Needs confirmation section.
+const escalation = (decide: readonly RuledSpecProblem[]): string =>
+  decide.length > 0
+    ? `\n\nNo revision can settle these, because the issue's own criteria conflict or can be read more than one way. Record each as a decision with affectsAcceptance true: pick the most reasonable reading, cite what grounds it, and build the spec on it:\n${list(problemLines(decide))}`
+    : "";
 
 // Returns the challenged spec, or the blockers still open after the last round.
 async function challenge(o: HowInput, first: SpecResult): Promise<{ spec: SpecResult; blockers: string[] }> {
   let spec = first;
-  let open: RuledSpecProblem[] = [];
+  let open: OpenProblem[] = [];
+  let decide: OpenProblem[] = [];
   const held = new Set<string>();
   for (let revisions = 0; revisions <= MAX_FIX_ROUNDS; revisions += 1) {
     phase("Challenge");
-    const revisedFor = open;
+    const revisedFor = revisions === 0 ? null : open;
     const [checked, attacked] = await parallel([() => runChecks(o, spec, held), () => runAttack(o, revisedFor)]);
     const advised = must(attacked, "how", "The advisors' attack on the spec.");
-    open = [
+    const found: OpenProblem[] = [
       ...unpermitted(spec.build),
       ...advised,
       ...(await ruleOn(o, must(checked, "how", "The spec's checks."), advised)),
     ];
-    if (open.length === 0) return { spec, blockers: [] };
+    decide = found.filter((p) => p.kind === "decision");
+    open = found.filter((p) => p.kind !== "decision");
+    if (open.length === 0 && decide.length === 0) return { spec, blockers: [] };
+    if (open.length === 0) {
+      spec = await writeAndCommit(o, escalation(decide).trimStart(), "record the spec's open decisions", "Challenge");
+      return { spec, blockers: [] };
+    }
     if (revisions === MAX_FIX_ROUNDS) break;
     spec = await writeAndCommit(
       o,
-      `Revise the spec for these problems, and update RATIONALE.md with each one and its reason:\n${list(problemLines(open))}`,
+      `Revise the spec for these problems, and update RATIONALE.md with each one and its reason:\n${list(problemLines(open))}${escalation(decide)}`,
       "revise the spec after its challenge",
       "Challenge",
     );
@@ -563,7 +593,7 @@ async function challenge(o: HowInput, first: SpecResult): Promise<{ spec: SpecRe
   if (stillBlocking.length === 0) {
     spec = await writeAndCommit(
       o,
-      `Record these open problems as risks in RATIONALE.md, changing nothing else:\n${list(problemLines(open))}`,
+      `Record these open problems as risks in RATIONALE.md${decide.length > 0 ? "" : ", changing nothing else"}:\n${list(problemLines(open))}${escalation(decide)}`,
       "record the spec's open risks",
       "Challenge",
     );

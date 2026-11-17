@@ -33,7 +33,8 @@ A delivery ends in a PR unless one of the halt conditions below holds. Anything 
  │   ▲  ≤3 revisions  CHALLENGE  check-claim × N, check-criterion × N, lens-scope (haiku),
  │   │                           lens-consistency (sonnet)
  │   │                           the 5 advisors, fresh, try to break the spec: blocker or major only
- │   │                           later rounds: only failed or changed checks; advisors check the revision
+ │   │                           later rounds: only failed or changed checks; an advisor checks the
+ │   │                           revision only for its own findings; a criteria conflict → a decision
  │   └── problems →              judge × 1 (opus) rules on the checks' findings → writer-spec revises  ⛔ H3
  ▼
  4 BUILD AND VALIDATE  outer loop: the first build, then ≤3 fix rounds
@@ -94,8 +95,9 @@ The issue says why and what. This stage decides how, and it deserves more time a
    - `lens-scope` checks that the spec adds and drops no scope. `lens-consistency` checks it against the project's rules and documents.
    - The same five advisors, in fresh dispatches, try to break the finished spec. Each reports only a `blocker` or a `major`, with its evidence, because nothing acts on a minor problem. Their findings need no judge.
    - One `judge` rules on all the checks' and lenses' findings of the round together. It merges findings that report the same problem, leaves out what an advisor already reported, and returns each problem that holds as a `blocker` or a `major`.
-   - `writer-spec` revises for every advisor finding and every problem the judge returns, and records each one and its reason in `RATIONALE.md`.
-   - After a revision, the next round checks the revision. The code doesn't change during the challenge, so a claim or criterion that held and kept its wording isn't checked again. The advisors report each problem the revision didn't fix and each `blocker` or `major` it introduced, rather than attacking the whole spec again.
+   - Each problem is of kind `spec`, which a revision can fix, or kind `decision`, when the issue's own criteria conflict or can be read more than one way, so only a person can settle what they mean.
+   - `writer-spec` revises for every `spec` problem, and records each one and its reason in `RATIONALE.md`. It never revises around a `decision` problem: it picks the most reasonable reading and records it as a decision with `affectsAcceptance` set, which reaches the person under **Needs confirmation**. Advisors and the judge don't report a recorded decision again, and a round whose only problems are decisions ends the challenge.
+   - After a revision, the next round checks the revision. The code doesn't change during the challenge, so a claim or criterion that held and kept its wording isn't checked again. Only the advisors whose findings the revision was for check it, each for its own findings: they report each one the revision didn't fix and each `blocker` or `major` the revision introduced. The other advisors aren't dispatched again, because the checks, lenses, and judge cover every round.
 
    A `major` still open after the last revision's round is recorded and the run continues. A `blocker` still open halts the run.
 

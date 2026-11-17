@@ -37,7 +37,13 @@ const isAdvisor = (type: string): boolean => type.startsWith("advisor-");
 const NO_FINDINGS = { findings: [] };
 const isAttack = (label: string): boolean => label === "attack the spec" || label === "check the revision";
 const adviceOrAttack = (label: string): Reply => (isAttack(label) ? NO_FINDINGS : { views: [] });
-const problem = (severity: string) => ({ location: "a.ts", problem: "gone", severity, reason: "r" });
+const problem = (severity: string, kind = "spec") => ({
+  location: "a.ts",
+  problem: "gone",
+  severity,
+  reason: "r",
+  kind,
+});
 const rulings = (...problems: Reply[]): Reply => ({ problems });
 
 const DEFAULTS: Record<string, Script> = {
@@ -311,7 +317,28 @@ describe("the how phase", () => {
     assert.equal(count("check-criterion"), 2);
   });
 
-  test("after a revision, has the advisors check it rather than attack the whole spec again", async () => {
+  test("after a revision, has only the advisor whose finding it was for check it", async () => {
+    let attacks = 0;
+    await how(
+      happy({
+        "advisor-risk": (_t, label) => {
+          if (!isAttack(label)) return { views: [] };
+          attacks += 1;
+          return attacks === 1 ? { findings: [problem("major")] } : NO_FINDINGS;
+        },
+        judge: (_t, label) => (label === "decide" ? VIABLE : rulings()),
+      }),
+    );
+    const risk = calls.filter((c) => c.type === "advisor-risk" && isAttack(c.label));
+    assert.deepEqual(
+      risk.map((c) => c.label),
+      ["attack the spec", "check the revision"],
+    );
+    assert.ok(risk[1]?.prompt.includes("gone"));
+    assert.equal(calls.filter((c) => c.type === "advisor-security" && isAttack(c.label)).length, 1);
+  });
+
+  test("dispatches no advisor to check a revision for problems only the checks found", async () => {
     let claims = 0;
     await how(
       happy({
@@ -323,12 +350,22 @@ describe("the how phase", () => {
         },
       }),
     );
-    const attacks = calls.filter((c) => c.type === "advisor-risk" && isAttack(c.label));
-    assert.deepEqual(
-      attacks.map((c) => c.label),
-      ["attack the spec", "check the revision"],
+    assert.equal(count("writer-spec"), 2);
+    assert.ok(calls.every((c) => c.label !== "check the revision"));
+  });
+
+  test("escalates a conflict in the issue's criteria as a decision instead of revising around it", async () => {
+    const r = await how(
+      happy({
+        "advisor-risk": (_t, label) => (isAttack(label) ? { findings: [problem("major", "decision")] } : { views: [] }),
+        judge: (_t, label) => (label === "decide" ? VIABLE : rulings()),
+      }),
     );
-    assert.ok(attacks[1]?.prompt.includes("gone"));
+    assert.ok("build" in r);
+    assert.equal(count("writer-spec"), 2);
+    const recorded = calls.findLast((c) => c.type === "writer-spec")?.prompt ?? "";
+    assert.ok(recorded.includes("affectsAcceptance true") && recorded.includes("gone"));
+    assert.equal(calls.filter((c) => c.label === "check the revision").length, 0);
   });
 
   test("has the spec writer fix what a commit hook reported, then commits again", async () => {

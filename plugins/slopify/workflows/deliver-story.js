@@ -1835,7 +1835,7 @@ var CHECK_SCHEMA = {
 };
 var SPEC_PROBLEM = {
   type: "object",
-  required: ["location", "problem", "severity", "reason"],
+  required: ["location", "problem", "severity", "reason", "kind"],
   properties: {
     location: { type: "string", description: "The spec file and item, or path:line" },
     problem: { type: "string", description: "What is wrong and what would fix it" },
@@ -1844,7 +1844,12 @@ var SPEC_PROBLEM = {
       enum: ["blocker", "major"],
       description: "blocker: building this spec can't deliver the issue. major: a real flaw to fix before building"
     },
-    reason: { type: "string", description: "The evidence it rests on, path:line or source" }
+    reason: { type: "string", description: "The evidence it rests on, path:line or source" },
+    kind: {
+      type: "string",
+      enum: ["spec", "decision"],
+      description: "spec: a revision of the spec can fix it. decision: the issue's own criteria conflict or can be read more than one way, so only a person can settle what they mean"
+    }
   }
 };
 var ATTACK_SCHEMA = {
@@ -2105,31 +2110,34 @@ ${specText}`,
   ];
 }
 var FULL_ATTACK = "Try to break this finished spec from your one angle, reading the code it touches. Report only what must change before building: a blocker or a major, each with its location and evidence.";
-var revisionCheck = (revisedFor) => `The spec was revised for these problems:
+var SETTLED = "A problem the spec records as a decision with affectsAcceptance true is settled for the person to confirm; don't report it again.";
+var revisionCheck = (revisedFor) => `The spec was revised for these problems you reported:
 ${list(problemLines(revisedFor))}
 
 From your one angle, reading the code it touches, report each of them the revision didn't fix, and each blocker or major the revision itself introduced, each with its location and evidence. Don't attack again what the revision left unchanged.`;
 async function runAttack(o, revisedFor) {
-  const ask = revisedFor.length > 0 ? revisionCheck(revisedFor) : FULL_ATTACK;
+  const advisors = revisedFor ? HOW_ADVISORS.filter((name) => revisedFor.some((p) => p.by === name)) : HOW_ADVISORS;
   const views = await parallel(
-    HOW_ADVISORS.map(
-      (name) => () => dispatch(
+    advisors.map((name) => async () => {
+      const own = revisedFor?.filter((p) => p.by === name);
+      const v = await dispatch(
         `${o.where}
 ${STORY_BLOCK(o)}
 
 ${SPEC_FILES(o)} Read all three files.
 
-${ask} Leave out anything minor, because nothing acts on it. Change nothing.`,
+${own ? revisionCheck(own) : FULL_ATTACK} Leave out anything minor, because nothing acts on it. ${SETTLED} Change nothing.`,
         {
           agentType: `slopify:${name}`,
-          label: revisedFor.length > 0 ? "check the revision" : "attack the spec",
+          label: own ? "check the revision" : "attack the spec",
           phase: "Challenge",
           schema: ATTACK_SCHEMA
         }
-      )
-    )
+      );
+      return must(v, "how", "An advisor's attack on the spec.").findings.map((f) => ({ ...f, by: name }));
+    })
   );
-  return views.flatMap((v) => must(v, "how", "An advisor's attack on the spec.").findings);
+  return views.flatMap((v) => must(v, "how", "An advisor's attack on the spec."));
 }
 async function ruleOn(o, reported, advised) {
   if (reported.length === 0) return [];
@@ -2139,7 +2147,7 @@ ${STORY_BLOCK(o)}
 
 ${SPEC_FILES(o)}
 
-Cheap checks reported these findings against the spec. Rule on all of them, checking each against the code, and merge findings that report the same problem. Return each distinct problem that holds as a blocker or a major. Leave out what doesn't hold, what is minor (real but low impact), and what an advisor's finding below already covers.
+Cheap checks reported these findings against the spec. Rule on all of them, checking each against the code, and merge findings that report the same problem. Return each distinct problem that holds as a blocker or a major. Leave out what doesn't hold, what is minor (real but low impact), and what an advisor's finding below already covers. ${SETTLED}
 
 Reported findings:
 ${list(reported.map((p) => `${p.location}: ${p.problem}`))}
@@ -2156,29 +2164,41 @@ function unpermitted(build) {
     location: `decision ${d.id}`,
     problem: `"${d.choice}" can't be undone, and the issue doesn't explicitly permit it. Build only its reversible part, and move the rest to manualActions.`,
     severity: "blocker",
-    reason: "An irreversible change needs explicit permission in the issue."
+    reason: "An irreversible change needs explicit permission in the issue.",
+    kind: "spec"
   }));
 }
+var escalation = (decide2) => decide2.length > 0 ? `
+
+No revision can settle these, because the issue's own criteria conflict or can be read more than one way. Record each as a decision with affectsAcceptance true: pick the most reasonable reading, cite what grounds it, and build the spec on it:
+${list(problemLines(decide2))}` : "";
 async function challenge(o, first) {
   let spec = first;
   let open = [];
+  let decide2 = [];
   const held = /* @__PURE__ */ new Set();
   for (let revisions = 0; revisions <= MAX_FIX_ROUNDS; revisions += 1) {
     phase("Challenge");
-    const revisedFor = open;
+    const revisedFor = revisions === 0 ? null : open;
     const [checked, attacked] = await parallel([() => runChecks(o, spec, held), () => runAttack(o, revisedFor)]);
     const advised = must(attacked, "how", "The advisors' attack on the spec.");
-    open = [
+    const found = [
       ...unpermitted(spec.build),
       ...advised,
       ...await ruleOn(o, must(checked, "how", "The spec's checks."), advised)
     ];
-    if (open.length === 0) return { spec, blockers: [] };
+    decide2 = found.filter((p) => p.kind === "decision");
+    open = found.filter((p) => p.kind !== "decision");
+    if (open.length === 0 && decide2.length === 0) return { spec, blockers: [] };
+    if (open.length === 0) {
+      spec = await writeAndCommit(o, escalation(decide2).trimStart(), "record the spec's open decisions", "Challenge");
+      return { spec, blockers: [] };
+    }
     if (revisions === MAX_FIX_ROUNDS) break;
     spec = await writeAndCommit(
       o,
       `Revise the spec for these problems, and update RATIONALE.md with each one and its reason:
-${list(problemLines(open))}`,
+${list(problemLines(open))}${escalation(decide2)}`,
       "revise the spec after its challenge",
       "Challenge"
     );
@@ -2187,8 +2207,8 @@ ${list(problemLines(open))}`,
   if (stillBlocking.length === 0) {
     spec = await writeAndCommit(
       o,
-      `Record these open problems as risks in RATIONALE.md, changing nothing else:
-${list(problemLines(open))}`,
+      `Record these open problems as risks in RATIONALE.md${decide2.length > 0 ? "" : ", changing nothing else"}:
+${list(problemLines(open))}${escalation(decide2)}`,
       "record the spec's open risks",
       "Challenge"
     );
