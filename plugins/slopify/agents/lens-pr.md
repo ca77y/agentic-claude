@@ -21,7 +21,7 @@ Check every rule of `pr-description.md`:
 - Each line under Why trust it, grouped or single, matches a criterion result in the brief, or a result the brief lists as what Why trust it rests on, and a grouped Why trust it line is accepted when every criterion it names has the result and evidence it states. A line no criterion result or listed result supports is a finding.
 - Each open item in the brief appears exactly once, every unfixed finding only under Not done, and each filed card under Not done with its identifier.
 - Each Needs you item is listed or covered by a grouped line with its count and a link to the committed file that lists them or to the card. A link to validator evidence is a finding.
-- No leak: no absolute path, `.tmp/` reference, ledger line, or credential-shaped text.
+- No leak: no absolute filesystem path (a URL route or a slash command is not one), `.tmp/` reference, ledger line, or credential-shaped text.
 
 Locate each finding by quoting the line it concerns, and name the rule it breaks.
 

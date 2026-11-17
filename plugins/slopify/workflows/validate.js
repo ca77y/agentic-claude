@@ -198,13 +198,18 @@ var FS_ROOTS = [
   "Volumes",
   "workspaces?",
   "repo",
-  "runner"
+  "runner",
+  "github/workspace",
+  "proc"
 ];
+var NOT_ROUTE = String.raw`(?<![\w.:/~-]|\b(?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s+)`;
+var NO_PARAM = String.raw`(?![^\s\x60)\]]*\/[:{])`;
 var LEAKS = [
   [
     [
       /(?<![\w.:/~-])~\/[\w.-]*\w/,
-      new RegExp(String.raw`(?<![\w.:/~-])\/(?:${FS_ROOTS.join("|")})\b(?![.-]\w)`),
+      new RegExp(String.raw`${NOT_ROUTE}\/(?:${FS_ROOTS.join("|")})\b(?![.-]\w)${NO_PARAM}`),
+      new RegExp(String.raw`${NOT_ROUTE}(?:\/\w[\w.-]*)+\/\w[\w-]*\.[A-Za-z]\w*\b${NO_PARAM}`),
       /\b[A-Z]:\\\w/i,
       /\bfile:\/\//
     ],

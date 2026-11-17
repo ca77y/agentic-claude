@@ -44,7 +44,7 @@ A story's **What changes** also holds its spec folder exactly once, on a line of
 
 The description never holds:
 
-- an absolute path;
+- an absolute filesystem path, such as a home or checkout path (a URL route or a slash command is not one);
 - a reference to `.tmp/`;
 - a ledger line, a progress entry included;
 - text shaped like a credential, such as a token, key, or password.
