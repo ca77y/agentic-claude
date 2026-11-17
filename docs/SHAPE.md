@@ -14,7 +14,7 @@ People own the issue. They say what kind of card they want, read it on the board
  2 GROUND ────── in parallel, by kind: library-reader, scout-code, scout-docs, scout-history,
  │               and, for a story, TESTING.md's categories
  3 ADVISE ────── advisors (opus), by kind
- 4 DRAFT ─────── writer-card (opus) writes the card from the kind's template
+ 4 DRAFT ─────── writer-card (sonnet) writes the card from the kind's template
  │               it settles what doesn't change the outcome as a labelled assumption,
  │               and marks what does as an open question
  5 CHECK ─────── checks by kind (haiku), then judge × 1 (opus) rules on the round's findings

@@ -2,7 +2,7 @@
 name: coder
 description: Production leaf that implements what its brief requires, test first, deciding how within it, or builds a reproduction or throwaway prototype, for a fresh validator to judge.
 model: opus
-effort: high
+effort: medium
 ---
 
 # Engineering coder

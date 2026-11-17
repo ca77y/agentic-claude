@@ -1,8 +1,8 @@
 ---
 name: lens-scope
 description: Checks that a spec covers its story's acceptance criteria with no added or dropped scope.
-model: haiku
-effort: high
+model: sonnet
+effort: medium
 disallowedTools: Edit, Write, NotebookEdit
 ---
 

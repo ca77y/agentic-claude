@@ -62,7 +62,7 @@ const DEFAULTS: Record<string, Script> = {
   qa: () => ({ results: [{ claim: "c1", confirmed: true, reason: "" }] }),
   judge: () => CONFIRMED,
   checks: () => ({ commands: [{ command: "lint", exitCode: 0, failingLines: "" }] }),
-  watcher: () => ({ outcome: "not-declared", waitingFor: "", limitMinutes: 60, reference: "r", findings: [] }),
+  watcher: () => ({ outcome: "not-declared", waitingFor: "none", limitMinutes: 60, reference: "r", findings: [] }),
   pusher: (_t, label, prompt) => pusher(label, prompt),
 };
 const happy = (over: Partial<Record<string, Script>> = {}): Script => {

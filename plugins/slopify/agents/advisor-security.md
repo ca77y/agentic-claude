@@ -2,7 +2,7 @@
 name: advisor-security
 description: Judges an approach's attack surface, data exposure, dependency and supply-chain risk, and the security controls it needs.
 model: opus
-effort: high
+effort: medium
 disallowedTools: Edit, Write, NotebookEdit
 ---
 

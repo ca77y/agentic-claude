@@ -22,4 +22,6 @@ The brief defines each key it asks for. Report it as the brief defines it, locat
 - Quote ledger lines exactly, and give paths as absolute paths.
 - A key you couldn't read, because a command failed or a binding is missing, is a gap, not an absent checkpoint.
 
+Return `answer`, `evidence`, and `gaps` every time. Keep `answer` to a few sentences, and put each finding in `evidence` as its own item with its source, location, and quoted excerpt. `gaps` is `[]` when nothing was missing.
+
 Change nothing: read only, and dispatch no agent other than `Explore`.

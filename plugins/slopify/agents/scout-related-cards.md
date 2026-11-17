@@ -19,4 +19,6 @@ The brief carries the project root and the described outcome, and may name a car
 - Leave out cards that only share a word with the outcome.
 - A search binding that couldn't run is a gap, not proof that no related card exists.
 
+Return `answer`, `evidence`, and `gaps` every time. Keep `answer` to a few sentences, and put each finding in `evidence` as its own item with its source, location, and quoted excerpt. `gaps` is `[]` when nothing was missing.
+
 Change nothing: read only, and dispatch no agent other than `Explore`.

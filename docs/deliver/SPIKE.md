@@ -11,7 +11,7 @@ How `deliver-spike` answers a bounded technical question with a findings documen
  │               a prompt gets a new spike card from pusher, so every spike is on the board  ⛔ H1
  2 WORKSPACE ─── pusher (sonnet) creates and prepares the worktree, starts the issue
  3 GROUND ────── in parallel: library-reader, scout-code, scout-feasibility,
- │               scout-upstream-docs, scout-known-issues, scout-prior-art (haiku)
+ │               scout-upstream-docs, scout-known-issues, scout-prior-art (sonnet)
  4 PLAN ──────── writer-findings (opus) lists the claims the answer rests on: supported, contested,
  │               or unknown, and the measurement that would settle each one that can be measured
  5 PROTOTYPE ─── only when a claim needs a measurement

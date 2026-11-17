@@ -2,7 +2,7 @@
 name: advisor-testability
 description: Judges whether an approach can be proved, by asking whether each acceptance criterion can be checked through its TESTING.md validation path.
 model: opus
-effort: high
+effort: medium
 disallowedTools: Edit, Write, NotebookEdit
 ---
 

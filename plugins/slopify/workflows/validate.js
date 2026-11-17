@@ -126,7 +126,19 @@ function familyAgent(prefix, schema, name, prompt, opts) {
   if (!name.startsWith(prefix)) throw new Error(`${name} is not a ${prefix}* agent`);
   return dispatch(prompt, { ...opts, agentType: `slopify:${name}`, schema });
 }
-var scout = (name, prompt, opts) => familyAgent("scout-", SCOUT_SCHEMA, name, prompt, opts);
+var SCOUT_RETRY = `Your last try returned no valid output. Return all three fields: answer as a few sentences, each finding as its own evidence item with its source, location, and quoted excerpt, and gaps as [] when nothing was missing.`;
+async function scout(name, prompt, opts) {
+  try {
+    return await familyAgent("scout-", SCOUT_SCHEMA, name, prompt, opts);
+  } catch {
+    return familyAgent("scout-", SCOUT_SCHEMA, name, `${prompt}
+
+${SCOUT_RETRY}`, {
+      ...opts,
+      label: [opts?.label, "retry"].filter(Boolean).join(" \xB7 ")
+    });
+  }
+}
 function fact(result, key) {
   const hit = result?.evidence.find((e) => e.source === key);
   return hit ? (hit.excerpt || hit.location || "").trim() : "";

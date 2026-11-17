@@ -8,7 +8,7 @@ export const MAX_HOOK_REPAIRS = 3;
 const DELIVERABLE_LABEL = "Deliverable";
 
 export type Severity = "blocker" | "major" | "minor" | "nit" | "pre-existing" | "none";
-type Kind = "code" | "test" | "docs" | "spec" | "cannot-verify" | "decision";
+export type Kind = "code" | "test" | "docs" | "spec" | "cannot-verify" | "decision";
 type Verdict = "confirmed" | "dismissed" | "unverified";
 type Ruling = "none" | "fix-differently" | "accept-as-debt" | "split-to-issue" | "escalate";
 
@@ -188,7 +188,7 @@ export function renderBody(b: PrBody): string {
     section("Unverified findings", items(b.unverified)),
     section("Not validated", items(b.notValidated)),
     section("Known debt", items(b.knownDebt)),
-    section("Suggestions", items(b.suggestions)),
+    section(`Suggestions (${String(b.suggestions.length)})`, items(b.suggestions)),
     section("Test changes", b.testChanges.map((t) => `- ${t}`).join("\n")),
   ]
     .filter(Boolean)

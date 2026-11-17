@@ -447,7 +447,7 @@ const SMALL_AGENTS: Record<string, Script> = {
     prompt.includes("open the branch's PR")
       ? { done: true, unmet: [], operations: [{ op: "pr", reference: "PR-1" }] }
       : OK_PUSH,
-  watcher: () => ({ outcome: "finished", waitingFor: "", limitMinutes: 60, reference: "r", findings: [] }),
+  watcher: () => ({ outcome: "finished", waitingFor: "none", limitMinutes: 60, reference: "r", findings: [] }),
 };
 
 // A prompt with no card: pusher files SMR-50 for it, and the card reads back with the prompt as its story.

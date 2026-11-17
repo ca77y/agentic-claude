@@ -33,6 +33,7 @@
     "lint:types": "type-coverage -p src/tsconfig.json --strict --at-least 100 && type-coverage -p src/slopify/skills/tsconfig.json --strict --at-least 100",
     "test:unit": "node --test \"test/**/*.test.ts\"",
     "lint:pins": "node scripts/check-pins.ts",
+    "lint:blocks": "node scripts/check-blocks.ts",
     "lint:sh": "shellcheck .githooks/pre-commit plugins/*/evals/*/scaffold.sh"
   }
 }

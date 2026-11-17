@@ -480,6 +480,7 @@ export default async function run(): Promise<SpikeResult> {
         paths: [docRel],
         check: () => checkDocument(d, story, docRel),
         revise: (problems) => reviseDocument(d, docRel, problems),
+        severity: "severity-spike.md",
       },
     });
     return {

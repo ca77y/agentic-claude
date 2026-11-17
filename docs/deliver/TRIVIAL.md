@@ -15,7 +15,7 @@ How `deliver-trivial` takes a trivial story from a card or a prompt to a reviewe
  │   │           checks (haiku) runs the TESTING.md checks
  │   └────────── qa (sonnet) checks the change and its history
  │               scout-docs (haiku) finds docs the diff affects
- │               writer-docs (opus) fixes them, only if it found any → commit
+ │               writer-docs (sonnet) fixes them, only if it found any → commit
  4 VALIDATE ──── validator (sonnet) runs the app as TESTING.md says, once
  5 PUSH ──────── pusher pushes, opens a draft PR, which fires the review             ⛔ H2
  6 REVIEW ────── watcher (haiku) reads the findings

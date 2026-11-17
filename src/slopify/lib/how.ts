@@ -141,11 +141,11 @@ const SPEC_SCHEMA = {
 
 const CHECK_SCHEMA = {
   type: "object",
-  required: ["holds", "location", "problem"],
+  required: ["holds", "location"],
   properties: {
     holds: { type: "boolean" },
     location: { type: "string", description: "path:line or the item checked" },
-    problem: { type: "string", description: "What is wrong; empty when it holds" },
+    problem: { type: "string", description: "What is wrong; left out when it holds" },
   },
 } as const;
 
@@ -465,7 +465,7 @@ async function runChecks(o: HowInput, spec: SpecResult, held: Set<string>): Prom
   const keys = [...claims.map((c) => claimKey(c)), ...criteria.map((c) => criterionKey(c))];
   for (const [i, r] of checked.entries()) if (r.holds) held.add(keys[i] ?? "");
   return [
-    ...checked.filter((r) => !r.holds).map((r) => ({ location: r.location, problem: r.problem })),
+    ...checked.filter((r) => !r.holds).map((r) => ({ location: r.location, problem: r.problem ?? "" })),
     ...lenses.flatMap((v) => findingsOf(must(v, "how", "A lens on the spec."))),
   ];
 }

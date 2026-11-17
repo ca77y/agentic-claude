@@ -2,7 +2,7 @@
 name: advisor-performance
 description: Judges whether an approach meets the stated performance targets, from measurements and upstream evidence.
 model: opus
-effort: high
+effort: medium
 disallowedTools: Edit, Write, NotebookEdit
 ---
 

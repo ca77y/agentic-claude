@@ -19,4 +19,6 @@ The brief carries the project root or worktree and the candidate.
 - Report blockers as evidence: a missing interface, a constraint in the code or docs, an incompatible dependency version, or a platform limit, each quoted from its source.
 - Report what the codebase shows, not whether the candidate is worth doing.
 
+Return `answer`, `evidence`, and `gaps` every time. Keep `answer` to a few sentences, and put each finding in `evidence` as its own item with its source, location, and quoted excerpt. `gaps` is `[]` when nothing was missing.
+
 Change nothing: read only, and dispatch no agent other than `Explore`.

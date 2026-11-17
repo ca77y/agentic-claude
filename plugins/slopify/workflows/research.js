@@ -163,7 +163,19 @@ function familyAgent(prefix, schema, name, prompt, opts) {
   if (!name.startsWith(prefix)) throw new Error(`${name} is not a ${prefix}* agent`);
   return dispatch(prompt, { ...opts, agentType: `slopify:${name}`, schema });
 }
-var scout = (name, prompt, opts) => familyAgent("scout-", SCOUT_SCHEMA, name, prompt, opts);
+var SCOUT_RETRY = `Your last try returned no valid output. Return all three fields: answer as a few sentences, each finding as its own evidence item with its source, location, and quoted excerpt, and gaps as [] when nothing was missing.`;
+async function scout(name, prompt, opts) {
+  try {
+    return await familyAgent("scout-", SCOUT_SCHEMA, name, prompt, opts);
+  } catch {
+    return familyAgent("scout-", SCOUT_SCHEMA, name, `${prompt}
+
+${SCOUT_RETRY}`, {
+      ...opts,
+      label: [opts?.label, "retry"].filter(Boolean).join(" \xB7 ")
+    });
+  }
+}
 var lens = (name, prompt, opts) => familyAgent("lens-", LENS_SCHEMA, name, prompt, opts);
 function fact(result, key) {
   const hit = result?.evidence.find((e) => e.source === key);
@@ -316,7 +328,7 @@ Findings: ${b.documents.map((p) => `\`${p}\``).join(", ")}` : ""}`,
     section("Unverified findings", items(b.unverified)),
     section("Not validated", items(b.notValidated)),
     section("Known debt", items(b.knownDebt)),
-    section("Suggestions", items(b.suggestions)),
+    section(`Suggestions (${String(b.suggestions.length)})`, items(b.suggestions)),
     section("Test changes", b.testChanges.map((t) => `- ${t}`).join("\n"))
   ].filter(Boolean).join("\n\n");
 }
@@ -773,7 +785,7 @@ var WATCHER_SCHEMA = {
       enum: ["finished", "skipped", "failed", "timed-out", "pending", "not-declared"],
       description: "finished: the review ran and completed. skipped: it ended without reviewing the change, such as when it skipped a draft"
     },
-    waitingFor: { type: "string", enum: ["start", "finish", ""] },
+    waitingFor: { type: "string", enum: ["start", "finish", "none"] },
     limitMinutes: { type: "number" },
     reference: { type: "string" },
     findings: {
@@ -791,7 +803,8 @@ var DOCS_SCHEMA = {
   required: ["changed"],
   properties: { changed: { ...STRINGS, description: "Documents changed, relative to the worktree root" } }
 };
-var SEVERITY_RUBRIC = `Severity: blocker when a criterion fails, the build or tests are broken, data is lost or corrupted, there is a security hole, or tests were weakened without a recorded reason. major for a correctness bug on a reachable path in changed code, an error swallowed on a path the user sees, or documentation the change made untrue. minor for real but low impact. nit for style, naming, or readability. pre-existing for a defect the change didn't introduce. none when the problem isn't a defect in the change.
+var CODE_SEVERITY = "severity-code.md";
+var severityRubric = (reference) => `Severity: blocker and major as the severity reference ${reference} defines them. minor for real but low impact. nit for style, naming, or readability. pre-existing for a defect the change didn't introduce. none when the problem isn't a defect in the change.
 Kind: code when the behavior is wrong. test when the behavior is right but the test or flow is wrong. docs when documentation is untrue or missing. spec when the spec is wrong, or the finding conflicts with its design. cannot-verify when a tool, simulator, or credential stopped working, the check hits a blind spot, or the proof is missing or unusable. decision when only a person can settle what a criterion should mean.
 Never downgrade a confirmed failure. Filter out what a linter would catch, and style. Run a reproduction when you can, rather than only reading the code. An earlier dismissal of the same fingerprint stands.`;
 var RECURRENCE_RUBRIC = `If a problem's fingerprint appears under earlier rulings after a fix attempt, also give a ruling, reading those attempts: fix-differently when another approach could work, accept-as-debt when a major can ship and be paid later, split-to-issue when a major belongs in its own issue, or escalate. Otherwise the ruling is none.`;
@@ -955,13 +968,18 @@ async function failingChecks(l) {
 var DONE = { reason: "", rewriteTest: false };
 function specStopped(l, c, problem) {
   const route = l.reviseSpec ? "revise-spec" : "escalate";
-  listRouted(l, route, {
-    problem: { source: "the coder", location: c.id, text: problem },
+  listRouted(
+    l,
     route,
-    severity: "blocker",
-    fingerprint: `${c.id}|spec`,
-    reason: "The coder can't deliver this without making a decision."
-  });
+    {
+      problem: { source: "the coder", location: c.id, text: problem },
+      route,
+      severity: "blocker",
+      fingerprint: `${c.id}|spec`,
+      reason: "The coder can't deliver this without making a decision."
+    },
+    "spec"
+  );
   return { reason: "", rewriteTest: false };
 }
 async function tryFix(l, c, cycle, lastFailure, attempt) {
@@ -1128,14 +1146,22 @@ async function reviseDocument(l, doc, items2) {
   l.changedThisRound.push(...changed);
   if (changed.length > 0) await commit(l, changed, "revise the findings", (brief) => doc.revise([brief]));
 }
+function takeMinors(l, roundRuns) {
+  if (!roundRuns) return [];
+  const taken = l.minors.filter((m) => !!l.document || m.kind === "docs");
+  l.minors = l.minors.filter((m) => !taken.includes(m));
+  l.suggestions = l.suggestions.filter((s) => taken.every((m) => m.entry !== s));
+  return taken.map((m) => m.item);
+}
 async function buildRound(l) {
   phase("Build");
   const openItems = l.open;
   l.open = [];
   l.changedThisRound = [];
   for (const item of openItems) countFix(l, item);
+  const minors = takeMinors(l, openItems.length > 0);
   if (l.document) {
-    await reviseDocument(l, l.document, openItems);
+    await reviseDocument(l, l.document, [...openItems, ...minors]);
     return;
   }
   const first = l.round === 0 ? firstChanges(l) : [];
@@ -1148,10 +1174,7 @@ async function buildRound(l) {
   l.affected = unique(changes.flatMap((c) => c.criteria.map((x) => x.id)));
   await runChanges(l, changes);
   await findDocs(l);
-  await updateDocs(
-    l,
-    openItems.filter((i) => i.route === "writer")
-  );
+  await updateDocs(l, [...openItems.filter((i) => i.route === "writer"), ...minors]);
 }
 async function runValidation(o) {
   phase("Validate");
@@ -1272,7 +1295,7 @@ ISSUE>>>` : ""}
 
 ${problems.map((p, i) => problemBlock(l, p, i + 1)).join("\n\n")}
 
-${SEVERITY_RUBRIC}
+${severityRubric(l.document?.severity ?? CODE_SEVERITY)}
 ${l.small ? "The ruling is none." : RECURRENCE_RUBRIC}
 
 Earlier rulings:
@@ -1280,8 +1303,9 @@ ${list(l.rulings)}
 
 ${answersText(l)}`;
 }
-function listRouted(l, route, item) {
+function listRouted(l, route, item, kind) {
   const entry = { text: `${item.problem.location}: ${item.problem.text}`, detail: item.reason };
+  if (route === "suggestion" && item.severity === "minor") l.minors.push({ item, kind, entry });
   const lists = {
     unverified: l.unverified,
     "needs-confirmation": l.confirmations,
@@ -1328,13 +1352,12 @@ async function judgeProblems(l, problems, phaseTitle) {
     const route = routeOf(v, l.fixes.get(v.fingerprint) ?? 0, l.differently.has(v.fingerprint), hasSpec);
     applyToRow(l, p, route, v.reason);
     l.rulings.push(`${v.fingerprint}: ${v.verdict}, ${v.severity}, ${v.kind}, ${route}. ${v.reason}`);
-    listRouted(l, route, {
-      problem: p,
+    listRouted(
+      l,
       route,
-      severity: v.severity,
-      fingerprint: v.fingerprint,
-      reason: v.reason
-    });
+      { problem: p, route, severity: v.severity, fingerprint: v.fingerprint, reason: v.reason },
+      v.kind
+    );
   }
 }
 async function gateway(l) {
@@ -1578,6 +1601,7 @@ function freshLoop(input) {
     confirmations: [],
     knownDebt: [],
     suggestions: [],
+    minors: [],
     newIssues: [],
     testChanges: [],
     review: { clean: false, note: "" },
@@ -1617,6 +1641,7 @@ async function runLoop(input) {
   }
   return endLoop(l, nextStep(l) === "clean");
 }
+var reviewSummary = (suggestions) => suggestions > 0 ? `no blocking findings, ${String(suggestions)} suggestion(s) in the PR description` : "clean";
 async function endLoop(l, ready) {
   if (!l.d.state.pr) await pushRound(l, true);
   await finish(l, ready);
@@ -1624,7 +1649,7 @@ async function endLoop(l, ready) {
     status: ready ? "ready" : "draft",
     rounds: l.round,
     pr: l.d.state.pr,
-    review: l.review.note || "clean",
+    review: l.review.note || reviewSummary(l.suggestions.length),
     draftReasons: ready ? [] : draftReasons(l),
     decisions: l.decisions.filter((d) => d.affectsAcceptance).map((d) => d.id)
   };
@@ -2160,31 +2185,40 @@ ${brief}`,
   pushed(await commitRepairing(paths, send, repair2), "A commit of the research.");
   return integrated.pages;
 }
-async function checkLibrary(c) {
-  const scope = `In the worktree ${c.worktree}, check the library files this branch changes from the target branch docs/FORGE.md declares.`;
-  const assignments = ["answer and evidence support", "library integrity"];
+async function checkLibrary(c, pages) {
+  const changed = `the library files this branch changes from the target branch docs/FORGE.md declares`;
+  const checks = [
+    ...pages.map((page) => ({
+      label: `evidence: ${page}`,
+      brief: `Assignment: answer and evidence support. In the worktree ${c.worktree}, check the wiki page ${page}, line by line, against the raw-note blocks it cites.`
+    })),
+    {
+      label: "library integrity",
+      brief: `Assignment: library integrity. In the worktree ${c.worktree}, check ${changed}.`
+    }
+  ];
   const verdicts = await parallel(
-    assignments.map(
-      (a) => () => dispatch(`${c.d.WHERE}
-Assignment: ${a}. ${scope}
+    checks.map(
+      (k) => () => dispatch(`${c.d.WHERE}
+${k.brief}
 
 ${quoted(c.question)}`, {
         agentType: "slopify:library-clerk",
-        label: a,
+        label: k.label,
         phase: "Validate",
         schema: CLERK_SCHEMA
       })
     )
   );
-  return assignments.flatMap((a, i) => {
-    const v = must(verdicts[i], "validate", `A verdict on ${a}.`);
+  return checks.flatMap((k, i) => {
+    const v = must(verdicts[i], "validate", `A verdict on ${k.label}.`);
     const found = (v.verdict === "pass" ? [] : v.findings).map((f) => ({
       source: "library-clerk",
-      location: a,
+      location: k.label,
       text: f
     }));
     if (v.verdict === "unverified" && found.length === 0) {
-      found.push({ source: "library-clerk", location: a, text: `The check couldn't run: ${v.evidence}` });
+      found.push({ source: "library-clerk", location: k.label, text: `The check couldn't run: ${v.evidence}` });
     }
     return found;
   });
@@ -2246,7 +2280,12 @@ async function run() {
       answers: answersOf(input["answers"]),
       startAtReview: d.state.pr ? Math.max(resume.reviewFired, 1) : 0,
       built: true,
-      document: { paths: pages, check: () => checkLibrary(c), revise: (problems) => repair(c, problems) }
+      document: {
+        paths: pages,
+        check: () => checkLibrary(c, pages),
+        revise: (problems) => repair(c, problems),
+        severity: "severity-research.md"
+      }
     });
     return { ...result, workflow: WORKFLOW, report: reportOf(WORKFLOW, result) };
   } catch (error) {

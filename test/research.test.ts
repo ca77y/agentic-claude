@@ -72,7 +72,7 @@ const DEFAULTS: Record<string, Script> = {
   "library-researcher": (_t, label) => evidenceFor(label === "retrieve q1" ? "https://a.example" : "https://b.example"),
   judge: (_t, label) => (label === "rule on the findings" ? PLAN_RULED : CONFIRMED),
   checks: () => ({ commands: [{ command: "lint", exitCode: 0, failingLines: "" }] }),
-  watcher: () => ({ outcome: "finished", waitingFor: "", limitMinutes: 60, reference: "r", findings: [] }),
+  watcher: () => ({ outcome: "finished", waitingFor: "none", limitMinutes: 60, reference: "r", findings: [] }),
   pusher: (_t, _l, prompt) => (prompt.includes("open the branch's PR") ? PR : OK_PUSH),
 };
 const happy = (over: Partial<Record<string, Script>> = {}): Script => {

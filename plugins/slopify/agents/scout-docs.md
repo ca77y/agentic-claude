@@ -19,4 +19,6 @@ The brief carries the project root or worktree and the area.
 - Note where two documents disagree, and where a document's date or status suggests it is historical. A spec always is: it records what was intended for one piece of past work, so label each claim from a spec as such.
 - Report the claims; don't judge whether the code bears them out.
 
+Return `answer`, `evidence`, and `gaps` every time. Keep `answer` to a few sentences, and put each finding in `evidence` as its own item with its source, location, and quoted excerpt. `gaps` is `[]` when nothing was missing.
+
 Change nothing: read only, and dispatch no agent other than `Explore`.

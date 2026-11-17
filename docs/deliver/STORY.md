@@ -25,13 +25,13 @@ A delivery ends in a PR unless one of the halt conditions below holds. Anything 
  ▼
  3 HOW ────────────── GROUND     scout-code, scout-tests, scout-docs, scout-history (haiku), library-reader
  │   ▲  ≤2 tries      DESIGN     designer × 3 (opus), independent: smallest fit, best structure, most robust
- │   │                           scout-upstream-docs, scout-known-issues per new dependency (haiku)
- │   │                ADVISE     architecture, performance, risk, security, testability (opus, high)
+ │   │                           scout-upstream-docs, scout-known-issues per new dependency (sonnet)
+ │   │                ADVISE     architecture, performance, risk, security, testability (opus)
  │   │                           each compares all 3 designs
  │   └── none viable  DECIDE     judge (opus) picks one and grafts the best of the others  ⛔ H3
  │                    SPEC       writer-spec (opus) writes the spec folder → pusher commits it
- │   ▲  ≤3 revisions  CHALLENGE  check-claim × N, check-criterion × N, lens-scope (haiku),
- │   │                           lens-consistency (sonnet)
+ │   ▲  ≤3 revisions  CHALLENGE  check-claim × N, check-criterion × N (haiku),
+ │   │                           lens-scope, lens-consistency (sonnet)
  │   │                           the 5 advisors, fresh, try to break the spec: blocker or major only
  │   │                           later rounds: only failed or changed checks; an advisor checks the
  │   │                           revision only for its own findings; a criteria conflict → a decision
@@ -47,7 +47,7 @@ A delivery ends in a PR unless one of the halt conditions below holds. Anything 
  │  │                  │ qa (sonnet) checks the change and its history │
  │  │                  │   fail → back to coder                        │
  │  │                  └───────────────────────────────────────────────┘
- │  │                  then writer-docs (opus) updates the listed docs against that code → commit
+ │  │                  then writer-docs (sonnet) updates the listed docs against that code → commit
  │  │   VALIDATE ───── checks (haiku) runs the TESTING.md checks
  │  │                  validator (sonnet) follows each criterion's category path
  │  │                  lens-docs (haiku) × N, one per listed doc: are its claims true?

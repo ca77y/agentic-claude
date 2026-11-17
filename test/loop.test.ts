@@ -46,7 +46,7 @@ const QA_FAIL = {
 const CHECKS_OK = { commands: [{ command: "lint", exitCode: 0, failingLines: "" }] };
 const PASS_ROW = { id: "c1", result: "pass", ran: "flow", evidence: ["shot.png"], detail: "", setting: "draft" };
 const VALIDATOR_PASS = { results: [PASS_ROW], uncategorizedSetting: "draft" };
-const CLEAN_REVIEW = { outcome: "finished", waitingFor: "", limitMinutes: 60, reference: "r", findings: [] };
+const CLEAN_REVIEW = { outcome: "finished", waitingFor: "none", limitMinutes: 60, reference: "r", findings: [] };
 const GATEWAY_OK = { missed: [], docsToAdd: [] };
 const finding = (text: string) => ({ ...CLEAN_REVIEW, findings: [{ id: "f1", location: "src/a.ts:3", text }] });
 const ruling = (over: Record<string, unknown> = {}) => ({
@@ -107,6 +107,7 @@ function freshRun(): Run {
 const count = (type: string, label?: string): number =>
   calls.filter((c) => c.type === type && (label === undefined || c.label.includes(label))).length;
 const pushPrompts = (): string[] => calls.filter((c) => c.label === "push the round").map((c) => c.prompt);
+const judgePrompts = (): string[] => calls.filter((c) => c.type === "judge").map((c) => c.prompt);
 const finalPrompt = (): string => calls.find((c) => /mark the PR ready|report the draft/.test(c.label))?.prompt ?? "";
 
 // Each review has one finding fewer, so the open count keeps falling and only the round cap can end the loop.
@@ -153,6 +154,15 @@ beforeEach(() => {
 });
 
 describe("a delivery with nothing wrong", () => {
+  test("rates blocker and major by the code severity reference", async () => {
+    use(happy({ watcher: () => finding("off by one") }));
+    await statusOf();
+    assert.match(
+      calls.find((c) => c.type === "judge" && c.label === "rule on the problems")?.prompt ?? "",
+      /blocker and major as the severity reference severity-code\.md defines them/,
+    );
+  });
+
   test("builds, validates, opens a draft, and goes ready on a clean review", async () => {
     use(happy());
     const r = await runLoop(inputFor(freshRun()));
@@ -907,6 +917,7 @@ describe("the document flow", () => {
           revisions.push(p);
           return Promise.resolve(["docs/spikes/smr-1.md"]);
         },
+        severity: "severity-spike.md",
       },
     };
   };
@@ -928,6 +939,38 @@ describe("the document flow", () => {
     assert.deepEqual(revisions, [[`${UNCITED.location}: ${UNCITED.text}`]]);
     assert.equal(count("coder"), 0);
     assert.ok(calls.some((c) => c.label === "commit: revise the findings"));
+  });
+
+  const WORDING = { source: "lens-evidence", location: "docs/spikes/smr-1.md:9", text: "awkward wording" };
+  const minorWording: Script = (_t, label, prompt) =>
+    label === "gateway" ? GATEWAY_OK : ruling(prompt.includes(WORDING.text) ? { severity: "minor", kind: "docs" } : {});
+
+  test("rates blocker and major by the document's own severity reference", async () => {
+    use(happy({ judge: minorWording }));
+    await statusOf(DOC([[UNCITED]]));
+    assert.match(
+      judgePrompts()[0] ?? "",
+      /blocker and major as the severity reference severity-spike\.md defines them/,
+    );
+  });
+
+  test("lists a minor problem as a suggestion, starts no round for it, and says so in the result", async () => {
+    use(happy({ judge: minorWording }));
+    const r = await runLoop(inputFor(freshRun(), DOC([[WORDING]])));
+    assert.equal(r.status, "ready");
+    assert.equal(r.rounds, 0);
+    assert.deepEqual(revisions, []);
+    assert.equal(r.review, "no blocking findings, 1 suggestion(s) in the PR description");
+    assert.match(finalPrompt(), /## Suggestions \(1\)/);
+  });
+
+  test("applies a minor problem when a round runs for another, and drops it from the suggestions", async () => {
+    use(happy({ judge: minorWording }));
+    const r = await runLoop(inputFor(freshRun(), DOC([[UNCITED, WORDING]])));
+    assert.equal(r.status, "ready");
+    assert.deepEqual(revisions, [[`${UNCITED.location}: ${UNCITED.text}`, `${WORDING.location}: ${WORDING.text}`]]);
+    assert.equal(r.review, "clean");
+    assert.doesNotMatch(finalPrompt(), /## Suggestions/);
   });
 
   test("sends a review finding to the writer and checks the document again", async () => {

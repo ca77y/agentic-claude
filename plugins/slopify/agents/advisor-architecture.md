@@ -2,7 +2,7 @@
 name: advisor-architecture
 description: Judges how an approach fits the codebase's structure, and the cost of integrating and maintaining it.
 model: opus
-effort: high
+effort: medium
 disallowedTools: Edit, Write, NotebookEdit
 ---
 

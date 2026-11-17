@@ -22,6 +22,7 @@ lint:
 	npm run --silent lint:dead
 	npm run --silent lint:dup
 	npm run --silent lint:pins
+	npm run --silent lint:blocks
 	npm run --silent lint:sh
 	npm run --silent lint:types
 	claude plugin validate --strict .

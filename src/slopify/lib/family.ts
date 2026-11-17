@@ -124,8 +124,21 @@ function familyAgent<const S extends Schema>(
   if (!name.startsWith(prefix)) throw new Error(`${name} is not a ${prefix}* agent`);
   return dispatch(prompt, { ...opts, agentType: `slopify:${name}`, schema });
 }
-export const scout = (name: string, prompt: string, opts?: FamilyOptions): Promise<ScoutResult | null> =>
-  familyAgent("scout-", SCOUT_SCHEMA, name, prompt, opts);
+// What a scout's second try is told. A scout that fails does so by stuffing a long answer and dropping evidence and gaps.
+const SCOUT_RETRY = `Your last try returned no valid output. Return all three fields: answer as a few sentences, each finding as its own evidence item with its source, location, and quoted excerpt, and gaps as [] when nothing was missing.`;
+
+// A scout whose output never fits the schema throws, and gets one more try with SCOUT_RETRY. A skipped scout returns null
+// and isn't tried again.
+export async function scout(name: string, prompt: string, opts?: FamilyOptions): Promise<ScoutResult | null> {
+  try {
+    return await familyAgent("scout-", SCOUT_SCHEMA, name, prompt, opts);
+  } catch {
+    return familyAgent("scout-", SCOUT_SCHEMA, name, `${prompt}\n\n${SCOUT_RETRY}`, {
+      ...opts,
+      label: [opts?.label, "retry"].filter(Boolean).join(" · "),
+    });
+  }
+}
 export const lens = (name: string, prompt: string, opts?: FamilyOptions): Promise<LensResult | null> =>
   familyAgent("lens-", LENS_SCHEMA, name, prompt, opts);
 export const advise = (name: string, prompt: string, opts?: FamilyOptions): Promise<AdvisorResult | null> =>
