@@ -690,6 +690,13 @@ describe("the review's outcome", () => {
     assert.ok(r.draftReasons.some((x) => x.text.includes("timed-out")));
   });
 
+  test("keeps a draft when the review was skipped, though it has no findings", async () => {
+    use(happy({ watcher: () => ({ ...CLEAN_REVIEW, outcome: "skipped" }) }));
+    const r = await runLoop(inputFor(freshRun()));
+    assert.equal(r.status, "draft");
+    assert.ok(r.draftReasons.some((x) => x.text.includes("skipped")));
+  });
+
   test("counts a project with no declared review as clean", async () => {
     use(happy({ watcher: () => ({ ...CLEAN_REVIEW, outcome: "not-declared" }) }));
     assert.equal(await statusOf(), "ready");

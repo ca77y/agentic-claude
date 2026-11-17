@@ -151,7 +151,7 @@ This stage is two nested loops. The inner loop makes one change correct, and onl
    - If a PR exists, `pusher` updates its description and requests the review as `docs/FORGE.md` declares.
    - Anything still flagged goes under **Why this is a draft**, with its evidence and what was tried.
 6. **Review.** This step runs only when a PR exists. The review is the one `docs/FORGE.md` declares, with the trigger and the status it declares for it. The workflow doesn't review the code itself.
-   - `watcher` waits for the review run to finish and returns its findings.
+   - `watcher` waits for the review run to finish and returns its findings. A review that ended without reviewing the change, such as one that skipped a draft, comes back `skipped`; it is not clean, though it has no findings, so the PR stays a draft.
    - One `judge` rules on all the review's findings as in step 3. Each brief includes the earlier rulings for the same fingerprint (file, symbol, category), so a dismissed finding stays dismissed.
    - The judge filters out pre-existing issues, issues a linter would catch, and style. It runs a reproduction when it can, rather than only reading the code.
 7. **Gate.** This step is code, not an agent. It waits for every judge.

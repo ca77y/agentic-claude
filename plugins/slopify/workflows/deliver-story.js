@@ -868,7 +868,11 @@ var WATCHER_SCHEMA = {
   type: "object",
   required: ["outcome", "waitingFor", "limitMinutes", "reference", "findings"],
   properties: {
-    outcome: { type: "string", enum: ["finished", "failed", "timed-out", "pending", "not-declared"] },
+    outcome: {
+      type: "string",
+      enum: ["finished", "skipped", "failed", "timed-out", "pending", "not-declared"],
+      description: "finished: the review ran and completed. skipped: it ended without reviewing the change, such as when it skipped a draft"
+    },
     waitingFor: { type: "string", enum: ["start", "finish", ""] },
     limitMinutes: { type: "number" },
     reference: { type: "string" },
@@ -1582,10 +1586,8 @@ async function reviewRound(l) {
       "Review"
     )
   );
-  l.review = {
-    clean: outcome === "finished" || outcome === "not-declared",
-    note: outcome === "finished" || outcome === "not-declared" ? "" : `Review ${String(l.reviewNumber)} ${outcome}.`
-  };
+  const clean2 = outcome === "finished" || outcome === "not-declared";
+  l.review = { clean: clean2, note: clean2 ? "" : `Review ${String(l.reviewNumber)} ${outcome}.` };
   await judgeProblems(
     l,
     (w?.findings ?? []).map((f) => ({ source: "the review", location: f.location, text: f.text })),

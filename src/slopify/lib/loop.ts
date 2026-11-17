@@ -217,7 +217,12 @@ const WATCHER_SCHEMA = {
   type: "object",
   required: ["outcome", "waitingFor", "limitMinutes", "reference", "findings"],
   properties: {
-    outcome: { type: "string", enum: ["finished", "failed", "timed-out", "pending", "not-declared"] },
+    outcome: {
+      type: "string",
+      enum: ["finished", "skipped", "failed", "timed-out", "pending", "not-declared"],
+      description:
+        "finished: the review ran and completed. skipped: it ended without reviewing the change, such as when it skipped a draft",
+    },
     waitingFor: { type: "string", enum: ["start", "finish", ""] },
     limitMinutes: { type: "number" },
     reference: { type: "string" },
@@ -1118,11 +1123,10 @@ async function reviewRound(l: Loop): Promise<void> {
       "Review",
     ),
   );
-  // A project that declares no review has nothing to wait for, so that can't hold its PR back.
-  l.review = {
-    clean: outcome === "finished" || outcome === "not-declared",
-    note: outcome === "finished" || outcome === "not-declared" ? "" : `Review ${String(l.reviewNumber)} ${outcome}.`,
-  };
+  // A project that declares no review has nothing to wait for, so that can't hold its PR back. A skipped review
+  // reviewed nothing, so its empty findings are not clean.
+  const clean = outcome === "finished" || outcome === "not-declared";
+  l.review = { clean, note: clean ? "" : `Review ${String(l.reviewNumber)} ${outcome}.` };
   await judgeProblems(
     l,
     (w?.findings ?? []).map((f) => ({ source: "the review", location: f.location, text: f.text })),
