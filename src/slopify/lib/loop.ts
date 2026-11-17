@@ -172,14 +172,28 @@ const VALIDATOR_SCHEMA = {
 
 const JUDGE_SCHEMA = {
   type: "object",
-  required: ["verdict", "severity", "kind", "ruling", "reason", "fingerprint"],
+  required: ["rulings"],
   properties: {
-    verdict: { type: "string", enum: ["confirmed", "dismissed", "unverified"] },
-    severity: { type: "string", enum: ["blocker", "major", "minor", "nit", "pre-existing", "none"] },
-    kind: { type: "string", enum: ["code", "test", "docs", "spec", "cannot-verify", "decision"] },
-    ruling: { type: "string", enum: ["none", "fix-differently", "accept-as-debt", "split-to-issue", "escalate"] },
-    reason: { type: "string", description: "What the evidence shows" },
-    fingerprint: { type: "string", description: "file|symbol|category, the same whenever this problem comes back" },
+    rulings: {
+      type: "array",
+      description: "One ruling for each problem, by its number",
+      items: {
+        type: "object",
+        required: ["problem", "verdict", "severity", "kind", "ruling", "reason", "fingerprint"],
+        properties: {
+          problem: { type: "number", description: "The number the problem has in the brief" },
+          verdict: { type: "string", enum: ["confirmed", "dismissed", "unverified"] },
+          severity: { type: "string", enum: ["blocker", "major", "minor", "nit", "pre-existing", "none"] },
+          kind: { type: "string", enum: ["code", "test", "docs", "spec", "cannot-verify", "decision"] },
+          ruling: { type: "string", enum: ["none", "fix-differently", "accept-as-debt", "split-to-issue", "escalate"] },
+          reason: { type: "string", description: "What the evidence shows" },
+          fingerprint: {
+            type: "string",
+            description: "file|symbol|category, the same whenever this problem comes back",
+          },
+        },
+      },
+    },
   },
 } as const;
 
@@ -228,7 +242,7 @@ const SEVERITY_RUBRIC = `Severity: blocker when a criterion fails, the build or 
 Kind: code when the behavior is wrong. test when the behavior is right but the test or flow is wrong. docs when documentation is untrue or missing. spec when the spec is wrong, or the finding conflicts with its design. cannot-verify when a tool, simulator, or credential stopped working, the check hits a blind spot, or the proof is missing or unusable. decision when only a person can settle what a criterion should mean.
 Never downgrade a confirmed failure. Filter out what a linter would catch, and style. Run a reproduction when you can, rather than only reading the code. An earlier dismissal of the same fingerprint stands.`;
 
-const RECURRENCE_RUBRIC = `If this problem's fingerprint appears under earlier rulings after a fix attempt, also give a ruling, reading those attempts: fix-differently when another approach could work, accept-as-debt when a major can ship and be paid later, split-to-issue when a major belongs in its own issue, or escalate. Otherwise the ruling is none.`;
+const RECURRENCE_RUBRIC = `If a problem's fingerprint appears under earlier rulings after a fix attempt, also give a ruling, reading those attempts: fix-differently when another approach could work, accept-as-debt when a major can ship and be paid later, split-to-issue when a major belongs in its own issue, or escalate. Otherwise the ruling is none.`;
 
 // ---- State ------------------------------------------------------------------
 
@@ -856,14 +870,19 @@ async function validateRound(l: Loop): Promise<Problem[]> {
 
 // ---- Judge ------------------------------------------------------------------
 
-function judgeBrief(l: Loop, p: Problem): string {
+function problemBlock(l: Loop, p: Problem, n: number): string {
   const criterion = p.criterion ? criteriaOf(l, [p.criterion])[0] : undefined;
-  return `${l.where}
-Rule on one problem in the worktree ${worktreeOf(l)}, against the diff from the target branch docs/FORGE.md declares. ${l.story ? `\n\nThe issue:\n<<<ISSUE\n${l.story}\nISSUE>>>` : ""}
+  return `Problem ${String(n)}: reported by ${p.source} at ${p.location}:
+${p.text}${criterion ? `\nThe criterion: ${criterion.wording}` : ""}`;
+}
 
-Reported by ${p.source} at ${p.location}:
-${p.text}
-${criterion ? `\nThe criterion: ${criterion.wording}` : ""}
+// One judge rules on every problem of a step, so it reads the diff, the issue, and the earlier rulings once. Each
+// problem still gets its own ruling, because its severity and kind decide where it goes.
+function judgeBrief(l: Loop, problems: readonly Problem[]): string {
+  return `${l.where}
+Rule on each of these problems in the worktree ${worktreeOf(l)}, against the diff from the target branch docs/FORGE.md declares. Give each one its own ruling on its own evidence, by its number, and give problems that report the same thing the same fingerprint. ${l.story ? `\n\nThe issue:\n<<<ISSUE\n${l.story}\nISSUE>>>` : ""}
+
+${problems.map((p, i) => problemBlock(l, p, i + 1)).join("\n\n")}
 
 ${SEVERITY_RUBRIC}
 ${l.small ? "The ruling is none." : RECURRENCE_RUBRIC}
@@ -908,19 +927,22 @@ function applyToRow(l: Loop, p: Problem, route: Route, reason: string): void {
 async function judgeProblems(l: Loop, problems: readonly Problem[], phaseTitle: string): Promise<void> {
   if (problems.length === 0) return;
   const hasSpec = !!l.reviseSpec;
-  const verdicts = await parallel(
-    problems.map(
-      (p, i) => () =>
-        dispatch(judgeBrief(l, p), {
-          agentType: "slopify:judge",
-          label: `rule ${String(i + 1)}`,
-          phase: phaseTitle,
-          schema: JUDGE_SCHEMA,
-        }),
-    ),
+  const judged = must(
+    await dispatch(judgeBrief(l, problems), {
+      agentType: "slopify:judge",
+      label: "rule on the problems",
+      phase: phaseTitle,
+      schema: JUDGE_SCHEMA,
+    }),
+    "judge",
+    "The rulings on the problems.",
   );
   for (const [i, p] of problems.entries()) {
-    const v = must(verdicts[i], "judge", `A ruling on ${p.location}.`);
+    const v = must(
+      judged.rulings.find((r) => r.problem === i + 1),
+      "judge",
+      `A ruling on ${p.location}.`,
+    );
     const route = routeOf(v, l.fixes.get(v.fingerprint) ?? 0, l.differently.has(v.fingerprint), hasSpec);
     applyToRow(l, p, route, v.reason);
     l.rulings.push(`${v.fingerprint}: ${v.verdict}, ${v.severity}, ${v.kind}, ${route}. ${v.reason}`);

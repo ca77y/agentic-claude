@@ -22,10 +22,10 @@ How `deliver-spike` answers a bounded technical question with a findings documen
  6 FINDINGS ──── writer-findings (opus) writes docs/spikes/<id>-<slug>.md → commit
  7 VALIDATE ──── checks (haiku) runs the TESTING.md checks
  │               lens-evidence, lens-question, lens-neutrality (haiku), on the document
- │               judge × N (opus), one per problem
+ │               judge × 1 (opus) rules on every problem
  8 PUSH ──────── pusher pushes, opens a draft PR, which fires the review               ⛔ H2
  9 REVIEW ────── watcher (haiku) reads the findings
- │   ▲ ≤3 fix    judge × N (opus), one per finding
+ │   ▲ ≤3 fix    judge × 1 (opus) rules on every finding
  │   │  rounds   writer revises the document → commit, then step 7 again
  │   └────────── pusher pushes and requests the review
  ▼

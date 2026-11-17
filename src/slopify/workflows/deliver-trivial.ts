@@ -17,7 +17,7 @@ export const meta = {
     },
     { title: "Validate", detail: "validator runs the app as TESTING.md says, once" },
     { title: "Push", detail: "pusher pushes, opens or updates the PR, and fires the review" },
-    { title: "Review", detail: "watcher reads the review, and one judge rules on each finding" },
+    { title: "Review", detail: "watcher reads the review, and one judge rules on every finding" },
   ],
 } as const satisfies WorkflowMeta;
 /* jscpd:ignore-end */

@@ -51,14 +51,14 @@ A delivery ends in a PR unless one of the halt conditions below holds. Anything 
  │  │   VALIDATE ───── checks (haiku) runs the TESTING.md checks
  │  │                  validator (sonnet) follows each criterion's category path
  │  │                  lens-docs (haiku) × N, one per listed doc: are its claims true?
- │  │   JUDGE ──────── judge × N (opus), one per problem: severity and kind
+ │  │   JUDGE ──────── judge × 1 (opus) rules on every problem: severity and kind
  │  │                  no proof → cannot-verify
  │  │   GATEWAY ────── judge (opus): anything missed? a doc not on the list → added
  │  │   PUSH ───────── pusher pushes (even if something is still flagged)                  ⛔ H4
  │  │                  no PR yet: opens a draft once nothing blocks, or on the last round
  │  │                  PR exists: requests the review
  │  │   REVIEW ─────── only if a PR exists: watcher (haiku) reads the findings
- │  │                  judge × N (opus), one per finding: severity and kind
+ │  │                  judge × 1 (opus) rules on every finding: severity and kind
  │  │   GATE (code) ── clean → exit
  │  └── code or test → inner loop     docs → writer-docs     spec → advisors and writer-spec
  ▼
@@ -140,7 +140,7 @@ This stage is two nested loops. The inner loop makes one change correct, and onl
    - An inner loop that runs out of tries doesn't stop the round. Its problem stays open as a `blocker`.
    - After the inner loops, `writer-docs` updates the documents on the `docs` list, so they describe the code as built. It runs in every round that changed code or has an open `docs` problem, and when the list isn't empty. `pusher` commits its work. Documentation needs no failing test, so it stays out of the inner loop.
 2. **Validate.** `checks` runs the `Checks` commands from `TESTING.md` and returns the exit codes and failing lines. `validator` then follows each criterion's category path, as defined below. In the first round it runs every criterion. In later rounds it runs the criteria whose code paths changed, or every criterion when a fix touched boot or config files. It runs even when `checks` fails. Boot is its first step, so a broken build fails there and is judged like any other problem. One `lens-docs` per listed document checks that its claims are true against the code.
-3. **Judge.** One `judge` (opus) per problem, all in parallel, gives one verdict: `confirmed` with a severity and a [kind](../DESIGN.md#severity-and-problem-kinds), `dismissed` with a reason, or `unverified`. The judge reads the evidence and the diff:
+3. **Judge.** One `judge` (opus) rules on all the round's problems together, so it reads the issue, the diff, and the earlier rulings once. Each problem still gets its own verdict, because its severity and kind decide where it goes, and problems that report the same thing get the same fingerprint. Each verdict is `confirmed` with a severity and a [kind](../DESIGN.md#severity-and-problem-kinds), `dismissed` with a reason, or `unverified`. The judge reads the evidence and the diff:
    - It never downgrades a confirmed failure.
    - It flags changes that no criterion calls for, such as unrelated refactors or disabled tests.
    - A `pass` without evidence becomes `cannot-verify`. It isn't a `fail`, because nothing shows that the code is wrong.
@@ -152,7 +152,7 @@ This stage is two nested loops. The inner loop makes one change correct, and onl
    - Anything still flagged goes under **Why this is a draft**, with its evidence and what was tried.
 6. **Review.** This step runs only when a PR exists. The review is the one `docs/FORGE.md` declares, with the trigger and the status it declares for it. The workflow doesn't review the code itself.
    - `watcher` waits for the review run to finish and returns its findings.
-   - One `judge` per finding rules on it as in step 3. Each brief includes the earlier rulings for the same fingerprint (file, symbol, category), so a dismissed finding stays dismissed.
+   - One `judge` rules on all the review's findings as in step 3. Each brief includes the earlier rulings for the same fingerprint (file, symbol, category), so a dismissed finding stays dismissed.
    - The judge filters out pre-existing issues, issues a linter would catch, and style. It runs a reproduction when it can, rather than only reading the code.
 7. **Gate.** This step is code, not an agent. It waits for every judge.
    - The delivery is clean when a PR exists, its review has run on the latest push, no `blocker` or `major` is open, no criterion is `fail`, and `TESTING.md` lets every `cannot-verify` and `uncategorized` criterion pass as `ready`.

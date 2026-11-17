@@ -29,10 +29,10 @@ export const meta = {
       detail: "one library-scribe per source writes its raw note, then one integrates the wiki pages",
     },
     { title: "Validate", detail: "checks and library-clerk on the changed files" },
-    { title: "Judge", detail: "one judge per problem gives its severity and kind" },
+    { title: "Judge", detail: "one judge gives each problem its severity and kind" },
     { title: "Build", detail: "library-scribe repairs the pages for each open problem" },
     { title: "Push", detail: "pusher pushes, opens or updates the PR, and fires the review" },
-    { title: "Review", detail: "watcher reads the review, and one judge rules on each finding" },
+    { title: "Review", detail: "watcher reads the review, and one judge rules on every finding" },
   ],
 } as const satisfies WorkflowMeta;
 

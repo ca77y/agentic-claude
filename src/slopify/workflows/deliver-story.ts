@@ -27,10 +27,10 @@ export const meta = {
     { title: "Challenge", detail: "checks and lenses test the spec, advisors try to break it, judge rules" },
     { title: "Build", detail: "one coder and qa inner loop per change, then writer-docs updates the listed docs" },
     { title: "Validate", detail: "checks, validator, and lens-docs" },
-    { title: "Judge", detail: "one judge per problem gives its severity and kind" },
+    { title: "Judge", detail: "one judge gives each problem its severity and kind" },
     { title: "Gateway", detail: "one judge checks the round for anything missed" },
     { title: "Push", detail: "pusher pushes the round, opens or updates the PR, and fires the review" },
-    { title: "Review", detail: "watcher reads the review, and one judge rules on each finding" },
+    { title: "Review", detail: "watcher reads the review, and one judge rules on every finding" },
   ],
 } as const satisfies WorkflowMeta;
 

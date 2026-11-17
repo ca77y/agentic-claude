@@ -16,12 +16,26 @@ async function runAll(thunks: (() => Promise<unknown>)[]): Promise<unknown[]> {
   };
   return Promise.all(thunks.map((t) => settle(t)));
 }
+// The delivery loop's judge rules on every problem of a step in one dispatch. A test scripts one ruling per problem,
+// so each problem is shown to the script on its own, with the rest of the brief, and the rulings are numbered back.
+const PROBLEM = /^Problem (\d+): [\s\S]*?(?=^Problem \d+: |^Severity: )/gm;
+function rulePerProblem(type: string, prompt: string): Reply {
+  const rest = prompt.replaceAll(PROBLEM, "");
+  const rulings = Array.from(prompt.matchAll(PROBLEM), ([block, n]) => {
+    const r = current.script(type, "rule", `${block}\n${rest}`);
+    return r && { ...r, problem: Number(n) };
+  });
+  return rulings.every(Boolean) ? { rulings } : null;
+}
+
 function fakeAgent(prompt: string, opts: { agentType?: string; label?: string }): Promise<Reply> {
   const type = (opts.agentType ?? "").replace("slopify:", "");
   const row = opts.label ?? "";
   const label = row.startsWith(`${type} · `) ? row.slice(type.length + 3) : row;
   calls.push({ type, label, row, prompt });
-  return Promise.resolve(current.script(type, label, prompt));
+  return Promise.resolve(
+    label === "rule on the problems" ? rulePerProblem(type, prompt) : current.script(type, label, prompt),
+  );
 }
 export function installAgents(): void {
   Object.assign(globalThis, { phase: () => null, parallel: runAll, agent: fakeAgent });

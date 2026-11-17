@@ -32,10 +32,10 @@ export const meta = {
     { title: "Prototype", detail: "coder measures and qa confirms, up to three tries, then pusher deletes it" },
     { title: "Findings", detail: "writer-findings writes the findings document, and pusher commits it" },
     { title: "Validate", detail: "checks, lens-evidence, lens-question, and lens-neutrality" },
-    { title: "Judge", detail: "one judge per problem gives its severity and kind" },
+    { title: "Judge", detail: "one judge gives each problem its severity and kind" },
     { title: "Build", detail: "writer-findings revises the document for each open problem" },
     { title: "Push", detail: "pusher pushes, opens or updates the PR, and fires the review" },
-    { title: "Review", detail: "watcher reads the review, and one judge rules on each finding" },
+    { title: "Review", detail: "watcher reads the review, and one judge rules on every finding" },
   ],
 } as const satisfies WorkflowMeta;
 

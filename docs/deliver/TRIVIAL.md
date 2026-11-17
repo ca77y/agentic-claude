@@ -19,7 +19,7 @@ How `deliver-trivial` takes a trivial story from a card or a prompt to a reviewe
  4 VALIDATE ──── validator (sonnet) runs the app as TESTING.md says, once
  5 PUSH ──────── pusher pushes, opens a draft PR, which fires the review             ⛔ H2
  6 REVIEW ────── watcher (haiku) reads the findings
- │   ▲ ≤3 fix    judge × N (opus), one per finding
+ │   ▲ ≤3 fix    judge × 1 (opus) rules on every finding
  │   │  rounds   each blocker/major: failing test → commit → coder → commit → checks
  │   │           scout-docs, then writer-docs if it found any
  │   └────────── pusher pushes and requests the review

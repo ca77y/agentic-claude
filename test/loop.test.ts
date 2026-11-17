@@ -444,6 +444,14 @@ describe("the outer loop", () => {
     assert.equal(count("watcher"), 4);
   });
 
+  test("rules on every review finding of a round with one judge", async () => {
+    use(fallingReviews([3, 0]));
+    await runLoop(inputFor(freshRun()));
+    const review = calls.find((c) => c.type === "judge" && c.label === "rule on the problems")?.prompt ?? "";
+    assert.ok(["bug 1-0", "bug 1-1", "bug 1-2"].every((b) => review.includes(b)));
+    assert.equal(count("judge", "rule"), 1);
+  });
+
   test("still reads and gates the review after the last fix round", async () => {
     use(fallingReviews([3, 2, 1, 0]));
     const r = await runLoop(inputFor(freshRun()));

@@ -19,10 +19,10 @@ How `research` answers a question from new sources and adds the answer to the pr
  6 PERSIST ───── library-scribe × N, one raw note per source, in parallel
  │               then one library-scribe integrates: the wiki page or pages that answer
  │               the question, and the index, taxonomy, and log → commit
- 7 VALIDATE ──── checks (haiku) and library-clerk on the changed files → judge × N (opus)
+ 7 VALIDATE ──── checks (haiku) and library-clerk on the changed files → judge × 1 (opus)
  8 PUSH ──────── pusher pushes, opens a draft PR, which fires the review                     ⛔ H2
  9 REVIEW ────── watcher (haiku) reads the findings
- │   ▲ ≤3 fix    judge × N (opus), one per finding
+ │   ▲ ≤3 fix    judge × 1 (opus) rules on every finding
  │   │  rounds   library-scribe repairs the pages → commit, then step 7 again
  │   └────────── pusher pushes and requests the review
  ▼
