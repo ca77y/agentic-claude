@@ -4,12 +4,12 @@
     "`type DeliveryKind = \"story\" | \"trivial\" | \"bugfix\" | \"spike\" | \"research\"`, from rules.ts, is `LoopInput.kind`.",
     "rules.ts interfaces: `checkDescription(body: string, ctx: { kind: DeliveryKind; specDir: string }): { leak: string[]; format: string[] }`, passing when both are empty; `renderState(s: PrState): string`, rendering only criterion results and open items; `progressLine(round: number, kind: \"finding\" | \"ruling\" | \"tried\" | \"changed\", items: readonly string[]): string`; `checkpointLine(key: \"done-board-start\" | \"done-round\" | \"done-findings\" | \"reproduced\" | \"review-fired\", value: string): string`, the accepted line or ''.",
     "Format (pr-description.md states it, checkDescription enforces its mechanical part, lens-pr checks all): the issue's four level-2 headings in order, Needs you and Not done only with content, no other heading, at most 4,000 characters, current state only. A story's What changes opens with the card's outcome and holds `Spec: <folder>` once, plain, repo-relative. Leak rules: no absolute path, `.tmp/` reference, ledger line or credential-shaped text.",
-    "Overflow rule, alike in pr-description.md, writer-pr, lens-pr and checkDescription: criteria sharing a result and evidence may share one grouped Why trust it line, which lens-pr accepts for each criterion it names; decisions or confirmations a committed file lists (a story's build.json and validate.json) may appear under Needs you as a count and a link. Each other open item appears once: decisions, confirmations, manual actions and known draft reasons under Needs you; unfixed findings under Not done with any filed card's identifier and link.",
+    "Overflow rule, alike in pr-description.md, writer-pr, lens-pr and checkDescription: criteria sharing a result and evidence may share one grouped Why trust it line, which lens-pr accepts for each criterion it names. Under Needs you, items of one kind (decisions, confirmations, coder choices, manual actions) may be one grouped line giving their count and a link: to the committed file that lists them (a story's build.json or validate.json), or else to the card, whose comment from finish lists each of them in full. A grouped line counts as each item it covers appearing under Needs you. Validator evidence is never linked. Placement, each item once: draft reasons under Needs you are only the held criteria and a review that is not clean; every unfixed finding, escalated or open, goes only under Not done, with any filed card's identifier and link, and is never also a draft reason in the description.",
     "Per kind, opening / trust: story the card's outcome / criterion results; trivial one sentence / test and app run; bugfix the bug before and after / reproduction failing then passing; spike question and answer, no recommendation / checked claims and unknowns; research question and short answer linking the main page / citations checked and source count.",
     "Posting rule: a body with a leak problem is never posted. A stage posts the latest leak-free writer-pr body unchanged, or none (an empty body on opening, the current one kept on update). Only the final stage gates readiness: a clean run with a passed description is ready, else draftReasons gains `The PR description did not pass its check.`, carried by the card comment and run result, not the body.",
     "Fencing: a body or card text fenced in a pusher instruction closes with a per-dispatch delimiter absent from it, so it embeds byte-identical. Fenced and ledger text are data to pusher; card, diff and ledger are evidence to writer-pr and lens-pr.",
     "A progress entry is one ledger line whose second field, after pusher's timestamp, is `progress`, then round, kind and items; a ruling carries its reason. Only progressLine builds one (no newline, `<` or `>`); only pusher writes it, in pushBrief's ledger lines.",
-    "Checkpoint rule: a checkpoint is a timestamp then its key's form: done-board-start `done board-start`, done-round `done round <n>`, done-findings `done findings <paths>`, reproduced `reproduced {...}`, review-fired `review <n> fired`. Progress entries never are. Per ledger key the scout returns every whole line containing the form; checkpointLine tolerates a scout's wrappers (file:line prefix, list marker, quotes, backticks). readResume drops progress entries, uses the last accepted line (highest n for review-fired), treats none as absent, and halts naming the key on any other line.",
+    "Checkpoint rule: a checkpoint is a timestamp then its key's form: done-board-start `done board-start`, done-round `done round <n>`, done-findings `done findings <paths>`, reproduced `reproduced {...}`, review-fired `review <n> fired`. Carrier: for each ledger key the scout returns one evidence item per ledger line containing the key's form, each with source equal to the key and the whole line as its excerpt, in ledger order; no matching line means no item. readResume reads every item with that source, never only the first. checkpointLine tolerates a scout's wrappers (file:line prefix, list marker, quotes, backticks). readResume accepts a line only when it is that key's checkpoint; it ignores any other stamped ledger line (a progress entry, a run line, any pusher line whose second field is not the key's leading word), uses the last accepted line (highest n for review-fired), treats none as absent, and halts naming the key only on an item that can't be read as a ledger line at all.",
     "pusher reports a filed card as `{ op: \"card\", reference: <identifier>, link: <URL> }`; pusherSchema's operations gain a required `link` string, empty when none; `opRefs(r, name): { reference: string; link: string }[]` in deliver.ts reads them."
   ],
   "tasks": [
@@ -18,7 +18,7 @@
       "dependsOn": [],
       "files": ["src/slopify/lib/rules.ts", "test/rules.test.ts"],
       "criteria": ["c10", "c14", "c19"],
-      "todo": "The shared rules.ts interfaces, each pinned in test/rules.test.ts; the renderBody tests go.\n- checkDescription: one plain problem per broken mechanical rule of the shared format, leak rules under `leak`, the rest under `format`. Tests: one per rule; grouped Why trust it lines and a count-and-link Needs you pass; a body for a 26-criterion, 14-decision story written to the overflow rule passes.\n- renderState and PrState replace renderBody and PrBody, with no fix-attempt counts. No string or comment in rules.ts holds a phrase c14 bans, and the header comment stops saying rules.ts holds the PR description.\n- progressLine tests: no newline, `<` or `>`; bounded for long input; a ruling keeps its reason.\n- checkpointLine tests: each key's form accepted bare and with each wrapper; a progress entry quoting any form, a whole ledger line included, rejected; prose rejected.\n- Keep reproductionLine and parseReproduction and their round-trip test.",
+      "todo": "The shared rules.ts interfaces, each pinned in test/rules.test.ts.\n- checkDescription: one plain problem per broken mechanical rule of the shared format, leak rules under `leak`, the rest under `format`. Tests: one per rule; grouped Why trust it lines and grouped Needs you lines (committed-file link and card link) pass; a body for a 26-criterion, 14-decision story that also carries dozens of coder choices and confirmations, written to the overflow rule, passes.\n- renderState and PrState are added, with no fix-attempt counts. renderBody and PrBody and their tests stay until the loop task removes them, so loop.ts keeps compiling and every commit passes `make lint`.\n- progressLine tests: no newline, `<` or `>`; bounded for long input; a ruling keeps its reason.\n- checkpointLine tests: each key's form accepted bare and with each wrapper; a progress entry quoting any form, a whole ledger line included, rejected; a run line quoting a form rejected; prose rejected.\n- Keep reproductionLine and parseReproduction and their round-trip test.",
       "reuse": [
         "rules.ts `items`, `cell`, `section`, `criteriaTable` helpers for renderState",
         "rules.ts `MAX_FIX_ROUNDS`, `reproductionLine`, `parseReproduction`",
@@ -40,19 +40,24 @@
         "test/spike.test.ts"
       ],
       "criteria": ["c10", "c19"],
-      "todo": "readResume follows the shared checkpoint rule: the scout brief words each ledger key with its form from that rule, and built, boardStartDone, findings, reproduced (parseReproduction only on an accepted line) and reviewFired come from accepted lines only. With no specDir passed, spec-dir is the folder on the PR description's `Spec:` line, backticks tolerated. Update the scout-checkpoint stubs in the how, research and spike tests to return whole ledger lines.\n\nNew test/resume.test.ts, each scenario compared with a named baseline:\n- a ledger of only progress entries quoting each form (a whole `done round` line and a `reproduced {` line among them) gives the empty ledger's Resume;\n- a real line followed by a progress entry quoting it, the scout returning both, gives the real-only ledger's Resume;\n- a real line returned inside a wrapper is accepted;\n- a malformed answer (prose, a line missing its timestamp) halts naming the key;\n- a backticked Spec line yields the folder.",
+      "todo": "readResume follows the shared checkpoint rule, carrier included: the scout brief words each ledger key with its form and asks for one evidence item per matching line; built, boardStartDone, findings, reproduced (parseReproduction only on an accepted line) and reviewFired come from accepted lines only, read from every item whose source is the key. With no specDir passed, spec-dir is the folder on the PR description's `Spec:` line, backticks tolerated. Update the scout-checkpoint stubs in the how, research and spike tests to the carrier shape.\n\nNew test/resume.test.ts, stubs in the carrier shape, each scenario compared with a named baseline:\n- a ledger of only progress entries quoting each form (a whole `done round` line and a `reproduced {` line among them) gives the empty ledger's Resume;\n- a real line followed by a progress entry quoting it, as two items in ledger order, gives the real-only ledger's Resume, and so does the entry listed first;\n- a run line whose story text quotes a form gives the ledger-without-it Resume, with no halt;\n- several review-fired lines give the highest n, and several done-findings lines the last one's paths;\n- a real line returned inside a wrapper is accepted;\n- an item that can't be read as a ledger line (prose, a line missing its timestamp) halts naming the key;\n- a backticked Spec line yields the folder.",
       "reuse": [
         "resume.ts readResume and its single scout-checkpoint dispatch",
-        "family.ts `val`, `fact`, `shaped('rel')`; loop.ts `must`",
+        "family.ts `val`, `shaped('rel')` (`fact` stays for single-value keys); loop.ts `must`",
         "test/harness.ts fakeAgent"
       ],
-      "create": ["accepted-line derivation and the halt on a malformed answer in readResume", "test/resume.test.ts"]
+      "create": [
+        "reading every evidence item for a ledger key, accepted-line derivation and the halt on an unreadable item in readResume",
+        "test/resume.test.ts"
+      ]
     },
     {
       "id": "loop",
       "dependsOn": ["rules", "resume"],
       "files": [
         "src/slopify/lib/loop.ts",
+        "src/slopify/lib/rules.ts",
+        "test/rules.test.ts",
         "src/slopify/lib/deliver.ts",
         "src/slopify/lib/schemas.ts",
         "src/slopify/lib/small.ts",
@@ -69,7 +74,7 @@
         "test/harness.ts"
       ],
       "criteria": ["c3", "c4", "c5", "c6", "c7", "c8", "c9", "c11", "c12", "c13", "c19"],
-      "todo": "Wire the description stage, progress entries and card filing into the shared loop, then `make build`.\n- Every runLoop caller sets its kind.\n- Describe stage, Loop staying unexported: before each pusher dispatch that opens or updates the PR, once the round's commits settle, writer-pr writes the body. Guard problems are revised without the lens; a guard-clean body goes to lens-pr; findings send writer-pr back to rewrite whole; at most MAX_FIX_ROUNDS revisions; the body the posting rule picks is lens-checked before posting. An unverified verdict without findings is retried once, then fails. A failed writer-pr attempt halts only when no body exists. Lens findings never reach judge or count as open.\n- writer-pr brief: card and story; worktree and FORGE.md's target branch, to read the diff; the ledger path, earlier progress entries being context never copied; renderState's block; and on their own lines the kind, the target with known draft reasons, the final stage's filed cards, and a story's Spec line. A revision adds the previous body and its problems. lens-pr brief: body, kind, Spec line, criterion results, open items.\n- Posting, and small.ts's card text, follow the fencing rule; the code-rendered body goes.\n- endLoop files new issues first, in their own dispatch with small.ts's marker dedupe, not halting on a partial failure; describes the final stage once and posts that body from the opening push and finish.\n- Every finding batch, ruling, fix attempt and change becomes a progress entry on the next ledger-writing pusher dispatch, kept until it succeeds. draftReasons and reviewSummary drop fix-attempt counts and old section names.\n- Tests: c3-c9, c11-c13; a body holding the default fence posted byte-identical; a leaking last body never posted; a 26-criterion, 14-decision run that fits and ends ready.",
+      "todo": "Wire the description stage, progress entries and card filing into the shared loop, then `make build`.\n- Switch loop.ts from renderBody to renderState, then remove renderBody, PrBody and their tests from rules.ts and test/rules.test.ts; no string or comment left in rules.ts holds a phrase c14 bans, and its header comment stops saying it holds the PR description.\n- Every runLoop caller sets its kind.\n- Describe stage, Loop staying unexported: before each pusher dispatch that opens or updates the PR, once the round's commits settle, writer-pr writes the body. Guard problems are revised without the lens; a guard-clean body goes to lens-pr; findings send writer-pr back to rewrite whole; at most MAX_FIX_ROUNDS revisions; the body the posting rule picks is lens-checked before posting. An unverified verdict without findings is retried once, then fails. A failed writer-pr attempt halts only when no body exists. Lens findings never reach judge or count as open.\n- writer-pr brief: card and story; worktree and FORGE.md's target branch, to read the diff; the ledger path, earlier progress entries being context never copied; renderState's block; and on their own lines the kind, the target with the known draft reasons the overflow rule places under Needs you (held criteria, review state; no findings), the final stage's filed cards, and a story's Spec line. A revision adds the previous body and its problems. lens-pr brief: body, kind, Spec line, criterion results, open items.\n- Posting, and small.ts's card text, follow the fencing rule; the code-rendered body goes.\n- endLoop files new issues first, in their own dispatch with small.ts's marker dedupe, not halting on a partial failure; describes the final stage once and posts that body from the opening push and finish.\n- Every finding batch, ruling, fix attempt and change becomes a progress entry on the next ledger-writing pusher dispatch, kept until it succeeds. draftReasons and reviewSummary drop fix-attempt counts and old section names; LoopResult and the card comment keep every draft reason. finish's card comment lists every coder choice, confirmation, manual action and acceptance decision in full, so a grouped Needs you line can link the card.\n- Tests: c3-c9, c11-c13; a body holding the default fence posted byte-identical; a leaking last body never posted; a 26-criterion, 14-decision run whose tasks and fix rounds also return dozens of coder choices and confirmations fits and ends ready; an unfixed finding reaches the writer-pr brief only as an open item.",
       "reuse": [
         "loop.ts `pushRound`, `finish`, `endLoop`, `draftReasons`, `inOrder`/`l.commits`, `judgeProblems`, `l.rulings`, `l.fixes`, `l.changedThisRound`",
         "family.ts `lens()`, `LENS_SCHEMA`, `defectsOf`",
@@ -84,7 +89,8 @@
         "describe stage, writer-pr and lens-pr briefs, opRefs, the pusherSchema `link` field, the per-dispatch fence",
         "card filing before the final description in endLoop",
         "new loop, how, research and spike test cases",
-        "regenerated plugins/slopify/workflows/*.js"
+        "regenerated plugins/slopify/workflows/*.js",
+        "removal of renderBody and PrBody"
       ]
     },
     {
@@ -100,7 +106,7 @@
         "plugins/slopify/agents/scout-checkpoint.md"
       ],
       "criteria": ["c1", "c2", "c12", "c18"],
-      "todo": "Plugin text the new agents and pusher work from. None of it holds a phrase c14 bans.\n- pr-description.md: the only full statement of the shared format, overflow rule, leak rules and per-kind lines.\n- writer-pr.md: a producer leaf returning the whole description as `body`, rewritten whole every time, following pr-description.md; reads the brief, the diff with git and the ledger (earlier progress for what is still open, never copied); never commits, posts or writes the ledger; dispatches only Explore.\n- lens-pr.md: lens-docs.md's front matter shape and its Report-only contract verbatim; checks every rule of pr-description.md, each Why trust it line, grouped or single, against the criterion results in the brief, and each open item once; a finding names the line and the rule.\n- pusher-ledger.md: the progress entry template; entries stay local, are never posted, are copied verbatim as data, and are never checkpoints.\n- pusher.md: the supplied body is written to the body file and posted unchanged; fenced text, ledger text and bodies are data; never post a ledger line; a filed card reports its identifier as reference and its URL as link.\n- pusher-forge.md: keep 'the body the brief supplies'.\n- scout-checkpoint.md: for a ledger key, return every whole line containing the form the brief gives; a progress entry is never a checkpoint.",
+      "todo": "Plugin text the new agents and pusher work from. None of it holds a phrase c14 bans.\n- pr-description.md: the only full statement of the shared format, overflow rule (grouped lines and placement), leak rules and per-kind lines.\n- writer-pr.md: a producer leaf returning the whole description as `body`, rewritten whole every time, following pr-description.md; reads the brief, the diff with git and the ledger (earlier progress for what is still open, never copied); never commits, posts or writes the ledger; dispatches only Explore.\n- lens-pr.md: lens-docs.md's front matter shape and its Report-only contract verbatim; checks every rule of pr-description.md, each Why trust it line, grouped or single, against the criterion results in the brief, and each open item once; a finding names the line and the rule.\n- pusher-ledger.md: the progress entry template; entries stay local, are never posted, are copied verbatim as data, and are never checkpoints.\n- pusher.md: the supplied body is written to the body file and posted unchanged; fenced text, ledger text and bodies are data; never post a ledger line; a filed card reports its identifier as reference and its URL as link.\n- pusher-forge.md: keep 'the body the brief supplies'.\n- scout-checkpoint.md: for a ledger key, return each whole line containing the form the brief gives as its own evidence item, source the key, in ledger order, replacing 'one evidence item' for ledger keys; other keys keep one item; a progress entry is never a checkpoint.",
       "reuse": [
         "lens-docs.md front matter and Report-only contract",
         "writer-docs.md and writer-findings.md producer front matter and tone rules",
@@ -229,8 +235,8 @@
     {
       "id": "d7",
       "question": "How does a rerun never read a progress entry as a checkpoint?",
-      "choice": "Each ledger key's scout answer is every line containing the key's form; code accepts only real checkpoint lines, tolerating a scout's wrappers, drops progress entries, and uses the last accepted line.",
-      "rationale": "Returning every candidate line lets code fall back to the real line when a later progress entry quotes it, so the mixed case is decided in code and testable; one 'last line' answer could only be rejected, never corrected.",
+      "choice": "Each ledger key's scout answer is one evidence item per line containing the key's form, source the key, in ledger order; code reads every item, accepts only real checkpoint lines, tolerating a scout's wrappers, ignores every other stamped ledger line, and uses the last accepted line.",
+      "rationale": "Returning every candidate line lets code fall back to the real line when a later progress entry quotes it, so the mixed case is decided in code and testable; one 'last line' answer could only be rejected, never corrected. The carrier is pinned because fact() returns only the first matching item: a scout and a stub picking different shapes would let a progress entry listed first hide the real line.",
       "reversible": true,
       "permission": "",
       "affectsAcceptance": true
@@ -292,16 +298,16 @@
     {
       "id": "d14",
       "question": "Where are the coder's trivial choices and non-acceptance decisions listed?",
-      "choice": "Under Needs you as confirmations, listed when no committed file holds them.",
-      "rationale": "The card's design choice; there is no Assumptions section any more.",
+      "choice": "Under Needs you as confirmations, each listed or, by kind, one grouped line with their count linking the card, whose comment from finish lists each in full.",
+      "rationale": "The card's design choice; there is no Assumptions section any more. Coder choices grow with every task and fix round and no committed file lists them, so without a grouped line a large story can't fit 4,000 characters.",
       "reversible": true,
       "permission": "",
       "affectsAcceptance": true
     },
     {
       "id": "d15",
-      "question": "How does a large story fit 4,000 characters (c20) while every decision appears under Needs you (c22) and Why trust it covers every criterion?",
-      "choice": "The overflow rule: criteria with the same result and evidence share one grouped Why trust it line, and decisions or confirmations a committed file lists appear as their count and a link to that file. A count with a link counts as those decisions appearing under Needs you.",
+      "question": "How does a large story fit 4,000 characters (c20) while every decision, confirmation and coder choice appears under Needs you (c22) and Why trust it covers every criterion?",
+      "choice": "The overflow rule: criteria with the same result and evidence share one grouped Why trust it line; Needs you items of one kind may be one grouped line with their count and a link to the committed file that lists them, or else to the card, whose finish comment lists each. A grouped line counts as those items appearing under Needs you.",
       "rationale": "The issue's Scope says 'about one screen with links for overflow'. Without it a 26-criterion, 14-decision story can't fit, the guard fails every attempt, and every clean large delivery ends draft. If a person reads c22 as ruling out summary by link, the conflict with c20 is theirs to settle.",
       "reversible": true,
       "permission": "",
@@ -327,12 +333,30 @@
     },
     {
       "id": "d18",
-      "question": "What does resume do when the scout returns a checkpoint answer that is neither a checkpoint nor a progress entry?",
-      "choice": "Halt naming the key, as a gap; wrappers a scout adds around a quoted line are tolerated first.",
-      "rationale": "Treating it as absent silently rebuilds every task, repeats the board-start operation, reproduces again or reruns an investigation; a halt costs one rerun.",
+      "question": "What does resume do with a scout item for a ledger key that is not that key's checkpoint?",
+      "choice": "Ignore any stamped ledger line that is not the key's checkpoint (progress entry, run line, other pusher line); halt naming the key only on an item that can't be read as a ledger line; wrappers are tolerated first.",
+      "rationale": "Treating an unreadable answer as absent silently rebuilds every task, repeats board-start, reproduces again or reruns an investigation. Halting on a readable non-checkpoint line would halt every rerun for good, since the run line embeds free-text story arguments and stays in the ledger.",
       "reversible": true,
       "permission": "",
       "affectsAcceptance": true
+    },
+    {
+      "id": "d19",
+      "question": "Where does an unfixed finding go, given draftReasons lists findings beside held criteria and review state?",
+      "choice": "Only under Not done. The writer-pr brief's draft-reason line carries held criteria and review state; findings reach it only as renderState's open items. LoopResult and the card comment keep the full draftReasons.",
+      "rationale": "Both channels would otherwise put each finding in the brief twice and the overflow rule in two places, inviting the duplicate c24 forbids.",
+      "reversible": true,
+      "permission": "",
+      "affectsAcceptance": true
+    },
+    {
+      "id": "d20",
+      "question": "When do renderBody and PrBody leave rules.ts?",
+      "choice": "In the loop task, together with loop.ts's switch to renderState.",
+      "rationale": "Removing them in the rules task breaks loop.ts's import, so typecheck and build:check in the pre-commit `make lint` reject that commit and resume's tests fail at link time through loop.ts.",
+      "reversible": true,
+      "permission": "",
+      "affectsAcceptance": false
     }
   ],
   "manualActions": [
