@@ -417,6 +417,12 @@ interface SpecProblem {
   problem: string;
 }
 
+// Each challenge round otherwise asks for more precision, and each revision adds it, so the spec drifts into the code.
+const CODERS_CHOICE =
+  "How a task implements a requirement inside its own files is its coder's decision: a finding that only asks the spec for more precision there, such as a constant, a pattern, a string, or step-by-step logic, is out of scope. An interface two tasks share is in scope.";
+const ABOVE_CODE =
+  "Fix each at the spec's level, which stops above the code. Prefer removing detail to adding it: never add a constant value, a pattern, a string the issue doesn't name, or call-by-call steps, and remove any the problems name.";
+
 const check = (name: string, label: string, brief: string) => () =>
   dispatch(brief, { agentType: `slopify:${name}`, label, phase: "Challenge", schema: CHECK_SCHEMA });
 const findingsOf = (v: LensResult): SpecProblem[] =>
@@ -451,13 +457,19 @@ async function runChecks(o: HowInput, spec: SpecResult, held: Set<string>): Prom
     () =>
       lens(
         "lens-scope",
-        `${o.where}\n${STORY_BLOCK(o)}\n\nCheck that this spec covers the issue's criteria and adds and drops no scope:\n${specText}`,
+        `${o.where}\n${STORY_BLOCK(o)}\n\nCheck that this spec covers the issue's criteria and adds and drops no scope. ${CODERS_CHOICE}\n${specText}`,
         { phase: "Challenge" },
       ),
     () =>
       lens(
         "lens-consistency",
-        `${o.where}\nCheck this spec against the project's rules and documents, in the worktree ${worktree(o)}:\n${specText}`,
+        `${o.where}\nCheck this spec against the project's rules and documents, in the worktree ${worktree(o)}. ${CODERS_CHOICE}\n${specText}`,
+        { phase: "Challenge" },
+      ),
+    () =>
+      lens(
+        "lens-altitude",
+        `${o.where}\nCheck that this spec stops above the code and keeps to its size budget, in the worktree ${worktree(o)}:\n${specText}`,
         { phase: "Challenge" },
       ),
   ]);
@@ -470,8 +482,7 @@ async function runChecks(o: HowInput, spec: SpecResult, held: Set<string>): Prom
   ];
 }
 
-const FULL_ATTACK =
-  "Try to break this finished spec from your one angle, reading the code it touches. Report only what must change before building: a blocker or a major, each with its location and evidence.";
+const FULL_ATTACK = `Try to break this finished spec from your one angle, reading the code it touches. Report only what must change before building: a blocker or a major, each with its location and evidence. ${CODERS_CHOICE}`;
 
 // A conflict in the issue's own criteria is settled as a decision the person confirms, so it isn't reported again.
 const SETTLED =
@@ -479,7 +490,7 @@ const SETTLED =
 
 // After a revision, an advisor checks the revision for its own findings rather than attack the whole spec again.
 const revisionCheck = (revisedFor: readonly RuledSpecProblem[]): string =>
-  `The spec was revised for these problems you reported:\n${list(problemLines(revisedFor))}\n\nFrom your one angle, reading the code it touches, report each of them the revision didn't fix, and each blocker or major the revision itself introduced, each with its location and evidence. Don't attack again what the revision left unchanged.`;
+  `The spec was revised for these problems you reported:\n${list(problemLines(revisedFor))}\n\nFrom your one angle, reading the code it touches, report each of them the revision didn't fix, and each blocker or major the revision itself introduced, each with its location and evidence. Don't attack again what the revision left unchanged. ${CODERS_CHOICE}`;
 
 // The first round has every advisor attack the spec. A later round has only the advisors whose findings the revision
 // was for check it; the cheap checks and the judge run every round and cover the rest.
@@ -522,7 +533,7 @@ ${STORY_BLOCK(o)}
 
 ${SPEC_FILES(o)}
 
-Cheap checks reported these findings against the spec. Rule on all of them, checking each against the code, and merge findings that report the same problem. Return each distinct problem that holds as a blocker or a major. Leave out what doesn't hold, what is minor (real but low impact), and what an advisor's finding below already covers. ${SETTLED}
+Cheap checks reported these findings against the spec. Rule on all of them, checking each against the code, and merge findings that report the same problem. Return each distinct problem that holds as a blocker or a major. Leave out what doesn't hold, what is minor (real but low impact), and what an advisor's finding below already covers. ${CODERS_CHOICE} A finding that the spec holds such detail, or is over its size budget, holds as a major. ${SETTLED}
 
 Reported findings:
 ${list(reported.map((p) => `${p.location}: ${p.problem}`))}
@@ -584,7 +595,7 @@ async function challenge(o: HowInput, first: SpecResult): Promise<{ spec: SpecRe
     if (revisions === MAX_FIX_ROUNDS) break;
     spec = await writeAndCommit(
       o,
-      `Revise the spec for these problems, and update RATIONALE.md with each one and its reason:\n${list(problemLines(open))}${escalation(decide)}`,
+      `Revise the spec for these problems, and update RATIONALE.md with each one and its reason. ${ABOVE_CODE}\n${list(problemLines(open))}${escalation(decide)}`,
       "revise the spec after its challenge",
       "Challenge",
     );

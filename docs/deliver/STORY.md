@@ -31,7 +31,7 @@ A delivery ends in a PR unless one of the halt conditions below holds. Anything 
  │   └── none viable  DECIDE     judge (opus) picks one and grafts the best of the others  ⛔ H3
  │                    SPEC       writer-spec (opus) writes the spec folder → pusher commits it
  │   ▲  ≤3 revisions  CHALLENGE  check-claim × N, check-criterion × N (haiku),
- │   │                           lens-scope, lens-consistency (sonnet)
+ │   │                           lens-scope, lens-consistency (sonnet), lens-altitude (haiku)
  │   │                           the 5 advisors, fresh, try to break the spec: blocker or major only
  │   │                           later rounds: only failed or changed checks; an advisor checks the
  │   │                           revision only for its own findings; a criteria conflict → a decision
@@ -92,7 +92,8 @@ The issue says why and what. This stage decides how, and it deserves more time a
 6. **Challenge.** At most three revisions, each checked by the next round:
    - One `check-claim` per file, symbol, or API claim checks that it is true of the code.
    - One `check-criterion` per criterion checks that its category matches what `TESTING.md` says that category covers, and that the category's path can check it.
-   - `lens-scope` checks that the spec adds and drops no scope. `lens-consistency` checks it against the project's rules and documents.
+   - `lens-scope` checks that the spec adds and drops no scope. `lens-consistency` checks it against the project's rules and documents. `lens-altitude` (haiku) checks that the spec stops above the code and keeps to its size budget: no constant, pattern, string, or step-by-step logic inside one task, no task over 300 words, and `shared` within 600.
+   - How a task is implemented inside its own files is its coder's decision, so a finding that only asks for more precision there is out of scope for every advisor, lens, and the judge, and a revision fixes problems by removing detail rather than adding it.
    - The same five advisors, in fresh dispatches, try to break the finished spec. Each reports only a `blocker` or a `major`, with its evidence, because nothing acts on a minor problem. Their findings need no judge.
    - One `judge` rules on all the checks' and lenses' findings of the round together. It merges findings that report the same problem, leaves out what an advisor already reported, and returns each problem that holds as a `blocker` or a `major`.
    - Each problem is of kind `spec`, which a revision can fix, or kind `decision`, when the issue's own criteria conflict or can be read more than one way, so only a person can settle what they mean.

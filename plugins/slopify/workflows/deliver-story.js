@@ -2104,6 +2104,8 @@ async function writeAndCommit(o, instruction, message, phaseTitle) {
   }
   return spec;
 }
+var CODERS_CHOICE = "How a task implements a requirement inside its own files is its coder's decision: a finding that only asks the spec for more precision there, such as a constant, a pattern, a string, or step-by-step logic, is out of scope. An interface two tasks share is in scope.";
+var ABOVE_CODE = "Fix each at the spec's level, which stops above the code. Prefer removing detail to adding it: never add a constant value, a pattern, a string the issue doesn't name, or call-by-call steps, and remove any the problems name.";
 var check = (name, label, brief) => () => dispatch(brief, { agentType: `slopify:${name}`, label, phase: "Challenge", schema: CHECK_SCHEMA });
 var findingsOf = (v) => defectsOf(v).map((f) => ({ location: f.location, problem: f.problem }));
 var claimKey = (claim) => `claim ${claim}`;
@@ -2137,14 +2139,21 @@ ${JSON.stringify(c)}`
       `${o.where}
 ${STORY_BLOCK(o)}
 
-Check that this spec covers the issue's criteria and adds and drops no scope:
+Check that this spec covers the issue's criteria and adds and drops no scope. ${CODERS_CHOICE}
 ${specText}`,
       { phase: "Challenge" }
     ),
     () => lens(
       "lens-consistency",
       `${o.where}
-Check this spec against the project's rules and documents, in the worktree ${worktree(o)}:
+Check this spec against the project's rules and documents, in the worktree ${worktree(o)}. ${CODERS_CHOICE}
+${specText}`,
+      { phase: "Challenge" }
+    ),
+    () => lens(
+      "lens-altitude",
+      `${o.where}
+Check that this spec stops above the code and keeps to its size budget, in the worktree ${worktree(o)}:
 ${specText}`,
       { phase: "Challenge" }
     )
@@ -2157,12 +2166,12 @@ ${specText}`,
     ...lenses.flatMap((v) => findingsOf(must(v, "how", "A lens on the spec.")))
   ];
 }
-var FULL_ATTACK = "Try to break this finished spec from your one angle, reading the code it touches. Report only what must change before building: a blocker or a major, each with its location and evidence.";
+var FULL_ATTACK = `Try to break this finished spec from your one angle, reading the code it touches. Report only what must change before building: a blocker or a major, each with its location and evidence. ${CODERS_CHOICE}`;
 var SETTLED = "A problem the spec records as a decision with affectsAcceptance true is settled for the person to confirm; don't report it again.";
 var revisionCheck = (revisedFor) => `The spec was revised for these problems you reported:
 ${list(problemLines(revisedFor))}
 
-From your one angle, reading the code it touches, report each of them the revision didn't fix, and each blocker or major the revision itself introduced, each with its location and evidence. Don't attack again what the revision left unchanged.`;
+From your one angle, reading the code it touches, report each of them the revision didn't fix, and each blocker or major the revision itself introduced, each with its location and evidence. Don't attack again what the revision left unchanged. ${CODERS_CHOICE}`;
 async function runAttack(o, revisedFor) {
   const advisors = revisedFor ? HOW_ADVISORS.filter((name) => revisedFor.some((p) => p.by === name)) : HOW_ADVISORS;
   const views = await parallel(
@@ -2195,7 +2204,7 @@ ${STORY_BLOCK(o)}
 
 ${SPEC_FILES(o)}
 
-Cheap checks reported these findings against the spec. Rule on all of them, checking each against the code, and merge findings that report the same problem. Return each distinct problem that holds as a blocker or a major. Leave out what doesn't hold, what is minor (real but low impact), and what an advisor's finding below already covers. ${SETTLED}
+Cheap checks reported these findings against the spec. Rule on all of them, checking each against the code, and merge findings that report the same problem. Return each distinct problem that holds as a blocker or a major. Leave out what doesn't hold, what is minor (real but low impact), and what an advisor's finding below already covers. ${CODERS_CHOICE} A finding that the spec holds such detail, or is over its size budget, holds as a major. ${SETTLED}
 
 Reported findings:
 ${list(reported.map((p) => `${p.location}: ${p.problem}`))}
@@ -2245,7 +2254,7 @@ async function challenge(o, first) {
     if (revisions === MAX_FIX_ROUNDS) break;
     spec = await writeAndCommit(
       o,
-      `Revise the spec for these problems, and update RATIONALE.md with each one and its reason:
+      `Revise the spec for these problems, and update RATIONALE.md with each one and its reason. ${ABOVE_CODE}
 ${list(problemLines(open))}${escalation(decide2)}`,
       "revise the spec after its challenge",
       "Challenge"

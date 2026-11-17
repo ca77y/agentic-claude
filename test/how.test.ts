@@ -53,6 +53,7 @@ const DEFAULTS: Record<string, Script> = {
   "check-claim": () => ({ holds: true, location: "a.ts:1", problem: "" }),
   "check-criterion": () => ({ holds: true, location: "c1", problem: "" }),
   "lens-scope": () => LENS_PASS,
+  "lens-altitude": () => LENS_PASS,
   "lens-consistency": () => LENS_PASS,
   judge: (_t, label) => (label === "decide" ? VIABLE : rulings(problem("major"))),
   "library-reader": () => ({ summary: "s", supported: [], gaps: [] }),
@@ -163,6 +164,7 @@ describe("the how phase", () => {
     assert.equal(count("check-claim"), 1);
     assert.equal(count("check-criterion"), 1);
     assert.equal(count("lens-scope"), 1);
+    assert.equal(count("lens-altitude"), 1);
   });
 
   test("designs again when none is viable, then reports it exhausted", async () => {
@@ -189,6 +191,8 @@ describe("the how phase", () => {
     );
     assert.ok("build" in r);
     assert.equal(count("writer-spec"), 2);
+    assert.match(calls.findLast((c) => c.type === "writer-spec")?.prompt ?? "", /Prefer removing detail to adding it/);
+    assert.match(calls.find((c) => c.label === "rule on the findings")?.prompt ?? "", /is its coder's decision/);
   });
 
   test("sends an irreversible choice the issue doesn't permit back to the writer, with no judge", async () => {
