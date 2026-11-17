@@ -290,9 +290,10 @@ function noProgress(openByRound) {
   return a !== void 0 && b !== void 0 && c !== void 0 && b >= a && c >= b;
 }
 var allowsReady = (setting) => setting?.trim() === "ready";
-function isDeliverable(labels) {
-  return labels.split(/[,\n]/).map((l) => l.trim()).includes(DELIVERABLE_LABEL);
+function hasLabel(labels, label) {
+  return labels.split(/[,\n]/).map((l) => l.trim()).includes(label);
 }
+var isDeliverable = (labels) => hasLabel(labels, DELIVERABLE_LABEL);
 var samePath = (a, b) => a === b || a.startsWith(`${b}/`) || b.startsWith(`${a}/`);
 var filesOverlap = (x, y) => x.files.some((a) => y.files.some((b) => samePath(a, b)));
 function waves(tasks) {

@@ -38,5 +38,5 @@ function fakeAgent(prompt: string, opts: { agentType?: string; label?: string })
   );
 }
 export function installAgents(): void {
-  Object.assign(globalThis, { phase: () => null, parallel: runAll, agent: fakeAgent });
+  Object.assign(globalThis, { phase: () => null, log: () => null, parallel: runAll, agent: fakeAgent });
 }
