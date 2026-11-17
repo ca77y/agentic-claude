@@ -697,14 +697,35 @@ Do not file it, commit, or change the board; pusher does that.`,
   );
   return w.openQuestions;
 }
+var SIMPLIFY = "advisor-simplify";
+async function simplify(d, c) {
+  const v = await dispatch(
+    `${d.WHERE}
+The card draft is ${c.draft}, a ${c.kind}. Report what it could remove, merge, or narrow and still deliver its outcome.
+
+${subject(c)}`,
+    { agentType: `slopify:${SIMPLIFY}`, label: "simplify the draft", phase: "Check", schema: LENS_SCHEMA }
+  );
+  return defectsOf(must(v, "check", `A view from ${SIMPLIFY}.`)).map((f) => ({
+    source: SIMPLIFY,
+    location: f.location,
+    text: f.problem
+  }));
+}
 async function checkDraft(d, c) {
   const { lenses } = KINDS[c.kind];
-  const verdicts = await parallel(
-    lenses.map(
-      (name) => () => lens(name, `${d.WHERE}
+  const [verdicts, simpler] = await Promise.all([
+    parallel(
+      lenses.map(
+        (name) => () => lens(name, `${d.WHERE}
 The card draft is ${c.draft}, a ${c.kind}.`, { label: name, phase: "Check" })
-    )
-  );
+      )
+    ),
+    simplify(d, c)
+  ]);
+  return [...simpler, ...checkFindings(c, lenses, verdicts)];
+}
+function checkFindings(c, lenses, verdicts) {
   return lenses.flatMap((name, i) => {
     const v = must(verdicts[i], "check", `A verdict from ${name}.`);
     const found = defectsOf(v).map((f) => ({ source: name, location: f.location, text: f.problem }));
@@ -717,7 +738,7 @@ The card draft is ${c.draft}, a ${c.kind}.`, { label: name, phase: "Check" })
 var rule = (d, c, problems) => confirmedProblems(
   problems,
   `${d.WHERE}
-The checks reported problems in the card draft ${c.draft}, a ${c.kind}; check them against the draft and the card template. blocker: a delivery can't take the card as it is. major: a real flaw that should be fixed before filing. minor: real but low impact.`,
+The checks reported problems in the card draft ${c.draft}, a ${c.kind}; check them against the draft and the card template. A finding from ${SIMPLIFY} holds when the card still delivers its outcome without what it names. blocker: a delivery can't take the card as it is. major: a real flaw that should be fixed before filing. minor: real but low impact.`,
   "Check"
 );
 async function refine(d, c, firstOpen) {
@@ -736,7 +757,7 @@ ${list(confirmed)}`,
     ) : await write(
       d,
       c,
-      `Revise the draft to fix these problems:
+      `Revise the draft to fix these problems. Prefer removing text to adding it, and remove what a problem names as extra:
 ${list(confirmed)}`,
       `revise ${String(revisions + 1)}`,
       "Check"

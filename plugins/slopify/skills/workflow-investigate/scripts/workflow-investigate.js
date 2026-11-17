@@ -107,7 +107,39 @@ function slowFlags(stats) {
     return group.filter((s) => group.length > 1 && s.durationMs > SLOW_MS && s.durationMs > m * SLOW_FACTOR).map((s) => `${name(s)} took ${seconds(s.durationMs)}, over ${String(SLOW_FACTOR)} times the ${type} median.`);
   });
 }
-var verdictOf = (s) => isRecord(s.agent.result) ? s.agent.result["verdict"] : void 0;
+function rulingsOf(s) {
+  const r = s.agent.result;
+  if (s.agent.type !== "judge" || !isRecord(r)) return [];
+  const rulings = r["rulings"];
+  if (!Array.isArray(rulings)) return r["verdict"] === void 0 ? [] : [r];
+  const list = rulings;
+  return list.filter((x) => isRecord(x));
+}
+var UNFIXED = /* @__PURE__ */ new Set(["minor", "nit", "none"]);
+var MIN_RULINGS = 3;
+function rulingFlags(stats) {
+  const rulings = stats.flatMap((s) => rulingsOf(s));
+  const dismissed = rulings.filter((r) => r["verdict"] === "dismissed");
+  const confirmed = rulings.filter((r) => r["verdict"] === "confirmed");
+  const unfixed = confirmed.filter((r) => UNFIXED.has(String(r["severity"])));
+  const out = [];
+  if (rulings.length > 0 && dismissed.length * 2 > rulings.length) {
+    out.push(`${String(dismissed.length)} of ${String(rulings.length)} judge rulings were dismissals.`);
+  }
+  if (confirmed.length >= MIN_RULINGS && unfixed.length * 2 > confirmed.length) {
+    out.push(
+      `${String(unfixed.length)} of ${String(confirmed.length)} confirmed findings were ruled minor or below, so nothing fixed them.`
+    );
+  }
+  return out;
+}
+var UNREVIEWED = /* @__PURE__ */ new Set(["skipped", "failed", "timed-out"]);
+function reviewFlags(stats) {
+  return stats.filter((s) => s.agent.type === "watcher").map((s) => ({ s, r: isRecord(s.agent.result) ? s.agent.result : {} })).filter(({ r }) => UNREVIEWED.has(String(r["outcome"]))).map(({ s, r }) => {
+    const why = typeof r["reference"] === "string" ? `: ${r["reference"]}` : ".";
+    return `${name(s)} reported the review ${String(r["outcome"])}${why}`;
+  });
+}
 function flags(run, stats) {
   const out = [];
   if (isRecord(run.result) && run.result["status"] !== "ready") {
@@ -119,11 +151,7 @@ function flags(run, stats) {
   for (const [label, group] of byName) {
     if (group.length > 1) out.push(`${label} ran ${String(group.length)} times.`);
   }
-  const judges = stats.filter((s) => s.agent.type === "judge" && verdictOf(s) !== void 0);
-  const dismissed = judges.filter((s) => verdictOf(s) === "dismissed");
-  if (judges.length > 0 && dismissed.length * 2 > judges.length) {
-    out.push(`${String(dismissed.length)} of ${String(judges.length)} judge rulings were dismissals.`);
-  }
+  out.push(...rulingFlags(stats), ...reviewFlags(stats));
   return out;
 }
 var seconds = (ms) => `${String(Math.round(ms / 1e3))}s`;

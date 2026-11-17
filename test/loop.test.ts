@@ -69,6 +69,7 @@ const DEFAULTS: Record<string, Script> = {
   pusher: (_t, _l, prompt) => pusher(prompt),
   coder: (_t, label) => (label.endsWith(": test") ? OK_TEST : OK_FIX),
   qa: () => QA_PASS,
+  simplifier: () => QA_PASS,
   checks: () => CHECKS_OK,
   validator: () => VALIDATOR_PASS,
   watcher: () => CLEAN_REVIEW,
@@ -276,6 +277,34 @@ describe("the inner loop", () => {
     assert.equal(r.status, "ready");
     assert.equal(count("coder", ": test"), 1);
     assert.equal(count("coder", ": fix"), 2);
+  });
+
+  test("sends code the simplifier finds unneeded back to the coder, only once qa passes", async () => {
+    let simplified = 0;
+    const UNNEEDED = {
+      ...QA_PASS,
+      verdict: "fail",
+      findings: [{ location: "src/a.ts:3", problem: "helper used once", blocking: true }],
+    };
+    use(
+      happy({
+        simplifier: () => {
+          simplified += 1;
+          return simplified === 1 ? UNNEEDED : QA_PASS;
+        },
+      }),
+    );
+    const r = await runLoop(inputFor(freshRun()));
+    assert.equal(r.status, "ready");
+    assert.equal(count("coder", ": fix"), 2);
+    assert.equal(count("simplifier"), 2);
+    assert.ok(calls.findLast((c) => c.label.includes(": fix"))?.prompt.includes("helper used once"));
+  });
+
+  test("doesn't ask the simplifier while qa still fails", async () => {
+    use(happy({ qa: () => QA_FAIL }));
+    await runLoop(inputFor(freshRun()));
+    assert.equal(count("simplifier"), 0);
   });
 
   test("rewrites the test when qa says the test is at fault", async () => {

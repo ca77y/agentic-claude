@@ -9,6 +9,8 @@ The argument is a report that `workflow-investigate` wrote, `docs/workflows/<slu
 1. Read the report. For each finding under `## Out of the ordinary` and each flag, find its cause in what produced it before proposing anything:
    - the plugin, under `${CLAUDE_PLUGIN_ROOT}`: the workflow in `workflows/<workflow>.js`, the agents in `agents/`, and the references in `references/`;
    - the project's setup: `docs/BOARD.md`, `docs/FORGE.md`, `TESTING.md`, `.claude/rules/`, and the root instructions.
+     A finding about what the run produced, such as a document that grew with every revision, has its cause in the brief or loop that kept producing it, not in its cost: find which instruction asks for more, and which check never pushes back.
+
 2. Propose one improvement per cause, ordered by what it would save. Each one gives:
    - a short title;
    - the findings it addresses, quoting the report's evidence;

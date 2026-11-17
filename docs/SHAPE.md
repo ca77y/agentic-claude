@@ -17,7 +17,8 @@ People own the issue. They say what kind of card they want, read it on the board
  4 DRAFT ─────── writer-card (sonnet) writes the card from the kind's template
  │               it settles what doesn't change the outcome as a labelled assumption,
  │               and marks what does as an open question
- 5 CHECK ─────── checks by kind (haiku), then judge × 1 (opus) rules on the round's findings
+ 5 CHECK ─────── checks by kind (haiku) and advisor-simplify (opus),
+ │               then judge × 1 (opus) rules on the round's findings
  │   ▲ ≤3 revisions a confirmed problem goes back to writer-card
  │   └────────── what is still open after the last round becomes an open question
  6 FILE ──────── pusher creates or updates the card on the board
@@ -35,7 +36,7 @@ The kind comes from the user, and is `story` when they don't say. It picks the t
 | bug   | observed, expected, where or how, assumptions, references                          | `advisor-fit`, for duplicates and related cards                         | `lens-template`                                                            |
 | spike | the question, what counts as an answer, conditions, assumptions, references        | `advisor-scope`, for whether the question is bounded                    | `lens-template`                                                            |
 
-`lens-template` checks that every required part of the kind is there, and that nothing outside the template is. `lens-criteria` checks that each criterion passes or fails by a check `TESTING.md` declares for its category.
+`lens-template` checks that every required part of the kind is there, and that nothing outside the template is. For every kind, `advisor-simplify` reads each draft for what it could remove, merge, or narrow and still deliver its outcome, since the checks only ask what is missing; the judge rules on its findings with the rest, and writer-card revises by removing. `lens-criteria` checks that each criterion passes or fails by a check `TESTING.md` declares for its category.
 
 ## Decisions
 

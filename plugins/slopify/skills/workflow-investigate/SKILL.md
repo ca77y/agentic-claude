@@ -13,7 +13,13 @@ The argument names one run: its run id (`wf_…`), or a workflow name such as `d
    - a `pusher` that reported an operation unmet;
    - a check that passed but listed findings, or judges that mostly dismissed what they ruled on;
    - one agent or phase that takes most of the time or cost;
-   - an agent that misread its brief, worked outside its role, or asked for something its brief didn't give.
+   - an agent that misread its brief, worked outside its role, or asked for something its brief didn't give;
+   - a review that skipped the change, or findings a judge confirmed but ruled too low for anything to fix them.
+
+   Then read what the run produced, on its branch: the worktree and branch are in `pusher`'s results. Look for:
+   - something a producer revised that grew with each revision instead of converging, such as a spec, with its word count at each commit (`git show <commit>:<path> | wc -w`);
+   - a commit whose diff doesn't match its message, such as a failing-test commit that changes production code (`git show --stat`);
+   - the PR's state and its review, through the read bindings in `docs/FORGE.md`.
 
    The run's records are under the Claude Code config directory, `$CLAUDE_CONFIG_DIR` or `~/.claude`, in `projects/<project root with every non-alphanumeric character replaced by ->/<session>/`. `subagents/workflows/<run id>/journal.jsonl` holds each dispatch and its result. `agent-<id>.jsonl` holds that agent's whole transcript, with its brief first, and `agent-<id>.meta.json` holds its type. Read the journal and the transcripts of the agents concerned, and use the `Explore` agent for a broad search across them.
 

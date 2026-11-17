@@ -585,20 +585,38 @@ async function tryFix(l: Loop, c: Change, cycle: CycleTest, lastFailure: string,
   l.manualActions.push(...fix.manualActions);
   l.changedThisRound.push(...fix.changed);
   // What the coder changed is committed even when it also reports a problem, so no later change builds on it uncommitted.
-  const committed =
-    fix.changed.length === 0 || (await commit(l, fix.changed, `implement ${c.id}`, coderRepair(l, c))) !== null;
+  const sha = fix.changed.length === 0 ? "" : await commit(l, fix.changed, `implement ${c.id}`, coderRepair(l, c));
   if (fix.specProblem) return specStopped(l, c, fix.specProblem);
   if (fix.testProblem) return { reason: fix.testProblem, rewriteTest: true };
   // A rejected commit is already an open problem, and qa can't judge what isn't committed.
-  if (!committed) return DONE;
+  if (sha === null) return DONE;
   const failing = await failingChecks(l);
   if (failing) return { reason: failing, rewriteTest: false };
   // A small flow's qa runs once, on its first change; a review fix there has only the checks.
   if (l.small && l.round > 0) return { reason: "", rewriteTest: false };
   const verdict = await qaOf(l, c, cycle);
-  if (verdict.verdict === "pass") return { reason: "", rewriteTest: false };
-  const reason = verdict.findings.map((f) => `${f.location}: ${f.problem}`).join("\n") || verdict.limits;
-  return { reason, rewriteTest: verdict.testAtFault };
+  if (verdict.verdict !== "pass") {
+    const reason = verdict.findings.map((f) => `${f.location}: ${f.problem}`).join("\n") || verdict.limits;
+    return { reason, rewriteTest: verdict.testAtFault };
+  }
+  return { reason: await unneeded(l, c, cycle, sha), rewriteTest: false };
+}
+
+// Once qa passes, a fresh simplifier looks for code the change adds but doesn't need; what it finds goes back to the coder.
+async function unneeded(l: Loop, c: Change, cycle: CycleTest, fixCommit: string): Promise<string> {
+  const base = cycle.commit || fixCommit;
+  const diff = base ? `the diff from the parent of ${base} to HEAD` : "the change's uncommitted diff";
+  const v = must(
+    await dispatch(
+      `${changeBrief(l, c)}\n\nJudge ${diff}, in the worktree ${worktreeOf(l)}, for code it adds but doesn't need.${cycle.paths.length > 0 ? ` Its test is in:\n${list(cycle.paths)}` : ""}`,
+      { agentType: "slopify:simplifier", label: `${c.id}: simplify`, phase: "Build", schema: LENS_SCHEMA },
+    ),
+    "build",
+    `A simplifier verdict on ${c.id}.`,
+  );
+  return defectsOf(v)
+    .map((f) => `${f.location}: ${f.problem}`)
+    .join("\n");
 }
 
 // Test, fix, validate. Returns what's still wrong after the last try, or an empty string.

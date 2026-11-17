@@ -38,6 +38,7 @@ const HOW_ADVISORS = [
   "advisor-risk",
   "advisor-security",
   "advisor-testability",
+  "advisor-simplify",
 ] as const;
 
 const CONTEXT_SCHEMA = {

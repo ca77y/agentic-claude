@@ -1070,17 +1070,35 @@ async function tryFix(l, c, cycle, lastFailure, attempt) {
   l.assumptions.push(...fix.assumptions);
   l.manualActions.push(...fix.manualActions);
   l.changedThisRound.push(...fix.changed);
-  const committed = fix.changed.length === 0 || await commit(l, fix.changed, `implement ${c.id}`, coderRepair(l, c)) !== null;
+  const sha = fix.changed.length === 0 ? "" : await commit(l, fix.changed, `implement ${c.id}`, coderRepair(l, c));
   if (fix.specProblem) return specStopped(l, c, fix.specProblem);
   if (fix.testProblem) return { reason: fix.testProblem, rewriteTest: true };
-  if (!committed) return DONE;
+  if (sha === null) return DONE;
   const failing = await failingChecks(l);
   if (failing) return { reason: failing, rewriteTest: false };
   if (l.small && l.round > 0) return { reason: "", rewriteTest: false };
   const verdict = await qaOf(l, c, cycle);
-  if (verdict.verdict === "pass") return { reason: "", rewriteTest: false };
-  const reason = verdict.findings.map((f) => `${f.location}: ${f.problem}`).join("\n") || verdict.limits;
-  return { reason, rewriteTest: verdict.testAtFault };
+  if (verdict.verdict !== "pass") {
+    const reason = verdict.findings.map((f) => `${f.location}: ${f.problem}`).join("\n") || verdict.limits;
+    return { reason, rewriteTest: verdict.testAtFault };
+  }
+  return { reason: await unneeded(l, c, cycle, sha), rewriteTest: false };
+}
+async function unneeded(l, c, cycle, fixCommit) {
+  const base = cycle.commit || fixCommit;
+  const diff = base ? `the diff from the parent of ${base} to HEAD` : "the change's uncommitted diff";
+  const v = must(
+    await dispatch(
+      `${changeBrief(l, c)}
+
+Judge ${diff}, in the worktree ${worktreeOf(l)}, for code it adds but doesn't need.${cycle.paths.length > 0 ? ` Its test is in:
+${list(cycle.paths)}` : ""}`,
+      { agentType: "slopify:simplifier", label: `${c.id}: simplify`, phase: "Build", schema: LENS_SCHEMA }
+    ),
+    "build",
+    `A simplifier verdict on ${c.id}.`
+  );
+  return defectsOf(v).map((f) => `${f.location}: ${f.problem}`).join("\n");
 }
 async function runChange(l, c) {
   let test = await writeTest(l, c, "");

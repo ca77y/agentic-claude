@@ -443,6 +443,7 @@ const SMALL_AGENTS: Record<string, Script> = {
       : { changed: ["calc.py"], ran: [], testProblem: "", specProblem: "", assumptions: [], manualActions: [] },
   checks: () => ({ commands: [{ command: "unit", exitCode: 0, failingLines: "" }] }),
   qa: () => ({ ...LENS_PASS, testAtFault: false }),
+  simplifier: () => LENS_PASS,
   validator: () => ({
     results: [{ id: "change", result: "pass", ran: "steps", evidence: ["out.txt"], detail: "", setting: "draft" }],
     uncategorizedSetting: "draft",

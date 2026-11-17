@@ -1,5 +1,15 @@
 import { dispatch } from "../lib/dispatch.ts";
-import { STRINGS, advise, defectsOf, lens, scout, slugged, type ScoutResult } from "../lib/family.ts";
+import {
+  LENS_SCHEMA,
+  STRINGS,
+  advise,
+  defectsOf,
+  lens,
+  scout,
+  slugged,
+  type LensResult,
+  type ScoutResult,
+} from "../lib/family.ts";
 import { callPusher, createDeliver, list, opRef, show, slugOf, type Stopped } from "../lib/deliver.ts";
 import { inputOf, textOf, type NotStarted } from "../lib/input.ts";
 import { must, pushed, stopOf, type Run } from "../lib/loop.ts";
@@ -195,14 +205,35 @@ async function write(d: Run, c: Card, task: string, label: string, phaseTitle: s
   return w.openQuestions;
 }
 
+// Every lens asks what a draft is missing, so one advisor asks what it could lose, and its findings go to the judge too.
+const SIMPLIFY = "advisor-simplify";
+async function simplify(d: Run, c: Card): Promise<Problem[]> {
+  const v = await dispatch(
+    `${d.WHERE}\nThe card draft is ${c.draft}, a ${c.kind}. Report what it could remove, merge, or narrow and still deliver its outcome.\n\n${subject(c)}`,
+    { agentType: `slopify:${SIMPLIFY}`, label: "simplify the draft", phase: "Check", schema: LENS_SCHEMA },
+  );
+  return defectsOf(must(v, "check", `A view from ${SIMPLIFY}.`)).map((f) => ({
+    source: SIMPLIFY,
+    location: f.location,
+    text: f.problem,
+  }));
+}
+
 async function checkDraft(d: Run, c: Card): Promise<Problem[]> {
   const { lenses } = KINDS[c.kind];
-  const verdicts = await parallel(
-    lenses.map(
-      (name) => () =>
-        lens(name, `${d.WHERE}\nThe card draft is ${c.draft}, a ${c.kind}.`, { label: name, phase: "Check" }),
+  const [verdicts, simpler] = await Promise.all([
+    parallel(
+      lenses.map(
+        (name) => () =>
+          lens(name, `${d.WHERE}\nThe card draft is ${c.draft}, a ${c.kind}.`, { label: name, phase: "Check" }),
+      ),
     ),
-  );
+    simplify(d, c),
+  ]);
+  return [...simpler, ...checkFindings(c, lenses, verdicts)];
+}
+
+function checkFindings(c: Card, lenses: readonly string[], verdicts: readonly (LensResult | null)[]): Problem[] {
   return lenses.flatMap((name, i) => {
     const v = must(verdicts[i], "check", `A verdict from ${name}.`);
     const found = defectsOf(v).map((f) => ({ source: name, location: f.location, text: f.problem }));
@@ -217,7 +248,7 @@ async function checkDraft(d: Run, c: Card): Promise<Problem[]> {
 const rule = (d: Run, c: Card, problems: readonly Problem[]): Promise<string[]> =>
   confirmedProblems(
     problems,
-    `${d.WHERE}\nThe checks reported problems in the card draft ${c.draft}, a ${c.kind}; check them against the draft and the card template. blocker: a delivery can't take the card as it is. major: a real flaw that should be fixed before filing. minor: real but low impact.`,
+    `${d.WHERE}\nThe checks reported problems in the card draft ${c.draft}, a ${c.kind}; check them against the draft and the card template. A finding from ${SIMPLIFY} holds when the card still delivers its outcome without what it names. blocker: a delivery can't take the card as it is. major: a real flaw that should be fixed before filing. minor: real but low impact.`,
     "Check",
   );
 
@@ -240,7 +271,7 @@ async function refine(d: Run, c: Card, firstOpen: readonly string[]): Promise<st
         : await write(
             d,
             c,
-            `Revise the draft to fix these problems:\n${list(confirmed)}`,
+            `Revise the draft to fix these problems. Prefer removing text to adding it, and remove what a problem names as extra:\n${list(confirmed)}`,
             `revise ${String(revisions + 1)}`,
             "Check",
           );

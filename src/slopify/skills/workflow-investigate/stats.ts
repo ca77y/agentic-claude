@@ -193,7 +193,49 @@ function slowFlags(stats: readonly AgentStats[]): string[] {
   });
 }
 
-const verdictOf = (s: AgentStats): unknown => (isRecord(s.agent.result) ? s.agent.result["verdict"] : undefined);
+// A judge returns one ruling per problem under rulings; an older one returned a single verdict.
+function rulingsOf(s: AgentStats): Record<string, unknown>[] {
+  const r = s.agent.result;
+  if (s.agent.type !== "judge" || !isRecord(r)) return [];
+  const rulings: unknown = r["rulings"];
+  if (!Array.isArray(rulings)) return r["verdict"] === undefined ? [] : [r];
+  const list: readonly unknown[] = rulings;
+  return list.filter((x) => isRecord(x));
+}
+// A confirmed finding at one of these severities is routed to a suggestion, so nothing fixes it.
+const UNFIXED = new Set(["minor", "nit", "none"]);
+// Too few rulings say nothing about how a judge rates.
+const MIN_RULINGS = 3;
+
+function rulingFlags(stats: readonly AgentStats[]): string[] {
+  const rulings = stats.flatMap((s) => rulingsOf(s));
+  const dismissed = rulings.filter((r) => r["verdict"] === "dismissed");
+  const confirmed = rulings.filter((r) => r["verdict"] === "confirmed");
+  const unfixed = confirmed.filter((r) => UNFIXED.has(String(r["severity"])));
+  const out: string[] = [];
+  if (rulings.length > 0 && dismissed.length * 2 > rulings.length) {
+    out.push(`${String(dismissed.length)} of ${String(rulings.length)} judge rulings were dismissals.`);
+  }
+  if (confirmed.length >= MIN_RULINGS && unfixed.length * 2 > confirmed.length) {
+    out.push(
+      `${String(unfixed.length)} of ${String(confirmed.length)} confirmed findings were ruled minor or below, so nothing fixed them.`,
+    );
+  }
+  return out;
+}
+
+// A review that skipped the change, failed, or timed out reviewed nothing.
+const UNREVIEWED = new Set(["skipped", "failed", "timed-out"]);
+function reviewFlags(stats: readonly AgentStats[]): string[] {
+  return stats
+    .filter((s) => s.agent.type === "watcher")
+    .map((s) => ({ s, r: isRecord(s.agent.result) ? s.agent.result : {} }))
+    .filter(({ r }) => UNREVIEWED.has(String(r["outcome"])))
+    .map(({ s, r }) => {
+      const why = typeof r["reference"] === "string" ? `: ${r["reference"]}` : ".";
+      return `${name(s)} reported the review ${String(r["outcome"])}${why}`;
+    });
+}
 
 /** What stands out, each with the agents it concerns. These are leads for the investigation, not conclusions. */
 export function flags(run: RunData, stats: readonly AgentStats[]): string[] {
@@ -207,11 +249,7 @@ export function flags(run: RunData, stats: readonly AgentStats[]): string[] {
   for (const [label, group] of byName) {
     if (group.length > 1) out.push(`${label} ran ${String(group.length)} times.`);
   }
-  const judges = stats.filter((s) => s.agent.type === "judge" && verdictOf(s) !== undefined);
-  const dismissed = judges.filter((s) => verdictOf(s) === "dismissed");
-  if (judges.length > 0 && dismissed.length * 2 > judges.length) {
-    out.push(`${String(dismissed.length)} of ${String(judges.length)} judge rulings were dismissals.`);
-  }
+  out.push(...rulingFlags(stats), ...reviewFlags(stats));
   return out;
 }
 

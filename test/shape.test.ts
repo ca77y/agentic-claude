@@ -24,6 +24,7 @@ const DEFAULTS: Record<string, Script> = {
   "writer-card": () => ({ openQuestions: [] }),
   judge: () => CONFIRMED,
   pusher: () => FILED,
+  "advisor-simplify": (_t, label) => (label === "simplify the draft" ? PASS : VIEW),
 };
 const happy = (over: Partial<Record<string, Script>> = {}): Script => {
   const agents = { ...DEFAULTS, ...over };
@@ -62,6 +63,7 @@ describe("shape", () => {
       calls.filter((c) => c.type.startsWith("lens-")).map((c) => c.type),
       ["lens-template", "lens-criteria", "lens-solution-free"],
     );
+    assert.equal(count("advisor-simplify", "simplify the draft"), 1);
     assert.ok(filing().includes("has the label Deliverable"));
     assert.ok(filing().includes("create a card only when there is none"));
   });
@@ -76,7 +78,7 @@ describe("shape", () => {
   test("shapes a bug with the fit advisor and the template check only, and never labels it", async () => {
     const r = await run({ idea: "add returns the difference", kind: "bug" }, happy());
     assert.ok("deliverable" in r && !r.deliverable);
-    assert.equal(calls.filter((c) => c.type.startsWith("advisor-")).length, 1);
+    assert.equal(calls.filter((c) => c.type.startsWith("advisor-") && c.label !== "simplify the draft").length, 1);
     assert.equal(count("advisor-fit"), 1);
     assert.deepEqual(
       calls.filter((c) => c.type.startsWith("lens-")).map((c) => c.type),
@@ -88,7 +90,7 @@ describe("shape", () => {
   test("shapes a spike with the scope advisor", async () => {
     await run({ idea: "Is the parser fast enough?", kind: "spike" }, happy());
     assert.equal(count("advisor-scope"), 1);
-    assert.equal(calls.filter((c) => c.type.startsWith("advisor-")).length, 1);
+    assert.equal(calls.filter((c) => c.type.startsWith("advisor-") && c.label !== "simplify the draft").length, 1);
     assert.ok(calls.find((c) => c.type === "writer-card")?.prompt.includes("a spike"));
   });
 

@@ -32,7 +32,7 @@ A delivery ends in a PR unless one of the halt conditions below holds. Anything 
  │                    SPEC       writer-spec (opus) writes the spec folder → pusher commits it
  │   ▲  ≤3 revisions  CHALLENGE  check-claim × N, check-criterion × N (haiku),
  │   │                           lens-scope, lens-consistency (sonnet), lens-altitude (haiku)
- │   │                           the 5 advisors, fresh, try to break the spec: blocker or major only
+ │   │                           the 6 advisors, fresh, try to break the spec: blocker or major only
  │   │                           later rounds: only failed or changed checks; an advisor checks the
  │   │                           revision only for its own findings; a criteria conflict → a decision
  │   └── problems →              judge × 1 (opus) rules on the checks' findings → writer-spec revises  ⛔ H3
@@ -45,6 +45,7 @@ A delivery ends in a PR unless one of the halt conditions below holds. Anything 
  │  │                  │ coder (opus) writes a failing test → commit   │
  │  │                  │ coder (opus) makes it pass → commit           │
  │  │                  │ qa (sonnet) checks the change and its history │
+ │  │                  │ simplifier (opus) finds code it doesn't need  │
  │  │                  │   fail → back to coder                        │
  │  │                  └───────────────────────────────────────────────┘
  │  │                  then writer-docs (sonnet) updates the listed docs against that code → commit
@@ -86,7 +87,7 @@ The issue says why and what. This stage decides how, and it deserves more time a
 
 1. **Ground.** The scouts and `library-reader` return file and line pointers, existing symbols, tests, documentation claims, history, and earlier research.
 2. **Design.** Three independent `designer` dispatches each produce a full approach, and none sees the others. The script gives each a fixed stance: the smallest change that fits the existing patterns, the best long-term structure, and the most robust under failure. Each reads the project's full architecture and design documents, and marks what it reuses and what it creates. Each design lists the outside libraries and services it relies on, never the project's own code or tools, and marks what is new: a dependency the project doesn't use yet, or a part of it the project doesn't use yet. `scout-upstream-docs` and `scout-known-issues` then run once for each new dependency, by name, whichever designs name it.
-3. **Advise.** Five advisors each compare all three designs from one angle: `advisor-architecture`, `advisor-performance`, `advisor-risk`, `advisor-security`, and `advisor-testability`. The last asks whether each criterion can be proved through its `TESTING.md` validation path. Each claim cites the code, and each concern says what would fix it.
+3. **Advise.** Six advisors each compare all three designs from one angle: `advisor-architecture`, `advisor-performance`, `advisor-risk`, `advisor-security`, `advisor-testability`, and `advisor-simplify`. `advisor-testability` asks whether each criterion can be proved through its `TESTING.md` validation path. `advisor-simplify` asks only what each design could remove, merge, or narrow and still deliver, since every other angle asks what is missing. Each claim cites the code, and each concern says what would fix it.
 4. **Decide.** One `judge` picks a design, grafts in the best of the others, and records what was rejected and why. If it rules no design viable, Design runs again with its reasons, at most once more. If none survives that, the run halts.
 5. **Spec.** `writer-spec` writes the [spec folder](#the-spec), and `pusher` commits it before any code exists.
 6. **Challenge.** At most three revisions, each checked by the next round:
@@ -94,7 +95,7 @@ The issue says why and what. This stage decides how, and it deserves more time a
    - One `check-criterion` per criterion checks that its category matches what `TESTING.md` says that category covers, and that the category's path can check it.
    - `lens-scope` checks that the spec adds and drops no scope. `lens-consistency` checks it against the project's rules and documents. `lens-altitude` (haiku) checks that the spec stops above the code and keeps to its size budget: no constant, pattern, string, or step-by-step logic inside one task, no task over 300 words, and `shared` within 600.
    - How a task is implemented inside its own files is its coder's decision, so a finding that only asks for more precision there is out of scope for every advisor, lens, and the judge, and a revision fixes problems by removing detail rather than adding it.
-   - The same five advisors, in fresh dispatches, try to break the finished spec. Each reports only a `blocker` or a `major`, with its evidence, because nothing acts on a minor problem. Their findings need no judge.
+   - The same six advisors, in fresh dispatches, try to break the finished spec. Each reports only a `blocker` or a `major`, with its evidence, because nothing acts on a minor problem. Their findings need no judge.
    - One `judge` rules on all the checks' and lenses' findings of the round together. It merges findings that report the same problem, leaves out what an advisor already reported, and returns each problem that holds as a `blocker` or a `major`.
    - Each problem is of kind `spec`, which a revision can fix, or kind `decision`, when the issue's own criteria conflict or can be read more than one way, so only a person can settle what they mean.
    - `writer-spec` revises for every `spec` problem, and records each one and its reason in `RATIONALE.md`. It never revises around a `decision` problem: it picks the most reasonable reading and records it as a decision with `affectsAcceptance` set, which reaches the person under **Needs confirmation**. Advisors and the judge don't report a recorded decision again, and a round whose only problems are decisions ends the challenge.
@@ -232,6 +233,8 @@ This is the inner loop. Every code change runs through it, from the first build 
    - The change stays within its criterion or problem.
 
    Any failed check is a `blocker` and goes back to step 2, or to step 1 when the test itself is at fault.
+
+4. **Simplify.** Once `qa` passes, a fresh `simplifier` (opus) reads the change's diff for code it adds but doesn't need: a helper or file used once, an option nothing exercises, handling for a case that can't happen, or a new mechanism where an existing one does the job. Each finding names what to remove, merge, or narrow, and goes back to step 2 like a failed `qa` check. `qa` judges whether the change is right; `simplifier` judges only whether it is bigger than it needs to be.
 
 ## Halt conditions
 
