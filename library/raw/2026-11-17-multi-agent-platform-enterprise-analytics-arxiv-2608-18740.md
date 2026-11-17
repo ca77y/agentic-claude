@@ -43,7 +43,7 @@ updated: 2026-11-17
 
 ## Limitations
 
-- Partly uncontrolled: the baseline lacks the input validation layer and its prompt was not reported as tuned like the agent prompts, so the gap mixes architecture, validation and prompt effort. ^e2 ^e3
+- Partly uncontrolled: the baseline lacks the input validation layer and its prompt was not reported as tuned like the agent prompts, so the gap mixes architecture, validation and prompt effort (^e2, ^e3).
 - Author-built system compared against an author-built baseline.
 - No significance test on multi-agent vs single-agent was reported in the text read; sample is 300 cases with one run each as far as the read sections show.
 - Authors' stated limits: one production domain, human review of only 100 of 260 responses, four LLMs only, sequential design adds latency.
