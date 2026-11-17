@@ -210,7 +210,7 @@ Each `pusher` dispatch that writes the ledger also appends the progress entries 
 #### How the run exits
 
 - **Clean:** `pusher` marks the PR ready, moves the issue to In Review, and comments with each item that needs a person.
-- **Not clean:** `pusher` converts the PR to a draft, and the description's **Needs you** and **Not done** list everything keeping it one. The issue gets a comment with each of them in full. The run returns `draft` with the decision ids. A rerun with `answers` resumes at the next outer round.
+- **Not clean:** `pusher` converts the PR to a draft, and the description's **Needs you** and **Not done** list everything keeping it one. The issue gets a comment with each Needs-you item, each follow-up card not confirmed filed, and the text of each reason the PR is a draft; the comment leaves out the Not-done items. The run returns `draft` with the decision ids. A rerun with `answers` resumes at the next outer round.
 
 ## Test first
 

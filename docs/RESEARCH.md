@@ -38,12 +38,12 @@ How `research` answers a question from new sources and adds the answer to the pr
 - **The answer is a wiki page.** The main question is answered in one or more wiki pages. Raw notes hold what was retrieved, one per source, as the library's conventions say. The PR description names the pages.
 - **The plan lives for the run only.** It sits in the worktree's ignored `.tmp/` and is never committed. It isn't a spec: specs are the how of a delivery.
 - **No replanning.** A researcher who finds the plan wrong reports it, and it becomes a limit the answer states. A sub-question nothing could be found for is a limit too, never a guess.
-- **Nothing stops for a judgment call.** What the plan's checks or the final checks leave open is stated in the pages or listed in the PR description as not done.
+- **Nothing stops for a judgment call.** What the plan's checks or the final checks leave open is stated in the pages or listed in the PR description: a decision or confirmation under Needs you, and an unverified or open problem under Not done.
 - **The loop is the delivery loop's document mode,** extended to several files: every problem, whatever its kind, goes to `library-scribe`, because the library pages are all the PR changes.
 
 ## The PR description
 
-`writer-pr` writes it and `lens-pr` checks it as in [`deliver/STORY.md`](deliver/STORY.md#the-pr-description): four parts, **What changes**, **Needs you**, **Why trust it**, and **Not done**, rewritten whole in every round that opens or updates the PR. Here **What changes** opens with the question and a short answer linking the main page. **Why trust it** rests on the citations checked and the source count. There is no `Spec:` line.
+`writer-pr` writes it and `lens-pr` checks it as in [`deliver/STORY.md`](deliver/STORY.md#the-pr-description): four parts, **What changes**, **Needs you**, **Why trust it**, and **Not done**, rewritten whole in every round that opens or updates the PR. Here **What changes** opens with the question and a short answer linking the pages the run added. **Why trust it** rests on the citations checked and the source count. There is no `Spec:` line.
 
 ## Halt conditions
 

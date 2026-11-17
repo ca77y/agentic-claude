@@ -30,13 +30,13 @@ Never link validator evidence.
 
 ## Per kind
 
-| Kind     | **What changes** opens with                           | **Why trust it** rests on                                     |
-| -------- | ----------------------------------------------------- | ------------------------------------------------------------- |
-| story    | the card's outcome                                    | the criterion results                                         |
-| trivial  | one sentence saying what changed                      | the test and the app run                                      |
-| bugfix   | the bug, before and after                             | the reproduction, failing before the fix and passing after it |
-| spike    | the question and its answer, recommending nothing     | the claims checked, and the unknowns                          |
-| research | the question and a short answer linking the main page | the citations checked, and the source count                   |
+| Kind     | **What changes** opens with                                     | **Why trust it** rests on                                     |
+| -------- | --------------------------------------------------------------- | ------------------------------------------------------------- |
+| story    | the card's outcome                                              | the criterion results                                         |
+| trivial  | one sentence saying what changed                                | the test and the app run                                      |
+| bugfix   | the bug, before and after                                       | the reproduction, failing before the fix and passing after it |
+| spike    | the question and its answer, recommending nothing               | the claims checked, and the unknowns                          |
+| research | the question and a short answer linking the pages the run added | the citations checked, and the source count                   |
 
 A story's **What changes** also holds its spec folder exactly once, on a line of the form `Spec: <folder>`: plain text, no backticks, the folder relative to the repository root.
 

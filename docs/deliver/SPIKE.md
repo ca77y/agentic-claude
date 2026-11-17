@@ -7,7 +7,7 @@ How `deliver-spike` answers a bounded technical question with a findings documen
 ```text
  /slopify:deliver-spike SMR-20     or a plain prompt
  │
- 1 READ ──────── scout-card (haiku) reads the issue
+ 1 READ ──────── scout-card (haiku) reads the issue, scout-checkpoint (haiku) the run state ⛔ H5
  │               a prompt gets a new spike card from pusher, so every spike is on the board  ⛔ H1
  2 WORKSPACE ─── pusher (sonnet) creates and prepares the worktree, starts the issue
  3 GROUND ────── in parallel: library-reader, scout-code, scout-feasibility,
@@ -66,3 +66,4 @@ One file, `docs/spikes/<id>-<slug>.md`, named like a spec folder. Unlike a spec 
 | H2  | The push is denied, or PR creation fails                                                                  | Push     | `blocked`; the document stays committed on the local branch |
 | H3  | Infrastructure: a stop signal, a required tool denied, or a budget, usage, or agent limit reached         | Any      | `blocked`, with the state reported on the issue             |
 | H4  | `writer-pr` returns no description in any attempt of a stage                                              | Push     | `blocked`; the document stays committed on the local branch |
+| H5  | On a rerun, a checkpoint item the scout returned for a ledger key isn't a ledger line                     | Read     | `blocked`, naming the key                                   |
