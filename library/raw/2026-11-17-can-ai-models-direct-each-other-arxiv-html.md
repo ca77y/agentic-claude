@@ -1,7 +1,7 @@
 ---
 title: Can AI Models Direct Each Other? HTML full text
 type: raw
-summary: Liu's SWE-bench Lite study (n=200) reports a strong-manager plus weak-worker pairing at 62% against 60% for the strong model alone, and a weak-to-weak manager loop 2 points below the weak agent alone; both gaps are inside the author's stated run-to-run swing, with no significance test.
+summary: Liu's SWE-bench Lite study (n=200) reports a strong-manager plus weak-worker pairing at 62% against 60% for the strong model alone, and a weak-to-weak manager loop 2 points below the weak agent alone at n=50, inside the author's stated run-to-run swing on small subsets; no significance test is reported.
 tags: [evaluation, agent-harness]
 aliases: [arXiv 2603.26458v1, Strong Direct vs ManagerWorker]
 source: https://arxiv.org/html/2603.26458v1
@@ -36,7 +36,7 @@ updated: 2026-11-17
 ## Limitations
 
 - Stated by the author: one benchmark (Python only), two model tiers only, cost given as estimated token counts, pipeline-specific artifacts, and non-determinism.
-- The 2-point ManagerWorker gap over Strong Direct and the 2-point Weak-to-Weak gap (n=50) are both inside the author's own stated 10 pp run-to-run swing on small subsets, and no significance test is reported.
+- The 2-point Weak-to-Weak gap (n=50) is inside the author's own stated 10 pp run-to-run swing on small subsets. The 2-point ManagerWorker gap over Strong Direct is on n=200, where the author states no swing. No significance test is reported for either.
 - Model is held fixed only in the Weak-to-Weak versus Weak Direct pair, which is n=50.
 - Figures were relayed by a researcher, not re-read by the scribe; the quotations are as reported.
 

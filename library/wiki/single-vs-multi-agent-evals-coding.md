@@ -117,7 +117,7 @@ These are published single-vs-orchestrated comparisons, but the design is confou
 
 - ManagerWorker (Sonnet 4.6 manager directing a GPT-5-mini worker) solved 62%, against 60% for Strong Direct (Sonnet 4.6 alone); Simple Loop (same pairing, review-only) 53%; Weak Direct 51%. [[library/raw/2026-11-17-can-ai-models-direct-each-other-arxiv-2603-26458#^e2]] [[library/raw/2026-11-17-can-ai-models-direct-each-other-arxiv-2603-26458#^e3]]
 - Estimated tokens: ManagerWorker about 6.6K strong-model tokens against about 30K for Strong Direct (the weak worker's tokens are separate). [[library/raw/2026-11-17-can-ai-models-direct-each-other-arxiv-2603-26458#^e5]]
-- The 2-point gain mixes models and is inside the author's stated 10-point swing on small subsets; no significance test, no latency. [[library/raw/2026-11-17-can-ai-models-direct-each-other-arxiv-2603-26458#^e9]] [[library/raw/2026-11-17-can-ai-models-direct-each-other-arxiv-2603-26458#^e10]]
+- The 2-point gain mixes models; no significance test, no latency. [[library/raw/2026-11-17-can-ai-models-direct-each-other-arxiv-2603-26458#^e9]] [[library/raw/2026-11-17-can-ai-models-direct-each-other-arxiv-2603-26458#^e10]]
 
 ### Anthropic docs, Optimizing for cost and intelligence: Eval A (subagents)
 

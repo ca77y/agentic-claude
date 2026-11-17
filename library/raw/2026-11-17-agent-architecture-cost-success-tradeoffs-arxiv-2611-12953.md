@@ -1,7 +1,7 @@
 ---
 title: Agent Architecture Cost-Success Trade-offs (arXiv:2611.12953)
 type: raw
-summary: A controlled evaluation of eight agent architectures on 13 enterprise SOPs with one model fixed; only orchestration-v2 significantly beat the single-agent baseline (75.6% vs 67.4%), at 4.7x tokens, on scoring cells the authors call provisional for orchestration.
+summary: A controlled evaluation of eight agent architectures on 13 enterprise SOPs with one model fixed; only orchestration-v2 significantly beat the single-agent baseline (75.6% vs 67.4%), at 4.7x tokens, on multi-field scoring cells the authors call provisional for orchestration.
 tags: [evaluation, architecture, performance]
 aliases: []
 source: https://arxiv.org/abs/2611.12953
@@ -86,4 +86,4 @@ updated: 2026-11-17
 
 - A published, controlled comparison of single-agent against multi-agent designs with the model, tasks and tool backend fixed, relevant to SMR-376. Its domain is enterprise SOPs with mock tools, not coding or software delivery. (inference; the paper reports no coding results)
 - The quantified cost side (1.4-4.7x tokens, 2.6-5.8x latency, pooled) is confirmed from the paper itself rather than from a secondary source (see ^e5).
-- The single significant gain (Orch-v2, ^e6) came after an implementation fix to a design gap (^e7), and the v1-to-v2 contrast rests on scoring cells the authors call provisional (see Limitations). Treat it as one-model, one-benchmark evidence.
+- The single significant gain (Orch-v2, ^e6) came after an implementation fix to a design gap (^e7), and the v1-to-v2 contrast rests on multi-field scoring cells the authors call provisional for orchestration (see Limitations). Treat it as one-model, one-benchmark evidence.
