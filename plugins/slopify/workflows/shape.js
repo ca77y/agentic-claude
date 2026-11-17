@@ -182,6 +182,31 @@ function blocked(workflow, step, needs, extra = {}) {
 
 // src/slopify/lib/rules.ts
 var MAX_FIX_ROUNDS = 3;
+var STAMP = String.raw`\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z`;
+var LEAKS = [
+  [[/(?<![\w.:/~-])~?\/[\w.-]+\//], "It holds an absolute path; name files relative to the repo root."],
+  [[/\.tmp\//], "It refers to .tmp/, which is never committed; link nothing under it."],
+  [[new RegExp(String.raw`${STAMP}\s+\S`)], "It holds a ledger line; describe the current state instead."],
+  [
+    [
+      /\bgh[pousr]_\w{30,}/,
+      /\bgithub_pat_\w{20,}/,
+      /\bsk-[\w-]{20,}/,
+      /\bAKIA[0-9A-Z]{16}\b/,
+      /\bxox[abprs]-[\w-]{10,}/,
+      /\blin_api_\w{20,}/,
+      /-----BEGIN [A-Z ]*PRIVATE KEY-----/
+    ],
+    "It holds credential-shaped text; remove the secret."
+  ]
+];
+var CHECKPOINT_FORMS = {
+  "done-board-start": String.raw`done board-start\b`,
+  "done-round": String.raw`done round \d+\b`,
+  "done-findings": String.raw`done findings \S`,
+  reproduced: String.raw`reproduced \{`,
+  "review-fired": String.raw`review \d+ fired\b`
+};
 
 // src/slopify/lib/schemas.ts
 function described(schema, description) {

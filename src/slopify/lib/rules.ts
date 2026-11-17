@@ -225,20 +225,137 @@ export interface PrState {
   open: readonly Listed[];
 }
 
-// Stubs: the tests in test/rules.test.ts pin what each must do.
-export const renderState: (s: PrState) => string = () => "";
+// What writer-pr is told about the run's current state, rendered as evidence for it, not as the PR description.
+export function renderState(s: PrState): string {
+  return [section("Criterion results", criteriaTable(s.criteria)), section("Open items", items(s.open))]
+    .filter(Boolean)
+    .join("\n\n");
+}
 
-export const checkDescription: (
+const PARTS = ["What changes", "Needs you", "Why trust it", "Not done"];
+const MAX_DESCRIPTION = 4000;
+const STAMP = String.raw`\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z`;
+
+const LEAKS: readonly [readonly RegExp[], string][] = [
+  [[/(?<![\w.:/~-])~?\/[\w.-]+\//], "It holds an absolute path; name files relative to the repo root."],
+  [[/\.tmp\//], "It refers to .tmp/, which is never committed; link nothing under it."],
+  [[new RegExp(String.raw`${STAMP}\s+\S`)], "It holds a ledger line; describe the current state instead."],
+  [
+    [
+      /\bgh[pousr]_\w{30,}/,
+      /\bgithub_pat_\w{20,}/,
+      /\bsk-[\w-]{20,}/,
+      /\bAKIA[0-9A-Z]{16}\b/,
+      /\bxox[abprs]-[\w-]{10,}/,
+      /\blin_api_\w{20,}/,
+      /-----BEGIN [A-Z ]*PRIVATE KEY-----/,
+    ],
+    "It holds credential-shaped text; remove the secret.",
+  ],
+];
+
+interface Part {
+  title: string;
+  level: number;
+  lines: string[];
+}
+
+// Splits the body at its headings, skipping fenced code; the text before the first heading has an empty title.
+function partsOf(body: string): Part[] {
+  const out: Part[] = [{ title: "", level: 0, lines: [] }];
+  let fenced = false;
+  for (const line of body.split("\n")) {
+    if (/^ {0,3}(?:```|~~~)/.test(line)) fenced = !fenced;
+    const h = fenced ? null : /^ {0,3}(#{1,6})(?:\s(.*))?$/.exec(line);
+    if (h) out.push({ title: h[2]?.trim() ?? "", level: h[1]?.length ?? 0, lines: [] });
+    else out.at(-1)?.lines.push(line);
+  }
+  return out;
+}
+
+const isPart = (p: Part): boolean => p.level === 2 && PARTS.includes(p.title);
+const content = (p: Part): string[] => p.lines.map((l) => l.trim()).filter(Boolean);
+
+function specProblem(parts: readonly Part[], specDir: string): string[] {
+  const changes = parts.find((p) => p.title === "What changes");
+  const specLines = parts.flatMap((p) =>
+    content(p)
+      .filter((l) => l.startsWith("Spec:"))
+      .map((l) => ({ p, l })),
+  );
+  const [only] = specLines;
+  const want = `Spec: ${specDir}`;
+  if (!only) return [`What changes has no Spec line; add \`${want}\`.`];
+  if (specLines.length > 1) return ["The Spec line is given more than once; keep one in What changes."];
+  if (only.p !== changes) return ["The Spec line sits outside What changes; move it there."];
+  if (only.l !== want) return [`The Spec line must read \`${want}\`, plain and repo-relative.`];
+  return content(changes)[0] === want ? ["What changes opens with the Spec line; open with the card's outcome."] : [];
+}
+
+// The mechanical part of the PR description format in references/pr-description.md: one plain problem per broken rule.
+export function checkDescription(
   body: string,
   ctx: { kind: DeliveryKind; specDir: string },
-) => { leak: string[]; format: string[] } = () => ({ leak: [], format: [] });
+): { leak: string[]; format: string[] } {
+  const leak = LEAKS.filter(([res]) => res.some((re) => re.test(body))).map(([, problem]) => problem);
+  const [before, ...headed] = partsOf(body);
+  const format: string[] = [];
+  if (body.length > MAX_DESCRIPTION) {
+    format.push(
+      `It is ${String(body.length)} characters, over ${String(MAX_DESCRIPTION)}; group lines and link the rest.`,
+    );
+  }
+  if (before && content(before).length > 0) format.push("Text comes before What changes; start with that heading.");
+  if (headed.some((p) => !isPart(p))) {
+    format.push(`It has a heading other than the level-2 ${PARTS.join(", ")}.`);
+  }
+  const known = headed.filter((p) => isPart(p));
+  const order = known.map((p) => PARTS.indexOf(p.title));
+  if (new Set(order).size < order.length) format.push("A part is given more than once.");
+  else if (order.some((n, i) => i > 0 && n < (order[i - 1] ?? 0)))
+    format.push(`The parts are not in the order ${PARTS.join(", ")}.`);
+  for (const required of ["What changes", "Why trust it"]) {
+    if (known.every((p) => p.title !== required)) format.push(`It has no ${required} part.`);
+  }
+  const empty = known.filter((p) => content(p).length === 0).map((p) => p.title);
+  if (empty.length > 0) format.push(`${empty.join(", ")} has no content; leave out a part with nothing to say.`);
+  if (ctx.kind === "story") format.push(...specProblem(headed, ctx.specDir));
+  return { leak, format };
+}
 
-export const progressLine: (
+const MAX_PROGRESS = 2000;
+
+// One progress entry for the ledger, on one line and with no angle bracket, so pusher can't take it for a placeholder.
+export function progressLine(
   round: number,
   kind: "finding" | "ruling" | "tried" | "changed",
-  items: readonly string[],
-) => string = () => "";
+  entries: readonly string[],
+): string {
+  const text = entries.map((e) => e.replaceAll(/[<>]/g, "").replaceAll(/\s+/g, " ").trim()).join("; ");
+  const line = `progress ${String(round)} ${kind}: ${text}`;
+  return line.length > MAX_PROGRESS ? `${line.slice(0, MAX_PROGRESS - 3)}...` : line;
+}
 
 export type CheckpointKey = "done-board-start" | "done-round" | "done-findings" | "reproduced" | "review-fired";
 
-export const checkpointLine: (key: CheckpointKey, value: string) => string = () => "";
+const CHECKPOINT_FORMS: Record<CheckpointKey, string> = {
+  "done-board-start": String.raw`done board-start\b`,
+  "done-round": String.raw`done round \d+\b`,
+  "done-findings": String.raw`done findings \S`,
+  reproduced: String.raw`reproduced \{`,
+  "review-fired": String.raw`review \d+ fired\b`,
+};
+
+// The ledger line a scout returned for a checkpoint key, with the wrappers a scout may add removed, or '' when it isn't
+// one: the key's form must follow pusher's timestamp directly, so a progress entry or run line quoting it never counts.
+export function checkpointLine(key: CheckpointKey, value: string): string {
+  const line = value
+    .trim()
+    .replace(/^```[^\n]*\n([\s\S]*?)\n?```$/, "$1")
+    .trim()
+    .replace(/^[-*]\s+/, "")
+    .replace(/^(["`])(.*)\1$/s, "$2")
+    .trim();
+  const re = new RegExp(`^${STAMP} ${CHECKPOINT_FORMS[key]}.*$`);
+  return re.test(line) ? line : "";
+}
