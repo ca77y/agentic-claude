@@ -74,6 +74,16 @@ const CLERK_SCHEMA = {
   },
 } as const;
 
+// An evidence check also names the raw notes the page cites, one per source, so a resumed run can count its sources.
+const EVIDENCE_SCHEMA = {
+  ...CLERK_SCHEMA,
+  required: [...CLERK_SCHEMA.required, "notes"],
+  properties: {
+    ...CLERK_SCHEMA.properties,
+    notes: { ...STRINGS, description: "Each raw note the page cites, relative to the worktree root" },
+  },
+} as const;
+
 const RESEARCH_SCHEMA = {
   type: "object",
   required: ["findings", "sources", "contradictions", "limits", "planProblem"],
@@ -135,6 +145,8 @@ interface Ctx {
   worktree: string;
   /** The distinct sources this run retrieved; null when the pages were already committed. */
   sources: number | null;
+  /** The raw notes the evidence checks found the pages citing, one per source. */
+  notes: Set<string>;
   /** Each final check's latest verdict, by its label. */
   verdicts: Map<string, string>;
 }
@@ -317,11 +329,13 @@ async function checkLibrary(c: Ctx, pages: readonly string[]): Promise<Problem[]
   const checks = [
     ...pages.map((page) => ({
       label: `evidence: ${page}`,
-      brief: `Assignment: answer and evidence support. In the worktree ${c.worktree}, check the wiki page ${page}, line by line, against the raw-note blocks it cites.`,
+      brief: `Assignment: answer and evidence support. In the worktree ${c.worktree}, check the wiki page ${page}, line by line, against the raw-note blocks it cites, and name each raw note it cites.`,
+      schema: EVIDENCE_SCHEMA,
     })),
     {
       label: "library integrity",
       brief: `Assignment: library integrity. In the worktree ${c.worktree}, check ${changed}.`,
+      schema: CLERK_SCHEMA,
     },
   ];
   const verdicts = await parallel(
@@ -331,13 +345,16 @@ async function checkLibrary(c: Ctx, pages: readonly string[]): Promise<Problem[]
           agentType: "slopify:library-clerk",
           label: k.label,
           phase: "Validate",
-          schema: CLERK_SCHEMA,
+          schema: k.schema,
         }),
     ),
   );
+  // The pages as they stand now: a repair may change which notes they cite.
+  c.notes.clear();
   return checks.flatMap((k, i) => {
     const v = must(verdicts[i], "validate", `A verdict on ${k.label}.`);
     c.verdicts.set(k.label, v.verdict === "pass" ? "passed" : v.verdict === "fail" ? "failed" : "could not run");
+    if ("notes" in v) for (const n of v.notes) c.notes.add(n.trim());
     const found = (v.verdict === "pass" ? [] : v.findings).map((f) => ({
       source: "library-clerk",
       location: k.label,
@@ -390,6 +407,7 @@ export default async function run(): Promise<ResearchResult> {
       plan: `.tmp/research/${found.slug}.plan.md`,
       worktree: d.state.worktree,
       sources: null,
+      notes: new Set(),
       verdicts: new Map(),
     };
     let pages = resume.findings;
@@ -418,14 +436,15 @@ export default async function run(): Promise<ResearchResult> {
         check: () => checkLibrary(c, pages),
         revise: (problems) => repair(c, problems),
         severity: "severity-research.md",
-        trust: () => [
-          ...[...c.verdicts].map(([label, verdict]) => `The library-clerk check "${label}" ${verdict}.`),
-          ...(c.sources === null
-            ? []
-            : [
-                `This run retrieved ${String(c.sources)} source${c.sources === 1 ? "" : "s"}, each recorded in its raw note.`,
-              ]),
-        ],
+        trust: () => {
+          // A resumed run retrieved nothing itself: it counts the raw notes the committed pages cite.
+          const n = c.sources ?? (c.notes.size > 0 ? c.notes.size : null);
+          const how = c.sources === null ? "each a raw note the committed pages cite" : "each recorded in its raw note";
+          return [
+            ...[...c.verdicts].map(([label, verdict]) => `The library-clerk check "${label}" ${verdict}.`),
+            ...(n === null ? [] : [`The research rests on ${String(n)} source${n === 1 ? "" : "s"}, ${how}.`]),
+          ];
+        },
       },
     });
     return { ...result, workflow: WORKFLOW, report: reportOf(WORKFLOW, result) };

@@ -2208,6 +2208,14 @@ var CLERK_SCHEMA = {
     evidence: { type: "string", description: "What was checked and how, or what stopped the check" }
   }
 };
+var EVIDENCE_SCHEMA = {
+  ...CLERK_SCHEMA,
+  required: [...CLERK_SCHEMA.required, "notes"],
+  properties: {
+    ...CLERK_SCHEMA.properties,
+    notes: { ...STRINGS, description: "Each raw note the page cites, relative to the worktree root" }
+  }
+};
 var RESEARCH_SCHEMA = {
   type: "object",
   required: ["findings", "sources", "contradictions", "limits", "planProblem"],
@@ -2450,11 +2458,13 @@ async function checkLibrary(c, pages) {
   const checks = [
     ...pages.map((page) => ({
       label: `evidence: ${page}`,
-      brief: `Assignment: answer and evidence support. In the worktree ${c.worktree}, check the wiki page ${page}, line by line, against the raw-note blocks it cites.`
+      brief: `Assignment: answer and evidence support. In the worktree ${c.worktree}, check the wiki page ${page}, line by line, against the raw-note blocks it cites, and name each raw note it cites.`,
+      schema: EVIDENCE_SCHEMA
     })),
     {
       label: "library integrity",
-      brief: `Assignment: library integrity. In the worktree ${c.worktree}, check ${changed}.`
+      brief: `Assignment: library integrity. In the worktree ${c.worktree}, check ${changed}.`,
+      schema: CLERK_SCHEMA
     }
   ];
   const verdicts = await parallel(
@@ -2466,13 +2476,15 @@ ${quoted(c.question)}`, {
         agentType: "slopify:library-clerk",
         label: k.label,
         phase: "Validate",
-        schema: CLERK_SCHEMA
+        schema: k.schema
       })
     )
   );
+  c.notes.clear();
   return checks.flatMap((k, i) => {
     const v = must(verdicts[i], "validate", `A verdict on ${k.label}.`);
     c.verdicts.set(k.label, v.verdict === "pass" ? "passed" : v.verdict === "fail" ? "failed" : "could not run");
+    if ("notes" in v) for (const n of v.notes) c.notes.add(n.trim());
     const found = (v.verdict === "pass" ? [] : v.findings).map((f) => ({
       source: "library-clerk",
       location: k.label,
@@ -2524,6 +2536,7 @@ async function run() {
       plan: `.tmp/research/${found.slug}.plan.md`,
       worktree: d.state.worktree,
       sources: null,
+      notes: /* @__PURE__ */ new Set(),
       verdicts: /* @__PURE__ */ new Map()
     };
     let pages = resume.findings;
@@ -2551,12 +2564,14 @@ async function run() {
         check: () => checkLibrary(c, pages),
         revise: (problems) => repair(c, problems),
         severity: "severity-research.md",
-        trust: () => [
-          ...[...c.verdicts].map(([label, verdict]) => `The library-clerk check "${label}" ${verdict}.`),
-          ...c.sources === null ? [] : [
-            `This run retrieved ${String(c.sources)} source${c.sources === 1 ? "" : "s"}, each recorded in its raw note.`
-          ]
-        ]
+        trust: () => {
+          const n = c.sources ?? (c.notes.size > 0 ? c.notes.size : null);
+          const how = c.sources === null ? "each a raw note the committed pages cite" : "each recorded in its raw note";
+          return [
+            ...[...c.verdicts].map(([label, verdict]) => `The library-clerk check "${label}" ${verdict}.`),
+            ...n === null ? [] : [`The research rests on ${String(n)} source${n === 1 ? "" : "s"}, ${how}.`]
+          ];
+        }
       }
     });
     return { ...result, workflow: WORKFLOW, report: reportOf(WORKFLOW, result) };
