@@ -1,0 +1,212 @@
+{
+  "criteria": [
+    {
+      "id": "c1",
+      "wording": "The plugin has a `writer-pr` agent that is a producer, and the instructions it works from require the four parts under their headings **What changes**, **Needs you**, **Why trust it**, and **Not done**, in that order, with no other heading, a description of at most 4,000 characters, and no process detail. (Deterministic)",
+      "category": "Deterministic",
+      "path": "make check, plus a unit test that reads plugins/slopify/agents/writer-pr.md and the reference it names",
+      "evidence": "make check exit 0; the test passes, showing writer-pr.md exists, is listed as a producer, and it or pr-description.md states the four headings in order, no other heading, the 4,000-character limit and no process detail",
+      "firstTest": "test/agents.test.ts (or phrases.test.ts): 'writer-pr's instructions require the four headings in order, no other heading, at most 4,000 characters, and no process detail'"
+    },
+    {
+      "id": "c2",
+      "wording": "The plugin has a `lens-*` agent for the PR description that is report-only, and the instructions it works from require checking the four headings and their order, the 4,000-character limit, the absence of process detail, and that each line under **Why trust it** matches a criterion result the run produced. (Deterministic)",
+      "category": "Deterministic",
+      "path": "make check, plus a unit test that reads plugins/slopify/agents/lens-pr.md and the reference it names",
+      "evidence": "make check exit 0; the test passes, showing lens-pr.md disallows Edit, Write and NotebookEdit, carries the Report-only contract, and requires each named check",
+      "firstTest": "'lens-pr is report-only and checks headings, order, the 4,000-character limit, process detail, and Why trust it lines against criterion results'"
+    },
+    {
+      "id": "c3",
+      "wording": "In each of deliver-story, deliver-trivial, deliver-bugfix, deliver-spike, and research, every round that creates or updates the PR dispatches `writer-pr` and then the description lens before the `pusher` dispatch that posts the description. (Deterministic)",
+      "category": "Deterministic",
+      "path": "make check, and the stub-harness tests in test/loop.test.ts, test/how.test.ts, test/research.test.ts and test/spike.test.ts",
+      "evidence": "make check exit 0; named tests for each of the five workflows pass, asserting the call order writer-pr, lens-pr, pusher for every PR-creating or updating push",
+      "firstTest": "loop.test.ts: 'every push that opens or updates the PR runs writer-pr, then lens-pr, then pusher', repeated per workflow"
+    },
+    {
+      "id": "c4",
+      "wording": "The body `pusher` is told to post is the last description `writer-pr` produced, unchanged. (Deterministic)",
+      "category": "Deterministic",
+      "path": "make check, and a stub-harness test in test/loop.test.ts",
+      "evidence": "make check exit 0; the test passes, asserting the body inside the pusher prompt equals the last writer-pr body byte for byte, including after a revision",
+      "firstTest": "'the pusher's body is the last writer-pr body, unchanged'"
+    },
+    {
+      "id": "c5",
+      "wording": "When the lens reports a problem, `writer-pr` is dispatched again with that problem, and the revised description is checked again before it is posted. (Deterministic)",
+      "category": "Deterministic",
+      "path": "make check, and a stub-harness test with a lens-pr stub that fails once",
+      "evidence": "make check exit 0; the test passes, showing a second writer-pr prompt containing the lens finding and a second lens-pr call before the pusher call",
+      "firstTest": "'a lens finding sends writer-pr back with it, and the revision is checked again'"
+    },
+    {
+      "id": "c6",
+      "wording": "When the lens still reports a problem after three revisions, the last revision is posted, the PR stays a draft, and the run's draft reasons include that the description did not pass its check. (Deterministic)",
+      "category": "Deterministic",
+      "path": "make check, and a stub-harness test with a lens-pr stub that always fails",
+      "evidence": "make check exit 0; the test passes, showing four writer-pr calls in the final stage, the fourth body in the pusher prompt, status draft, and draftReasons containing 'The PR description did not pass its check.'",
+      "firstTest": "'after three failed revisions the last one is posted and the run ends draft with the description reason'"
+    },
+    {
+      "id": "c7",
+      "wording": "`writer-pr` has access to the card, the diff, the ledger, and the run's current criterion results and open items. (Deterministic)",
+      "category": "Deterministic",
+      "path": "make check, and a stub-harness test on the writer-pr brief, plus the writer-pr.md text",
+      "evidence": "make check exit 0; the test passes, showing the brief holds the card id and story, the diff instruction with the worktree and target branch, the ledger path, and the state block's criterion results and open items",
+      "firstTest": "'the writer-pr brief carries the card, the diff instruction, the ledger path, and the criterion results and open items'"
+    },
+    {
+      "id": "c8",
+      "wording": "After each round, the ledger holds that round's findings, each ruling with its reason, what was tried, and what changed, and every one of those entries reached the ledger through a `pusher` dispatch. (Deterministic)",
+      "category": "Deterministic",
+      "path": "make check, and stub-harness tests on pusher ledger lines plus rules.test.ts on progressLine",
+      "evidence": "make check exit 0; tests pass showing finding, ruling (with reason), tried and changed progress entries in a pusher prompt's ledger-lines block for each round, including review rulings carried on the next pusher dispatch",
+      "firstTest": "'each round's findings, rulings, attempts and changes ride on a pusher dispatch as progress entries'"
+    },
+    {
+      "id": "c9",
+      "wording": "Nothing the workflow tells `pusher` to post to GitHub, whether a PR description or a comment, contains a ledger progress entry. (Deterministic)",
+      "category": "Deterministic",
+      "path": "make check, a stub-harness test over every pusher prompt, and checkDescription tests",
+      "evidence": "make check exit 0; the test passes, showing no pusher instruction text outside the ledger-lines block contains a `progress ` entry; checkDescription flags a body holding one",
+      "firstTest": "'no pusher instruction, body or comment contains a progress entry'"
+    },
+    {
+      "id": "c10",
+      "wording": "A rerun over a ledger that holds progress entries resumes from the same point as a rerun over the same ledger without those entries, whatever text the entries quote, including the text of the ledger's own resume records. (Deterministic)",
+      "category": "Deterministic",
+      "path": "make check, test/resume.test.ts with stubbed scout answers, and checkpointLine tests in rules.test.ts",
+      "evidence": "make check exit 0; tests pass showing equal Resume values with and without progress entries that quote each checkpoint form and whole ledger lines",
+      "firstTest": "resume.test.ts: 'progress entries quoting checkpoint lines leave the Resume unchanged'"
+    },
+    {
+      "id": "c11",
+      "wording": "On a rerun, `writer-pr` has access to the progress entries earlier runs wrote to the ledger. (Deterministic)",
+      "category": "Deterministic",
+      "path": "make check, and a stub-harness test on the writer-pr brief of a resumed run, plus writer-pr.md text",
+      "evidence": "make check exit 0; the test passes, showing a resumed run's writer-pr brief names the worktree ledger path and tells it to read earlier runs' progress entries",
+      "firstTest": "'a resumed run's writer-pr brief points it at the ledger's earlier progress entries'"
+    },
+    {
+      "id": "c12",
+      "wording": "The instructions `writer-pr` and the description lens work from both require a deliver-story description to name its spec folder on a line of the form `Spec: <folder>`. (Deterministic)",
+      "category": "Deterministic",
+      "path": "make check, a stub-harness test on deliver-story's writer-pr and lens-pr briefs, and a text test on the agent files and reference",
+      "evidence": "make check exit 0; tests pass showing both briefs carry `Spec: docs/specs/...` with no backticks and both agents' instructions require the line",
+      "firstTest": "'deliver-story's writer-pr and lens-pr briefs both require the Spec: <folder> line'"
+    },
+    {
+      "id": "c13",
+      "wording": "When the run files follow-up cards, the final `writer-pr` dispatch has access to each filed card's identifier and link. (Deterministic)",
+      "category": "Deterministic",
+      "path": "make check, and a stub-harness test whose pusher stub reports card operations",
+      "evidence": "make check exit 0; the test passes, showing the filing dispatch precedes the final writer-pr dispatch and that brief holds each card's identifier and link; a partial filing failure does not halt",
+      "firstTest": "'filed cards reach the final writer-pr brief with their identifiers and links'"
+    },
+    {
+      "id": "c14",
+      "wording": "No current product documentation or plugin text, past specs excluded, contains any of the case-sensitive phrases `Suggestions`, `Known debt`, `Unverified findings`, `Not validated`, or `Test changes`. (Deterministic)",
+      "category": "Deterministic",
+      "path": "make check, and test/phrases.test.ts",
+      "evidence": "make check exit 0; phrases.test.ts passes with no hits over tracked docs, README, TESTING.md, plugins/ and src/, with docs/specs/ excluded",
+      "firstTest": "phrases.test.ts: 'no shipped doc or plugin text holds an old PR section phrase'"
+    },
+    {
+      "id": "c15",
+      "wording": "Each PR-opening kind's design doc, the product's forge design, and the forge setup `bootstrap` creates in a project describe the PR description as its four parts under the headings **What changes**, **Needs you**, **Why trust it**, and **Not done**, in that order. (Deterministic)",
+      "category": "Deterministic",
+      "path": "make check, and a text test over STORY.md, TRIVIAL.md, BUGFIX.md, SPIKE.md, docs/RESEARCH.md, docs/FORGE.md and bootstrap references/forge.md",
+      "evidence": "make check exit 0; the test passes, finding the four headings in order in each file",
+      "firstTest": "'each kind's design doc and both forge texts name the four parts in order'"
+    },
+    {
+      "id": "c16",
+      "wording": "Each PR-opening kind's design doc describes that kind's opening and trust line. (Deterministic)",
+      "category": "Deterministic",
+      "path": "make check, and a text test over the five kind design docs",
+      "evidence": "make check exit 0; the test passes, finding in each doc its kind's opening and trust line wording",
+      "firstTest": "'each kind's design doc states its opening and its trust line'"
+    },
+    {
+      "id": "c17",
+      "wording": "The product's agent listings, every place the product design lists its producer agents, and the plugin's description include `writer-pr` and the description lens, and the plugin's version is unchanged. (Deterministic)",
+      "category": "Deterministic",
+      "path": "make check, and a text test over README.md, docs/DESIGN.md and plugin.json, plus git diff of plugin.json's version",
+      "evidence": "make check exit 0; the test passes, finding writer-pr and lens-pr in each listing; plugin.json version equals the base branch's",
+      "firstTest": "'README, DESIGN and plugin.json list writer-pr and lens-pr'"
+    },
+    {
+      "id": "c18",
+      "wording": "The product README and the instructions `pusher` works from for the ledger describe the progress entries and say they stay local. (Deterministic)",
+      "category": "Deterministic",
+      "path": "make check, and a text test over README.md and plugins/slopify/references/pusher-ledger.md",
+      "evidence": "make check exit 0; the test passes, finding the progress entry and that it stays local in both",
+      "firstTest": "'README and pusher-ledger.md describe progress entries as local'"
+    },
+    {
+      "id": "c19",
+      "wording": "`make check` passes. (Deterministic)",
+      "category": "Deterministic",
+      "path": "make check",
+      "evidence": "make check exit 0, including build:check over the regenerated plugins/slopify/workflows/*.js",
+      "firstTest": "Run make check after make build"
+    },
+    {
+      "id": "c20",
+      "wording": "In a full run of each of the five PR-opening workflows, the posted description is at most 4,000 characters. (Full eval)",
+      "category": "Full eval",
+      "path": "The user's full run of each of the five workflows by hand (make eval does not exist until SMR-364)",
+      "evidence": "The user's run report with each posted description's character count",
+      "firstTest": "A full run of each workflow; measure the posted PR body's length"
+    },
+    {
+      "id": "c21",
+      "wording": "In a full run of each of the five PR-opening workflows, the posted description opens with **What changes**, saying what changes and why. (Full eval)",
+      "category": "Full eval",
+      "path": "The user's full run of each of the five workflows by hand",
+      "evidence": "The user's run report showing each posted body's first heading and its content",
+      "firstTest": "A full run of each workflow; read the first section of the posted body"
+    },
+    {
+      "id": "c22",
+      "wording": "In a full run of each of the five PR-opening workflows, every decision, confirmation, manual action, and reason the PR is a draft appears under **Needs you**, and **Needs you**, when present, comes before **Why trust it**. (Full eval)",
+      "category": "Full eval",
+      "path": "The user's full run of each of the five workflows by hand",
+      "evidence": "The user's run report comparing the run result's decisions and draft reasons with the posted Needs you section",
+      "firstTest": "A full run that records a decision and ends draft; compare the result with Needs you"
+    },
+    {
+      "id": "c23",
+      "wording": "In a full run of each of the five PR-opening workflows, the posted description contains no rulings, fingerprints, round counts, or fix-attempt counts. (Full eval)",
+      "category": "Full eval",
+      "path": "The user's full run of each of the five workflows by hand",
+      "evidence": "The user's run report showing no process detail in each posted body",
+      "firstTest": "A full run of each workflow; search the posted body for process detail"
+    },
+    {
+      "id": "c24",
+      "wording": "In a full run that ends as a draft, each open item appears exactly once in the description. (Full eval)",
+      "category": "Full eval",
+      "path": "The user's full run that ends draft, by hand",
+      "evidence": "The user's run report listing each open item and its single occurrence",
+      "firstTest": "A full run that ends draft; count each open item's occurrences in the posted body"
+    },
+    {
+      "id": "c25",
+      "wording": "In a full run that files follow-up cards, the final posted description names each filed card's identifier under **Not done**. (Full eval)",
+      "category": "Full eval",
+      "path": "The user's full run that files follow-up cards, by hand",
+      "evidence": "The user's run report matching filed card identifiers to Not done lines",
+      "firstTest": "A full run that files a follow-up card; read Not done in the final body"
+    },
+    {
+      "id": "c26",
+      "wording": "In a full deliver-story run that is rerun with no spec folder passed, the rerun uses the spec folder the first run wrote. (Full eval)",
+      "category": "Full eval",
+      "path": "The user's full deliver-story run followed by a rerun with no spec folder, by hand",
+      "evidence": "The user's run report showing the rerun's spec folder equals the first run's",
+      "firstTest": "A full deliver-story run, then a rerun with no spec folder; compare the spec folders"
+    }
+  ]
+}
