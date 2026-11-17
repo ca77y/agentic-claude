@@ -1123,13 +1123,18 @@ async function tryFix(l, c, cycle, lastFailure, attempt) {
   if (sha === null) return DONE;
   const failing = await failingChecks(l);
   if (failing) return { reason: failing, rewriteTest: false };
-  if (l.small && l.round > 0) return { reason: "", rewriteTest: false };
+  if (l.small && l.round > 0) {
+    l.passedTests = unique([...l.passedTests, ...cycle.paths]);
+    return { reason: "", rewriteTest: false };
+  }
   const verdict = await qaOf(l, c, cycle);
   if (verdict.verdict !== "pass") {
-    const reason = verdict.findings.map((f) => `${f.location}: ${f.problem}`).join("\n") || verdict.limits;
-    return { reason, rewriteTest: verdict.testAtFault };
+    const reason2 = verdict.findings.map((f) => `${f.location}: ${f.problem}`).join("\n") || verdict.limits;
+    return { reason: reason2, rewriteTest: verdict.testAtFault };
   }
-  return { reason: await unneeded(l, c, cycle, sha), rewriteTest: false };
+  const reason = await unneeded(l, c, cycle, sha);
+  if (!reason && l.small) l.passedTests = unique([...l.passedTests, ...cycle.paths]);
+  return { reason, rewriteTest: false };
 }
 async function unneeded(l, c, cycle, fixCommit) {
   const base = cycle.commit || fixCommit;
@@ -1604,6 +1609,8 @@ Spec: ${l.specDir}` : "",
 ${list(l.document.paths)}` : "",
     l.document?.trust ? `What Why trust it rests on:
 ${list(l.document.trust())}` : "",
+    l.passedTests.length > 0 ? `What Why trust it rests on:
+${list(l.passedTests.map((p) => `The change's test ${p} passes, and the project's checks pass with it.`))}` : "",
     l.small?.reproduced ? `The bug's reproduction, before the fix:
 ${list(l.small.reproduced.map((x) => entryText(x)))}` : "",
     renderState({ criteria: rowsOf(l), open }) || "No criterion results and no open items.",
@@ -1856,6 +1863,7 @@ function freshLoop(input) {
     final: null,
     review: { clean: false, note: "" },
     changedThisRound: [],
+    passedTests: [],
     uncommitted: [],
     openByRound: [],
     commits: Promise.resolve(),

@@ -387,6 +387,8 @@ interface Loop extends LoopInput {
   final: Described | null;
   review: ReviewOutcome;
   changedThisRound: string[];
+  /** The small flow's test paths that pass once their change is in, which a trivial run's Why trust it rests on. */
+  passedTests: string[];
   /** Paths whose commit the hook still rejected after repairs; the next commit carries them. */
   uncommitted: string[];
   openByRound: number[];
@@ -631,13 +633,18 @@ async function tryFix(l: Loop, c: Change, cycle: CycleTest, lastFailure: string,
   const failing = await failingChecks(l);
   if (failing) return { reason: failing, rewriteTest: false };
   // A small flow's qa runs once, on its first change; a review fix there has only the checks.
-  if (l.small && l.round > 0) return { reason: "", rewriteTest: false };
+  if (l.small && l.round > 0) {
+    l.passedTests = unique([...l.passedTests, ...cycle.paths]);
+    return { reason: "", rewriteTest: false };
+  }
   const verdict = await qaOf(l, c, cycle);
   if (verdict.verdict !== "pass") {
     const reason = verdict.findings.map((f) => `${f.location}: ${f.problem}`).join("\n") || verdict.limits;
     return { reason, rewriteTest: verdict.testAtFault };
   }
-  return { reason: await unneeded(l, c, cycle, sha), rewriteTest: false };
+  const reason = await unneeded(l, c, cycle, sha);
+  if (!reason && l.small) l.passedTests = unique([...l.passedTests, ...cycle.paths]);
+  return { reason, rewriteTest: false };
 }
 
 // Once qa passes, a fresh simplifier looks for code the change adds but doesn't need; what it finds goes back to the coder.
@@ -1168,6 +1175,9 @@ function describeContext(l: Loop, target: boolean | null): string {
       : "",
     l.document ? `The documents the PR adds:\n${list(l.document.paths)}` : "",
     l.document?.trust ? `What Why trust it rests on:\n${list(l.document.trust())}` : "",
+    l.passedTests.length > 0
+      ? `What Why trust it rests on:\n${list(l.passedTests.map((p) => `The change's test ${p} passes, and the project's checks pass with it.`))}`
+      : "",
     l.small?.reproduced
       ? `The bug's reproduction, before the fix:\n${list(l.small.reproduced.map((x) => entryText(x)))}`
       : "",
@@ -1448,6 +1458,7 @@ function freshLoop(input: LoopInput): Loop {
     final: null,
     review: { clean: false, note: "" },
     changedThisRound: [],
+    passedTests: [],
     uncommitted: [],
     openByRound: [],
     commits: Promise.resolve(),
