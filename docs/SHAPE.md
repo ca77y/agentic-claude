@@ -47,6 +47,7 @@ The kind comes from the user, and is `story` when they don't say. It picks the t
 - **Assumptions don't stop the run.** `shape` settles everything that doesn't change what the card delivers or whom it serves, and states it so a reader can object. Only what changes the outcome becomes an open question.
 - **Criteria follow `TESTING.md`.** The writer reads its categories and guidance, so every criterion is one that a category can check.
 - **`shape` sets no type label.** Feature, Improvement, Bug, or any other label `docs/BOARD.md` declares is the person's choice. A card that already has one keeps it.
+- **A card with no identifier is found again by a hidden marker.** The last line of the card body is a comment holding the workflow's name and a hash of the idea's slug, never the slug itself, because the board rewrites text such as a card identifier on save (Linear turns `smr-317` into a link) and a line holding it would not read back as written. A rerun searches the board for that line and updates the card it finds instead of creating another.
 - **`shape` always files.** Its output is the card. The working draft lives under `.tmp/shape/`, and is never the record.
 
 ## Halt conditions
