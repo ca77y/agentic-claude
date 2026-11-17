@@ -1008,7 +1008,10 @@ describe("the document flow", () => {
     assert.equal(r.status, "ready");
     assert.equal(r.rounds, 0);
     assert.deepEqual(revisions, []);
-    assert.equal(r.review, "no blocking findings, 1 suggestion(s) in the PR description");
+    // The description has no suggestions section any more: an unfixed finding sits only under Not done (d19).
+    assert.doesNotMatch(r.review, /suggestion/i, "the summary names no old section");
+    assert.match(r.review, /\b1\b/, "the summary counts the unfixed finding");
+    assert.match(r.review, /Not done/, "the summary says where the description lists it");
     assert.ok(lastWriterPrompt().includes("awkward wording"), "writer-pr is told the suggestion");
   });
 
