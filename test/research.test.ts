@@ -128,6 +128,24 @@ describe("research", () => {
     assert.ok(describedBeforeEachPosting());
   });
 
+  test("writer-pr and lens-pr are given the citations checked and the source count that Why trust it rests on", async () => {
+    const r = await run("SMR-30", happy());
+    assert.equal(r.status, "ready");
+    for (const type of ["writer-pr", "lens-pr"]) {
+      const prompts = calls.filter((c) => c.type === type).map((c) => c.prompt);
+      assert.ok(prompts.length > 0, `${type} ran`);
+      for (const prompt of prompts) {
+        for (const check of ["evidence: library/wiki/parser-speed.md", "library integrity"]) {
+          assert.ok(
+            prompt.split("\n").some((line) => line.includes(check) && /\bpass(?:ed)?\b/i.test(line)),
+            `${type} is told the clerk check "${check}" passed`,
+          );
+        }
+        assert.match(prompt, /\b2 sources\b/i, `${type} is told the source count`);
+      }
+    }
+  });
+
   test("writes one raw note for a source two sub-questions share", async () => {
     await run("SMR-30", happy({ "library-researcher": () => evidenceFor("https://same.example") }));
     assert.equal(count("library-scribe", "raw note"), 1);
