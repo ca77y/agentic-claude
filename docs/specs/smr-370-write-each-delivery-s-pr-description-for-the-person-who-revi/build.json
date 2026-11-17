@@ -2,7 +2,7 @@
   "shared": [
     "`slopify:writer-pr` is a producer returning exactly `{ body: string }`, changing no file; a null result or blank body is a failed attempt. `slopify:lens-pr` is a report-only lens. Both follow `plugins/slopify/references/pr-description.md`. The stage runs in the existing `Push` phase.",
     "`type DeliveryKind = \"story\" | \"trivial\" | \"bugfix\" | \"spike\" | \"research\"`, from rules.ts, is `LoopInput.kind`.",
-    "rules.ts interfaces: `checkDescription(body: string, ctx: { kind: DeliveryKind; specDir: string }): { leak: string[]; format: string[] }`, passing when both are empty; `renderState(s: PrState): string`, rendering only criterion results and open items; `progressLine(round: number, kind: \"finding\" | \"ruling\" | \"tried\" | \"changed\", items: readonly string[]): string`; `checkpointLine(key: \"done-board-start\" | \"done-round\" | \"done-findings\" | \"reproduced\" | \"review-fired\", value: string): string`, the accepted line or ''.",
+    "rules.ts exports, already in place and kept as stated: `checkDescription(body: string, ctx: { kind: DeliveryKind; specDir: string }): { leak: string[]; format: string[] }`, passing when both are empty; `renderState(s: PrState): string`, rendering only criterion results and open items; `progressLine(round: number, kind: \"finding\" | \"ruling\" | \"tried\" | \"changed\", items: readonly string[]): string`; `checkpointLine(key: \"done-board-start\" | \"done-round\" | \"done-findings\" | \"reproduced\" | \"review-fired\", value: string): string`, the accepted line or ''.",
     "Format (pr-description.md states it, checkDescription enforces its mechanical part, lens-pr checks all): the issue's four level-2 headings in order, Needs you and Not done only with content, no other heading, at most 4,000 characters, current state only. A story's What changes opens with the card's outcome and holds `Spec: <folder>` once, plain, repo-relative. Leak rules: no absolute path, `.tmp/` reference, ledger line or credential-shaped text.",
     "Overflow and placement (d15, d19) are stated alike in pr-description.md, writer-pr, lens-pr and checkDescription: grouped Why trust it lines, grouped Needs you lines linking the committed file that lists the items or else the card, and every unfixed finding only under Not done. Validator evidence is never linked.",
     "Per kind, opening / trust: story the card's outcome / criterion results; trivial one sentence / test and app run; bugfix the bug before and after / reproduction failing then passing; spike question and answer, no recommendation / checked claims and unknowns; research question and short answer linking the main page / citations checked and source count.",
@@ -12,152 +12,9 @@
     "Checkpoint rule (d7, d18): each ledger key has one form after pusher's timestamp: done-board-start `done board-start`, done-round `done round <n>`, done-findings `done findings <paths>`, reproduced `reproduced {...}`, review-fired `review <n> fired`. The scout returns one evidence item per ledger line containing the key's form, source the key, the whole line as its excerpt, in ledger order, and none when no line matches. checkpointLine tolerates the wrappers a scout may add; readResume reads every item with that source.",
     "pusher reports a filed card as `{ op: \"card\", reference: <identifier>, link: <URL> }`; pusherSchema's operations gain a required `link` string, empty when none; `opRefs(r, name): { reference: string; link: string }[]` in deliver.ts reads them.",
     "Halts: the run stops for its description only when writer-pr never returns a body (d2), and on resume only for an unreadable checkpoint item (d18). Both are declared halt conditions in each kind's doc, returning `blocked` with the cause reported on the issue.",
-    "Task split (d21): every task's commit passes `make lint`, its regenerated plugins/slopify/workflows/*.js included, so a task that edits src/ runs `make build` and lists the built output. Each task owns the tests its first failing-test step writes, and its own files can make them pass. Before the last task, a task's evidence is `make lint` plus its own named tests; only docs, which runs last, carries c19."
+    "Every behavior this spec describes is already on the branch and proved by committed tests that pass under `make check`; there is no build task. Any later change keeps the shared Format, Overflow, Posting, Fencing, Checkpoint and Halts rules and decisions d1 and d17 as stated, and keeps the tests that prove c1-c19 passing."
   ],
-  "tasks": [
-    {
-      "id": "rules",
-      "dependsOn": [],
-      "files": ["src/slopify/lib/rules.ts", "test/rules.test.ts", "plugins/slopify/workflows/"],
-      "criteria": ["c10"],
-      "todo": "The shared rules.ts interfaces, each pinned in test/rules.test.ts, then `make build` so the commit carries the regenerated workflows.\n- checkDescription: one plain problem per broken mechanical rule of the shared format, leak rules under `leak`, the rest under `format`. Tests: one per rule; grouped Why trust it lines and grouped Needs you lines (committed-file link and card link) pass; a body for a 26-criterion, 14-decision story that also carries dozens of coder choices and confirmations, written to the overflow rule, passes.\n- renderState and PrState are added, with no fix-attempt counts. renderBody and PrBody and their tests stay until the loop task removes them, so loop.ts keeps compiling and every commit passes `make lint`.\n- progressLine tests: no newline, `<` or `>`; bounded for long input; a ruling keeps its reason.\n- checkpointLine tests: each key's form accepted bare and wrapped as a scout might return it; a progress entry quoting any form, a whole ledger line included, rejected; a run line quoting a form rejected; prose rejected.\n- Keep reproductionLine and parseReproduction and their round-trip test.\n- New rules.ts text holds none of c14's phrases; the phrase test itself belongs to docs.",
-      "reuse": [
-        "rules.ts `items`, `cell`, `section`, `criteriaTable` helpers for renderState",
-        "rules.ts `MAX_FIX_ROUNDS`, `reproductionLine`, `parseReproduction`",
-        "`Listed` and `CriterionState` types already used by PrBody"
-      ],
-      "create": [
-        "checkDescription, renderState/PrState, progressLine, checkpointLine and DeliveryKind in rules.ts",
-        "rules.test.ts cases for each",
-        "regenerated plugins/slopify/workflows/*.js"
-      ]
-    },
-    {
-      "id": "resume",
-      "dependsOn": ["rules"],
-      "files": [
-        "src/slopify/lib/resume.ts",
-        "test/resume.test.ts",
-        "test/how.test.ts",
-        "test/research.test.ts",
-        "test/spike.test.ts",
-        "plugins/slopify/workflows/"
-      ],
-      "criteria": ["c10"],
-      "todo": "readResume follows the shared checkpoint rule, then `make build` so the commit carries the regenerated workflows; carrier included: the scout brief words each ledger key with its form and asks for one evidence item per matching line; built, boardStartDone, findings, reproduced (parseReproduction only on an accepted line) and reviewFired come from accepted lines only, read from every item whose source is the key. With no specDir passed, spec-dir is the folder on the PR description's `Spec:` line, backticks tolerated. Update the scout-checkpoint stubs in the how, research and spike tests to the carrier shape.\n\nNew test/resume.test.ts, stubs in the carrier shape, each scenario compared with a named baseline:\n- a ledger of only progress entries quoting each form (a whole `done round` line and a `reproduced {` line among them) gives the empty ledger's Resume;\n- a real line followed by a progress entry quoting it, as two items in ledger order, gives the real-only ledger's Resume, and so does the entry listed first;\n- a run line whose story text quotes a form gives the ledger-without-it Resume, with no halt;\n- several review-fired lines give the highest n, and several done-findings lines the last one's paths;\n- a real line returned inside a wrapper is accepted;\n- an item that can't be read as a ledger line (prose, a line missing its timestamp) halts naming the key;\n- a backticked Spec line yields the folder.",
-      "reuse": [
-        "resume.ts readResume and its single scout-checkpoint dispatch",
-        "family.ts `val`, `shaped('rel')` (`fact` stays for single-value keys); loop.ts `must`",
-        "test/harness.ts fakeAgent"
-      ],
-      "create": [
-        "reading every evidence item for a ledger key, accepted-line derivation and the halt on an unreadable item in readResume",
-        "test/resume.test.ts",
-        "regenerated plugins/slopify/workflows/*.js"
-      ]
-    },
-    {
-      "id": "loop",
-      "dependsOn": ["rules", "resume"],
-      "files": [
-        "src/slopify/lib/loop.ts",
-        "src/slopify/lib/rules.ts",
-        "test/rules.test.ts",
-        "src/slopify/lib/deliver.ts",
-        "src/slopify/lib/schemas.ts",
-        "src/slopify/lib/small.ts",
-        "src/slopify/workflows/deliver-story.ts",
-        "src/slopify/workflows/deliver-trivial.ts",
-        "src/slopify/workflows/deliver-bugfix.ts",
-        "src/slopify/workflows/deliver-spike.ts",
-        "src/slopify/workflows/research.ts",
-        "plugins/slopify/workflows/",
-        "test/loop.test.ts",
-        "test/how.test.ts",
-        "test/research.test.ts",
-        "test/spike.test.ts",
-        "test/harness.ts"
-      ],
-      "criteria": ["c3", "c4", "c5", "c6", "c7", "c8", "c9", "c11", "c12", "c13"],
-      "todo": "Wire the description stage, progress entries and card filing into the shared loop, then `make build`.\n- Switch loop.ts from renderBody to renderState, then remove renderBody, PrBody and their tests (d20); rules.ts keeps no phrase c14 bans, and its header comment stops saying it holds the PR description.\n- Every runLoop caller sets its kind.\n- Describe stage, in loop.ts with Loop unexported: before each pusher dispatch that opens or updates the PR, once the round's commits settle, writer-pr writes the body, checkDescription and lens-pr check it (d3, d4), and problems send writer-pr back to rewrite whole, within MAX_FIX_ROUNDS (d5). Posting follows the posting rule; a failed attempt follows d2. Lens findings never reach judge or count as open.\n- writer-pr's brief gives the card, the diff, the ledger path and renderState's block, plus only the readiness d16 and d19 allow and the final stage's filed cards (d6); a revision adds the previous body and its problems. lens-pr's brief gives the body and what it is checked against.\n- Posting and small.ts's card text follow the fencing rule; the code-rendered body goes.\n- endLoop files new cards first (d6) and describes once (d12).\n- Progress entries follow d8. draftReasons and reviewSummary drop fix-attempt counts and old section names; LoopResult and the card comment keep every draft reason, and finish's card comment lists every coder choice, confirmation, manual action and acceptance decision in full (d14).\n- Tests: c3-c9 and c11-c13; a body holding the default fence posted byte-identical; a leaking last body never posted; a large run with dozens of coder choices and confirmations ending ready; writer-pr never returning a body halting as declared.\n- rules.ts, src/ and the built JS end this task free of c14's phrases, so the docs task's phrase test can pass.",
-      "reuse": [
-        "loop.ts `pushRound`, `finish`, `endLoop`, `draftReasons`, `inOrder`/`l.commits`, `judgeProblems`, `l.rulings`, `l.fixes`, `l.changedThisRound`",
-        "family.ts `lens()`, `LENS_SCHEMA`, `defectsOf`",
-        "deliver.ts `callDocsWriter` dispatch pattern for a writer-pr caller, `opRef`, `pushOk`, `pushBrief`/`takeLines`",
-        "small.ts fileCard marker-line dedupe",
-        "shape.ts refine loop as the write-check-revise pattern",
-        "rules.ts interfaces from the rules task",
-        "test/harness.ts fakeAgent, calls and happy()"
-      ],
-      "create": [
-        "LoopInput.kind, pending progress entries, the stored description and filed cards on the Loop",
-        "describe stage, writer-pr and lens-pr briefs, opRefs, the pusherSchema `link` field, the per-dispatch fence",
-        "card filing before the final description in endLoop",
-        "new loop, how, research and spike test cases",
-        "regenerated plugins/slopify/workflows/*.js",
-        "removal of renderBody and PrBody"
-      ]
-    },
-    {
-      "id": "agents",
-      "dependsOn": [],
-      "files": [
-        "plugins/slopify/agents/writer-pr.md",
-        "plugins/slopify/agents/lens-pr.md",
-        "plugins/slopify/references/pr-description.md",
-        "plugins/slopify/references/pusher-ledger.md",
-        "plugins/slopify/agents/pusher.md",
-        "plugins/slopify/references/pusher-forge.md",
-        "plugins/slopify/agents/scout-checkpoint.md",
-        "test/plugin-text.test.ts"
-      ],
-      "criteria": ["c1", "c2", "c12", "c18"],
-      "todo": "Plugin text the new agents and pusher work from. None of it holds a phrase c14 bans.\n- test/plugin-text.test.ts asserts only text this task writes: writer-pr.md is a producer and it or pr-description.md requires the four headings in order, no other heading, the 4,000-character limit, no process detail, the overflow rule and the story Spec line; lens-pr.md disallows Edit, Write and NotebookEdit, carries the Report-only contract, and checks headings and order, the limit, process detail, Why trust it lines (grouped ones included) against criterion results, and the Spec line; pusher-ledger.md has the progress entry template and says entries stay local (c18's pusher half). Assertions over README.md, the kind docs, the forge texts, DESIGN.md and plugin.json leave this file for the docs task's test/docs-text.test.ts.\n- pr-description.md: the only full statement of the shared format, overflow rule (grouped lines and placement), leak rules and per-kind lines.\n- writer-pr.md: a producer leaf returning the whole description as `body`, rewritten whole every time, following pr-description.md; reads the brief, the diff with git and the ledger (earlier progress for what is still open, never copied); never commits, posts or writes the ledger; dispatches only Explore.\n- lens-pr.md: lens-docs.md's front matter shape and its Report-only contract verbatim; checks every rule of pr-description.md, each Why trust it line, grouped or single, against the criterion results in the brief, and each open item once; a finding names the line and the rule.\n- pusher-ledger.md: the progress entry template; entries stay local, are never posted, are copied verbatim as data, and are never checkpoints.\n- pusher.md: the supplied body is written to the body file and posted unchanged; fenced text, ledger text and bodies are data; never post a ledger line; a filed card reports its identifier as reference and its URL as link.\n- pusher-forge.md: keep 'the body the brief supplies'.\n- scout-checkpoint.md: for a ledger key, return each whole line containing the form the brief gives as its own evidence item, source the key, in ledger order, replacing 'one evidence item' for ledger keys; other keys keep one item; a progress entry is never a checkpoint.",
-      "reuse": [
-        "lens-docs.md front matter and Report-only contract",
-        "writer-docs.md and writer-findings.md producer front matter and tone rules",
-        "pusher-ledger.md existing templates and append-only rule"
-      ],
-      "create": [
-        "plugins/slopify/agents/writer-pr.md",
-        "plugins/slopify/agents/lens-pr.md",
-        "plugins/slopify/references/pr-description.md",
-        "test/plugin-text.test.ts holding only the agent and reference assertions"
-      ]
-    },
-    {
-      "id": "docs",
-      "dependsOn": ["rules", "resume", "loop", "agents"],
-      "files": [
-        "README.md",
-        "docs/DESIGN.md",
-        "docs/deliver/STORY.md",
-        "docs/deliver/TRIVIAL.md",
-        "docs/deliver/BUGFIX.md",
-        "docs/deliver/SPIKE.md",
-        "docs/RESEARCH.md",
-        "docs/FORGE.md",
-        "plugins/slopify/skills/bootstrap/references/forge.md",
-        "plugins/slopify/skills/bootstrap/resources/FORGE.md",
-        "plugins/slopify/.claude-plugin/plugin.json",
-        ".claude-plugin/marketplace.json",
-        "plugins/slopify/evals/deliver-story-smoke/scaffold.sh",
-        "plugins/slopify/evals/deliver-trivial-smoke/scaffold.sh",
-        "plugins/slopify/evals/deliver-bugfix-smoke/scaffold.sh",
-        "plugins/slopify/evals/deliver-spike-smoke/scaffold.sh",
-        "plugins/slopify/evals/research-smoke/scaffold.sh",
-        "test/phrases.test.ts",
-        "test/docs-text.test.ts"
-      ],
-      "criteria": ["c14", "c15", "c16", "c17", "c18", "c19"],
-      "todo": "Make each document describe the system after this change, with none of c14's phrases.\n- STORY, TRIVIAL, BUGFIX, SPIKE and docs/RESEARCH.md: writer-pr writes the description and lens-pr checks it before pusher posts it, whole each round that opens or updates the PR, in the four parts in order, with the kind's opening and trust line. STORY adds the Spec line, the revision cap and the draft reason. SPIKE and RESEARCH stop saying they share the story's sections.\n- Halt tables: STORY, TRIVIAL and SPIKE gain the two halts of the shared Halts rule, each with where it is found and what the user gets; BUGFIX and RESEARCH keep deferring to TRIVIAL. STORY's closing sentence on the worst outcome once a PR exists names them as the exceptions.\n- DESIGN.md: writer-pr among producers (a producer may return its work instead of writing a file) and lens-pr among lenses; lens-pr findings go only to writer-pr; the old section names become Needs you and Not done; the ledger holds checkpoints and progress entries, never read as checkpoints, and the description stays a checkpoint through its Spec line.\n- docs/FORGE.md and bootstrap references/forge.md, naming no agent: the body is written for its reviewer, whole each round, in the four parts, with its Spec line. bootstrap resources/FORGE.md only if it words the body beyond its placeholder.\n- README.md: writer-pr and lens-pr in each per-workflow agent list in the Area table's 'Agents its workflows dispatch' column (Delivery row: deliver-story; deliver-trivial and deliver-bugfix; deliver-spike. Library row: research), writer-pr in the Agents table's Producers row and lens-pr in its Lenses row; progress entries stay local and are never read as checkpoints; what pusher posts.\n- plugin.json's description names writer-pr and lens-pr, version unchanged; marketplace.json only if stale.\n- Eval scaffolds stop saying the delivery renders the body; the spike scaffold's body follows the four parts.\n\nTests this task writes first and makes pass with its own edits:\n- test/phrases.test.ts scans tracked files and fails on any case-sensitive hit of c14's five phrases in README.md, TESTING.md, docs/ and plugins/ (agents, references, skills, built workflows, plugin.json, eval scaffolds and graders), plus src/ so a banned string can't reach the built JS. It excludes docs/specs/, library/, test/ and plugins/slopify/evals/results/, stating each exclusion and why. Each failure names the file and line.\n- test/docs-text.test.ts: the five kind docs, docs/FORGE.md and bootstrap references/forge.md name the four headings in order; each kind doc states its opening and trust line; README's per-workflow lists for deliver-story, deliver-trivial and deliver-bugfix, deliver-spike and research, its Producers and Lenses rows, docs/DESIGN.md's producer list and plugin.json's description name writer-pr and lens-pr, plugin.json's version unchanged; README.md describes progress entries as local (c18's README half).\n\nThen run `make check` (c19); every other task has landed, so what it reports is in this story's text.",
-      "reuse": [
-        "Existing structure of each doc; .claude/rules/docs.md and json.md conventions",
-        "test/plugin-text.test.ts helpers (sentence split, local-progress check) as a pattern; node:test and node:child_process as other tests use them"
-      ],
-      "create": ["test/phrases.test.ts", "test/docs-text.test.ts"]
-    }
-  ],
+  "tasks": [],
   "docs": [
     "README.md",
     "docs/DESIGN.md",
@@ -173,10 +30,6 @@
     "plugins/slopify/skills/bootstrap/resources/FORGE.md",
     "plugins/slopify/.claude-plugin/plugin.json",
     ".claude-plugin/marketplace.json",
-    "plugins/slopify/agents/pusher.md",
-    "plugins/slopify/references/pusher-forge.md",
-    "plugins/slopify/references/pusher-ledger.md",
-    "plugins/slopify/agents/scout-checkpoint.md",
     "TESTING.md",
     ".claude/rules/architecture.md"
   ],
@@ -351,24 +204,6 @@
       "reversible": true,
       "permission": "",
       "affectsAcceptance": true
-    },
-    {
-      "id": "d20",
-      "question": "When do renderBody and PrBody leave rules.ts?",
-      "choice": "In the loop task, together with loop.ts's switch to renderState.",
-      "rationale": "Removing them in the rules task breaks loop.ts's import, so typecheck and build:check in the pre-commit `make lint` reject that commit and resume's tests fail at link time through loop.ts.",
-      "reversible": true,
-      "permission": "",
-      "affectsAcceptance": false
-    },
-    {
-      "id": "d21",
-      "question": "How are tasks split so each task's test-first loop can finish and every commit passes make lint?",
-      "choice": "No test-only task: each test file belongs to the task whose files make it pass (agents: test/plugin-text.test.ts over agent and reference text; docs: test/phrases.test.ts and test/docs-text.test.ts). docs runs last (dependsOn rules, resume, loop, agents) and alone carries c19. Every task that edits src/ lists plugins/slopify/workflows/ and runs make build.",
-      "rationale": "The build showed a test-only phrases task could write no fix, two tasks owned plugin-text.test.ts, docs had nowhere for its failing test, c19 was unmeetable on three intermediate tasks, and rules/resume commits failed build:check.",
-      "reversible": true,
-      "permission": "",
-      "affectsAcceptance": false
     }
   ],
   "manualActions": [

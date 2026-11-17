@@ -6,7 +6,7 @@
       "category": "Deterministic",
       "path": "make check, plus a unit test that reads plugins/slopify/agents/writer-pr.md and the reference it names",
       "evidence": "make check exit 0; the test passes, showing writer-pr.md exists as a producer, and it or pr-description.md states the four headings in order, no other heading, the 4,000-character limit, no process detail, and the overflow rule",
-      "firstTest": "test/plugin-text.test.ts: 'writer-pr's instructions require the four headings in order, no other heading, at most 4,000 characters, and no process detail'"
+      "firstTest": "test/plugin-text.test.ts: 'writer-pr's instructions require the four headings in order, no other heading, at most 4,000 characters, and no process detail' (committed, passes)"
     },
     {
       "id": "c2",
@@ -14,7 +14,7 @@
       "category": "Deterministic",
       "path": "make check, plus a unit test that reads plugins/slopify/agents/lens-pr.md and the reference it names",
       "evidence": "make check exit 0; the test passes, showing lens-pr.md disallows Edit, Write and NotebookEdit, carries the Report-only contract, and requires each named check, accepting a grouped Why trust it line for each criterion it names",
-      "firstTest": "test/plugin-text.test.ts: 'lens-pr is report-only and checks headings, order, the 4,000-character limit, process detail, and Why trust it lines against criterion results'"
+      "firstTest": "test/plugin-text.test.ts: 'lens-pr is report-only and checks headings, order, the 4,000-character limit, process detail, and Why trust it lines against criterion results' (committed, passes)"
     },
     {
       "id": "c3",
@@ -22,7 +22,7 @@
       "category": "Deterministic",
       "path": "make check, and the stub-harness tests in test/loop.test.ts, test/how.test.ts, test/research.test.ts and test/spike.test.ts",
       "evidence": "make check exit 0; named tests for each of the five workflows pass, asserting the call order writer-pr, lens-pr, pusher for every PR-creating or updating push",
-      "firstTest": "loop.test.ts: 'every push that opens or updates the PR runs writer-pr, then lens-pr, then pusher', repeated per workflow"
+      "firstTest": "test/loop.test.ts, test/how.test.ts, test/research.test.ts, test/spike.test.ts: 'every push that opens or updates the PR runs writer-pr, then lens-pr, then pusher (<workflow>)', one per workflow (committed, pass)"
     },
     {
       "id": "c4",
@@ -30,7 +30,7 @@
       "category": "Deterministic",
       "path": "make check, and a stub-harness test in test/loop.test.ts",
       "evidence": "make check exit 0; the test passes, asserting the body inside the pusher prompt equals the last writer-pr body byte for byte, including after a revision and when the body contains the default closing fence; when the last body breaks a leak rule, the posted body is the latest leak-free writer-pr body, unchanged (d17)",
-      "firstTest": "'the pusher's body is the last writer-pr body, unchanged'"
+      "firstTest": "test/loop.test.ts: 'the pusher's body is the last writer-pr body, unchanged', with 'a body that holds the default fence is posted byte-identical' and 'a leaking last body is never posted; the latest leak-free one is, unchanged' (committed, pass)"
     },
     {
       "id": "c5",
@@ -38,7 +38,7 @@
       "category": "Deterministic",
       "path": "make check, and a stub-harness test with a lens-pr stub that fails once",
       "evidence": "make check exit 0; the test passes, showing a second writer-pr prompt containing the lens finding and a second lens-pr call before the pusher call",
-      "firstTest": "'a lens finding sends writer-pr back with it, and the revision is checked again'"
+      "firstTest": "test/loop.test.ts: 'a lens finding sends writer-pr back with it, and the revision is checked again' (committed, passes)"
     },
     {
       "id": "c6",
@@ -46,7 +46,7 @@
       "category": "Deterministic",
       "path": "make check, and a stub-harness test with a lens-pr stub that always fails",
       "evidence": "make check exit 0; the test passes, showing four writer-pr calls in the final stage, the fourth (leak-free) body in the pusher prompt, a lens-pr dispatch before that pusher dispatch, status draft, and draftReasons containing 'The PR description did not pass its check.'",
-      "firstTest": "'after three failed revisions the last one is posted and the run ends draft with the description reason'"
+      "firstTest": "test/loop.test.ts: 'after three failed revisions the last one is posted and the run ends draft with the description reason' (committed, passes)"
     },
     {
       "id": "c7",
@@ -54,7 +54,7 @@
       "category": "Deterministic",
       "path": "make check, and a stub-harness test on the writer-pr brief, plus the writer-pr.md text",
       "evidence": "make check exit 0; the test passes, showing the brief holds the card id and story, the diff instruction with the worktree and target branch, the ledger path, and the state block's criterion results and open items",
-      "firstTest": "'the writer-pr brief carries the card, the diff instruction, the ledger path, and the criterion results and open items'"
+      "firstTest": "test/loop.test.ts: 'the writer-pr brief carries the card, the diff instruction, the ledger path, and the criterion results and open items' (committed, passes)"
     },
     {
       "id": "c8",
@@ -62,7 +62,7 @@
       "category": "Deterministic",
       "path": "make check, and stub-harness tests on pusher ledger lines plus rules.test.ts on progressLine",
       "evidence": "make check exit 0; tests pass showing finding, ruling (with reason), tried and changed progress entries in a pusher prompt's ledger-lines block for each round, including review rulings carried on the next pusher dispatch",
-      "firstTest": "'each round's findings, rulings, attempts and changes ride on a pusher dispatch as progress entries'"
+      "firstTest": "test/loop.test.ts: 'each round's findings, rulings, attempts and changes ride on a pusher dispatch as progress entries' (committed, passes)"
     },
     {
       "id": "c9",
@@ -70,7 +70,7 @@
       "category": "Deterministic",
       "path": "make check, a stub-harness test over every pusher prompt, and checkDescription tests",
       "evidence": "make check exit 0; the test passes, showing no pusher instruction text outside the ledger-lines block contains a `progress ` entry; checkDescription flags a body holding one",
-      "firstTest": "'no pusher instruction, body or comment contains a progress entry'"
+      "firstTest": "test/loop.test.ts: 'no pusher instruction, body or comment contains a progress entry' (committed, passes)"
     },
     {
       "id": "c10",
@@ -78,7 +78,7 @@
       "category": "Deterministic",
       "path": "make check, test/resume.test.ts with stubbed scout answers, and checkpointLine tests in rules.test.ts",
       "evidence": "make check exit 0; resume.test.ts passes with stubs in the carrier shape (one evidence item per matching line, source the key): a ledger of only progress entries quoting each checkpoint form (whole ledger lines included) gives the empty ledger's Resume; a real line plus a progress entry quoting it, in either order, gives the real-only ledger's Resume; a run line quoting a form changes nothing and does not halt; a wrapped real line is accepted; an unreadable item halts. Proved up to the scout returning every line containing the key's form (open risk in RATIONALE.md)",
-      "firstTest": "resume.test.ts: 'a real checkpoint followed by a progress entry quoting it resumes like the ledger without the entry'"
+      "firstTest": "test/resume.test.ts: 'a real checkpoint followed by a progress entry quoting it resumes like the ledger without the entry', with the file's other scenarios (committed, pass)"
     },
     {
       "id": "c11",
@@ -86,7 +86,7 @@
       "category": "Deterministic",
       "path": "make check, and a stub-harness test on the writer-pr brief of a resumed run, plus writer-pr.md text",
       "evidence": "make check exit 0; the test passes, showing a resumed run's writer-pr brief names the worktree ledger path and tells it to read earlier runs' progress entries",
-      "firstTest": "'a resumed run's writer-pr brief points it at the ledger's earlier progress entries'"
+      "firstTest": "test/loop.test.ts: 'a resumed run's writer-pr brief points it at the ledger's earlier progress entries' (committed, passes)"
     },
     {
       "id": "c12",
@@ -94,7 +94,7 @@
       "category": "Deterministic",
       "path": "make check, a stub-harness test on deliver-story's writer-pr and lens-pr briefs, and a text test on the agent files and reference",
       "evidence": "make check exit 0; tests pass showing both briefs carry `Spec: docs/specs/...` with no backticks and both agents' instructions require the line",
-      "firstTest": "'deliver-story's writer-pr and lens-pr briefs both require the Spec: <folder> line'"
+      "firstTest": "test/loop.test.ts: 'deliver-story's writer-pr and lens-pr briefs both require the Spec: <folder> line', and test/plugin-text.test.ts: 'writer-pr's and lens-pr's instructions both require the Spec: <folder> line' (committed, pass)"
     },
     {
       "id": "c13",
@@ -102,7 +102,7 @@
       "category": "Deterministic",
       "path": "make check, and a stub-harness test whose pusher stub reports card operations",
       "evidence": "make check exit 0; the test passes with a pusher stub reporting each filed card as { op: 'card', reference: <identifier>, link: <URL> }, showing the filing dispatch precedes the final writer-pr dispatch, that brief holds each card's identifier and link, and a partial filing failure does not halt",
-      "firstTest": "'filed cards reach the final writer-pr brief with their identifiers and links'"
+      "firstTest": "test/loop.test.ts: 'filed cards reach the final writer-pr brief with their identifiers and links', with 'a partial card filing failure doesn't halt the run' (committed, pass)"
     },
     {
       "id": "c14",
@@ -110,7 +110,7 @@
       "category": "Deterministic",
       "path": "make check, and test/phrases.test.ts",
       "evidence": "make check exit 0; phrases.test.ts passes with no hits over tracked docs, README, TESTING.md, plugins/ and src/, with docs/specs/ excluded",
-      "firstTest": "phrases.test.ts: 'no shipped doc or plugin text holds an old PR section phrase'"
+      "firstTest": "test/phrases.test.ts: 'no shipped doc or plugin text holds an old PR section phrase' (committed, passes)"
     },
     {
       "id": "c15",
@@ -118,7 +118,7 @@
       "category": "Deterministic",
       "path": "make check, and test/docs-text.test.ts over STORY.md, TRIVIAL.md, BUGFIX.md, SPIKE.md, docs/RESEARCH.md, docs/FORGE.md and bootstrap references/forge.md",
       "evidence": "make check exit 0; the test passes, finding the four headings in order in each file",
-      "firstTest": "test/docs-text.test.ts: 'each kind's design doc and both forge texts name the four parts in order'"
+      "firstTest": "test/docs-text.test.ts: 'each kind's design doc and both forge texts name the four parts in order' (committed, passes)"
     },
     {
       "id": "c16",
@@ -126,7 +126,7 @@
       "category": "Deterministic",
       "path": "make check, and test/docs-text.test.ts over the five kind docs",
       "evidence": "make check exit 0; the test passes, finding in each doc its kind's opening and trust line wording",
-      "firstTest": "test/docs-text.test.ts: 'each kind's design doc states its opening and its trust line'"
+      "firstTest": "test/docs-text.test.ts: 'each kind's design doc states its opening and its trust line' (committed, passes)"
     },
     {
       "id": "c17",
@@ -134,7 +134,7 @@
       "category": "Deterministic",
       "path": "make check, and test/docs-text.test.ts over README.md, docs/DESIGN.md and plugin.json, plus git diff of plugin.json's version",
       "evidence": "make check exit 0; the test passes, finding writer-pr and lens-pr in README's per-workflow lists in the Area table (deliver-story; deliver-trivial and deliver-bugfix; deliver-spike; research), its Producers and Lenses rows, DESIGN's producer list and plugin.json's description; plugin.json version equals the base branch's",
-      "firstTest": "test/docs-text.test.ts: 'README's workflow lists and agent families, DESIGN and plugin.json list writer-pr and lens-pr'"
+      "firstTest": "test/docs-text.test.ts: 'README's workflow lists and agent families, DESIGN and plugin.json list writer-pr and lens-pr' (committed, passes)"
     },
     {
       "id": "c18",
@@ -142,21 +142,21 @@
       "category": "Deterministic",
       "path": "make check, test/plugin-text.test.ts over plugins/slopify/references/pusher-ledger.md, and test/docs-text.test.ts over README.md",
       "evidence": "make check exit 0; plugin-text.test.ts finds the progress entry template in pusher-ledger.md and that entries stay local; docs-text.test.ts finds README saying progress entries stay local",
-      "firstTest": "test/plugin-text.test.ts: 'pusher-ledger.md describes progress entries as local'; test/docs-text.test.ts: 'README describes progress entries as local'"
+      "firstTest": "test/plugin-text.test.ts: 'pusher-ledger.md describes progress entries as local'; test/docs-text.test.ts: 'README describes progress entries as local' (committed, pass)"
     },
     {
       "id": "c19",
       "wording": "`make check` passes. (Deterministic)",
       "category": "Deterministic",
       "path": "make check",
-      "evidence": "make check exit 0 at the end of the last task (docs), including build:check over the regenerated plugins/slopify/workflows/*.js",
-      "firstTest": "Run make check after make build"
+      "evidence": "make check exit 0, including build:check over the regenerated plugins/slopify/workflows/*.js, run once on the tree the PR will carry, after writer-docs",
+      "firstTest": "Run make check on that tree"
     },
     {
       "id": "c20",
       "wording": "In a full run of each of the five PR-opening workflows, the posted description is at most 4,000 characters. (Full eval)",
       "category": "Full eval",
-      "path": "The user's full run of each of the five workflows by hand (make eval does not exist until SMR-364); the loop test 'a 26-criterion, 14-decision run with dozens of coder choices and confirmations fits and ends ready' guards the overflow rule beforehand",
+      "path": "The user's full run of each of the five workflows by hand (make eval does not exist until SMR-364); the loop test 'a large run with dozens of coder choices and confirmations fits and ends ready' guards the overflow rule beforehand",
       "evidence": "The user's run report with each posted description's character count",
       "firstTest": "A full run of each workflow; measure the posted PR body's length"
     },
