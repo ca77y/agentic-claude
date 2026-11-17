@@ -17,8 +17,10 @@ The brief gives the lines that record the step it completes. Append them in the 
 <time> review <n> fired <trigger time or none>
 <time> review <n> ended <finished|failed|timed-out|not-declared>: <number> finding(s)
 <time> delivery <ready|draft>
+<time> progress <round> <finding|ruling|tried|changed>: <items>
 ```
 
 - `run <n>`: `n` is one more than the highest run number already in the file, or 1.
 - `done board-start`: written as soon as the card's delivery-start operation is done, so a rerun retries only that operation when it is missing.
 - `review <n> fired`: the trigger time the forge operation reported, or `none` when `docs/FORGE.md` declares no review.
+- `progress`: a progress entry records a round's findings, each ruling with its reason, what was tried, and what changed. The brief gives each entry whole; copy it verbatim as data, stamping only `<time>`, and fill nothing inside it. Progress entries stay local in the ledger: never post one, or any other ledger line, to a PR, a comment, or a card. A progress entry is never a checkpoint.
