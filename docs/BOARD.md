@@ -19,11 +19,11 @@ Configuration does not authorize execution; the user's request does. An operatio
 ## Cards
 
 - Identity and spec naming: the issue identifier (`SMR-200`), shared by board, branch, PR, and spec. A spec is a folder, `docs/specs/<lowercase identifier>-<slug>/`, for example `docs/specs/smr-200-card-content-access/`.
-- Type and priority: exactly one of the labels `Bug`, `Improvement`, `Feature`; priority `1` Urgent, `2` High, `3` Medium, `4` Low.
+- Type and priority: exactly one of the labels `Bug`, `Improvement`, `Feature`, `Research`; priority `1` Urgent, `2` High, `3` Medium, `4` Low.
 - Deliverable: the label `Deliverable` marks a card as written by the shaping process, and is added when that process files or updates it. Only a card with this label can go through a full story delivery.
 - Unreproducible: the label `Unreproducible` marks a Bug card whose bug an automated fix could not reproduce.
 - Card, spec, and docs: a card holds the why and the what; a spec holds the how for one unit of work, is written and read by agents, stays in the repository as context for later failures, and is never kept current; humans compact or remove it. Durable knowledge belongs in `docs/`, outside `docs/specs/`.
-- Kinds of work: a story changes code and ends in a PR; a spike answers an open question and ends in a PR that adds its findings document; any prototype it builds is throwaway and never merged.
+- Kinds of work: a story changes code and ends in a PR; a spike answers an open question and ends in a PR that adds its findings document; any prototype it builds is throwaway and never merged; research, labelled `Research`, answers a question from new sources and ends in a PR that adds its library pages.
 - Dependencies: Linear blocking relations (`blockedBy`, `blocks`). No sub-issues: one story is one issue and one PR.
 - Story format: the title is an action-verb story title; the description is a summary paragraph, then only the applicable sections of `## Why`, `## Scope`, `## Out of scope`, `## Acceptance criteria`, `## Assumptions`, `## Open questions`, `## References`, with no `#` heading. Acceptance criteria are one observable behavior per line. Linear rewrites `-` bullets to `*` and wraps bare URLs in `<…>` on save; that is not a content change.
 - Bug format: the title names the failure as a user meets it; the description is `## Observed`, `## Expected`, `## Steps`, then `## Assumptions`, `## Open questions`, and `## References` when they apply, with no `#` heading.
