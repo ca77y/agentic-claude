@@ -1,7 +1,7 @@
 ---
 title: "Agent Architecture Cost-Success Trade-offs (arXiv:2611.12953v1)"
 type: raw
-summary: Controlled evaluation of eight agent architectures on 13 enterprise SOPs with one fixed model; only orchestration-v2 beat the single-agent baseline significantly, at 4.7x tokens.
+summary: Controlled evaluation of eight agent architectures on 13 enterprise SOPs with one fixed model; only orchestration-v2 beat the single-agent baseline significantly, at 4.7x tokens, on scoring cells the authors call provisional for orchestration.
 tags: [evaluation, architecture, performance]
 aliases: []
 source: https://arxiv.org/html/2611.12953v1

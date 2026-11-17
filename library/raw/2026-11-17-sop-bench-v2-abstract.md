@@ -1,7 +1,7 @@
 ---
 title: SOP-Bench v2 abstract and paper (arXiv 2506.08119v2)
 type: raw
-summary: SOP-Bench v2 benchmarks only single-agent loops (Function-Calling vs ReAct) on 2,411 SOP tasks; it has no single-agent versus multi-agent comparison.
+summary: SOP-Bench v2 benchmarks single-agent loops (Function-Calling vs ReAct) on 2,411 SOP tasks; a keyword search of it found no single-agent versus multi-agent comparison.
 tags: [evaluation, agent-harness]
 aliases: [SOP-Bench]
 source: https://arxiv.org/abs/2506.08119v2

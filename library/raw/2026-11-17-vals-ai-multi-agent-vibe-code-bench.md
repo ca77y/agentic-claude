@@ -1,7 +1,7 @@
 ---
 title: Vals AI - Do Agent Teams Pay Off? A Case Study on Vibe Code Bench
 type: raw
-summary: Vals AI's one controlled single-agent versus team comparison on 50 greenfield web-app builds; teams cost 1.8x to 5.1x as much and beat single agents significantly in only one of four model/effort pairs.
+summary: Vals AI's controlled single-agent versus team comparison on 50 greenfield web-app builds, the only one of its kind a search of Vals found; teams cost 1.8x to 5.1x as much and beat single agents significantly in only one of four model/effort pairs.
 tags: [evaluation, agent-harness]
 aliases: [Vals multi-agent Vibe Code Bench, Do Agent Teams Pay Off]
 source: https://www.vals.ai/blogs/multi-agent-vibe-code-bench

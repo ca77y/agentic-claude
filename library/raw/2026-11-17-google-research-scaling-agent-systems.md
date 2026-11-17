@@ -1,7 +1,7 @@
 ---
 title: Google Research blog, Towards a science of scaling agent systems
 type: raw
-summary: A Google Research blog (28 Jan 2026) and its arXiv paper report a controlled single-agent vs multi-agent study that finds gains on parallelizable tasks, losses on sequential and high-baseline tasks, and 1.6-6.2x token overhead.
+summary: A Google Research blog (28 Jan 2026) and its arXiv paper report a controlled single-agent vs multi-agent study with gains on Finance-Agent, losses on PlanCraft and on tasks whose single-agent score already exceeds about 45%, and 1.6-6.2x token overhead.
 tags: [evaluation, architecture, performance, reliability]
 aliases: []
 source: https://research.google/blog/towards-a-science-of-scaling-agent-systems-when-and-why-agent-systems-work/

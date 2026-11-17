@@ -1,7 +1,7 @@
 ---
 title: Can AI Models Direct Each Other? Organizational Structure as a Probe into Training Limitations (arXiv 2603.26458)
 type: raw
-summary: Independent academic eval on 200 SWE-bench Lite instances comparing single agents with manager-worker designs; the one model-fixed pair (weak-to-weak) shows overhead, the headline pair mixes models.
+summary: Independent academic eval on 200 SWE-bench Lite instances comparing single agents with manager-worker designs; the one model-fixed pair (weak-to-weak) shows no benefit, and the headline pair mixes models.
 tags: [evaluation, agent-harness]
 aliases: []
 source: https://arxiv.org/abs/2603.26458

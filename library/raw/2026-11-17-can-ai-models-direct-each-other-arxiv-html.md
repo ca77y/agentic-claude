@@ -1,7 +1,7 @@
 ---
 title: Can AI Models Direct Each Other? HTML full text
 type: raw
-summary: Liu's SWE-bench Lite study (n=200) finds a strong-manager plus weak-worker pairing at 62% against 60% for the strong model alone, and a weak-to-weak manager loop below the weak agent alone.
+summary: Liu's SWE-bench Lite study (n=200) reports a strong-manager plus weak-worker pairing at 62% against 60% for the strong model alone, and a weak-to-weak manager loop 2 points below the weak agent alone; both gaps are inside the author's stated run-to-run swing, with no significance test.
 tags: [evaluation, agent-harness]
 aliases: [arXiv 2603.26458v1, Strong Direct vs ManagerWorker]
 source: https://arxiv.org/html/2603.26458v1

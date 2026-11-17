@@ -1,7 +1,7 @@
 ---
 title: SOP-Bench v2 HTML full text
 type: raw
-summary: SOP-Bench v2 benchmarks single-agent FC and ReAct loops on 2,411 SOP tasks; it has no single-agent versus multi-agent comparison.
+summary: SOP-Bench v2 benchmarks single-agent FC and ReAct loops on 2,411 SOP tasks; a keyword search of it found no single-agent versus multi-agent comparison.
 tags: [evaluation, agent-harness]
 aliases: [SOP-Bench, arXiv 2506.08119v2]
 source: https://arxiv.org/html/2506.08119v2
