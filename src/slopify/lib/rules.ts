@@ -197,8 +197,8 @@ const MAX_DESCRIPTION = 4000;
 const STAMP = String.raw`\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z`;
 
 // An absolute filesystem path is a slash-led word under one of these roots, or one of two or more segments ending in a
-// file name with an extension. A URL route (one after an HTTP method, or with a :param or {param} segment) and a
-// slash command are not; a directory under an unlisted root reads the same as a route, so it is not flagged.
+// file name with an extension, or any slash-led word the text names as a directory, folder or file. A URL route (one
+// after an HTTP method, with a :param or {param} segment, or named as a route or endpoint) and a slash command are not.
 const FS_ROOTS = [
   "Users",
   "home",
@@ -220,7 +220,7 @@ const FS_ROOTS = [
 ];
 
 const NOT_ROUTE = String.raw`(?<![\w.:/~-]|\b(?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s+)`;
-const NO_PARAM = String.raw`(?![^\s\x60)\]]*\/[:{])`;
+const NO_PARAM = String.raw`(?![^\s\x60)\]]*(?:\/[:{]|\x60?\s+(?:route|endpoint)s?\b))`;
 
 const LEAKS: readonly [readonly RegExp[], string][] = [
   [
@@ -228,6 +228,7 @@ const LEAKS: readonly [readonly RegExp[], string][] = [
       /(?<![\w.:/~-])~\/[\w.-]*\w/,
       new RegExp(String.raw`${NOT_ROUTE}\/(?:${FS_ROOTS.join("|")})\b(?![.-]\w)${NO_PARAM}`),
       new RegExp(String.raw`${NOT_ROUTE}(?:\/\w[\w.-]*)+\/\w[\w-]*\.[A-Za-z]\w*\b${NO_PARAM}`),
+      new RegExp(String.raw`${NOT_ROUTE}(?:\/\w[\w.-]*)+\x60?\s+(?:directory|folder|file)\b`),
       /\b[A-Z]:\\\w/i,
       /\bfile:\/\//,
     ],

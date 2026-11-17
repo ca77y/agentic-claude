@@ -338,13 +338,14 @@ var FS_ROOTS = [
   "proc"
 ];
 var NOT_ROUTE = String.raw`(?<![\w.:/~-]|\b(?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s+)`;
-var NO_PARAM = String.raw`(?![^\s\x60)\]]*\/[:{])`;
+var NO_PARAM = String.raw`(?![^\s\x60)\]]*(?:\/[:{]|\x60?\s+(?:route|endpoint)s?\b))`;
 var LEAKS = [
   [
     [
       /(?<![\w.:/~-])~\/[\w.-]*\w/,
       new RegExp(String.raw`${NOT_ROUTE}\/(?:${FS_ROOTS.join("|")})\b(?![.-]\w)${NO_PARAM}`),
       new RegExp(String.raw`${NOT_ROUTE}(?:\/\w[\w.-]*)+\/\w[\w-]*\.[A-Za-z]\w*\b${NO_PARAM}`),
+      new RegExp(String.raw`${NOT_ROUTE}(?:\/\w[\w.-]*)+\x60?\s+(?:directory|folder|file)\b`),
       /\b[A-Z]:\\\w/i,
       /\bfile:\/\//
     ],
