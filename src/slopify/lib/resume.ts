@@ -1,5 +1,5 @@
 // Where a delivery stands, from its durable checkpoints: the worktree, the PR, the ledger, and the committed spec.
-import { absent, fact, scout, shaped, type ScoutResult } from "./family.ts";
+import { fact, scout, shaped, type ScoutResult } from "./family.ts";
 import { val } from "./deliver.ts";
 import { Halt, must, type Run } from "./loop.ts";
 import { checkpointLine, parseReproduction, type CheckpointKey, type Reproduction } from "./rules.ts";
@@ -30,8 +30,7 @@ function accepted(cp: ScoutResult, key: CheckpointKey): string[] {
   const lines: string[] = [];
   for (const e of cp.evidence) {
     if (e.source !== key) continue;
-    const item = (e.excerpt || e.location || "").trim();
-    if (absent(item, true)) continue;
+    const item = e.excerpt.trim();
     if (!LEDGER_LINE.test(item)) {
       throw new Halt(
         "locate",
