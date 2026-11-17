@@ -14,7 +14,7 @@
       "category": "Deterministic",
       "path": "make check, plus a unit test that reads plugins/slopify/agents/lens-pr.md and the reference it names",
       "evidence": "make check exit 0; the test passes, showing lens-pr.md disallows Edit, Write and NotebookEdit, carries the Report-only contract, and requires each named check, accepting a grouped Why trust it line for each criterion it names",
-      "firstTest": "'lens-pr is report-only and checks headings, order, the 4,000-character limit, process detail, and Why trust it lines against criterion results'"
+      "firstTest": "test/plugin-text.test.ts: 'lens-pr is report-only and checks headings, order, the 4,000-character limit, process detail, and Why trust it lines against criterion results'"
     },
     {
       "id": "c3",
@@ -116,40 +116,40 @@
       "id": "c15",
       "wording": "Each PR-opening kind's design doc, the product's forge design, and the forge setup `bootstrap` creates in a project describe the PR description as its four parts under the headings **What changes**, **Needs you**, **Why trust it**, and **Not done**, in that order. (Deterministic)",
       "category": "Deterministic",
-      "path": "make check, and a text test over STORY.md, TRIVIAL.md, BUGFIX.md, SPIKE.md, docs/RESEARCH.md, docs/FORGE.md and bootstrap references/forge.md",
+      "path": "make check, and test/docs-text.test.ts over STORY.md, TRIVIAL.md, BUGFIX.md, SPIKE.md, docs/RESEARCH.md, docs/FORGE.md and bootstrap references/forge.md",
       "evidence": "make check exit 0; the test passes, finding the four headings in order in each file",
-      "firstTest": "'each kind's design doc and both forge texts name the four parts in order'"
+      "firstTest": "test/docs-text.test.ts: 'each kind's design doc and both forge texts name the four parts in order'"
     },
     {
       "id": "c16",
       "wording": "Each PR-opening kind's design doc describes that kind's opening and trust line. (Deterministic)",
       "category": "Deterministic",
-      "path": "make check, and a text test over the five kind design docs",
+      "path": "make check, and test/docs-text.test.ts over the five kind docs",
       "evidence": "make check exit 0; the test passes, finding in each doc its kind's opening and trust line wording",
-      "firstTest": "'each kind's design doc states its opening and its trust line'"
+      "firstTest": "test/docs-text.test.ts: 'each kind's design doc states its opening and its trust line'"
     },
     {
       "id": "c17",
       "wording": "The product's agent listings, every place the product design lists its producer agents, and the plugin's description include `writer-pr` and the description lens, and the plugin's version is unchanged. (Deterministic)",
       "category": "Deterministic",
-      "path": "make check, and a text test over README.md, docs/DESIGN.md and plugin.json, plus git diff of plugin.json's version",
-      "evidence": "make check exit 0; the test passes, finding writer-pr and lens-pr in each listing; plugin.json version equals the base branch's",
-      "firstTest": "'README, DESIGN and plugin.json list writer-pr and lens-pr'"
+      "path": "make check, and test/docs-text.test.ts over README.md, docs/DESIGN.md and plugin.json, plus git diff of plugin.json's version",
+      "evidence": "make check exit 0; the test passes, finding writer-pr and lens-pr in README's per-workflow lists in the Area table (deliver-story; deliver-trivial and deliver-bugfix; deliver-spike; research), its Producers and Lenses rows, DESIGN's producer list and plugin.json's description; plugin.json version equals the base branch's",
+      "firstTest": "test/docs-text.test.ts: 'README's workflow lists and agent families, DESIGN and plugin.json list writer-pr and lens-pr'"
     },
     {
       "id": "c18",
       "wording": "The product README and the instructions `pusher` works from for the ledger describe the progress entries and say they stay local. (Deterministic)",
       "category": "Deterministic",
-      "path": "make check, and a text test over README.md and plugins/slopify/references/pusher-ledger.md",
-      "evidence": "make check exit 0; the test passes, finding the progress entry and that it stays local in both",
-      "firstTest": "'README and pusher-ledger.md describe progress entries as local'"
+      "path": "make check, test/plugin-text.test.ts over plugins/slopify/references/pusher-ledger.md, and test/docs-text.test.ts over README.md",
+      "evidence": "make check exit 0; plugin-text.test.ts finds the progress entry template in pusher-ledger.md and that entries stay local; docs-text.test.ts finds README saying progress entries stay local",
+      "firstTest": "test/plugin-text.test.ts: 'pusher-ledger.md describes progress entries as local'; test/docs-text.test.ts: 'README describes progress entries as local'"
     },
     {
       "id": "c19",
       "wording": "`make check` passes. (Deterministic)",
       "category": "Deterministic",
       "path": "make check",
-      "evidence": "make check exit 0, including build:check over the regenerated plugins/slopify/workflows/*.js",
+      "evidence": "make check exit 0 at the end of the last task (docs), including build:check over the regenerated plugins/slopify/workflows/*.js",
       "firstTest": "Run make check after make build"
     },
     {
