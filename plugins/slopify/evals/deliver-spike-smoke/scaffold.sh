@@ -127,7 +127,6 @@ cp -R "$resources/library" library
 today=2026-01-01 # fixed, so the seed commit and its sha are the same on every run
 find library -type f -name '*.md' | while IFS= read -r f; do
   # The backticks are literal Markdown, not command substitution.
-  # shellcheck disable=SC2016
   sed \
     -e "s|{{PROJECT_NAME}}|Eval Project|g" \
     -e "s|{{TODAY}}|$today|g" \

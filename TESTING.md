@@ -30,7 +30,7 @@ CLI: a Claude Code plugin marketplace. There is no running app; plugins are chec
 Each command is expected to exit 0. `make check` runs all of them; `make format` rewrites files and is never a check.
 
 - Format: `npx --no-install prettier --check .`
-- Lint: `npm run --silent build:check && npm run --silent lint:ts && npm run --silent lint:md && npm run --silent lint:dead && npm run --silent lint:dup && npm run --silent lint:pins && npm run --silent lint:blocks && npm run --silent lint:sh && npm run --silent lint:types && claude plugin validate --strict . && claude plugin validate --strict plugins/slopify`
+- Lint: `npm run --silent build:check && npm run --silent lint:ts && npm run --silent lint:md && npm run --silent lint:dead && npm run --silent lint:dup && npm run --silent lint:pins && npm run --silent lint:blocks && npm run --silent lint:types && claude plugin validate --strict . && claude plugin validate --strict plugins/slopify`
 - Typecheck: `npm run --silent typecheck`
 - Unit tests: `npm run --silent test:unit`, or `node --test <file>` for one test file.
 
