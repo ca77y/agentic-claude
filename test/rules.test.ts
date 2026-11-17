@@ -362,6 +362,12 @@ describe("checkDescription's leak rules", () => {
     );
   });
 
+  test("flags a home-directory path or a path ending in a file name even when the word route or endpoint follows", () => {
+    leaks("Edited /Users/me/x/api.ts route handlers.");
+    leaks("Edited /Users/me/proj endpoint config.");
+    leaks("Edited /srv/app/src/api.ts endpoint handlers.");
+  });
+
   test("flags a path named as a directory or file under a root the list does not hold", () => {
     leaks("The cache is in the /data/cache directory.");
     leaks("The worker writes the /scratch/out/report file.");
