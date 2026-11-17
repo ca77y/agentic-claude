@@ -424,7 +424,7 @@ function createDeliver(config) {
   const { workflow: WORKFLOW2, projectRoot, storyArg } = config;
   const branchOnly = config.branchOnly === true;
   const WHERE = projectRoot ? `The project is at ${projectRoot}.` : "The project is the session project directory.";
-  const AUTH = `Authorization, from the user's invocation of /slopify:${WORKFLOW2}: the story branch and worktree, attributable commits, the pushes the brief asks for, opening or updating this task's PR as a draft or ready, the declared review trigger, the one issue comment and label the brief asks for when the run ends or halts, and filing the issues the brief lists. It does not authorize merging, releases, any other message, rewriting docs/BOARD.md or docs/FORGE.md, or changing a card's content. Work exactly as docs/BOARD.md and docs/FORGE.md declare; an operation that is not bound is unmet, never improvised. Stage explicit paths only.`;
+  const AUTH = `Authorization, from the user's invocation of /slopify:${WORKFLOW2}: the story branch and worktree, attributable commits, the pushes the brief asks for, opening or updating this task's PR, marking it ready, or converting it to a draft, the declared review trigger, the one issue comment and label the brief asks for when the run ends or halts, and filing the issues the brief lists. It does not authorize merging, releases, any other message, rewriting docs/BOARD.md or docs/FORGE.md, or changing a card's content. Work exactly as docs/BOARD.md and docs/FORGE.md declare; an operation that is not bound is unmet, never improvised. Stage explicit paths only.`;
   const completed = [];
   const state = {
     worktree: "",
@@ -1442,7 +1442,7 @@ async function pushRound(l, last) {
   const number = l.reviewNumber + 1;
   const noReview = "When docs/FORGE.md declares no review, fire nothing: that is not unmet.";
   const steps = state.pr ? `Push the branch even if something is still flagged. Then update the PR ${state.pr}. ${bodyInstruction(l)}
-Then fire the review trigger as docs/FORGE.md declares. ${noReview}` : open ? `Push the branch even if something is still flagged. Then open the branch's PR as a draft as docs/FORGE.md declares. ${bodyInstruction(l)}
+If the PR is a draft, mark it ready for review as docs/FORGE.md declares, since a review may skip a draft. Then fire the review trigger as docs/FORGE.md declares. ${noReview}` : open ? `Push the branch even if something is still flagged. Then open the branch's PR ready for review, not as a draft, as docs/FORGE.md declares, since a review may skip a draft. ${bodyInstruction(l)}
 Fire the review trigger only if docs/FORGE.md says opening doesn't fire it. ${noReview} Then attach the PR to card ${l.cardId} as docs/BOARD.md declares. Report the PR reference as the operation named pr.` : "Push the branch even if something is still flagged. Open no PR yet.";
   const lines = [
     ...open ? ["done publish <the PR reference>"] : [],
@@ -1523,7 +1523,7 @@ ${list(questions)}`;
       () => callPusher(
         l.d.pushBrief(
           `Update the PR ${state.pr}. ${bodyInstruction(l)}
-${ready ? "Mark the PR ready for review, as docs/FORGE.md declares.\n" : "Leave it a draft.\n"}${issues}${card}`,
+${ready ? "Mark the PR ready for review if it is a draft, as docs/FORGE.md declares.\n" : "Convert the PR to a draft, as docs/FORGE.md declares, so it shows the work is unfinished.\n"}${issues}${card}`,
           [`delivery ${ready ? "ready" : "draft"}`]
         ),
         ready ? "mark the PR ready" : "report the draft",

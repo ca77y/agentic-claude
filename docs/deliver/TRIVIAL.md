@@ -17,14 +17,14 @@ How `deliver-trivial` takes a trivial story from a card or a prompt to a reviewe
  │               scout-docs (haiku) finds docs the diff affects
  │               writer-docs (sonnet) fixes them, only if it found any → commit
  4 VALIDATE ──── validator (sonnet) runs the app as TESTING.md says, once
- 5 PUSH ──────── pusher pushes, opens a draft PR, which fires the review             ⛔ H2
+ 5 PUSH ──────── pusher pushes, opens the PR ready, which fires the review            ⛔ H2
  6 REVIEW ────── watcher (haiku) reads the findings
  │   ▲ ≤3 fix    judge × 1 (opus) rules on every finding
  │   │  rounds   each blocker/major: failing test → commit → coder → commit → checks
  │   │           scout-docs, then writer-docs if it found any
  │   └────────── pusher pushes and requests the review
  ▼
- clean → PR ready, issue In Review            not clean → PR stays draft, saying why
+ clean → PR ready, issue In Review            not clean → PR turns draft, saying why
 ```
 
 ## What differs from `deliver-story`

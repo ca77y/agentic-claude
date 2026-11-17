@@ -163,9 +163,10 @@ describe("a delivery with nothing wrong", () => {
     );
   });
 
-  test("builds, validates, opens a draft, and goes ready on a clean review", async () => {
+  test("builds, validates, opens the PR ready, and keeps it ready on a clean review", async () => {
     use(happy());
     const r = await runLoop(inputFor(freshRun()));
+    assert.match(pushPrompts().at(-1) ?? "", /open the branch's PR ready for review, not as a draft/);
     assert.equal(r.status, "ready");
     assert.equal(r.pr, "PR-1");
     assert.equal(r.rounds, 0);
@@ -326,6 +327,7 @@ describe("the inner loop", () => {
     const r = await runLoop(inputFor(freshRun()));
     assert.equal(r.status, "draft");
     assert.ok(r.draftReasons.some((x) => x.text.includes("blocker")));
+    assert.ok(finalPrompt().includes("Convert the PR to a draft"));
     assert.ok(count("validator") >= 1);
     assert.equal(count("coder", "t1: fix"), 3);
   });

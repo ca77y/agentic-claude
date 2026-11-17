@@ -10,7 +10,7 @@ How `deliver-story` takes a card to a pull request (PR) whose review is clean. I
 4. The PR is reviewed. It is marked ready only when the review is clean.
 5. The change is validated by running the app, as the target project's `TESTING.md` describes. The workflow knows no platform, so a web app is driven in a browser and an iOS app in the simulator because `TESTING.md` says so.
 
-A delivery ends in a PR unless one of the halt conditions below holds. Anything still open goes into the PR, and the PR stays a draft. A human merges.
+A delivery ends in a PR unless one of the halt conditions below holds. Anything still open goes into the PR, and `pusher` converts the PR to a draft. A human merges.
 
 ## Flow
 
@@ -55,14 +55,14 @@ A delivery ends in a PR unless one of the halt conditions below holds. Anything 
  │  │                  no proof → cannot-verify
  │  │   GATEWAY ────── judge (opus): anything missed? a doc not on the list → added
  │  │   PUSH ───────── pusher pushes (even if something is still flagged)                  ⛔ H4
- │  │                  no PR yet: opens a draft once nothing blocks, or on the last round
+ │  │                  no PR yet: opens it ready once nothing blocks, or on the last round
  │  │                  PR exists: requests the review
  │  │   REVIEW ─────── only if a PR exists: watcher (haiku) reads the findings
  │  │                  judge × 1 (opus) rules on every finding: severity and kind
  │  │   GATE (code) ── clean → exit
  │  └── code or test → inner loop     docs → writer-docs     spec → advisors and writer-spec
  ▼
- clean → PR ready, issue In Review            not clean → PR stays draft, issue gets questions
+ clean → PR ready, issue In Review            not clean → PR turns draft, issue gets questions
 ```
 
 ## Stages
@@ -147,11 +147,11 @@ This stage is two nested loops. The inner loop makes one change correct, and onl
    - A finding that conflicts with the spec's design is kind `spec`, which brings in the advisors. `coder` doesn't improvise around a wrong spec.
 4. **Gateway.** One `judge` (opus) reads every `qa` verdict, the validator's evidence, the `lens-docs` results, and the round's diff, and decides whether anything was missed. Whatever it flags is judged like any other problem and becomes open for the next round. A document the change affects that isn't on the `docs` list is added to it.
 5. **Push.** `pusher` commits and pushes the round's work, even when something is still flagged, so every attempt stays in git history.
-   - If no PR exists, `pusher` opens one as a draft once no `blocker` or `major` is open, or on the last round either way. Opening it fires the review. `pusher` then attaches it to the issue.
+   - If no PR exists, `pusher` opens one ready for review once no `blocker` or `major` is open, or on the last round either way. Opening it fires the review. It is never opened as a draft, because a review may skip drafts; when a PR is a draft, as after an earlier run, `pusher` marks it ready before firing the next review. `pusher` then attaches it to the issue.
    - If a PR exists, `pusher` updates its description and requests the review as `docs/FORGE.md` declares.
    - Anything still flagged goes under **Why this is a draft**, with its evidence and what was tried.
 6. **Review.** This step runs only when a PR exists. The review is the one `docs/FORGE.md` declares, with the trigger and the status it declares for it. The workflow doesn't review the code itself.
-   - `watcher` waits for the review run to finish and returns its findings. A review that ended without reviewing the change, such as one that skipped a draft, comes back `skipped`; it is not clean, though it has no findings, so the PR stays a draft.
+   - `watcher` waits for the review run to finish and returns its findings. A review that ended without reviewing the change, comes back `skipped`; it is not clean, though it has no findings, so the PR becomes a draft.
    - One `judge` rules on all the review's findings as in step 3. Each brief includes the earlier rulings for the same fingerprint (file, symbol, category), so a dismissed finding stays dismissed.
    - The judge filters out pre-existing issues, issues a linter would catch, and style. It runs a reproduction when it can, rather than only reading the code.
 7. **Gate.** This step is code, not an agent. It waits for every judge.
@@ -209,7 +209,7 @@ The description is rendered from the run state and updated after every round. It
 #### How the run exits
 
 - **Clean:** `pusher` marks the PR ready, moves the issue to In Review, and comments with the evidence and assumptions.
-- **Not clean:** the PR stays a draft, and **Why this is a draft** lists everything keeping it one. The issue gets a comment with the specific questions. The run returns `draft` with the decision ids. A rerun with `answers` resumes at the next outer round.
+- **Not clean:** `pusher` converts the PR to a draft, and **Why this is a draft** lists everything keeping it one. The issue gets a comment with the specific questions. The run returns `draft` with the decision ids. A rerun with `answers` resumes at the next outer round.
 
 ## Test first
 

@@ -1092,9 +1092,9 @@ async function pushRound(l: Loop, last: boolean): Promise<void> {
   // A project may declare no review; the watcher then reports not-declared, which counts as clean.
   const noReview = "When docs/FORGE.md declares no review, fire nothing: that is not unmet.";
   const steps = state.pr
-    ? `Push the branch even if something is still flagged. Then update the PR ${state.pr}. ${bodyInstruction(l)}\nThen fire the review trigger as docs/FORGE.md declares. ${noReview}`
+    ? `Push the branch even if something is still flagged. Then update the PR ${state.pr}. ${bodyInstruction(l)}\nIf the PR is a draft, mark it ready for review as docs/FORGE.md declares, since a review may skip a draft. Then fire the review trigger as docs/FORGE.md declares. ${noReview}`
     : open
-      ? `Push the branch even if something is still flagged. Then open the branch's PR as a draft as docs/FORGE.md declares. ${bodyInstruction(l)}\nFire the review trigger only if docs/FORGE.md says opening doesn't fire it. ${noReview} Then attach the PR to card ${l.cardId} as docs/BOARD.md declares. Report the PR reference as the operation named pr.`
+      ? `Push the branch even if something is still flagged. Then open the branch's PR ready for review, not as a draft, as docs/FORGE.md declares, since a review may skip a draft. ${bodyInstruction(l)}\nFire the review trigger only if docs/FORGE.md says opening doesn't fire it. ${noReview} Then attach the PR to card ${l.cardId} as docs/BOARD.md declares. Report the PR reference as the operation named pr.`
       : "Push the branch even if something is still flagged. Open no PR yet.";
   const lines = [
     ...(open ? ["done publish <the PR reference>"] : []),
@@ -1184,7 +1184,7 @@ async function finish(l: Loop, ready: boolean): Promise<void> {
     await inOrder(l, () =>
       callPusher(
         l.d.pushBrief(
-          `Update the PR ${state.pr}. ${bodyInstruction(l)}\n${ready ? "Mark the PR ready for review, as docs/FORGE.md declares.\n" : "Leave it a draft.\n"}${issues}${card}`,
+          `Update the PR ${state.pr}. ${bodyInstruction(l)}\n${ready ? "Mark the PR ready for review if it is a draft, as docs/FORGE.md declares.\n" : "Convert the PR to a draft, as docs/FORGE.md declares, so it shows the work is unfinished.\n"}${issues}${card}`,
           [`delivery ${ready ? "ready" : "draft"}`],
         ),
         ready ? "mark the PR ready" : "report the draft",

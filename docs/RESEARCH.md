@@ -21,13 +21,13 @@ How `research` answers a question from new sources and adds the answer to the pr
  │               the question, and the index, taxonomy, and log → commit
  7 VALIDATE ──── checks (haiku), library-clerk × 1 per wiki page on its evidence, and
  │               library-clerk on the changed files' integrity → judge × 1 (opus)
- 8 PUSH ──────── pusher pushes, opens a draft PR, which fires the review                     ⛔ H2
+ 8 PUSH ──────── pusher pushes, opens the PR ready, which fires the review                    ⛔ H2
  9 REVIEW ────── watcher (haiku) reads the findings
  │   ▲ ≤3 fix    judge × 1 (opus) rules on every finding
  │   │  rounds   library-scribe repairs the pages → commit, then step 7 again
  │   └────────── pusher pushes and requests the review
  ▼
- clean → PR ready, issue In Review            not clean → PR stays draft, saying why
+ clean → PR ready, issue In Review            not clean → PR turns draft, saying why
 ```
 
 ## Decisions
