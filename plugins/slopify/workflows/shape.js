@@ -167,6 +167,7 @@ function hashOf(text) {
   for (const ch of text) h = (h * 33 ^ (ch.codePointAt(0) ?? 0)) >>> 0;
   return h.toString(36).padStart(6, "0");
 }
+var markerOf = (workflow, slug) => `<!-- ${workflow} ${hashOf(slug)} -->`;
 function slugged(text, fallback) {
   const norm = (text || "").toLowerCase().replaceAll(/[^a-z0-9]+/g, " ").trim();
   const words = norm.split(" ").filter(Boolean).slice(0, 6).join("-");
@@ -804,7 +805,7 @@ ${list(confirmed)}`,
 }
 async function file(d, c, slug, deliverable) {
   phase("File");
-  const marker = `<!-- shape ${slug} -->`;
+  const marker = markerOf("shape", slug);
   const target = c.cardId ? `Update card ${c.cardId} with it.` : `Search the board for a card whose body holds the line ${marker}, and update that card with it; create a card only when there is none.`;
   const deliverableLabel = c.kind === "story" ? deliverable ? ` Make sure the card has the label ${DELIVERABLE}.` : ` Make sure the card doesn't have the label ${DELIVERABLE}.` : "";
   const label = `Make sure the card has the label ${SHAPED_LABEL}.${deliverableLabel}`;

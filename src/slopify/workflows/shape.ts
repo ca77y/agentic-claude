@@ -6,6 +6,7 @@ import {
   defectsOf,
   fact,
   lens,
+  markerOf,
   scout,
   slugged,
   type LensResult,
@@ -312,7 +313,7 @@ async function refine(d: Run, c: Card, firstOpen: readonly string[]): Promise<st
 
 async function file(d: Run, c: Card, slug: string, deliverable: boolean): Promise<string> {
   phase("File");
-  const marker = `<!-- shape ${slug} -->`;
+  const marker = markerOf("shape", slug);
   const target = c.cardId
     ? `Update card ${c.cardId} with it.`
     : `Search the board for a card whose body holds the line ${marker}, and update that card with it; create a card only when there is none.`;

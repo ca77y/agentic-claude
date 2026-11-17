@@ -232,6 +232,10 @@ export function hashOf(text: string): string {
   for (const ch of text) h = ((h * 33) ^ (ch.codePointAt(0) ?? 0)) >>> 0;
   return h.toString(36).padStart(6, "0");
 }
+// The hidden line a workflow writes last in a card body so a rerun can find the card. It holds only a hash of the slug:
+// the board rewrites text such as a card identifier on save (Linear turns smr-317 into a link), and a line holding
+// such text would never read back as written.
+export const markerOf = (workflow: string, slug: string): string => `<!-- ${workflow} ${hashOf(slug)} -->`;
 // A file slug for free text: its first six words plus a hash of all of it, so two ideas that open
 // alike never share a file.
 export function slugged(text: string | null | undefined, fallback?: string): string {

@@ -223,6 +223,7 @@ function hashOf(text) {
   for (const ch of text) h = (h * 33 ^ (ch.codePointAt(0) ?? 0)) >>> 0;
   return h.toString(36).padStart(6, "0");
 }
+var markerOf = (workflow, slug) => `<!-- ${workflow} ${hashOf(slug)} -->`;
 function slugged(text, fallback) {
   const norm = (text || "").toLowerCase().replaceAll(/[^a-z0-9]+/g, " ").trim();
   const words = norm.split(" ").filter(Boolean).slice(0, 6).join("-");
@@ -1840,7 +1841,7 @@ ${d.branchOnly ? "- worktree: the main checkout, only when it has this run's bra
 
 // src/slopify/lib/small.ts
 async function fileCard(d, story, slug, cardType) {
-  const marker = `<!-- deliver-small ${slug} -->`;
+  const marker = markerOf("deliver-small", slug);
   const r = await callPusher(
     d.pushBrief(
       `Create a ${cardType} card from this text, as docs/BOARD.md declares, with one trailing line in its body: ${marker}. First search the board for a card whose body holds that line, and use that card instead of creating another. Report the card's identifier as the operation card.

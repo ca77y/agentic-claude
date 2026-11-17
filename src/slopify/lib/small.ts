@@ -1,5 +1,5 @@
 // What deliver-trivial and deliver-bugfix share: from a card or a prompt to a reviewed PR, with no spec.
-import { scout, slugged } from "./family.ts";
+import { markerOf, scout, slugged } from "./family.ts";
 import { callPusher, createDeliver, opRef, pushOk, type Stopped } from "./deliver.ts";
 import { locate, workspace } from "./deliver-steps.ts";
 import { answersOf, answersRejected, flagOf, inputOf, textOf, type NotStarted } from "./input.ts";
@@ -37,7 +37,7 @@ interface SmallFlow {
 
 // Work with no card still belongs on the board. The marker line lets a rerun find this card instead of filing another.
 async function fileCard(d: Run, story: string, slug: string, cardType: string): Promise<string> {
-  const marker = `<!-- deliver-small ${slug} -->`;
+  const marker = markerOf("deliver-small", slug);
   const r = await callPusher(
     d.pushBrief(
       `Create a ${cardType} card from this text, as docs/BOARD.md declares, with one trailing line in its body: ${marker}. First search the board for a card whose body holds that line, and use that card instead of creating another. Report the card's identifier as the operation card.\n<<<TEXT\n${story}\nTEXT>>>`,
