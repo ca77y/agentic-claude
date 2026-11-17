@@ -679,6 +679,90 @@ describe("the small workflows", () => {
     }
   });
 
+  test("deliver-trivial still gives writer-pr and lens-pr the passed test on a rerun that resumes after the build", async () => {
+    current.script = promptRun;
+    Object.assign(globalThis, { args: "Add mul to calc.py" });
+    await deliverTrivial();
+    // The done-round lines the first run had pusher append, read back as the scout returns them.
+    const rounds = calls
+      .filter((c) => c.type === "pusher")
+      .flatMap((c) => c.prompt.split("\n"))
+      .filter((line) => line.startsWith("- ") && line.includes("done round"))
+      .map((line) => `2026-11-09T10:00:00Z ${line.slice(2).replaceAll(/<[^<>]*>/g, "none")}`);
+    assert.ok(rounds.length > 0, "the first run wrote a done-round checkpoint");
+    calls.length = 0;
+    current.script = (type, label, prompt) =>
+      type === "scout-checkpoint"
+        ? {
+            ...SCOUT,
+            evidence: [
+              { source: "worktree", location: "x", excerpt: "/p/wt" },
+              { source: "pr", location: "x", excerpt: "PR-1" },
+              ...rounds.map((excerpt) => ({ source: "done-round", location: "x", excerpt })),
+            ],
+          }
+        : promptRun(type, label, prompt);
+    Object.assign(globalThis, { args: "SMR-50" });
+    const r = await deliverTrivial();
+    assert.equal(r.status, "ready");
+    assert.equal(
+      calls.filter((c) => c.label === "change: test").length,
+      0,
+      "the rerun resumes after the build, writing no test",
+    );
+    for (const type of ["writer-pr", "lens-pr"]) {
+      const prompts = calls.filter((c) => c.type === type).map((c) => c.prompt);
+      assert.ok(prompts.length > 0, `${type} ran`);
+      for (const prompt of prompts) {
+        assert.ok(
+          prompt.split("\n").some((line) => line.includes("t.py") && /\bpass(?:es|ed)?\b/i.test(line)),
+          `${type} is told, on the rerun, the change's test t.py and that it passed`,
+        );
+      }
+    }
+  });
+
+  test("deliver-trivial claims no passed test to writer-pr and lens-pr when the change's test never passes", async () => {
+    // qa never passes the first change, t.py, so it escalates; the review round's fix has its own test, fix.py.
+    current.script = (type, label, prompt) => {
+      if (type === "qa") {
+        const findings = [{ location: "calc.py", problem: "wrong", blocking: true }];
+        return { verdict: "fail", evaluated: "x", findings, limits: "", testAtFault: false };
+      }
+      const reply = promptRun(type, label, prompt);
+      return type === "coder" && label.startsWith("fix-") && label.endsWith(": test")
+        ? { ...reply, tests: ["fix.py"] }
+        : reply;
+    };
+    Object.assign(globalThis, { args: "Add mul to calc.py" });
+    await deliverTrivial();
+    for (const type of ["writer-pr", "lens-pr"]) {
+      const prompts = calls.filter((c) => c.type === type).map((c) => c.prompt);
+      assert.ok(prompts.length > 0, `${type} ran`);
+      for (const prompt of prompts) {
+        assert.ok(
+          prompt.split("\n").every((line) => !line.includes("t.py") || !/\bpass(?:es|ed)?\b/i.test(line)),
+          `${type} is not told that t.py passed`,
+        );
+      }
+    }
+  });
+
+  test("deliver-bugfix's Why trust it rests on the reproduction, with no test-passes line from the trivial path", async () => {
+    current.script = bugRun(REPRO_OK);
+    Object.assign(globalThis, { args: "SMR-13" });
+    const r = await deliverBugfix();
+    assert.equal(r.status, "ready");
+    for (const type of ["writer-pr", "lens-pr"]) {
+      const prompts = calls.filter((c) => c.type === type).map((c) => c.prompt);
+      assert.ok(prompts.length > 0, `${type} ran`);
+      for (const prompt of prompts) {
+        assert.ok(prompt.includes("run add(1, 1)"), `${type} is told the reproduction`);
+        assert.ok(!prompt.includes("The change's test"), `${type} is not given the trivial test-passes trust line`);
+      }
+    }
+  });
+
   test("every push that opens or updates the PR runs writer-pr, then lens-pr, then pusher (deliver-bugfix)", async () => {
     current.script = bugRun(REPRO_OK);
     Object.assign(globalThis, { args: "SMR-13" });
