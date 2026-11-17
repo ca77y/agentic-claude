@@ -1,7 +1,7 @@
 ---
 title: SOP-Bench v1 abstract page
 type: raw
-summary: The arXiv v1 abstract of SOP-Bench (June 2025) reports 1,800+ tasks in 10 domains and evaluates only a Function-Calling agent and a ReAct agent.
+summary: The arXiv v1 abstract of SOP-Bench (June 2025) reports 1,800+ tasks in 10 domains and names only a Function-Calling agent and a ReAct agent; the v1 body was not read.
 tags: [evaluation]
 aliases: []
 source: https://arxiv.org/abs/2506.08119v1
