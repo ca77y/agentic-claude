@@ -200,7 +200,8 @@ const STAMP = String.raw`\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z`;
 // file name with an extension, or any slash-led word the text names as a directory, folder or file. A URL route (one
 // after an HTTP method or with a :param or {param} segment) and a slash command are not. A word named as a route or
 // endpoint is not either, unless it is under a home-directory root or ends in a file name, which stay paths whatever
-// word follows them.
+// word follows them. A markdown link target ending in a file name is root-relative, not a path, unless it is under a
+// root above.
 const FS_ROOTS = [
   "home",
   "root",
@@ -223,6 +224,9 @@ const NOT_ROUTE = String.raw`(?<![\w.:/~-]|\b(?:GET|POST|PUT|PATCH|DELETE|HEAD|O
 const NO_PARAM = String.raw`(?![^\s\x60)\]]*\/[:{])`;
 const NOT_NAMED_ROUTE = String.raw`(?![^\s\x60)\]]*\x60?\s+(?:route|endpoint)s?\b)`;
 const HOME_ROOTS = ["Users", "Volumes"];
+// What follows pusher's timestamp on a ledger line, per references/pusher-ledger.md; a timestamp followed by other text,
+// such as a bug's quoted output, is not a ledger line.
+const LEDGER_ENTRY = String.raw`(?:run \d+:|done (?:spec|findings|board-start|round|publish) |reproduced \{|review \d+ (?:fired|ended)\b|delivery (?:ready|draft)\b|progress \d+ )`;
 
 const LEAKS: readonly [readonly RegExp[], string][] = [
   [
@@ -230,7 +234,7 @@ const LEAKS: readonly [readonly RegExp[], string][] = [
       /(?<![\w.:/~-])~\/[\w.-]*\w/,
       new RegExp(String.raw`${NOT_ROUTE}\/(?:${HOME_ROOTS.join("|")})\b(?![.-]\w)${NO_PARAM}`),
       new RegExp(String.raw`${NOT_ROUTE}\/(?:${FS_ROOTS.join("|")})\b(?![.-]\w)${NO_PARAM}${NOT_NAMED_ROUTE}`),
-      new RegExp(String.raw`${NOT_ROUTE}(?:\/\w[\w.-]*)+\/\w[\w-]*\.[A-Za-z]\w*\b${NO_PARAM}`),
+      new RegExp(String.raw`${NOT_ROUTE}(?<!\]\()(?:\/\w[\w.-]*)+\/\w[\w-]*\.[A-Za-z]\w*\b${NO_PARAM}`),
       new RegExp(String.raw`${NOT_ROUTE}(?:\/\w[\w.-]*)+\x60?\s+(?:directory|folder|file)\b`),
       /\b[A-Z]:\\\w/i,
       /\bfile:\/\//,
@@ -238,7 +242,7 @@ const LEAKS: readonly [readonly RegExp[], string][] = [
     "It holds an absolute path; name files relative to the repo root.",
   ],
   [[/\.tmp\//], "It refers to .tmp/, which is never committed; link nothing under it."],
-  [[new RegExp(String.raw`${STAMP}\s+\S`)], "It holds a ledger line; describe the current state instead."],
+  [[new RegExp(String.raw`${STAMP}\s+${LEDGER_ENTRY}`)], "It holds a ledger line; describe the current state instead."],
   [
     [
       /\bgh[pousr]_\w{30,}/,

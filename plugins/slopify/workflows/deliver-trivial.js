@@ -330,13 +330,14 @@ var NOT_ROUTE = String.raw`(?<![\w.:/~-]|\b(?:GET|POST|PUT|PATCH|DELETE|HEAD|OPT
 var NO_PARAM = String.raw`(?![^\s\x60)\]]*\/[:{])`;
 var NOT_NAMED_ROUTE = String.raw`(?![^\s\x60)\]]*\x60?\s+(?:route|endpoint)s?\b)`;
 var HOME_ROOTS = ["Users", "Volumes"];
+var LEDGER_ENTRY = String.raw`(?:run \d+:|done (?:spec|findings|board-start|round|publish) |reproduced \{|review \d+ (?:fired|ended)\b|delivery (?:ready|draft)\b|progress \d+ )`;
 var LEAKS = [
   [
     [
       /(?<![\w.:/~-])~\/[\w.-]*\w/,
       new RegExp(String.raw`${NOT_ROUTE}\/(?:${HOME_ROOTS.join("|")})\b(?![.-]\w)${NO_PARAM}`),
       new RegExp(String.raw`${NOT_ROUTE}\/(?:${FS_ROOTS.join("|")})\b(?![.-]\w)${NO_PARAM}${NOT_NAMED_ROUTE}`),
-      new RegExp(String.raw`${NOT_ROUTE}(?:\/\w[\w.-]*)+\/\w[\w-]*\.[A-Za-z]\w*\b${NO_PARAM}`),
+      new RegExp(String.raw`${NOT_ROUTE}(?<!\]\()(?:\/\w[\w.-]*)+\/\w[\w-]*\.[A-Za-z]\w*\b${NO_PARAM}`),
       new RegExp(String.raw`${NOT_ROUTE}(?:\/\w[\w.-]*)+\x60?\s+(?:directory|folder|file)\b`),
       /\b[A-Z]:\\\w/i,
       /\bfile:\/\//
@@ -344,7 +345,7 @@ var LEAKS = [
     "It holds an absolute path; name files relative to the repo root."
   ],
   [[/\.tmp\//], "It refers to .tmp/, which is never committed; link nothing under it."],
-  [[new RegExp(String.raw`${STAMP}\s+\S`)], "It holds a ledger line; describe the current state instead."],
+  [[new RegExp(String.raw`${STAMP}\s+${LEDGER_ENTRY}`)], "It holds a ledger line; describe the current state instead."],
   [
     [
       /\bgh[pousr]_\w{30,}/,
