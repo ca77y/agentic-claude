@@ -2288,6 +2288,10 @@ async function checkLibrary(c, pages) {
       brief: `Assignment: answer and evidence support. In the worktree ${c.worktree}, check the wiki page ${page}, line by line, against the raw-note blocks it cites.`
     })),
     {
+      label: "summaries",
+      brief: `Assignment: answer and evidence support. In the worktree ${c.worktree}, check the summary of each raw note among ${changed}, one note at a time, against that note's own key evidence and Limitations. A summary that claims more than its body records, or drops a hedge its body states, is a finding. Then check that each of their index lines carries the note's title and summary word for word.`
+    },
+    {
       label: "library integrity",
       brief: `Assignment: library integrity. In the worktree ${c.worktree}, check ${changed}.`
     }

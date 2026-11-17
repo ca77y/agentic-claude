@@ -307,7 +307,8 @@ async function persist(c: Ctx, evidence: readonly Evidence[], limits: readonly s
 // ---- The loop's checks and repairs --------------------------------------------
 
 // One clerk checks the evidence of each wiki page, line by line, because one clerk over the whole change skims; one
-// more checks the integrity of every changed library file.
+// checks every changed raw note's summary against its own body, since the index repeats it to readers who never open
+// the note; and one more checks the integrity of every changed library file.
 async function checkLibrary(c: Ctx, pages: readonly string[]): Promise<Problem[]> {
   const changed = `the library files this branch changes from the target branch docs/FORGE.md declares`;
   const checks = [
@@ -315,6 +316,10 @@ async function checkLibrary(c: Ctx, pages: readonly string[]): Promise<Problem[]
       label: `evidence: ${page}`,
       brief: `Assignment: answer and evidence support. In the worktree ${c.worktree}, check the wiki page ${page}, line by line, against the raw-note blocks it cites.`,
     })),
+    {
+      label: "summaries",
+      brief: `Assignment: answer and evidence support. In the worktree ${c.worktree}, check the summary of each raw note among ${changed}, one note at a time, against that note's own key evidence and Limitations. A summary that claims more than its body records, or drops a hedge its body states, is a finding. Then check that each of their index lines carries the note's title and summary word for word.`,
+    },
     {
       label: "library integrity",
       brief: `Assignment: library integrity. In the worktree ${c.worktree}, check ${changed}.`,
