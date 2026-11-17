@@ -278,10 +278,6 @@ export function decisionsOf(prefix: string, questions: readonly string[] | null 
   }
   return out;
 }
-export function answerOf(answers: Answers | null | undefined, id: string): string {
-  const a = answers?.[id];
-  return a === undefined || a === null ? "" : String(a).trim();
-}
 export type NeedKind = "story" | "decision" | "prerequisite" | "validation" | "input";
 /** Something a blocked run needs before a rerun can pass the step. `arg` names the arg that answers an input need. */
 export interface Need {

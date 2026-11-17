@@ -3,7 +3,6 @@ import { describe, test } from "node:test";
 
 import {
   absent,
-  answerOf,
   decisionsOf,
   hashOf,
   parseSpec,
@@ -100,11 +99,6 @@ describe("decisions and answers", () => {
   });
   test("a repeated question is listed once", () => {
     assert.equal(decisionsOf("x", ["q?", "q?"]).length, 1);
-  });
-  test("answerOf trims and treats null as unanswered", () => {
-    assert.equal(answerOf({ a: "  yes " }, "a"), "yes");
-    assert.equal(answerOf({ a: null }, "a"), "");
-    assert.equal(answerOf(undefined, "a"), "");
   });
   test("answersOf reads an answers object and treats an array as no answers", () => {
     assert.deepEqual(answersOf({ a: "yes" }), { a: "yes" });
