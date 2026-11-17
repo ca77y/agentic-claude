@@ -11,6 +11,8 @@ const text = (path: string): string => {
 // A front matter field's value, read from the first line that sets it.
 const field = (md: string, key: string): string => new RegExp(`^${key}: (.+)$`, "m").exec(md)?.[1] ?? "";
 const sentences = (md: string): string[] => md.split(/(?<=[.!?])\s+|\n\s*\n/);
+const saysLocal = (doc: string): boolean =>
+  sentences(doc).some((s) => /progress entr/i.test(s) && /\blocal\b/i.test(s));
 
 const writerPr = text("plugins/slopify/agents/writer-pr.md");
 const lensPr = text("plugins/slopify/agents/lens-pr.md");
@@ -64,17 +66,13 @@ describe("PR description agents", () => {
 });
 
 describe("progress entries", () => {
-  test("README and pusher-ledger.md describe progress entries as local", () => {
+  test("pusher-ledger.md describes progress entries as local", () => {
     const ledger = text("plugins/slopify/references/pusher-ledger.md");
     assert.match(ledger, /^<time> progress /m, "pusher-ledger.md has the progress entry template");
-    for (const [name, doc] of [
-      ["README.md", text("README.md")],
-      ["pusher-ledger.md", ledger],
-    ] as const) {
-      assert.ok(
-        sentences(doc).some((s) => /progress entr/i.test(s) && /\blocal\b/i.test(s)),
-        `${name} says progress entries stay local`,
-      );
-    }
+    assert.ok(saysLocal(ledger), "pusher-ledger.md says progress entries stay local");
+  });
+
+  test("README describes progress entries as local", () => {
+    assert.ok(saysLocal(text("README.md")), "README.md says progress entries stay local");
   });
 });
