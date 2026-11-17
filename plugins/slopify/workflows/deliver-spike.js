@@ -330,7 +330,6 @@ var PARTS = ["What changes", "Needs you", "Why trust it", "Not done"];
 var MAX_DESCRIPTION = 4e3;
 var STAMP = String.raw`\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z`;
 var FS_ROOTS = [
-  "Users",
   "home",
   "root",
   "tmp",
@@ -341,7 +340,6 @@ var FS_ROOTS = [
   "usr",
   "mnt",
   "srv",
-  "Volumes",
   "workspaces?",
   "repo",
   "runner",
@@ -349,12 +347,15 @@ var FS_ROOTS = [
   "proc"
 ];
 var NOT_ROUTE = String.raw`(?<![\w.:/~-]|\b(?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s+)`;
-var NO_PARAM = String.raw`(?![^\s\x60)\]]*(?:\/[:{]|\x60?\s+(?:route|endpoint)s?\b))`;
+var NO_PARAM = String.raw`(?![^\s\x60)\]]*\/[:{])`;
+var NOT_NAMED_ROUTE = String.raw`(?![^\s\x60)\]]*\x60?\s+(?:route|endpoint)s?\b)`;
+var HOME_ROOTS = ["Users", "Volumes"];
 var LEAKS = [
   [
     [
       /(?<![\w.:/~-])~\/[\w.-]*\w/,
-      new RegExp(String.raw`${NOT_ROUTE}\/(?:${FS_ROOTS.join("|")})\b(?![.-]\w)${NO_PARAM}`),
+      new RegExp(String.raw`${NOT_ROUTE}\/(?:${HOME_ROOTS.join("|")})\b(?![.-]\w)${NO_PARAM}`),
+      new RegExp(String.raw`${NOT_ROUTE}\/(?:${FS_ROOTS.join("|")})\b(?![.-]\w)${NO_PARAM}${NOT_NAMED_ROUTE}`),
       new RegExp(String.raw`${NOT_ROUTE}(?:\/\w[\w.-]*)+\/\w[\w-]*\.[A-Za-z]\w*\b${NO_PARAM}`),
       new RegExp(String.raw`${NOT_ROUTE}(?:\/\w[\w.-]*)+\x60?\s+(?:directory|folder|file)\b`),
       /\b[A-Z]:\\\w/i,
