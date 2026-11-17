@@ -333,7 +333,7 @@ export interface LoopInput {
   /** The spec's tasks are already built, so the first round starts at validation. */
   built: boolean;
   /** The short flow for a trivial story or a bug: no spec, and what the first test has to state. */
-  small?: { firstTest: string; reproduced?: readonly Listed[] };
+  small?: { firstTest: string; reproduced?: readonly Listed[]; passedTests?: readonly string[] };
   /** A spike's or a research run's flow: the PR changes documents, which their own checks validate and their own writer revises. */
   document?: LoopDocument;
   /** Advisors and the writer revise the spec for these problems, and return the tasks to run again. */
@@ -387,7 +387,7 @@ interface Loop extends LoopInput {
   final: Described | null;
   review: ReviewOutcome;
   changedThisRound: string[];
-  /** The small flow's test paths that pass once their change is in, which a trivial run's Why trust it rests on. */
+  /** A trivial run's test paths that pass once their change is in, which its Why trust it rests on; done round lines carry them. */
   passedTests: string[];
   /** Paths whose commit the hook still rejected after repairs; the next commit carries them. */
   uncommitted: string[];
@@ -634,7 +634,7 @@ async function tryFix(l: Loop, c: Change, cycle: CycleTest, lastFailure: string,
   if (failing) return { reason: failing, rewriteTest: false };
   // A small flow's qa runs once, on its first change; a review fix there has only the checks.
   if (l.small && l.round > 0) {
-    l.passedTests = unique([...l.passedTests, ...cycle.paths]);
+    if (l.kind === "trivial") l.passedTests = unique([...l.passedTests, ...cycle.paths]);
     return { reason: "", rewriteTest: false };
   }
   const verdict = await qaOf(l, c, cycle);
@@ -643,7 +643,7 @@ async function tryFix(l: Loop, c: Change, cycle: CycleTest, lastFailure: string,
     return { reason, rewriteTest: verdict.testAtFault };
   }
   const reason = await unneeded(l, c, cycle, sha);
-  if (!reason && l.small) l.passedTests = unique([...l.passedTests, ...cycle.paths]);
+  if (!reason && l.kind === "trivial") l.passedTests = unique([...l.passedTests, ...cycle.paths]);
   return { reason, rewriteTest: false };
 }
 
@@ -1285,7 +1285,7 @@ async function pushRound(l: Loop, last: boolean): Promise<void> {
     ...(state.pr || open
       ? [`review ${String(number)} fired <the trigger time, or none when docs/FORGE.md declares no review>`]
       : []),
-    `done round ${String(l.round)}`,
+    `done round ${String(l.round)}${l.passedTests.length > 0 ? ` passed ${l.passedTests.join(" ")}` : ""}`,
   ];
   const r = pushed(
     await pushWithProgress(l, steps, lines, "push the round", "Push"),
@@ -1458,7 +1458,7 @@ function freshLoop(input: LoopInput): Loop {
     final: null,
     review: { clean: false, note: "" },
     changedThisRound: [],
-    passedTests: [],
+    passedTests: [...(input.small?.passedTests ?? [])],
     uncommitted: [],
     openByRound: [],
     commits: Promise.resolve(),

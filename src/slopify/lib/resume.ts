@@ -13,6 +13,8 @@ export interface Resume {
   reviewFired: number;
   /** The ledger shows a finished round, so the spec's tasks are built. */
   built: boolean;
+  /** A trivial run's passed test paths, from the `passed <paths>` tail of every done round line; absent when none. */
+  passedTests?: string[];
   boardStartDone: boolean;
   /** The committed documents of a spike or a research run, from the ledger; empty when none. */
   findings: string[];
@@ -78,6 +80,17 @@ ${d.branchOnly ? "- worktree: the main checkout, only when it has this run's bra
   state.pr = shaped("ref", val(cp, "pr"));
   const lastFindings = accepted(cp, "done-findings").at(-1) ?? "";
   const lastRepro = accepted(cp, "reproduced").at(-1);
+  const rounds = accepted(cp, "done-round");
+  const passedTests = [
+    ...new Set(
+      rounds.flatMap((l) =>
+        (/ done round \d+ passed (.+)$/.exec(l)?.[1] ?? "")
+          .split(/\s+/)
+          .map((p) => shaped("rel", p))
+          .filter(Boolean),
+      ),
+    ),
+  ];
   const spec = val(cp, "spec-dir")
     .replace(/^Spec:\s*/i, "")
     .replaceAll("`", "");
@@ -89,7 +102,8 @@ ${d.branchOnly ? "- worktree: the main checkout, only when it has this run's bra
       0,
       ...accepted(cp, "review-fired").map((l) => Number(/review (\d+) fired/.exec(l)?.[1] ?? 0)),
     ),
-    built: accepted(cp, "done-round").length > 0,
+    built: rounds.length > 0,
+    ...(passedTests.length > 0 && { passedTests }),
     boardStartDone: accepted(cp, "done-board-start").length > 0,
     findings: lastFindings
       .replace(/^.*? done findings /, "")

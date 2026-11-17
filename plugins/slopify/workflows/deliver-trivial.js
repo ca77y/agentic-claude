@@ -1212,7 +1212,7 @@ async function tryFix(l, c, cycle, lastFailure, attempt) {
   const failing = await failingChecks(l);
   if (failing) return { reason: failing, rewriteTest: false };
   if (l.small && l.round > 0) {
-    l.passedTests = unique([...l.passedTests, ...cycle.paths]);
+    if (l.kind === "trivial") l.passedTests = unique([...l.passedTests, ...cycle.paths]);
     return { reason: "", rewriteTest: false };
   }
   const verdict = await qaOf(l, c, cycle);
@@ -1221,7 +1221,7 @@ async function tryFix(l, c, cycle, lastFailure, attempt) {
     return { reason: reason2, rewriteTest: verdict.testAtFault };
   }
   const reason = await unneeded(l, c, cycle, sha);
-  if (!reason && l.small) l.passedTests = unique([...l.passedTests, ...cycle.paths]);
+  if (!reason && l.kind === "trivial") l.passedTests = unique([...l.passedTests, ...cycle.paths]);
   return { reason, rewriteTest: false };
 }
 async function unneeded(l, c, cycle, fixCommit) {
@@ -1793,7 +1793,7 @@ Fire the review trigger only if docs/FORGE.md says opening doesn't fire it. ${no
   const lines = [
     ...open ? ["done publish <the PR reference>"] : [],
     ...state.pr || open ? [`review ${String(number)} fired <the trigger time, or none when docs/FORGE.md declares no review>`] : [],
-    `done round ${String(l.round)}`
+    `done round ${String(l.round)}${l.passedTests.length > 0 ? ` passed ${l.passedTests.join(" ")}` : ""}`
   ];
   const r = pushed(
     await pushWithProgress(l, steps, lines, "push the round", "Push"),
@@ -1951,7 +1951,7 @@ function freshLoop(input) {
     final: null,
     review: { clean: false, note: "" },
     changedThisRound: [],
-    passedTests: [],
+    passedTests: [...input.small?.passedTests ?? []],
     uncommitted: [],
     openByRound: [],
     commits: Promise.resolve(),
@@ -2070,6 +2070,14 @@ ${d.branchOnly ? "- worktree: the main checkout, only when it has this run's bra
   state.pr = shaped("ref", val(cp, "pr"));
   const lastFindings = accepted(cp, "done-findings").at(-1) ?? "";
   const lastRepro = accepted(cp, "reproduced").at(-1);
+  const rounds = accepted(cp, "done-round");
+  const passedTests = [
+    ...new Set(
+      rounds.flatMap(
+        (l) => (/ done round \d+ passed (.+)$/.exec(l)?.[1] ?? "").split(/\s+/).map((p) => shaped("rel", p)).filter(Boolean)
+      )
+    )
+  ];
   const spec = val(cp, "spec-dir").replace(/^Spec:\s*/i, "").replaceAll("`", "");
   return {
     build: parseBuild(fact(cp, "build-json")),
@@ -2079,7 +2087,8 @@ ${d.branchOnly ? "- worktree: the main checkout, only when it has this run's bra
       0,
       ...accepted(cp, "review-fired").map((l) => Number(/review (\d+) fired/.exec(l)?.[1] ?? 0))
     ),
-    built: accepted(cp, "done-round").length > 0,
+    built: rounds.length > 0,
+    ...passedTests.length > 0 && { passedTests },
     boardStartDone: accepted(cp, "done-board-start").length > 0,
     findings: lastFindings.replace(/^.*? done findings /, "").split(/\s+/).map((p) => shaped("rel", p)).filter(Boolean),
     reproduced: lastRepro ? parseReproduction(lastRepro) : null
@@ -2184,7 +2193,11 @@ async function deliverSmall(d, started, input) {
     // Once the PR exists, a rerun resumes at its review.
     startAtReview: d.state.pr ? Math.max(resume.reviewFired, 1) : 0,
     built: resume.built,
-    small: { firstTest: input.firstTest, ...input.reproduced && { reproduced: input.reproduced } }
+    small: {
+      firstTest: input.firstTest,
+      ...resume.passedTests && { passedTests: resume.passedTests },
+      ...input.reproduced && { reproduced: input.reproduced }
+    }
   });
   return { ...result, workflow: input.workflowName, report: reportOf(input.workflowName, result) };
 }

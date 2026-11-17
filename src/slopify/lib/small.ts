@@ -142,7 +142,11 @@ export async function deliverSmall(d: Run, started: Started, input: SmallFlow): 
     // Once the PR exists, a rerun resumes at its review.
     startAtReview: d.state.pr ? Math.max(resume.reviewFired, 1) : 0,
     built: resume.built,
-    small: { firstTest: input.firstTest, ...(input.reproduced && { reproduced: input.reproduced }) },
+    small: {
+      firstTest: input.firstTest,
+      ...(resume.passedTests && { passedTests: resume.passedTests }),
+      ...(input.reproduced && { reproduced: input.reproduced }),
+    },
   });
   return { ...result, workflow: input.workflowName, report: reportOf(input.workflowName, result) };
 }
