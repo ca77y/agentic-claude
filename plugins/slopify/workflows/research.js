@@ -2481,10 +2481,15 @@ ${quoted(c.question)}`, {
     )
   );
   c.notes.clear();
+  c.notesPartial = false;
   return checks.flatMap((k, i) => {
     const v = must(verdicts[i], "validate", `A verdict on ${k.label}.`);
     c.verdicts.set(k.label, v.verdict === "pass" ? "passed" : v.verdict === "fail" ? "failed" : "could not run");
-    if ("notes" in v) for (const n of v.notes) c.notes.add(n.trim());
+    if ("notes" in v) {
+      const raw = v.notes.map((n) => n.trim()).filter((n) => n.startsWith("library/raw/"));
+      for (const n of raw) c.notes.add(n);
+      if (raw.length === 0) c.notesPartial = true;
+    }
     const found = (v.verdict === "pass" ? [] : v.findings).map((f) => ({
       source: "library-clerk",
       location: k.label,
@@ -2537,6 +2542,7 @@ async function run() {
       worktree: d.state.worktree,
       sources: null,
       notes: /* @__PURE__ */ new Set(),
+      notesPartial: false,
       verdicts: /* @__PURE__ */ new Map()
     };
     let pages = resume.findings;
@@ -2567,9 +2573,10 @@ async function run() {
         trust: () => {
           const n = c.sources ?? (c.notes.size > 0 ? c.notes.size : null);
           const how = c.sources === null ? "each a raw note the committed pages cite" : "each recorded in its raw note";
+          const bound = c.sources === null && c.notesPartial ? "at least " : "";
           return [
             ...[...c.verdicts].map(([label, verdict]) => `The library-clerk check "${label}" ${verdict}.`),
-            ...n === null ? [] : [`The research rests on ${String(n)} source${n === 1 ? "" : "s"}, ${how}.`]
+            ...n === null ? [] : [`The research rests on ${bound}${String(n)} source${n === 1 ? "" : "s"}, ${how}.`]
           ];
         }
       }

@@ -147,6 +147,8 @@ interface Ctx {
   sources: number | null;
   /** The raw notes the evidence checks found the pages citing, one per source. */
   notes: Set<string>;
+  /** True when an evidence check named no raw note, so the notes counted are a lower bound. */
+  notesPartial: boolean;
   /** Each final check's latest verdict, by its label. */
   verdicts: Map<string, string>;
 }
@@ -351,10 +353,16 @@ async function checkLibrary(c: Ctx, pages: readonly string[]): Promise<Problem[]
   );
   // The pages as they stand now: a repair may change which notes they cite.
   c.notes.clear();
+  c.notesPartial = false;
   return checks.flatMap((k, i) => {
     const v = must(verdicts[i], "validate", `A verdict on ${k.label}.`);
     c.verdicts.set(k.label, v.verdict === "pass" ? "passed" : v.verdict === "fail" ? "failed" : "could not run");
-    if ("notes" in v) for (const n of v.notes) c.notes.add(n.trim());
+    if ("notes" in v) {
+      // Only a raw note is a source: a clerk may also name a wiki page the page links.
+      const raw = v.notes.map((n) => n.trim()).filter((n) => n.startsWith("library/raw/"));
+      for (const n of raw) c.notes.add(n);
+      if (raw.length === 0) c.notesPartial = true;
+    }
     const found = (v.verdict === "pass" ? [] : v.findings).map((f) => ({
       source: "library-clerk",
       location: k.label,
@@ -408,6 +416,7 @@ export default async function run(): Promise<ResearchResult> {
       worktree: d.state.worktree,
       sources: null,
       notes: new Set(),
+      notesPartial: false,
       verdicts: new Map(),
     };
     let pages = resume.findings;
@@ -440,9 +449,10 @@ export default async function run(): Promise<ResearchResult> {
           // A resumed run retrieved nothing itself: it counts the raw notes the committed pages cite.
           const n = c.sources ?? (c.notes.size > 0 ? c.notes.size : null);
           const how = c.sources === null ? "each a raw note the committed pages cite" : "each recorded in its raw note";
+          const bound = c.sources === null && c.notesPartial ? "at least " : "";
           return [
             ...[...c.verdicts].map(([label, verdict]) => `The library-clerk check "${label}" ${verdict}.`),
-            ...(n === null ? [] : [`The research rests on ${String(n)} source${n === 1 ? "" : "s"}, ${how}.`]),
+            ...(n === null ? [] : [`The research rests on ${bound}${String(n)} source${n === 1 ? "" : "s"}, ${how}.`]),
           ];
         },
       },
