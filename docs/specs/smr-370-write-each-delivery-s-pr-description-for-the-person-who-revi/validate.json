@@ -5,15 +5,15 @@
       "wording": "The plugin has a `writer-pr` agent that is a producer, and the instructions it works from require the four parts under their headings **What changes**, **Needs you**, **Why trust it**, and **Not done**, in that order, with no other heading, a description of at most 4,000 characters, and no process detail. (Deterministic)",
       "category": "Deterministic",
       "path": "make check, plus a unit test that reads plugins/slopify/agents/writer-pr.md and the reference it names",
-      "evidence": "make check exit 0; the test passes, showing writer-pr.md exists, is listed as a producer, and it or pr-description.md states the four headings in order, no other heading, the 4,000-character limit and no process detail",
-      "firstTest": "test/agents.test.ts (or phrases.test.ts): 'writer-pr's instructions require the four headings in order, no other heading, at most 4,000 characters, and no process detail'"
+      "evidence": "make check exit 0; the test passes, showing writer-pr.md exists as a producer, and it or pr-description.md states the four headings in order, no other heading, the 4,000-character limit, no process detail, and the overflow rule",
+      "firstTest": "test/plugin-text.test.ts: 'writer-pr's instructions require the four headings in order, no other heading, at most 4,000 characters, and no process detail'"
     },
     {
       "id": "c2",
       "wording": "The plugin has a `lens-*` agent for the PR description that is report-only, and the instructions it works from require checking the four headings and their order, the 4,000-character limit, the absence of process detail, and that each line under **Why trust it** matches a criterion result the run produced. (Deterministic)",
       "category": "Deterministic",
       "path": "make check, plus a unit test that reads plugins/slopify/agents/lens-pr.md and the reference it names",
-      "evidence": "make check exit 0; the test passes, showing lens-pr.md disallows Edit, Write and NotebookEdit, carries the Report-only contract, and requires each named check",
+      "evidence": "make check exit 0; the test passes, showing lens-pr.md disallows Edit, Write and NotebookEdit, carries the Report-only contract, and requires each named check, accepting a grouped Why trust it line for each criterion it names",
       "firstTest": "'lens-pr is report-only and checks headings, order, the 4,000-character limit, process detail, and Why trust it lines against criterion results'"
     },
     {
@@ -29,7 +29,7 @@
       "wording": "The body `pusher` is told to post is the last description `writer-pr` produced, unchanged. (Deterministic)",
       "category": "Deterministic",
       "path": "make check, and a stub-harness test in test/loop.test.ts",
-      "evidence": "make check exit 0; the test passes, asserting the body inside the pusher prompt equals the last writer-pr body byte for byte, including after a revision",
+      "evidence": "make check exit 0; the test passes, asserting the body inside the pusher prompt equals the last writer-pr body byte for byte, including after a revision and when the body contains the default closing fence; when the last body breaks a leak rule, the posted body is the latest leak-free writer-pr body, unchanged (d17)",
       "firstTest": "'the pusher's body is the last writer-pr body, unchanged'"
     },
     {
@@ -45,7 +45,7 @@
       "wording": "When the lens still reports a problem after three revisions, the last revision is posted, the PR stays a draft, and the run's draft reasons include that the description did not pass its check. (Deterministic)",
       "category": "Deterministic",
       "path": "make check, and a stub-harness test with a lens-pr stub that always fails",
-      "evidence": "make check exit 0; the test passes, showing four writer-pr calls in the final stage, the fourth body in the pusher prompt, status draft, and draftReasons containing 'The PR description did not pass its check.'",
+      "evidence": "make check exit 0; the test passes, showing four writer-pr calls in the final stage, the fourth (leak-free) body in the pusher prompt, a lens-pr dispatch before that pusher dispatch, status draft, and draftReasons containing 'The PR description did not pass its check.'",
       "firstTest": "'after three failed revisions the last one is posted and the run ends draft with the description reason'"
     },
     {
@@ -77,8 +77,8 @@
       "wording": "A rerun over a ledger that holds progress entries resumes from the same point as a rerun over the same ledger without those entries, whatever text the entries quote, including the text of the ledger's own resume records. (Deterministic)",
       "category": "Deterministic",
       "path": "make check, test/resume.test.ts with stubbed scout answers, and checkpointLine tests in rules.test.ts",
-      "evidence": "make check exit 0; tests pass showing equal Resume values with and without progress entries that quote each checkpoint form and whole ledger lines",
-      "firstTest": "resume.test.ts: 'progress entries quoting checkpoint lines leave the Resume unchanged'"
+      "evidence": "make check exit 0; resume.test.ts passes: a ledger of only progress entries quoting each checkpoint form (whole ledger lines included) gives the empty ledger's Resume; a real line plus a later progress entry quoting it, with the scout returning both, gives the real-only ledger's Resume; a wrapped real line is accepted; a malformed answer halts. Proved up to the scout returning every line containing the key's form (open risk in RATIONALE.md)",
+      "firstTest": "resume.test.ts: 'a real checkpoint followed by a progress entry quoting it resumes like the ledger without the entry'"
     },
     {
       "id": "c11",
@@ -101,7 +101,7 @@
       "wording": "When the run files follow-up cards, the final `writer-pr` dispatch has access to each filed card's identifier and link. (Deterministic)",
       "category": "Deterministic",
       "path": "make check, and a stub-harness test whose pusher stub reports card operations",
-      "evidence": "make check exit 0; the test passes, showing the filing dispatch precedes the final writer-pr dispatch and that brief holds each card's identifier and link; a partial filing failure does not halt",
+      "evidence": "make check exit 0; the test passes with a pusher stub reporting each filed card as { op: 'card', reference: <identifier>, link: <URL> }, showing the filing dispatch precedes the final writer-pr dispatch, that brief holds each card's identifier and link, and a partial filing failure does not halt",
       "firstTest": "'filed cards reach the final writer-pr brief with their identifiers and links'"
     },
     {
@@ -156,7 +156,7 @@
       "id": "c20",
       "wording": "In a full run of each of the five PR-opening workflows, the posted description is at most 4,000 characters. (Full eval)",
       "category": "Full eval",
-      "path": "The user's full run of each of the five workflows by hand (make eval does not exist until SMR-364)",
+      "path": "The user's full run of each of the five workflows by hand (make eval does not exist until SMR-364); the loop test 'a 26-criterion, 14-decision run fits and ends ready' guards the overflow rule beforehand",
       "evidence": "The user's run report with each posted description's character count",
       "firstTest": "A full run of each workflow; measure the posted PR body's length"
     },
@@ -173,7 +173,7 @@
       "wording": "In a full run of each of the five PR-opening workflows, every decision, confirmation, manual action, and reason the PR is a draft appears under **Needs you**, and **Needs you**, when present, comes before **Why trust it**. (Full eval)",
       "category": "Full eval",
       "path": "The user's full run of each of the five workflows by hand",
-      "evidence": "The user's run report comparing the run result's decisions and draft reasons with the posted Needs you section",
+      "evidence": "The user's run report comparing the run result's decisions and draft reasons with the posted Needs you section, where a count with a link to a committed file counts as listing those decisions (d15) and the description-check draft reason is carried by the card comment and run result instead (d16)",
       "firstTest": "A full run that records a decision and ends draft; compare the result with Needs you"
     },
     {
