@@ -175,7 +175,11 @@ describe("research", () => {
           gaps: [],
           evidence: [
             { source: "worktree", location: "x", excerpt: "/p/wt" },
-            { source: "done-findings", location: "x", excerpt: "library/wiki/parser-speed.md" },
+            {
+              source: "done-findings",
+              location: "x",
+              excerpt: "2026-11-09T10:00:00Z done findings library/wiki/parser-speed.md",
+            },
           ],
         }),
       }),

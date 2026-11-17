@@ -489,7 +489,7 @@ const promptRun: Script = (type, label, prompt) => {
 
 const REPRO_OK = { reproduced: true, steps: ["run add(1, 1)"], observed: "got 0", reason: "" };
 const REPRO_NO = { reproduced: false, steps: [], observed: "", reason: "it passed every time" };
-const KEPT = 'reproduced {"steps":["run add(1, 1)"],"observed":"got 0"}';
+const KEPT = '2026-11-09T10:00:00Z reproduced {"steps":["run add(1, 1)"],"observed":"got 0"}';
 const BUG_CARD = {
   answer: "a",
   gaps: [],
