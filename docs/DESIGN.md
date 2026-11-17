@@ -48,7 +48,7 @@ How the plugins are built, within the principles in [`.claude/rules/architecture
 
 What counts as `blocker` or `major` depends on what the PR changes. The rows above are the definitions for code, kept in `plugins/slopify/references/severity-code.md`. A research run rates its library pages by `severity-research.md`, and a spike its findings by `severity-spike.md`: there, a claim its cited source doesn't support, a claim credited to the wrong source, or a broken citation is `major`. The judge's brief names the reference, so the agent that checks a document and the judge that rates its problems use the same standard. `minor`, `nit`, and `pre-existing` mean the same in every flow, and a problem is rated by what it is, never softened by wording elsewhere.
 
-Minor problems and nits go to the PR's Suggestions section, and the run reports a ready PR with suggestions as having no blocking findings, not as clean. A minor problem never starts a fix round, but a round that runs for a blocker or a major also applies the minor problems its writer can fix: every one in a document, and a `docs` problem in code. An applied problem leaves the Suggestions section. A pre-existing problem becomes a new issue.
+Minor problems and nits go to the PR's Suggestions section, and the run reports a ready PR with suggestions as having no blocking findings, not as clean. A minor problem never starts a fix round, but a round that runs for a blocker or a major also applies the minor problems its writer can fix: every one in a document, and a `docs` problem in code. An applied problem leaves the Suggestions section. A pre-existing problem goes on one new card with the run's other pre-existing problems, which a person can split.
 
 Each confirmed `blocker` or `major` has one kind:
 

@@ -361,7 +361,10 @@ interface Loop extends LoopInput {
   suggestions: Listed[];
   /** Confirmed minor problems still listed as suggestions, which a fix round applies when its writer can. */
   minors: Minor[];
+  /** Scope split out of this change, one card each. */
   newIssues: Listed[];
+  /** Problems the change found but didn't introduce, filed together on one card a person can split. */
+  preExisting: Listed[];
   testChanges: string[];
   review: ReviewOutcome;
   changedThisRound: string[];
@@ -1053,7 +1056,7 @@ function listRouted(l: Loop, route: Route, item: OpenItem, kind: Kind): void {
     "needs-confirmation": l.confirmations,
     suggestion: l.suggestions,
     "known-debt": l.knownDebt,
-    "new-issue": l.newIssues,
+    "new-issue": l.preExisting,
     "split-issue": l.newIssues,
   };
   lists[route]?.push(entry);
@@ -1284,10 +1287,16 @@ async function reviewRound(l: Loop): Promise<void> {
 
 async function finish(l: Loop, ready: boolean): Promise<void> {
   const { state } = l.d;
-  const issues =
+  const lines = (xs: readonly Listed[]): string => list(xs.map((i) => `${i.text} ${i.detail ?? ""}`));
+  const split =
     l.newIssues.length > 0
-      ? `File one card for each of these, as docs/BOARD.md declares:\n${list(l.newIssues.map((i) => `${i.text} ${i.detail ?? ""}`))}\n`
+      ? `File one card for each of these, as docs/BOARD.md declares:\n${lines(l.newIssues)}\n`
       : "";
+  const old =
+    l.preExisting.length > 0
+      ? `File one card, as docs/BOARD.md declares, that lists every one of these problems this delivery found but didn't introduce, each with its location and what is wrong, so a person can fix them or split the card:\n${lines(l.preExisting)}\n`
+      : "";
+  const issues = split + old;
   const questions = [
     ...unique(l.manualActions).map((a) => `Manual action: ${a}`),
     ...l.decisions.filter((d) => d.affectsAcceptance).map((d) => `${d.question} We chose: ${d.choice}.`),
@@ -1388,6 +1397,7 @@ function freshLoop(input: LoopInput): Loop {
     suggestions: [],
     minors: [],
     newIssues: [],
+    preExisting: [],
     testChanges: [],
     review: { clean: false, note: "" },
     changedThisRound: [],

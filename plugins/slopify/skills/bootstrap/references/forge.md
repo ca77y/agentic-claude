@@ -12,4 +12,6 @@ A delivery opens its PR ready for review, pushes at the end of every round even 
 
 A delivery commits a failing test before the fix that makes it pass, so a commit hook must not run the unit tests; it may format, lint, and typecheck. When the repository's hook runs tests, say so to the user and propose moving the tests out of it, to CI or a pre-push step.
 
+The review status binding says how to read a result that ended early: a reviewer can end its run with success before it posts every finding, so name what in the result shows that each step finished, such as a progress list with no unchecked item.
+
 "No forge" is a complete choice: record the local commit convention and mark hosted PR and review operations unsupported.

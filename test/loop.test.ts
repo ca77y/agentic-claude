@@ -805,7 +805,8 @@ describe("the PR's other sections", () => {
     const r = await runLoop(inputFor(freshRun()));
     assert.equal(r.status, "ready");
     assert.equal(count("coder", "fix-"), 0);
-    assert.ok(finalPrompt().includes("File one card"));
+    assert.ok(finalPrompt().includes("File one card, as docs/BOARD.md declares, that lists every one"));
+    assert.ok(!finalPrompt().includes("File one card for each"));
   });
 });
 

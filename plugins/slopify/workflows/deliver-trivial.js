@@ -1465,7 +1465,7 @@ function listRouted(l, route, item, kind) {
     "needs-confirmation": l.confirmations,
     suggestion: l.suggestions,
     "known-debt": l.knownDebt,
-    "new-issue": l.newIssues,
+    "new-issue": l.preExisting,
     "split-issue": l.newIssues
   };
   lists[route]?.push(entry);
@@ -1674,9 +1674,14 @@ async function reviewRound(l) {
 }
 async function finish(l, ready) {
   const { state } = l.d;
-  const issues = l.newIssues.length > 0 ? `File one card for each of these, as docs/BOARD.md declares:
-${list(l.newIssues.map((i) => `${i.text} ${i.detail ?? ""}`))}
+  const lines = (xs) => list(xs.map((i) => `${i.text} ${i.detail ?? ""}`));
+  const split = l.newIssues.length > 0 ? `File one card for each of these, as docs/BOARD.md declares:
+${lines(l.newIssues)}
 ` : "";
+  const old = l.preExisting.length > 0 ? `File one card, as docs/BOARD.md declares, that lists every one of these problems this delivery found but didn't introduce, each with its location and what is wrong, so a person can fix them or split the card:
+${lines(l.preExisting)}
+` : "";
+  const issues = split + old;
   const questions = [
     ...unique(l.manualActions).map((a) => `Manual action: ${a}`),
     ...l.decisions.filter((d) => d.affectsAcceptance).map((d) => `${d.question} We chose: ${d.choice}.`),
@@ -1772,6 +1777,7 @@ function freshLoop(input) {
     suggestions: [],
     minors: [],
     newIssues: [],
+    preExisting: [],
     testChanges: [],
     review: { clean: false, note: "" },
     changedThisRound: [],
