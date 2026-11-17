@@ -662,6 +662,23 @@ describe("the small workflows", () => {
     assert.ok(describedBeforeEachPosting());
   });
 
+  test("deliver-trivial gives writer-pr and lens-pr the test result that Why trust it rests on, beside the app run", async () => {
+    current.script = promptRun;
+    Object.assign(globalThis, { args: "Add mul to calc.py" });
+    const r = await deliverTrivial();
+    assert.equal(r.status, "ready");
+    for (const type of ["writer-pr", "lens-pr"]) {
+      const prompts = calls.filter((c) => c.type === type).map((c) => c.prompt);
+      assert.ok(prompts.length > 0, `${type} ran`);
+      for (const prompt of prompts) {
+        assert.ok(
+          prompt.split("\n").some((line) => line.includes("t.py") && /\bpass(?:es|ed)?\b/i.test(line)),
+          `${type} is told the change's test, t.py, and that it passed`,
+        );
+      }
+    }
+  });
+
   test("every push that opens or updates the PR runs writer-pr, then lens-pr, then pusher (deliver-bugfix)", async () => {
     current.script = bugRun(REPRO_OK);
     Object.assign(globalThis, { args: "SMR-13" });
