@@ -23,10 +23,13 @@ How `deliver-spike` answers a bounded technical question with a findings documen
  7 VALIDATE ──── checks (haiku) runs the TESTING.md checks
  │               lens-evidence, lens-question, lens-neutrality (haiku), on the document
  │               judge × 1 (opus) rules on every problem
- 8 PUSH ──────── pusher pushes, opens the PR ready, which fires the review              ⛔ H2
+ 8 PUSH ──────── writer-pr (sonnet) writes the PR description whole, lens-pr (haiku)
+ │               checks it                                                          ⛔ H4
+ │               pusher pushes, opens the PR ready, which fires the review            ⛔ H2
  9 REVIEW ────── watcher (haiku) reads the findings
  │   ▲ ≤3 fix    judge × 1 (opus) rules on every finding
  │   │  rounds   writer revises the document → commit, then step 7 again
+ │   │           writer-pr rewrites the description, lens-pr checks it
  │   └────────── pusher pushes and requests the review
  ▼
  clean → PR ready, issue In Review            not clean → PR turns draft, saying why
@@ -48,8 +51,12 @@ One file, `docs/spikes/<id>-<slug>.md`, named like a spec folder. Unlike a spec 
 
 - **Nothing stops for a judgment call.** An ambiguous question becomes an assumption the plan states. A measurement that fails three tries stays an unknown with its reason.
 - **The prototype is throwaway.** It lives on the local branch and worktree that docs/FORGE.md's "Spike prototypes" line names, is never pushed, and is deleted once the measurements are confirmed, before the document is written. The document keeps each command and its output, so the evidence outlives it. When that line says `none`, the project wants no prototypes: claims that need a measurement go under Unknowns.
-- **The loop is `deliver-story`'s.** The same judge rulings, routes, limits, PR sections, and review rounds apply. Every problem that needs a fix, whatever its kind, goes to `writer-findings`, because the document is the only thing the PR changes. There is no app to run, so no `validator`.
+- **The loop is `deliver-story`'s.** The same judge rulings, routes, limits, and review rounds apply. Every problem that needs a fix, whatever its kind, goes to `writer-findings`, because the document is the only thing the PR changes. There is no app to run, so no `validator`.
 - **The three lenses replace `qa`** for the document: every claim cites a source that says what it claims, every part of the question is answered or named as unknown, and nothing recommends.
+
+## The PR description
+
+`writer-pr` writes it and `lens-pr` checks it as in [`STORY.md`](STORY.md#the-pr-description): four parts, **What changes**, **Needs you**, **Why trust it**, and **Not done**, rewritten whole in every round that opens or updates the PR. Here **What changes** opens with the question and its answer, with no recommendation, as the document makes none. **Why trust it** rests on the claims checked and the unknowns. There is no `Spec:` line.
 
 ## Halt conditions
 
@@ -58,3 +65,4 @@ One file, `docs/spikes/<id>-<slug>.md`, named like a spec folder. Unlike a spec 
 | H1  | The issue can't be read, the argument says nothing, or `answers` isn't a map or holds an object or a list | Read     | `not-started`, no board write                               |
 | H2  | The push is denied, or PR creation fails                                                                  | Push     | `blocked`; the document stays committed on the local branch |
 | H3  | Infrastructure: a stop signal, a required tool denied, or a budget, usage, or agent limit reached         | Any      | `blocked`, with the state reported on the issue             |
+| H4  | `writer-pr` returns no description in any attempt of a stage                                              | Push     | `blocked`; the document stays committed on the local branch |
