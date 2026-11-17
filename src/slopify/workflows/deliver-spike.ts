@@ -467,6 +467,7 @@ export default async function run(): Promise<SpikeResult> {
     }
     const result = await runLoop({
       d,
+      kind: "spike",
       where: d.WHERE,
       story,
       cardId,

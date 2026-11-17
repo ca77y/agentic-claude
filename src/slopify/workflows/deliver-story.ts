@@ -122,6 +122,7 @@ ARG>>>`,
 
   const result = await runLoop({
     d,
+    kind: "story",
     where: how.where,
     story,
     cardId,

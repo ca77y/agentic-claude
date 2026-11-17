@@ -37,11 +37,12 @@ export function pusherSchema(notes: { reference?: string; unmet?: string } = {})
       done: { type: "boolean" },
       operations: arrayOf({
         type: "object",
-        required: ["op", "result", "reference"],
+        required: ["op", "result", "reference", "link"],
         properties: {
           op: { type: "string" },
           result: { type: "string" },
           reference: described({ type: "string" }, notes.reference),
+          link: { type: "string", description: "The URL of a card you filed; empty when none" },
         },
       }),
       unmet: described(STRINGS, notes.unmet),

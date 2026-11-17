@@ -11,13 +11,11 @@ import {
   parseReproduction,
   progressLine,
   reproductionLine,
-  renderBody,
   renderState,
   routeOf,
   waves,
   type CheckpointKey,
   type DeliveryKind,
-  type PrBody,
   type PrState,
   type Ruled,
 } from "../src/slopify/lib/rules.ts";
@@ -157,46 +155,6 @@ describe("waves", () => {
   test("still finishes on a dependency cycle or an unknown id", () => {
     assert.deepEqual(idsOf([task("a", ["b"]), task("b", ["a"])]), [["a", "b"]]);
     assert.deepEqual(idsOf([task("a", ["missing"])]), [["a"]]);
-  });
-});
-
-describe("renderBody", () => {
-  const body: PrBody = {
-    issue: "SMR-1",
-    specDir: "docs/specs/smr-1-x",
-    draftReasons: [],
-    needsConfirmation: [],
-    manualActions: [],
-    criteria: [],
-    assumptions: [],
-    unverified: [],
-    notValidated: [],
-    knownDebt: [],
-    suggestions: [],
-    testChanges: [],
-  };
-
-  test("leaves out empty sections", () => {
-    assert.equal(renderBody(body), "Issue: SMR-1\n\nSpec: `docs/specs/smr-1-x`");
-  });
-
-  test("puts why it is a draft and what needs confirmation before the criteria", () => {
-    const text = renderBody({
-      ...body,
-      draftReasons: [{ text: "login fails", detail: "tried twice" }],
-      needsConfirmation: [{ text: "keep the data?" }],
-      criteria: [{ id: "c1", wording: "a | b", category: "UI", path: "flow", result: "pass", evidence: ["x.png"] }],
-    });
-    assert.ok(text.indexOf("Why this is a draft") < text.indexOf("Needs confirmation"));
-    assert.ok(text.indexOf("Needs confirmation") < text.indexOf("## Criteria"));
-    assert.ok(text.includes("- login fails\n  tried twice"));
-    assert.ok(text.includes(String.raw`a \| b`));
-  });
-
-  test("gives unverified findings and unvalidated criteria their own sections", () => {
-    const text = renderBody({ ...body, unverified: [{ text: "race?" }], notValidated: [{ text: "no simulator" }] });
-    assert.ok(text.includes("## Unverified findings\n\n- race?"));
-    assert.ok(text.includes("## Not validated\n\n- no simulator"));
   });
 });
 
@@ -368,8 +326,24 @@ describe("checkDescription's leak rules", () => {
     leaks("2026-11-09T10:00:00Z progress 2 ruling: fp-3 accept-as-debt, because the flake is upstream");
   });
 
+  test("flags an absolute path of one segment, a Windows path and a file URL", () => {
+    leaks("The checkout is /repo now.");
+    leaks(String.raw`The fix is in C:\Users\me\x.ts.`);
+    leaks("Open file:///Users/me/x.ts to see it.");
+  });
+
   test("flags credential-shaped text", () => {
     leaks(`The token ghp_${"a1B2c3D4e5".repeat(4)} still works.`);
+  });
+
+  test("flags a password or key assignment, a bearer token and a JWT", () => {
+    leaks("The login is password: hunter2 for now.");
+    leaks("Set password=hunter2 in the env.");
+    leaks("Run with API_KEY=abcd1234efgh5678 set.");
+    leaks("Send Authorization: Bearer abcdefghijklmnop1234567890 with it.");
+    leaks(
+      "The token eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U works.",
+    );
   });
 
   test("passes a link to a URL or a repo-relative file", () => {

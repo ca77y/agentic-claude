@@ -394,6 +394,7 @@ export default async function run(): Promise<ResearchResult> {
     }
     const result = await runLoop({
       d,
+      kind: "research",
       where: d.WHERE,
       story: found.story,
       cardId: found.cardId,

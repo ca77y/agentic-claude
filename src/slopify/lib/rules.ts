@@ -1,5 +1,5 @@
 // The fixed tables of a delivery: what happens to each ruled problem, when a loop ends, what runs in parallel, and the
-// PR description. Agents report what they found; these functions decide what runs next.
+// mechanical checks of what writer-pr writes. Agents report what they found; these functions decide what runs next.
 
 export const MAX_FIX_ROUNDS = 3;
 export const MAX_INNER_TRIES = 3;
@@ -137,26 +137,6 @@ export interface Listed {
   text: string;
   detail?: string;
 }
-export interface PrBody {
-  issue: string;
-  specDir: string;
-  /** The documents a spike or a research run adds. */
-  documents?: readonly string[];
-  draftReasons: readonly Listed[];
-  needsConfirmation: readonly Listed[];
-  /** Irreversible steps nothing explicitly permits, left for a person to do. */
-  manualActions: readonly string[];
-  /** A bug's reproduction, as it behaved before the fix; the criteria table shows it after. */
-  reproduced?: readonly Listed[];
-  criteria: readonly CriterionRow[];
-  assumptions: readonly string[];
-  unverified: readonly Listed[];
-  notValidated: readonly Listed[];
-  knownDebt: readonly Listed[];
-  suggestions: readonly Listed[];
-  testChanges: readonly string[];
-}
-
 const items = (list: readonly Listed[]): string =>
   list.map((x) => `- ${x.text}${x.detail ? `\n  ${x.detail}` : ""}`).join("\n");
 const cell = (s: string): string => s.replaceAll("|", String.raw`\|`).replaceAll("\n", " ");
@@ -173,26 +153,6 @@ function criteriaTable(rows: readonly CriterionRow[]): string {
     "| --- | --- | --- | --- | --- |",
     ...lines,
   ].join("\n");
-}
-
-// The PR description, rendered from the run state and written again after every round.
-export function renderBody(b: PrBody): string {
-  return [
-    `Issue: ${b.issue}${b.specDir ? `\n\nSpec: \`${b.specDir}\`` : ""}${b.documents?.length ? `\n\nFindings: ${b.documents.map((p) => `\`${p}\``).join(", ")}` : ""}`,
-    section("Why this is a draft", items(b.draftReasons)),
-    section("Needs confirmation", items(b.needsConfirmation)),
-    section("Manual actions", b.manualActions.map((a) => `- ${a}`).join("\n")),
-    section("Reproduced", items(b.reproduced ?? [])),
-    section("Criteria", criteriaTable(b.criteria)),
-    section("Assumptions", b.assumptions.map((a) => `- ${a}`).join("\n")),
-    section("Unverified findings", items(b.unverified)),
-    section("Not validated", items(b.notValidated)),
-    section("Known debt", items(b.knownDebt)),
-    section(`Suggestions (${String(b.suggestions.length)})`, items(b.suggestions)),
-    section("Test changes", b.testChanges.map((t) => `- ${t}`).join("\n")),
-  ]
-    .filter(Boolean)
-    .join("\n\n");
 }
 
 export interface Reproduction {
@@ -237,7 +197,10 @@ const MAX_DESCRIPTION = 4000;
 const STAMP = String.raw`\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z`;
 
 const LEAKS: readonly [readonly RegExp[], string][] = [
-  [[/(?<![\w.:/~-])~?\/[\w.-]+\//], "It holds an absolute path; name files relative to the repo root."],
+  [
+    [/(?<![\w.:/~-])~?\/[\w.-]*\w(?![\w:-]|\.\w)/, /\b[A-Z]:\\\w/i, /\bfile:\/\//],
+    "It holds an absolute path; name files relative to the repo root.",
+  ],
   [[/\.tmp\//], "It refers to .tmp/, which is never committed; link nothing under it."],
   [[new RegExp(String.raw`${STAMP}\s+\S`)], "It holds a ledger line; describe the current state instead."],
   [
@@ -249,6 +212,9 @@ const LEAKS: readonly [readonly RegExp[], string][] = [
       /\bxox[abprs]-[\w-]{10,}/,
       /\blin_api_\w{20,}/,
       /-----BEGIN [A-Z ]*PRIVATE KEY-----/,
+      /\b(?:\w*_)?(?:password|passwd|api_?key)\s*[:=]\s*\S/i,
+      /\bBearer\s+[\w.~+/-]{16,}/,
+      /\beyJ[\w-]{8,}\.eyJ[\w-]{8,}\.[\w-]{8,}/,
     ],
     "It holds credential-shaped text; remove the secret.",
   ],

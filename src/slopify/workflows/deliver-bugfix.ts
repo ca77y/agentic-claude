@@ -91,6 +91,7 @@ export default async function run(): Promise<NotStarted | Unreproducible | Small
       d,
       { ...found, resume },
       {
+        kind: "bugfix",
         answers: answersOf(input["answers"]),
         workflowName: WORKFLOW,
         ...fixFrom(repro),

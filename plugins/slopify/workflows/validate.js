@@ -184,7 +184,10 @@ function shaped(kind, v) {
 // src/slopify/lib/rules.ts
 var STAMP = String.raw`\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z`;
 var LEAKS = [
-  [[/(?<![\w.:/~-])~?\/[\w.-]+\//], "It holds an absolute path; name files relative to the repo root."],
+  [
+    [/(?<![\w.:/~-])~?\/[\w.-]*\w(?![\w:-]|\.\w)/, /\b[A-Z]:\\\w/i, /\bfile:\/\//],
+    "It holds an absolute path; name files relative to the repo root."
+  ],
   [[/\.tmp\//], "It refers to .tmp/, which is never committed; link nothing under it."],
   [[new RegExp(String.raw`${STAMP}\s+\S`)], "It holds a ledger line; describe the current state instead."],
   [
@@ -195,7 +198,10 @@ var LEAKS = [
       /\bAKIA[0-9A-Z]{16}\b/,
       /\bxox[abprs]-[\w-]{10,}/,
       /\blin_api_\w{20,}/,
-      /-----BEGIN [A-Z ]*PRIVATE KEY-----/
+      /-----BEGIN [A-Z ]*PRIVATE KEY-----/,
+      /\b(?:\w*_)?(?:password|passwd|api_?key)\s*[:=]\s*\S/i,
+      /\bBearer\s+[\w.~+/-]{16,}/,
+      /\beyJ[\w-]{8,}\.eyJ[\w-]{8,}\.[\w-]{8,}/
     ],
     "It holds credential-shaped text; remove the secret."
   ]
@@ -223,11 +229,12 @@ function pusherSchema(notes = {}) {
       done: { type: "boolean" },
       operations: arrayOf({
         type: "object",
-        required: ["op", "result", "reference"],
+        required: ["op", "result", "reference", "link"],
         properties: {
           op: { type: "string" },
           result: { type: "string" },
-          reference: described({ type: "string" }, notes.reference)
+          reference: described({ type: "string" }, notes.reference),
+          link: { type: "string", description: "The URL of a card you filed; empty when none" }
         }
       }),
       unmet: described(STRINGS, notes.unmet),

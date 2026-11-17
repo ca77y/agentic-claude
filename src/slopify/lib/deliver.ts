@@ -88,10 +88,26 @@ export async function commitRepairing(
   }
   return r;
 }
-export const opRef = (r: PusherResult | null, name: string): string => {
-  const o = (r?.operations ?? []).find((x) => x.op.toLowerCase() === name);
-  return o ? o.reference.trim() : "";
-};
+export const opRefs = (r: PusherResult | null, name: string): { reference: string; link: string }[] =>
+  (r?.operations ?? [])
+    .filter((x) => x.op.toLowerCase() === name)
+    .map((x) => ({ reference: x.reference.trim(), link: x.link }));
+export const opRef = (r: PusherResult | null, name: string): string => opRefs(r, name)[0]?.reference ?? "";
+
+// A card filed with a marker line in its body: a rerun finds that card instead of filing another.
+export const MARKED =
+  "First search the board for a card whose body holds that line, and use that card instead of creating another.";
+
+// Text fenced in a brief closes with a delimiter it doesn't hold, so it embeds byte-identical and can't end its fence early.
+export function fenced(tag: string, text: string): string {
+  let close = tag;
+  let n = 0;
+  while (text.includes(`${close}>>>`)) {
+    n += 1;
+    close = `${tag}${String(n)}`;
+  }
+  return `<<<${close}\n${text}\n${close}>>>`;
+}
 
 // Each dispatch of a producer or operator names its agent type literally.
 export function callSpecWriter<const S extends Schema>(
@@ -190,7 +206,7 @@ ${
     : "Append no ledger lines."
 }
 
-Report each operation you performed as an operations entry whose op is exactly one of worktree, branch, prepare, delivery-start, card, commit, push, pr, review-trigger, or ledger, with its reference: the identifier, sha, path, or URL alone. Set done only when every operation this brief asks for is complete. List in unmet only an operation this brief asks for that is unbound or failed; one it doesn't ask for is neither performed nor unmet.`;
+Report each operation you performed as an operations entry whose op is exactly one of worktree, branch, prepare, delivery-start, card, commit, push, pr, review-trigger, or ledger, with its reference: the identifier, sha, path, or URL alone, and its link: a filed card's URL, else empty. Set done only when every operation this brief asks for is complete. List in unmet only an operation this brief asks for that is unbound or failed; one it doesn't ask for is neither performed nor unmet.`;
   }
   function pushStop(step: string, r: PusherResult | null): Stopped {
     return stop(step, [
