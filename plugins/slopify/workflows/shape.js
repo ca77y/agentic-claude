@@ -183,9 +183,31 @@ function blocked(workflow, step, needs, extra = {}) {
 // src/slopify/lib/rules.ts
 var MAX_FIX_ROUNDS = 3;
 var STAMP = String.raw`\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z`;
+var FS_ROOTS = [
+  "Users",
+  "home",
+  "root",
+  "tmp",
+  "private",
+  "var",
+  "etc",
+  "opt",
+  "usr",
+  "mnt",
+  "srv",
+  "Volumes",
+  "workspaces?",
+  "repo",
+  "runner"
+];
 var LEAKS = [
   [
-    [/(?<![\w.:/~-])~?\/[\w.-]*\w(?![\w:-]|\.\w)/, /\b[A-Z]:\\\w/i, /\bfile:\/\//],
+    [
+      /(?<![\w.:/~-])~\/[\w.-]*\w/,
+      new RegExp(String.raw`(?<![\w.:/~-])\/(?:${FS_ROOTS.join("|")})\b(?![.-]\w)`),
+      /\b[A-Z]:\\\w/i,
+      /\bfile:\/\//
+    ],
     "It holds an absolute path; name files relative to the repo root."
   ],
   [[/\.tmp\//], "It refers to .tmp/, which is never committed; link nothing under it."],
