@@ -84,6 +84,7 @@ const happy = (over: Partial<Record<string, Script>> = {}): Script => {
   };
 };
 const briefOf = (label: string): string => calls.find((c) => c.label === label)?.prompt ?? "";
+const described = (type: string): string[] => calls.filter((c) => c.type === type).map((c) => c.prompt);
 
 // Every case starts from the same prompt.
 async function run(script: Script) {
@@ -141,6 +142,42 @@ describe("deliver-spike", () => {
     assert.equal(r.status, "ready");
     assert.ok(calls.filter((c) => isPosting(c)).length >= 2);
     assert.ok(describedBeforeEachPosting());
+  });
+
+  test("writer-pr and lens-pr are given the claims checked and the unknowns that Why trust it rests on", async () => {
+    const r = await run(happy());
+    assert.equal(r.status, "ready");
+    for (const type of ["writer-pr", "lens-pr"]) {
+      const prompts = described(type);
+      assert.ok(prompts.length > 0, `${type} ran`);
+      for (const prompt of prompts) {
+        for (const check of ["lens-evidence", "lens-question", "lens-neutrality"]) {
+          assert.ok(
+            prompt.split("\n").some((line) => line.includes(check) && /\bpass(?:ed)?\b/i.test(line)),
+            `${type} is told the check "${check}" passed`,
+          );
+        }
+        assert.ok(
+          prompt.split("\n").some((line) => line.includes(CLAIM.claim) && line.includes("0.02 s")),
+          `${type} is told the measured claim and its value`,
+        );
+      }
+    }
+  });
+
+  test("writer-pr and lens-pr are given each claim the prototype left unknown", async () => {
+    const r = await run(happy({ qa: () => ({ results: [{ claim: "c1", confirmed: false, reason: "too noisy" }] }) }));
+    assert.ok("status" in r);
+    for (const type of ["writer-pr", "lens-pr"]) {
+      const prompts = described(type);
+      assert.ok(prompts.length > 0, `${type} ran`);
+      for (const prompt of prompts) {
+        assert.ok(
+          prompt.split("\n").some((line) => line.includes(CLAIM.claim) && line.includes("too noisy")),
+          `${type} is told the unknown claim and why it wasn't measured`,
+        );
+      }
+    }
   });
 
   test("tells pusher that an operation the brief doesn't ask for is not unmet", async () => {
