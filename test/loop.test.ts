@@ -1309,6 +1309,19 @@ describe("the PR description", () => {
     assert.ok(lastWriterPrompt().includes("SMR-77"));
   });
 
+  for (const [name, filing] of [
+    ["fails outright", null],
+    ["fails part way", { done: false, unmet: ["card: the second card failed"], operations: [] }],
+  ] as const) {
+    test(`a follow-up whose card filing ${name} stays in the PR description, the card comment and the run result`, async () => {
+      use(preExisting(filing));
+      const r = await runLoop(inputFor(freshRun()));
+      assert.ok(lastWriterPrompt().includes("old bug"), "the final writer-pr brief lists the unfiled follow-up");
+      assert.ok(finalPrompt().includes("old bug"), "the card comment lists the unfiled follow-up");
+      assert.ok(JSON.stringify(r).includes("old bug"), "the run result carries the unfiled follow-up");
+    });
+  }
+
   test("a large run with dozens of coder choices and confirmations fits and ends ready", async () => {
     const ids = Array.from({ length: 26 }, (_, i) => `c${String(i + 1)}`);
     const validate: Validate = {
