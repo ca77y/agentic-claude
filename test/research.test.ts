@@ -105,6 +105,18 @@ const RESUMED = {
     },
   ],
 };
+// A resumed run whose committed pages are these.
+const resumedWith = (pages: readonly string[]) => ({
+  ...RESUMED,
+  evidence: [
+    RESUMED.evidence[0],
+    { source: "done-findings", location: "x", excerpt: `2026-11-09T10:00:00Z done findings ${pages.join(" ")}` },
+  ],
+});
+const lastDescribed = (type: string): string => described(type).at(-1) ?? "";
+// Every source count the prompt states, as written.
+const counts = (prompt: string): string[] =>
+  Array.from(prompt.matchAll(/(?:at least )?\b\d+ sources?\b/gi), (m) => m[0]);
 
 async function run(args: unknown, script: Script) {
   current.script = script;
@@ -179,6 +191,90 @@ describe("research", () => {
       for (const prompt of prompts) {
         assert.ok(trustLine(prompt, "library integrity", "passed"), `${type} is told the integrity check passed`);
         assert.match(prompt, /\b3 sources\b/i, `${type} is told the source count on a resumed run`);
+      }
+    }
+  });
+
+  test("a resumed run counts only the raw notes the pages cite after a repair, not those an earlier round named", async () => {
+    let checks = 0;
+    const r = await run(
+      "SMR-30",
+      happy({
+        "scout-checkpoint": () => RESUMED,
+        "library-clerk": (_t, label) => {
+          if (!label.startsWith("evidence: ")) return PASS;
+          checks += 1;
+          // The repair drops the page's citation of c.
+          return checks === 1
+            ? {
+                ...FAIL,
+                findings: ["cites c for a claim c does not make"],
+                notes: ["library/raw/a.md", "library/raw/b.md", "library/raw/c.md"],
+              }
+            : { ...PASS, notes: ["library/raw/a.md", "library/raw/b.md"] };
+        },
+      }),
+    );
+    assert.equal(r.status, "ready");
+    assert.equal(count("library-scribe", "repair"), 1);
+    for (const type of ["writer-pr", "lens-pr"]) {
+      assert.deepEqual(counts(lastDescribed(type)), ["2 sources"], `${type} is told the count after the repair`);
+    }
+  });
+
+  test("a resumed run counts a raw note two pages cite once, however the clerk spaces its path", async () => {
+    const r = await run(
+      "SMR-30",
+      happy({
+        "scout-checkpoint": () => resumedWith(["library/wiki/parser-speed.md", "library/wiki/parser-input.md"]),
+        "library-clerk": (_t, label) =>
+          label === "evidence: library/wiki/parser-speed.md"
+            ? { ...PASS, notes: ["library/raw/a.md", "library/raw/b.md"] }
+            : label === "evidence: library/wiki/parser-input.md"
+              ? { ...PASS, notes: [" library/raw/b.md ", "library/raw/c.md"] }
+              : PASS,
+      }),
+    );
+    assert.equal(r.status, "ready");
+    for (const type of ["writer-pr", "lens-pr"]) {
+      assert.deepEqual(counts(lastDescribed(type)), ["3 sources"], `${type} counts the shared note once`);
+    }
+  });
+
+  test("a resumed run counts only raw notes among the paths a clerk names", async () => {
+    await run(
+      "SMR-30",
+      happy({
+        "scout-checkpoint": () => RESUMED,
+        "library-clerk": (_t, label) =>
+          label.startsWith("evidence: ")
+            ? { ...PASS, notes: ["library/raw/a.md", "library/raw/b.md", "library/wiki/parser-input.md"] }
+            : PASS,
+      }),
+    );
+    for (const type of ["writer-pr", "lens-pr"]) {
+      assert.deepEqual(counts(lastDescribed(type)), ["2 sources"], `${type} is not told a wiki page is a source`);
+    }
+  });
+
+  test("a resumed run never states a flat source count when an evidence check could not name its notes", async () => {
+    await run(
+      "SMR-30",
+      happy({
+        "scout-checkpoint": () => resumedWith(["library/wiki/parser-speed.md", "library/wiki/parser-input.md"]),
+        "library-clerk": (_t, label) =>
+          label === "evidence: library/wiki/parser-speed.md"
+            ? { ...PASS, notes: ["library/raw/a.md", "library/raw/b.md"] }
+            : label === "evidence: library/wiki/parser-input.md"
+              ? { verdict: "unverified", findings: [], evidence: "the page could not be read", notes: [] }
+              : PASS,
+      }),
+    );
+    const prompts = [...described("writer-pr"), ...described("lens-pr")];
+    assert.ok(prompts.length > 0, "the PR is described");
+    for (const prompt of prompts) {
+      for (const stated of counts(prompt)) {
+        assert.match(stated, /^at least /i, `a count that misses a page's notes is a lower bound, not "${stated}"`);
       }
     }
   });
