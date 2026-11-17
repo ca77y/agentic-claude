@@ -1,6 +1,6 @@
 # Deliver bugfix
 
-How `deliver-bugfix` fixes a bug on its own, from a Linear issue or a prompt to a reviewed GitHub PR. Nobody is needed at any point. A bug it can reproduce has a clear way to check the fix, and the PR shows the evidence: the reproduced behavior and the behavior after the fix.
+How `deliver-bugfix` fixes a bug on its own, from a card or a prompt to a reviewed PR. Nobody is needed at any point. A bug it can reproduce has a clear way to check the fix, and the PR shows the evidence: the reproduced behavior and the behavior after the fix.
 
 ## Flow
 

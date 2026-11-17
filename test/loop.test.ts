@@ -513,7 +513,7 @@ describe("recurrence", () => {
   test("files a split recurring major as an issue", async () => {
     use(recurring("split-to-issue"));
     await runLoop(inputFor(freshRun()));
-    assert.ok(finalPrompt().includes("File one Linear issue"));
+    assert.ok(finalPrompt().includes("File one card"));
   });
 
   test("never lets a ruling close a recurring blocker", async () => {
@@ -669,7 +669,7 @@ describe("the PR's other sections", () => {
     const r = await runLoop(inputFor(freshRun()));
     assert.equal(r.status, "ready");
     assert.equal(count("coder", "fix-"), 0);
-    assert.ok(finalPrompt().includes("File one Linear issue"));
+    assert.ok(finalPrompt().includes("File one card"));
   });
 });
 

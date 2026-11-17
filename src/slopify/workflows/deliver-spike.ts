@@ -21,7 +21,7 @@ import { startWork } from "../lib/small.ts";
 export const meta = {
   name: "deliver-spike",
   description:
-    "Answer a bounded technical question from a Linear issue or a prompt with a cited findings document, delivered as a pull request: scouts gather evidence, a plan lists the claims, a throwaway prototype measures what evidence can't settle, and the document goes through the delivery loop's checks and review until it is clean",
+    "Answer a bounded technical question from a card or a prompt with a cited findings document, delivered as a pull request: scouts gather evidence, a plan lists the claims, a throwaway prototype measures what evidence can't settle, and the document goes through the delivery loop's checks and review until it is clean",
   whenToUse:
     'Run only when the user invokes /slopify:deliver-spike or asks for the slopify deliver-spike workflow, for a bounded technical question that needs findings, measurements, or a throwaway prototype. Open-ended outside research ("what is the best X") belongs to /slopify:research. Args: {question, projectRoot?, branchOnly?, answers?}, or the question as a plain string; question is a card identifier or URL, or the question as a prompt; projectRoot defaults to the session project directory; branchOnly: true, when the user asks for a branch without a worktree, checks the branch out in the main checkout and creates no worktree; answers maps a decision id from a draft or blocked result to its answer when rerunning.',
   phases: [
@@ -443,7 +443,7 @@ export default async function run(): Promise<SpikeResult> {
   const rejected = answersRejected(input["answers"]);
   if (rejected) return rejected;
   if (!arg) {
-    return { status: "not-started", next: "Ask the user for the Linear issue or the question, then invoke again." };
+    return { status: "not-started", next: "Ask the user for the card or the question, then invoke again." };
   }
   const d = createDeliver({
     workflow: WORKFLOW,

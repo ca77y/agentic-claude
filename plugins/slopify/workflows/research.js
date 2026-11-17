@@ -1,6 +1,6 @@
 export const meta = {
   "name": "research",
-  "description": "Answer a question from new sources in the project library, from a Linear issue or a prompt, delivered as a pull request: a checked plan, one researcher per sub-question, one raw note per source, and wiki pages that answer the question, which go through the delivery loop's checks and review until they are clean",
+  "description": "Answer a question from new sources in the project library, from a card or a prompt, delivered as a pull request: a checked plan, one researcher per sub-question, one raw note per source, and wiki pages that answer the question, which go through the delivery loop's checks and review until they are clean",
   "whenToUse": "Run only when the user invokes /slopify:research or asks for the slopify research workflow. Answers from the existing library belong to the ask skill. Args: {question, projectRoot?, branchOnly?, answers?}, or the question as a plain string; question is a card identifier or URL, or the question as a prompt; projectRoot defaults to the session project directory; branchOnly: true, when the user asks for a branch without a worktree, checks the branch out in the main checkout and creates no worktree.",
   "phases": [
     {
@@ -1474,7 +1474,7 @@ async function reviewRound(l) {
 }
 async function finish(l, ready) {
   const { state } = l.d;
-  const issues = l.newIssues.length > 0 ? `File one Linear issue for each of these, as docs/BOARD.md declares:
+  const issues = l.newIssues.length > 0 ? `File one card for each of these, as docs/BOARD.md declares:
 ${list(l.newIssues.map((i) => `${i.text} ${i.detail ?? ""}`))}
 ` : "";
   const questions = [
@@ -1838,8 +1838,8 @@ ARG>>>`,
     { label: "read the work", phase: "Locate" }
   );
   return locate(d, cardRes, arg, slugged(arg, "change"), {
-    readable: "A readable Linear issue, or a prompt.",
-    input: "A Linear issue or a prompt saying what to change.",
+    readable: "A readable card, or a prompt.",
+    input: "A card or a prompt saying what to change.",
     arg: "story",
     criteria: false
   });
@@ -2187,8 +2187,7 @@ async function run() {
   const arg = textOf(input["question"]);
   const rejected = answersRejected(input["answers"]);
   if (rejected) return rejected;
-  if (!arg)
-    return { status: "not-started", next: "Ask the user for the Linear issue or the question, then invoke again." };
+  if (!arg) return { status: "not-started", next: "Ask the user for the card or the question, then invoke again." };
   const d = createDeliver({
     workflow: WORKFLOW,
     projectRoot: textOf(input["projectRoot"]),

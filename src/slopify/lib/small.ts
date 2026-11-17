@@ -1,4 +1,4 @@
-// What deliver-trivial and deliver-bugfix share: from a Linear issue or a prompt to a reviewed PR, with no spec.
+// What deliver-trivial and deliver-bugfix share: from a card or a prompt to a reviewed PR, with no spec.
 import { scout, slugged } from "./family.ts";
 import { callPusher, createDeliver, opRef, pushOk, type Stopped } from "./deliver.ts";
 import { locate, workspace } from "./deliver-steps.ts";
@@ -71,8 +71,8 @@ ARG>>>`,
     { label: "read the work", phase: "Locate" },
   );
   return locate(d, cardRes, arg, slugged(arg, "change"), {
-    readable: "A readable Linear issue, or a prompt.",
-    input: "A Linear issue or a prompt saying what to change.",
+    readable: "A readable card, or a prompt.",
+    input: "A card or a prompt saying what to change.",
     arg: "story",
     criteria: false,
   });
@@ -152,7 +152,7 @@ export async function runSmall(workflowArgs: unknown, workflowName: string, firs
   const rejected = answersRejected(input["answers"]);
   if (rejected) return rejected;
   if (!arg) {
-    return { status: "not-started", next: "Ask the user for the Linear issue or a prompt, then invoke again." };
+    return { status: "not-started", next: "Ask the user for the card or a prompt, then invoke again." };
   }
   const d = createDeliver({
     workflow: workflowName,

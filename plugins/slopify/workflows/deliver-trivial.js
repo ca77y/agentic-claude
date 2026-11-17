@@ -1,6 +1,6 @@
 export const meta = {
   "name": "deliver-trivial",
-  "description": "Deliver a trivial story from a Linear issue or a prompt to a pull request, with no spec: a failing test, the change, one run of the app as TESTING.md says, and a PR that goes ready once its review is clean",
+  "description": "Deliver a trivial story from a card or a prompt to a pull request, with no spec: a failing test, the change, one run of the app as TESTING.md says, and a PR that goes ready once its review is clean",
   "whenToUse": "Run only when the user invokes /slopify:deliver-trivial or asks for the slopify deliver-trivial workflow. Args: {story, projectRoot?, branchOnly?, answers?}, or the work as a plain string; story is a card identifier or URL, or a prompt saying what to change; projectRoot defaults to the session project directory; branchOnly: true, when the user asks for a branch without a worktree, checks the branch out in the main checkout and creates no worktree; answers maps a decision id from a draft or blocked result to its answer when rerunning.",
   "phases": [
     {
@@ -1548,7 +1548,7 @@ async function reviewRound(l) {
 }
 async function finish(l, ready) {
   const { state } = l.d;
-  const issues = l.newIssues.length > 0 ? `File one Linear issue for each of these, as docs/BOARD.md declares:
+  const issues = l.newIssues.length > 0 ? `File one card for each of these, as docs/BOARD.md declares:
 ${list(l.newIssues.map((i) => `${i.text} ${i.detail ?? ""}`))}
 ` : "";
   const questions = [
@@ -1784,8 +1784,8 @@ ARG>>>`,
     { label: "read the work", phase: "Locate" }
   );
   return locate(d, cardRes, arg, slugged(arg, "change"), {
-    readable: "A readable Linear issue, or a prompt.",
-    input: "A Linear issue or a prompt saying what to change.",
+    readable: "A readable card, or a prompt.",
+    input: "A card or a prompt saying what to change.",
     arg: "story",
     criteria: false
   });
@@ -1842,7 +1842,7 @@ async function runSmall(workflowArgs, workflowName, firstTest) {
   const rejected = answersRejected(input["answers"]);
   if (rejected) return rejected;
   if (!arg) {
-    return { status: "not-started", next: "Ask the user for the Linear issue or a prompt, then invoke again." };
+    return { status: "not-started", next: "Ask the user for the card or a prompt, then invoke again." };
   }
   const d = createDeliver({
     workflow: workflowName,

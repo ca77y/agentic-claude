@@ -1,8 +1,8 @@
 # Shape
 
-How `shape` turns an idea into a Linear issue that a delivery can take as it is. It writes the why and the what, never the how. [`deliver/CARDS.md`](deliver/CARDS.md) says what each kind of card must hold; this document says how `shape` gets there. It follows the rules in [`DESIGN.md`](DESIGN.md).
+How `shape` turns an idea into a card that a delivery can take as it is. It writes the why and the what, never the how. [`deliver/CARDS.md`](deliver/CARDS.md) says what each kind of card must hold; this document says how `shape` gets there. It follows the rules in [`DESIGN.md`](DESIGN.md).
 
-People own the issue. They say what kind of card they want, read it on Linear, answer its open questions, and decide which delivery runs on it. `shape` never decides any of that.
+People own the issue. They say what kind of card they want, read it on the board, answer its open questions, and decide which delivery runs on it. `shape` never decides any of that.
 
 ## Flow
 
@@ -20,7 +20,7 @@ People own the issue. They say what kind of card they want, read it on Linear, a
  5 CHECK ─────── checks by kind (haiku), then judge × 1 (opus) rules on the round's findings
  │   ▲ ≤3 revisions a confirmed problem goes back to writer-card
  │   └────────── what is still open after the last round becomes an open question
- 6 FILE ──────── pusher creates or updates the card on Linear
+ 6 FILE ──────── pusher creates or updates the card on the board
                  no open question → a story gets the Deliverable label
                  open questions   → listed on the card; answer them there and run shape on the card again
 ```
@@ -39,12 +39,12 @@ The kind comes from the user, and is `story` when they don't say. It picks the t
 
 ## Decisions
 
-- **The card is the checkpoint, and Linear is the conversation.** Open questions go on the card, in their own section. A person answers them on the card or in a comment, and runs `shape` on the card again. That run reads the answers, applies them, checks the card again, and updates it. Nothing waits in a session.
+- **The card is the checkpoint, and the board is the conversation.** Open questions go on the card, in their own section. A person answers them on the card or in a comment, and runs `shape` on the card again. That run reads the answers, applies them, checks the card again, and updates it. Nothing waits in a session.
 - **`Deliverable` means the card meets the story contract.** It goes on only when no open question is left and every check passed, and comes off when a rerun reopens one.
 - **Assumptions don't stop the run.** `shape` settles everything that doesn't change what the card delivers or whom it serves, and states it so a reader can object. Only what changes the outcome becomes an open question.
 - **Criteria follow `TESTING.md`.** The writer reads its categories and guidance, so every criterion is one that a category can check.
 - **`shape` sets no type label.** Feature, Improvement, Bug, or any other label `docs/BOARD.md` declares is the person's choice. A card that already has one keeps it.
-- **`shape` always files.** Its output is the Linear issue. The working draft lives under `.tmp/shape/`, and is never the record.
+- **`shape` always files.** Its output is the card. The working draft lives under `.tmp/shape/`, and is never the record.
 
 ## Halt conditions
 

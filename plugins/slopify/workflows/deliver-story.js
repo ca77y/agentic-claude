@@ -1,6 +1,6 @@
 export const meta = {
   "name": "deliver-story",
-  "description": "Deliver a non-simple story from a Deliverable Linear issue to a pull request: independent designs, opus advisors, and a challenged spec decide how; a coder and qa build each change test first; the app is validated as TESTING.md says; and the PR goes ready once its review is clean, or stays a draft that says what is open",
+  "description": "Deliver a non-simple story from a Deliverable card to a pull request: independent designs, opus advisors, and a challenged spec decide how; a coder and qa build each change test first; the app is validated as TESTING.md says; and the PR goes ready once its review is clean, or stays a draft that says what is open",
   "whenToUse": "Run only when the user invokes /slopify:deliver-story or asks for the slopify deliver-story workflow. Args: {story, projectRoot?, branchOnly?, answers?}, or the story as a plain string; story is a card identifier or URL for an issue labelled Deliverable; projectRoot defaults to the session project directory; branchOnly: true, when the user asks for a branch without a worktree, checks the branch out in the main checkout and creates no worktree; answers maps a decision id from a draft or blocked result to its answer when rerunning.",
   "phases": [
     {
@@ -1574,7 +1574,7 @@ async function reviewRound(l) {
 }
 async function finish(l, ready) {
   const { state } = l.d;
-  const issues = l.newIssues.length > 0 ? `File one Linear issue for each of these, as docs/BOARD.md declares:
+  const issues = l.newIssues.length > 0 ? `File one card for each of these, as docs/BOARD.md declares:
 ${list(l.newIssues.map((i) => `${i.text} ${i.detail ?? ""}`))}
 ` : "";
   const questions = [
@@ -2395,8 +2395,8 @@ ARG>>>`,
     { label: "read the issue", phase: "Locate" }
   );
   const located = locate(d, cardRes, storyArg, slugged(storyArg, "story"), {
-    readable: "A readable Linear issue.",
-    input: "A Linear issue the board can read.",
+    readable: "A readable card.",
+    input: "A card the board can read.",
     arg: "story",
     criteria: false
   });
@@ -2405,7 +2405,7 @@ ARG>>>`,
   if (!cardId)
     return {
       status: "not-started",
-      next: "Ask the user for the Linear issue to deliver; a story reaches delivery only as an issue shape filed."
+      next: "Ask the user for the card to deliver; a story reaches delivery only as a card shape filed."
     };
   if (!isDeliverable(fact(cardRes, "labels"))) return refuse(d, cardId);
   const specDir = specRel.replace(/\.md$/, "");
@@ -2450,7 +2450,7 @@ async function run() {
   const rejected = answersRejected(input["answers"]);
   if (rejected) return rejected;
   if (!storyArg) {
-    return { status: "not-started", next: "Ask the user for the Linear issue to deliver, then invoke again." };
+    return { status: "not-started", next: "Ask the user for the card to deliver, then invoke again." };
   }
   const projectRoot = textOf(input["projectRoot"]);
   const d = createDeliver({

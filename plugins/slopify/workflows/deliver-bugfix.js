@@ -1,6 +1,6 @@
 export const meta = {
   "name": "deliver-bugfix",
-  "description": "Fix a bug autonomously, from a Linear issue or a prompt to a pull request: reproduce it, turn the reproduction into a failing test, fix it, run the reproduction again in the app, and show the before and after in a PR that goes ready once its review is clean. A bug that can't be reproduced is labelled Unreproducible on its card, with no PR",
+  "description": "Fix a bug autonomously, from a card or a prompt to a pull request: reproduce it, turn the reproduction into a failing test, fix it, run the reproduction again in the app, and show the before and after in a PR that goes ready once its review is clean. A bug that can't be reproduced is labelled Unreproducible on its card, with no PR",
   "whenToUse": "Run only when the user invokes /slopify:deliver-bugfix or asks for the slopify deliver-bugfix workflow. Args: {story, projectRoot?, branchOnly?, answers?}, or the bug as a plain string; story is a card identifier or URL, or the report; projectRoot defaults to the session project directory; branchOnly: true, when the user asks for a branch without a worktree, checks the branch out in the main checkout and creates no worktree; answers maps a decision id from a draft or blocked result to its answer when rerunning.",
   "phases": [
     {
@@ -1460,7 +1460,7 @@ async function reviewRound(l) {
 }
 async function finish(l, ready) {
   const { state } = l.d;
-  const issues = l.newIssues.length > 0 ? `File one Linear issue for each of these, as docs/BOARD.md declares:
+  const issues = l.newIssues.length > 0 ? `File one card for each of these, as docs/BOARD.md declares:
 ${list(l.newIssues.map((i) => `${i.text} ${i.detail ?? ""}`))}
 ` : "";
   const questions = [
@@ -1891,8 +1891,8 @@ ARG>>>`,
     { label: "read the work", phase: "Locate" }
   );
   return locate(d, cardRes, arg, slugged(arg, "change"), {
-    readable: "A readable Linear issue, or a prompt.",
-    input: "A Linear issue or a prompt saying what to change.",
+    readable: "A readable card, or a prompt.",
+    input: "A card or a prompt saying what to change.",
     arg: "story",
     criteria: false
   });
@@ -1981,7 +1981,7 @@ async function run() {
   const arg = textOf(input["story"]);
   const rejected = answersRejected(input["answers"]);
   if (rejected) return rejected;
-  if (!arg) return { status: "not-started", next: "Ask the user for the bug: a Linear issue or a report." };
+  if (!arg) return { status: "not-started", next: "Ask the user for the bug: a card or a report." };
   const d = createDeliver({
     workflow: WORKFLOW,
     projectRoot: textOf(input["projectRoot"]),

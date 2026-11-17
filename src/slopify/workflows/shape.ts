@@ -10,7 +10,7 @@ import { libraryReaderSchema } from "../lib/schemas.ts";
 export const meta = {
   name: "shape",
   description:
-    "Turn an idea into a Linear issue of the kind the user asks for, story, bug, or spike, written from the plugin's card template: scouts and advisors ground it, writer-card drafts it, cheap checks and a judge refine it, and pusher files it, labelled Deliverable when a story has no open question",
+    "Turn an idea into a card of the kind the user asks for, story, bug, or spike, written from the plugin's card template: scouts and advisors ground it, writer-card drafts it, cheap checks and a judge refine it, and pusher files it, labelled Deliverable when a story has no open question",
   whenToUse:
     "Run only when the user invokes /slopify:shape or asks for the slopify shape workflow. Args: {idea?, card?, kind?, projectRoot?}, or the idea as a plain string; card names an existing card to start from, such as one whose open questions are now answered; kind is story, bug, or spike, and story when not given; projectRoot defaults to the session project directory.",
   phases: [

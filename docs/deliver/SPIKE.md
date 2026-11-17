@@ -1,6 +1,6 @@
 # Deliver spike
 
-How `deliver-spike` answers a bounded technical question with a findings document, delivered as a reviewed GitHub PR. It follows the rules in [`DESIGN.md`](../DESIGN.md) and takes the outer loop and the review from [`STORY.md`](STORY.md), with the document in place of code.
+How `deliver-spike` answers a bounded technical question with a findings document, delivered as a reviewed PR. It follows the rules in [`DESIGN.md`](../DESIGN.md) and takes the outer loop and the review from [`STORY.md`](STORY.md), with the document in place of code.
 
 ## Flow
 
@@ -27,7 +27,7 @@ How `deliver-spike` answers a bounded technical question with a findings documen
  9 REVIEW ────── watcher (haiku) reads the findings
  │   ▲ ≤3 fix    judge × N (opus), one per finding
  │   │  rounds   writer revises the document → commit, then step 7 again
- │   └────────── pusher pushes and comments "@review"
+ │   └────────── pusher pushes and requests the review
  ▼
  clean → PR ready, issue In Review            not clean → PR stays draft, saying why
 ```

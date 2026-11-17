@@ -1,6 +1,6 @@
 # Deliver trivial
 
-How `deliver-trivial` takes a trivial story from a Linear issue or a prompt to a reviewed GitHub PR. There is no spec, and the issue or prompt says everything. It follows the rules in [`DESIGN.md`](../DESIGN.md) and takes the review from [`STORY.md`](STORY.md). `deliver-bugfix` is the same flow; see [`BUGFIX.md`](BUGFIX.md).
+How `deliver-trivial` takes a trivial story from a card or a prompt to a reviewed PR. There is no spec, and the issue or prompt says everything. It follows the rules in [`DESIGN.md`](../DESIGN.md) and takes the review from [`STORY.md`](STORY.md). `deliver-bugfix` is the same flow; see [`BUGFIX.md`](BUGFIX.md).
 
 ## Flow
 
@@ -22,7 +22,7 @@ How `deliver-trivial` takes a trivial story from a Linear issue or a prompt to a
  │   ▲ ≤3 fix    judge × N (opus), one per finding
  │   │  rounds   each blocker/major: failing test → commit → coder → commit → checks
  │   │           scout-docs, then writer-docs if it found any
- │   └────────── pusher pushes and comments "@review"
+ │   └────────── pusher pushes and requests the review
  ▼
  clean → PR ready, issue In Review            not clean → PR stays draft, saying why
 ```

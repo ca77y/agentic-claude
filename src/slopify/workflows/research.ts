@@ -11,7 +11,7 @@ import { findCard, openWork, resumeOf } from "../lib/small.ts";
 export const meta = {
   name: "research",
   description:
-    "Answer a question from new sources in the project library, from a Linear issue or a prompt, delivered as a pull request: a checked plan, one researcher per sub-question, one raw note per source, and wiki pages that answer the question, which go through the delivery loop's checks and review until they are clean",
+    "Answer a question from new sources in the project library, from a card or a prompt, delivered as a pull request: a checked plan, one researcher per sub-question, one raw note per source, and wiki pages that answer the question, which go through the delivery loop's checks and review until they are clean",
   whenToUse:
     "Run only when the user invokes /slopify:research or asks for the slopify research workflow. Answers from the existing library belong to the ask skill. Args: {question, projectRoot?, branchOnly?, answers?}, or the question as a plain string; question is a card identifier or URL, or the question as a prompt; projectRoot defaults to the session project directory; branchOnly: true, when the user asks for a branch without a worktree, checks the branch out in the main checkout and creates no worktree.",
   phases: [
@@ -355,8 +355,7 @@ export default async function run(): Promise<ResearchResult> {
   const arg = textOf(input["question"]);
   const rejected = answersRejected(input["answers"]);
   if (rejected) return rejected;
-  if (!arg)
-    return { status: "not-started", next: "Ask the user for the Linear issue or the question, then invoke again." };
+  if (!arg) return { status: "not-started", next: "Ask the user for the card or the question, then invoke again." };
   const d = createDeliver({
     workflow: WORKFLOW,
     projectRoot: textOf(input["projectRoot"]),

@@ -1114,7 +1114,7 @@ async function finish(l: Loop, ready: boolean): Promise<void> {
   const { state } = l.d;
   const issues =
     l.newIssues.length > 0
-      ? `File one Linear issue for each of these, as docs/BOARD.md declares:\n${list(l.newIssues.map((i) => `${i.text} ${i.detail ?? ""}`))}\n`
+      ? `File one card for each of these, as docs/BOARD.md declares:\n${list(l.newIssues.map((i) => `${i.text} ${i.detail ?? ""}`))}\n`
       : "";
   const questions = [
     ...unique(l.manualActions).map((a) => `Manual action: ${a}`),

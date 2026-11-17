@@ -1,12 +1,12 @@
 # Deliver story
 
-How `deliver-story` takes a Linear issue to a GitHub pull request (PR) whose review is clean. It is built for non-simple stories, and it spends the most on the how and on validation. [`TRIVIAL.md`](TRIVIAL.md) and [`BUGFIX.md`](BUGFIX.md) cover the short flow. It follows the shared rules in [`DESIGN.md`](../DESIGN.md): the severity scale, recorded decisions, bounded loops, and run outcomes.
+How `deliver-story` takes a card to a pull request (PR) whose review is clean. It is built for non-simple stories, and it spends the most on the how and on validation. [`TRIVIAL.md`](TRIVIAL.md) and [`BUGFIX.md`](BUGFIX.md) cover the short flow. It follows the shared rules in [`DESIGN.md`](../DESIGN.md): the severity scale, recorded decisions, bounded loops, and run outcomes.
 
 ## Invariants
 
-1. Work starts from a Linear issue that `shape` marked `Deliverable`. The issue holds the why and the what, never the how; [`CARDS.md`](CARDS.md) lists what it must hold.
+1. Work starts from a card that `shape` marked `Deliverable`. The issue holds the why and the what, never the how; [`CARDS.md`](CARDS.md) lists what it must hold.
 2. The spec holds the how. Agents write it and agents read it. Humans validate the issue and review the PR.
-3. Work ends in a GitHub PR.
+3. Work ends in a PR.
 4. The PR is reviewed. It is marked ready only when the review is clean.
 5. The change is validated by running the app, as the target project's `TESTING.md` describes. The workflow knows no platform, so a web app is driven in a browser and an iOS app in the simulator because `TESTING.md` says so.
 
@@ -55,7 +55,7 @@ A delivery ends in a PR unless one of the halt conditions below holds. Anything 
  │  │   GATEWAY ────── judge (opus): anything missed? a doc not on the list → added
  │  │   PUSH ───────── pusher pushes (even if something is still flagged)                  ⛔ H4
  │  │                  no PR yet: opens a draft once nothing blocks, or on the last round
- │  │                  PR exists: comments "@review"
+ │  │                  PR exists: requests the review
  │  │   REVIEW ─────── only if a PR exists: watcher (haiku) reads the findings
  │  │                  judge × N (opus), one per finding: severity and kind
  │  │   GATE (code) ── clean → exit
@@ -146,9 +146,9 @@ This stage is two nested loops. The inner loop makes one change correct, and onl
 4. **Gateway.** One `judge` (opus) reads every `qa` verdict, the validator's evidence, the `lens-docs` results, and the round's diff, and decides whether anything was missed. Whatever it flags is judged like any other problem and becomes open for the next round. A document the change affects that isn't on the `docs` list is added to it.
 5. **Push.** `pusher` commits and pushes the round's work, even when something is still flagged, so every attempt stays in git history.
    - If no PR exists, `pusher` opens one as a draft once no `blocker` or `major` is open, or on the last round either way. Opening it fires the review. `pusher` then attaches it to the issue.
-   - If a PR exists, `pusher` updates its description and comments `@review`.
+   - If a PR exists, `pusher` updates its description and requests the review as `docs/FORGE.md` declares.
    - Anything still flagged goes under **Why this is a draft**, with its evidence and what was tried.
-6. **Review.** This step runs only when a PR exists. The review is the one `docs/FORGE.md` declares: the Claude Code Review GitHub Action, which runs when the PR opens and again whenever a PR comment is `@review`. The workflow doesn't review the code itself.
+6. **Review.** This step runs only when a PR exists. The review is the one `docs/FORGE.md` declares, with the trigger and the status it declares for it. The workflow doesn't review the code itself.
    - `watcher` waits for the review run to finish and returns its findings.
    - One `judge` per finding rules on it as in step 3. Each brief includes the earlier rulings for the same fingerprint (file, symbol, category), so a dismissed finding stays dismissed.
    - The judge filters out pre-existing issues, issues a linter would catch, and style. It runs a reproduction when it can, rather than only reading the code.
@@ -165,7 +165,7 @@ The outer loop has three limits:
 - **Recurrence:** when a problem's fingerprint is confirmed again after a fix attempt, `judge` also gives it a ruling, with the earlier attempts in its brief, and the script applies the fixed action:
   - `fix-differently` starts one more inner loop. It is allowed once; a problem that comes back after that is treated as `escalate`.
   - `accept-as-debt` lists it under **Known debt** and closes it for this PR. Only a `major` can get this ruling.
-  - `split-to-issue` files a Linear issue and closes it for this PR. Only a `major` can get this ruling.
+  - `split-to-issue` files a card and closes it for this PR. Only a `major` can get this ruling.
   - `escalate` lists it under **Why this is a draft**, and the PR stays a draft.
 
 A `blocker` is therefore either fixed or left open. Anything still open when the loop ends goes under **Why this is a draft**.
@@ -236,7 +236,7 @@ These are the only conditions that stop the run:
 
 | #   | Condition                                                                                         | Found at | What the user gets                                                                   |
 | --- | ------------------------------------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------ |
-| H1  | The Linear issue can't be read, or `answers` isn't a map or holds an object or a list             | Intake   | `not-started`, no board write                                                        |
+| H1  | The card can't be read, or `answers` isn't a map or holds an object or a list                     | Intake   | `not-started`, no board write                                                        |
 | H2  | The issue doesn't have the `Deliverable` label                                                    | Intake   | `not-started`, and an issue comment saying to run `shape`                            |
 | H3  | The how phase's loops are exhausted: no design survives, or a `blocker` stays open in the spec    | How      | `blocked`, and an issue comment saying the workflow is broken, with everything tried |
 | H4  | The push is denied, or PR creation fails                                                          | Push     | `blocked`; finished work stays committed on the local branch                         |
@@ -260,6 +260,6 @@ Invoking `deliver-story` authorizes the following:
 - opening and updating the story's PR, as a draft or ready;
 - the issue's status moves the board declares for delivery start and for review;
 - one comment on the issue when the run ends or halts;
-- filing a Linear issue for each `pre-existing` finding, and for each finding the judge splits off with `split-to-issue`.
+- filing a card for each `pre-existing` finding, and for each finding the judge splits off with `split-to-issue`.
 
 It never merges, approves, or force-pushes.

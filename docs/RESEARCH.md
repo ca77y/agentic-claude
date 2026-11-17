@@ -1,6 +1,6 @@
 # Research
 
-How `research` answers a question from new sources and adds the answer to the project's library, delivered as a reviewed GitHub PR. It follows the rules in [`DESIGN.md`](DESIGN.md) and takes the outer loop and the review from [`deliver/STORY.md`](deliver/STORY.md), with the library pages in place of code. The library's own conventions are in `library/_meta/librarian.md` in the target project.
+How `research` answers a question from new sources and adds the answer to the project's library, delivered as a reviewed PR. It follows the rules in [`DESIGN.md`](DESIGN.md) and takes the outer loop and the review from [`deliver/STORY.md`](deliver/STORY.md), with the library pages in place of code. The library's own conventions are in `library/_meta/librarian.md` in the target project.
 
 ## Flow
 
@@ -24,7 +24,7 @@ How `research` answers a question from new sources and adds the answer to the pr
  9 REVIEW ────── watcher (haiku) reads the findings
  │   ▲ ≤3 fix    judge × N (opus), one per finding
  │   │  rounds   library-scribe repairs the pages → commit, then step 7 again
- │   └────────── pusher pushes and comments "@review"
+ │   └────────── pusher pushes and requests the review
  ▼
  clean → PR ready, issue In Review            not clean → PR stays draft, saying why
 ```

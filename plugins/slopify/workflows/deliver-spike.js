@@ -1,6 +1,6 @@
 export const meta = {
   "name": "deliver-spike",
-  "description": "Answer a bounded technical question from a Linear issue or a prompt with a cited findings document, delivered as a pull request: scouts gather evidence, a plan lists the claims, a throwaway prototype measures what evidence can't settle, and the document goes through the delivery loop's checks and review until it is clean",
+  "description": "Answer a bounded technical question from a card or a prompt with a cited findings document, delivered as a pull request: scouts gather evidence, a plan lists the claims, a throwaway prototype measures what evidence can't settle, and the document goes through the delivery loop's checks and review until it is clean",
   "whenToUse": "Run only when the user invokes /slopify:deliver-spike or asks for the slopify deliver-spike workflow, for a bounded technical question that needs findings, measurements, or a throwaway prototype. Open-ended outside research (\"what is the best X\") belongs to /slopify:research. Args: {question, projectRoot?, branchOnly?, answers?}, or the question as a plain string; question is a card identifier or URL, or the question as a prompt; projectRoot defaults to the session project directory; branchOnly: true, when the user asks for a branch without a worktree, checks the branch out in the main checkout and creates no worktree; answers maps a decision id from a draft or blocked result to its answer when rerunning.",
   "phases": [
     {
@@ -1482,7 +1482,7 @@ async function reviewRound(l) {
 }
 async function finish(l, ready) {
   const { state } = l.d;
-  const issues = l.newIssues.length > 0 ? `File one Linear issue for each of these, as docs/BOARD.md declares:
+  const issues = l.newIssues.length > 0 ? `File one card for each of these, as docs/BOARD.md declares:
 ${list(l.newIssues.map((i) => `${i.text} ${i.detail ?? ""}`))}
 ` : "";
   const questions = [
@@ -1810,8 +1810,8 @@ ARG>>>`,
     { label: "read the work", phase: "Locate" }
   );
   return locate(d, cardRes, arg, slugged(arg, "change"), {
-    readable: "A readable Linear issue, or a prompt.",
-    input: "A Linear issue or a prompt saying what to change.",
+    readable: "A readable card, or a prompt.",
+    input: "A card or a prompt saying what to change.",
     arg: "story",
     criteria: false
   });
@@ -2196,7 +2196,7 @@ async function run() {
   const rejected = answersRejected(input["answers"]);
   if (rejected) return rejected;
   if (!arg) {
-    return { status: "not-started", next: "Ask the user for the Linear issue or the question, then invoke again." };
+    return { status: "not-started", next: "Ask the user for the card or the question, then invoke again." };
   }
   const d = createDeliver({
     workflow: WORKFLOW,
