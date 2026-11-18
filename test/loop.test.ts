@@ -5,7 +5,20 @@ import { beforeEach, describe, test } from "node:test";
 import { createDeliver } from "../src/slopify/lib/deliver.ts";
 import { runLoop, stopOf, Halt, type LoopInput, type Run } from "../src/slopify/lib/loop.ts";
 import type { Build, Validate } from "../src/slopify/lib/spec.ts";
-import { calls, current, installAgents, type Reply, type Script } from "./harness.ts";
+import { checkDescription } from "../src/slopify/lib/rules.ts";
+import {
+  PR_LENS_PASS,
+  PR_AGENTS,
+  calls,
+  current,
+  describedBeforeEachPosting,
+  installAgents,
+  isPosting,
+  scriptOf,
+  prBody,
+  type Reply,
+  type Script,
+} from "./harness.ts";
 
 installAgents();
 
@@ -82,15 +95,14 @@ const DEFAULTS: Record<string, Script> = {
   watcher: () => CLEAN_REVIEW,
   judge: (_t, label) => (label === "gateway" ? GATEWAY_OK : ruling()),
   "writer-docs": () => ({ changed: ["docs/a.md"] }),
+  ...PR_AGENTS,
 };
-const happy = (over: Partial<Record<string, Script>> = {}): Script => {
-  const agents = { ...DEFAULTS, ...over };
-  return (type, label, prompt) => agents[type]?.(type, label, prompt) ?? null;
-};
+const happy = (over: Partial<Record<string, Script>> = {}): Script => scriptOf(DEFAULTS, over);
 
 function inputFor(d: Run, over: Partial<LoopInput> = {}): LoopInput {
   return {
     d,
+    kind: "story",
     where: "project",
     story: "the issue",
     cardId: "SMR-1",
@@ -117,6 +129,11 @@ const count = (type: string, label?: string): number =>
 const pushPrompts = (): string[] => calls.filter((c) => c.label === "push the round").map((c) => c.prompt);
 const judgePrompts = (): string[] => calls.filter((c) => c.type === "judge").map((c) => c.prompt);
 const finalPrompt = (): string => calls.find((c) => /mark the PR ready|report the draft/.test(c.label))?.prompt ?? "";
+const cardPrompt = (): string => calls.find((c) => c.label === "update the card")?.prompt ?? "";
+const writerPrompts = (): string[] => calls.filter((c) => c.type === "writer-pr").map((c) => c.prompt);
+const lastWriterPrompt = (): string => writerPrompts().at(-1) ?? "";
+const filingPrompt = (): string =>
+  calls.find((c) => c.type === "pusher" && c.prompt.includes("File one card"))?.prompt ?? "";
 
 // Each review has one finding fewer, so the open count keeps falling and only the round cap can end the loop.
 const fallingReviews = (counts: readonly number[]): Script => {
@@ -499,7 +516,7 @@ describe("a coder decides how, not what", () => {
     use(happy({ coder: (_t, label) => (label.endsWith(": test") ? OK_TEST : { ...OK_FIX, assumptions: [NAMED] }) }));
     const r = await runLoop(inputFor(freshRun()));
     assert.equal(r.status, "ready");
-    assert.match(finalPrompt(), /Assumptions[\s\S]*What to call the helper\? retryUpload\./);
+    assert.ok(cardPrompt().includes(NAMED), "the card comment lists the coder's choice");
   });
 
   test("a test dispatch can stop the same way", async () => {
@@ -643,20 +660,19 @@ describe("recurrence", () => {
     use(recurring("accept-as-debt"));
     const r = await runLoop(inputFor(freshRun()));
     assert.equal(r.status, "ready");
-    assert.ok(finalPrompt().includes("## Known debt"));
+    assert.ok(lastWriterPrompt().includes("same bug"), "writer-pr is told the debt is still open");
   });
 
   test("files a split recurring major as an issue", async () => {
     use(recurring("split-to-issue"));
     await runLoop(inputFor(freshRun()));
-    assert.ok(finalPrompt().includes("File one card"));
+    assert.ok(filingPrompt().includes("same bug"));
   });
 
   test("never lets a ruling close a recurring blocker", async () => {
     use(recurring("accept-as-debt", "blocker"));
     const r = await runLoop(inputFor(freshRun()));
     assert.equal(r.status, "draft");
-    assert.ok(!finalPrompt().includes("## Known debt"));
     assert.ok(r.draftReasons.some((x) => x.text.includes("blocker")));
   });
 });
@@ -667,14 +683,14 @@ describe("what TESTING.md decides", () => {
     const r = await runLoop(inputFor(freshRun()));
     assert.equal(r.status, "draft");
     assert.equal(r.rounds, 0);
-    assert.ok(finalPrompt().includes("## Why this is a draft"));
+    assert.ok(cardPrompt().includes("it works (cannot-verify)"), "the card comment says why it is a draft");
   });
 
   test("lets a cannot-verify criterion set to ready through, under Not validated", async () => {
     use(cannotVerify("ready"));
     const r = await runLoop(inputFor(freshRun()));
     assert.equal(r.status, "ready");
-    assert.ok(finalPrompt().includes("## Not validated"));
+    assert.ok(lastWriterPrompt().includes("cannot-verify"), "writer-pr is told the criterion's result");
   });
 
   test("treats a missing statement as draft", async () => {
@@ -726,7 +742,7 @@ describe("rulings on a failing criterion", () => {
       }),
     );
     assert.equal(await statusOf(), "ready");
-    assert.ok(finalPrompt().includes("overturned a fail"));
+    assert.ok(lastWriterPrompt().includes("overturned a fail"));
     assert.equal(count("coder", "fix-"), 0);
   });
 
@@ -752,7 +768,7 @@ describe("the PR's other sections", () => {
     );
     const r = await runLoop(inputFor(freshRun()));
     assert.equal(r.status, "ready");
-    assert.ok(finalPrompt().includes("## Unverified findings"));
+    assert.ok(lastWriterPrompt().includes("maybe a race"), "writer-pr is told the finding is open");
   });
 
   test("marks ready with a spec decision that changes acceptance, and lists it to confirm", async () => {
@@ -769,7 +785,7 @@ describe("the PR's other sections", () => {
     const r = await runLoop(inputFor(freshRun(), { build: { ...BUILD, decisions: [decision] } }));
     assert.equal(r.status, "ready");
     assert.deepEqual(r.decisions, ["d1"]);
-    assert.ok(finalPrompt().includes("## Needs confirmation"));
+    assert.ok(cardPrompt().includes("keep the data?"), "the card comment lists the decision");
   });
 
   test("lists the spec's and the coder's manual actions, and still goes ready", async () => {
@@ -781,7 +797,7 @@ describe("the PR's other sections", () => {
     );
     const r = await runLoop(inputFor(freshRun(), { build: { ...BUILD, manualActions: ["run the backfill"] } }));
     assert.equal(r.status, "ready");
-    assert.match(finalPrompt(), /## Manual actions[\s\S]*run the backfill[\s\S]*drop the old table/);
+    assert.match(cardPrompt(), /run the backfill[\s\S]*drop the old table/);
   });
 
   test("lists a finding only a person can settle under Needs confirmation", async () => {
@@ -792,7 +808,7 @@ describe("the PR's other sections", () => {
       }),
     );
     assert.equal(await statusOf(), "ready");
-    assert.ok(finalPrompt().includes("## Needs confirmation"));
+    assert.ok(cardPrompt().includes("what should this mean?"), "the card comment lists the confirmation");
   });
 
   test("files a pre-existing finding as an issue and doesn't fix it", async () => {
@@ -805,8 +821,8 @@ describe("the PR's other sections", () => {
     const r = await runLoop(inputFor(freshRun()));
     assert.equal(r.status, "ready");
     assert.equal(count("coder", "fix-"), 0);
-    assert.ok(finalPrompt().includes("File one card, as docs/BOARD.md declares, that lists every one"));
-    assert.ok(!finalPrompt().includes("File one card for each"));
+    assert.ok(filingPrompt().includes("old bug"));
+    assert.match(filingPrompt(), /deliver-preexisting SMR-1 [a-z0-9-]+ -->/);
   });
 });
 
@@ -847,14 +863,16 @@ describe("the review's outcome", () => {
 });
 
 describe("starting points", () => {
-  test("a rerun after the PR opened starts at the review and builds nothing when it's clean", async () => {
+  test("a rerun after the PR opened validates once, builds nothing, and goes ready when the review is clean", async () => {
     use(happy());
     const d = freshRun();
     d.state.pr = "PR-9";
     const r = await runLoop(inputFor(d, { startAtReview: 1, built: true }));
     assert.equal(r.status, "ready");
     assert.equal(count("coder"), 0);
-    assert.equal(count("validator"), 0);
+    assert.equal(count("validator"), 1, "the description has criterion results to rest on");
+    assert.equal(count("judge", "gateway"), 0);
+    assert.ok(!(calls.find((c) => c.type === "writer-pr")?.prompt ?? "").includes("No criterion results"));
   });
 
   test("a rerun whose tasks are built starts at validation", async () => {
@@ -867,6 +885,7 @@ describe("starting points", () => {
 
 describe("the small flow", () => {
   const SMALL = {
+    kind: "trivial" as const,
     build: null,
     specDir: "",
     small: { firstTest: "states the new behavior." },
@@ -1039,6 +1058,7 @@ describe("the document flow", () => {
     let checked = 0;
     revisions.length = 0;
     return {
+      kind: "spike" as const,
       build: null,
       validate: null,
       specDir: "",
@@ -1066,7 +1086,7 @@ describe("the document flow", () => {
     assert.equal(count("qa"), 0);
     assert.equal(count("validator"), 0);
     assert.equal(count("checks"), 1);
-    assert.match(pushPrompts()[0] ?? "", /Findings: `docs\/spikes\/smr-1\.md`/);
+    assert.ok(lastWriterPrompt().includes("docs/spikes/smr-1.md"), "writer-pr is told the document");
   });
 
   test("sends a confirmed problem from the document's checks to its writer, whatever its kind", async () => {
@@ -1096,8 +1116,11 @@ describe("the document flow", () => {
     assert.equal(r.status, "ready");
     assert.equal(r.rounds, 0);
     assert.deepEqual(revisions, []);
-    assert.equal(r.review, "no blocking findings, 1 suggestion(s) in the PR description");
-    assert.match(finalPrompt(), /## Suggestions \(1\)/);
+    // The description has no suggestions section any more: an unfixed finding sits only under Not done (d19).
+    assert.doesNotMatch(r.review, /suggestion/i, "the summary names no old section");
+    assert.match(r.review, /\b1\b/, "the summary counts the unfixed finding");
+    assert.match(r.review, /Not done/, "the summary says where the description lists it");
+    assert.ok(lastWriterPrompt().includes("awkward wording"), "writer-pr is told the suggestion");
   });
 
   test("applies a minor problem when a round runs for another, and drops it from the suggestions", async () => {
@@ -1106,7 +1129,7 @@ describe("the document flow", () => {
     assert.equal(r.status, "ready");
     assert.deepEqual(revisions, [[`${UNCITED.location}: ${UNCITED.text}`, `${WORDING.location}: ${WORDING.text}`]]);
     assert.equal(r.review, "clean");
-    assert.doesNotMatch(finalPrompt(), /## Suggestions/);
+    assert.ok(!lastWriterPrompt().includes("awkward wording"));
   });
 
   test("sends a review finding to the writer and checks the document again", async () => {
@@ -1123,5 +1146,351 @@ describe("the document flow", () => {
     assert.equal(revisions.length, 1);
     assert.equal(count("checks"), 2);
     assert.equal(count("judge", "gateway"), 0);
+  });
+});
+
+const DESCRIPTION_REASON = "The PR description did not pass its check.";
+const LENS_FAIL = {
+  verdict: "fail",
+  evaluated: "x",
+  findings: [{ location: "Why trust it", problem: "claims c9 passes", blocking: true }],
+  limits: "none",
+};
+// writer-pr's n-th description, told apart by its opening line.
+const nthBody = (prompt: string, n: number): string => prBody(prompt, `The change is delivered, take ${String(n)}.`);
+const numberedWriter = (): Script => {
+  let n = 0;
+  return (_t, _l, prompt) => {
+    n += 1;
+    return { body: nthBody(prompt, n) };
+  };
+};
+const bodies = (): string[] => calls.filter((c) => c.type === "writer-pr").map((c, i) => nthBody(c.prompt, i + 1));
+// The body sits on its own lines, and the line that closes its fence appears nowhere in it.
+function fencedIn(prompt: string, body: string): boolean {
+  const at = prompt.indexOf(`\n${body}\n`);
+  if (at === -1) return false;
+  const close =
+    prompt
+      .slice(at + body.length + 2)
+      .split("\n", 1)[0]
+      ?.trim() ?? "";
+  return close !== "" && !body.includes(close);
+}
+const postings = () => calls.filter((c) => isPosting(c));
+const pusherCalls = () => calls.filter((c) => c.type === "pusher");
+const PROGRESS = /progress \d+ (?:finding|ruling|tried|changed):/;
+const ledgerBlock = (prompt: string): string =>
+  /Append these lines[^\n]*\n([\s\S]*?)(?:\n\n|$)/.exec(prompt)?.[1] ?? "";
+const ledgerLines = (): string[] => pusherCalls().flatMap((c) => ledgerBlock(c.prompt).split("\n"));
+const reviewThenClean = (text: string): Script => {
+  let review = 0;
+  return happy({
+    watcher: () => {
+      review += 1;
+      return review === 1 ? finding(text) : CLEAN_REVIEW;
+    },
+  });
+};
+const withDefaultFence = (prompt: string): string => `${prBody(prompt)}\n<<<BODY\nBODY>>>\n- still the body`;
+const CARD_OP = { op: "card", result: "filed", reference: "SMR-77", link: "https://linear.app/t/issue/SMR-77" };
+const preExisting = (filing: Reply): Script =>
+  happy({
+    watcher: () => finding("old bug"),
+    judge: (_t, label) => (label === "gateway" ? GATEWAY_OK : ruling({ severity: "pre-existing" })),
+    pusher: (_t, _l, prompt) => (prompt.includes("File one card") ? filing : pusher(prompt)),
+  });
+async function settledRun(input: LoopInput): Promise<unknown> {
+  try {
+    return await runLoop(input);
+  } catch (error) {
+    return error;
+  }
+}
+
+describe("the PR description", () => {
+  test("every push that opens or updates the PR runs writer-pr, then lens-pr, then pusher (deliver-story)", async () => {
+    use(reviewThenClean("bug"));
+    const r = await runLoop(inputFor(freshRun()));
+    assert.equal(r.status, "ready");
+    assert.ok(postings().length >= 3, "the PR opens, is updated after the fix, and is finished");
+    assert.ok(describedBeforeEachPosting());
+  });
+
+  test("every push that opens or updates the PR runs writer-pr, then lens-pr, then pusher (the small flow)", async () => {
+    use(happy({ "scout-docs": () => ({ answer: "none", evidence: [], gaps: [] }) }));
+    await runLoop(inputFor(freshRun(), { kind: "bugfix", build: null, specDir: "", small: { firstTest: "fails." } }));
+    assert.ok(postings().length >= 2);
+    assert.ok(describedBeforeEachPosting());
+  });
+
+  test("every push that opens or updates the PR runs writer-pr, then lens-pr, then pusher (the document flow)", async () => {
+    use(happy());
+    const document = {
+      paths: ["docs/spikes/smr-1.md"],
+      check: () => Promise.resolve([]),
+      revise: () => Promise.resolve([]),
+      severity: "severity-spike.md",
+    };
+    await runLoop(
+      inputFor(freshRun(), { kind: "research", build: null, validate: null, specDir: "", built: true, document }),
+    );
+    assert.ok(postings().length >= 2);
+    assert.ok(describedBeforeEachPosting());
+  });
+
+  test("the pusher's body is the last writer-pr body, unchanged", async () => {
+    use(happy({ "writer-pr": numberedWriter() }));
+    await runLoop(inputFor(freshRun()));
+    const written = bodies();
+    assert.ok(written.length >= 2);
+    const [opening, final] = postings();
+    assert.ok(fencedIn(opening?.prompt ?? "", written[0] ?? "x"), "the opening push posts the first stage's body");
+    assert.ok(fencedIn(final?.prompt ?? "", written.at(-1) ?? "x"), "the final update posts the last body");
+  });
+
+  test("a body that holds the default fence is posted byte-identical", async () => {
+    use(happy({ "writer-pr": (_t, _l, prompt) => ({ body: withDefaultFence(prompt) }) }));
+    await runLoop(inputFor(freshRun()));
+    const body = withDefaultFence(writerPrompts()[0] ?? "");
+    const posted = postings();
+    assert.ok(posted.length >= 2);
+    assert.ok(
+      posted.every((p) => fencedIn(p.prompt, body)),
+      "every posting embeds it whole",
+    );
+  });
+
+  test("a leaking last body is never posted; the latest leak-free one is, unchanged", async () => {
+    const LEAK = "See /Users/me/wt/src/a.ts for the change.";
+    let n = 0;
+    use(
+      happy({
+        "lens-pr": () => LENS_FAIL,
+        "writer-pr": (_t, _l, prompt) => {
+          n += 1;
+          return { body: n === 1 ? prBody(prompt) : `${prBody(prompt)}\n\n${LEAK}` };
+        },
+      }),
+    );
+    const r = await runLoop(inputFor(freshRun()));
+    const first = prBody(writerPrompts()[0] ?? "");
+    assert.ok(writerPrompts().length > 1);
+    assert.ok(fencedIn(postings()[0]?.prompt ?? "", first));
+    assert.ok(pusherCalls().every((c) => !c.prompt.includes(LEAK)));
+    assert.equal(r.status, "draft");
+  });
+
+  test("a lens finding sends writer-pr back with it, and the revision is checked again", async () => {
+    let lensed = 0;
+    use(
+      happy({
+        "writer-pr": numberedWriter(),
+        "lens-pr": () => {
+          lensed += 1;
+          return lensed === 1 ? LENS_FAIL : PR_LENS_PASS;
+        },
+      }),
+    );
+    const r = await runLoop(inputFor(freshRun()));
+    assert.equal(r.status, "ready");
+    const opening = calls.findIndex((c) => isPosting(c));
+    const stage = calls.slice(0, opening).filter((c) => c.type === "writer-pr" || c.type === "lens-pr");
+    assert.deepEqual(
+      stage.map((c) => c.type),
+      ["writer-pr", "lens-pr", "writer-pr", "lens-pr"],
+    );
+    const revision = stage[2]?.prompt ?? "";
+    assert.ok(revision.includes("claims c9 passes"), "the revision brief carries the lens finding");
+    assert.ok(revision.includes(bodies()[0] ?? "x"), "the revision brief carries the previous body");
+    assert.ok(fencedIn(calls[opening]?.prompt ?? "", bodies()[1] ?? "x"), "the checked revision is posted");
+    assert.ok(
+      judgePrompts().every((p) => !p.includes("claims c9 passes")),
+      "a lens finding never reaches the judge",
+    );
+  });
+
+  test("after three failed revisions the last one is posted and the run ends draft with the description reason", async () => {
+    use(happy({ "writer-pr": numberedWriter(), "lens-pr": () => LENS_FAIL }));
+    const r = await runLoop(inputFor(freshRun()));
+    const finalAt = calls.findIndex((c) => /mark the PR ready|report the draft/.test(c.label));
+    const openedAt = calls.findIndex((c) => isPosting(c));
+    const finalStage = calls.slice(openedAt + 1, finalAt);
+    assert.equal(
+      finalStage.filter((c) => c.type === "writer-pr").length,
+      4,
+      "the first description and three revisions",
+    );
+    const lastWriter = finalStage.findLastIndex((c) => c.type === "writer-pr");
+    assert.ok(finalStage.slice(lastWriter).some((c) => c.type === "lens-pr"));
+    assert.ok(fencedIn(finalPrompt(), bodies().at(-1) ?? "x"));
+    assert.equal(r.status, "draft");
+    assert.ok(r.draftReasons.some((x) => x.text === DESCRIPTION_REASON));
+    assert.ok(cardPrompt().includes(DESCRIPTION_REASON), "the card comment carries it");
+    assert.ok(bodies().every((b) => !b.includes(DESCRIPTION_REASON)));
+  });
+
+  test("the writer-pr brief carries the card, the diff instruction, the ledger path, and the criterion results and open items", async () => {
+    use(happy({ qa: () => QA_FAIL }));
+    await runLoop(inputFor(freshRun()));
+    const brief = lastWriterPrompt();
+    for (const part of ["SMR-1", "the issue", "/p/wt", "/p/wt/.tmp/ledger.md", "Criterion results", "it works"]) {
+      assert.ok(brief.includes(part), part);
+    }
+    assert.match(brief, /diff/);
+    assert.match(brief, /target branch/);
+    assert.ok(brief.includes("Open items"));
+    assert.ok(brief.includes("src/a.ts: wrong"), "the open blocker");
+  });
+
+  test("each round's findings, rulings, attempts and changes ride on a pusher dispatch as progress entries", async () => {
+    use(reviewThenClean("off by one"));
+    await runLoop(inputFor(freshRun()));
+    const lines = ledgerLines();
+    assert.ok(
+      lines.some((l) => /^- progress \d+ finding: .*off by one/.test(l)),
+      "the finding",
+    );
+    assert.ok(
+      lines.some((l) => /^- progress \d+ ruling: .*seen/.test(l)),
+      "the ruling with its reason",
+    );
+    assert.ok(
+      lines.some((l) => l.startsWith("- progress 1 tried: ")),
+      "what round 1 tried",
+    );
+    assert.ok(
+      lines.some((l) => /^- progress 1 changed: .*src\/a\.ts/.test(l)),
+      "what round 1 changed",
+    );
+  });
+
+  test("no pusher instruction, body or comment contains a progress entry", async () => {
+    use(reviewThenClean("off by one"));
+    await runLoop(inputFor(freshRun()));
+    assert.ok(
+      ledgerLines().some((l) => PROGRESS.test(l)),
+      "the run wrote progress entries",
+    );
+    const leaked = pusherCalls().filter((c) => PROGRESS.test(c.prompt.replace(ledgerBlock(c.prompt), "")));
+    assert.deepEqual(
+      leaked.map((c) => c.label),
+      [],
+    );
+  });
+
+  test("a resumed run's writer-pr brief points it at the ledger's earlier progress entries", async () => {
+    use(happy());
+    const d = freshRun();
+    d.state.pr = "PR-9";
+    await runLoop(inputFor(d, { startAtReview: 1, built: true }));
+    const brief = lastWriterPrompt();
+    assert.ok(brief.includes("/p/wt/.tmp/ledger.md"));
+    assert.match(brief, /progress entr/);
+  });
+
+  test("deliver-story's writer-pr and lens-pr briefs both require the Spec: <folder> line", async () => {
+    use(happy());
+    await runLoop(inputFor(freshRun()));
+    const lensBrief = calls.findLast((c) => c.type === "lens-pr")?.prompt ?? "";
+    for (const brief of [lastWriterPrompt(), lensBrief]) {
+      assert.ok(brief.includes("Spec: docs/specs/smr-1"), brief.slice(0, 200));
+      assert.ok(!brief.includes("Spec: `"));
+    }
+  });
+
+  test("filed cards reach the final writer-pr brief with their identifiers and links", async () => {
+    use(preExisting({ done: true, unmet: [], operations: [CARD_OP] }));
+    const r = await runLoop(inputFor(freshRun()));
+    assert.equal(r.status, "ready");
+    const filedAt = calls.findIndex((c) => c.type === "pusher" && c.prompt.includes("File one card"));
+    const lastWriterAt = calls.findLastIndex((c) => c.type === "writer-pr");
+    assert.ok(filedAt !== -1 && filedAt < lastWriterAt, "the cards are filed before the final description");
+    assert.ok(lastWriterPrompt().includes("SMR-77"));
+    assert.ok(lastWriterPrompt().includes(CARD_OP.link));
+  });
+
+  test("a partial card filing failure doesn't halt the run", async () => {
+    use(preExisting({ done: false, unmet: ["card: the second card failed"], operations: [CARD_OP] }));
+    const r = await settledRun(inputFor(freshRun()));
+    assert.ok(!(r instanceof Halt), String(r));
+    assert.ok(lastWriterPrompt().includes("SMR-77"));
+  });
+
+  for (const [name, filing] of [
+    ["fails outright", null],
+    ["fails part way", { done: false, unmet: ["card: the second card failed"], operations: [] }],
+  ] as const) {
+    test(`a follow-up whose card filing ${name} stays in the PR description, the card comment and the run result`, async () => {
+      use(preExisting(filing));
+      const r = await runLoop(inputFor(freshRun()));
+      assert.ok(lastWriterPrompt().includes("old bug"), "the final writer-pr brief lists the unfiled follow-up");
+      assert.ok(cardPrompt().includes("old bug"), "the card comment lists the unfiled follow-up");
+      assert.ok(JSON.stringify(r).includes("old bug"), "the run result carries the unfiled follow-up");
+    });
+  }
+
+  test("a large run with dozens of coder choices and confirmations fits and ends ready", async () => {
+    const ids = Array.from({ length: 26 }, (_, i) => `c${String(i + 1)}`);
+    const validate: Validate = {
+      criteria: ids.map((id) => ({
+        id,
+        wording: `${id} works`,
+        category: "UI",
+        path: "flow",
+        evidence: "shot",
+        firstTest: "t",
+      })),
+    };
+    const decisions = Array.from({ length: 14 }, (_, i) => ({
+      id: `d${String(i + 1)}`,
+      question: `Which store for part ${String(i + 1)}?`,
+      choice: "the existing one",
+      rationale: "reuse",
+      reversible: true,
+      permission: "",
+      affectsAcceptance: i % 2 === 0,
+    }));
+    const choices = Array.from(
+      { length: 30 },
+      (_, i) => `How to name helper ${String(i + 1)}? helper${String(i + 1)}.`,
+    );
+    const questions = Array.from({ length: 24 }, (_, i) => `what should rule ${String(i + 1)} mean?`);
+    use(
+      happy({
+        coder: (_t, label) => (label.endsWith(": test") ? OK_TEST : { ...OK_FIX, assumptions: choices }),
+        validator: () => ({ results: ids.map((id) => ({ ...PASS_ROW, id })), uncategorizedSetting: "draft" }),
+        watcher: () => ({
+          ...CLEAN_REVIEW,
+          findings: questions.map((text, i) => ({ id: `f${String(i)}`, location: "", text })),
+        }),
+        judge: (_t, label) => (label === "gateway" ? GATEWAY_OK : ruling({ kind: "decision", severity: "none" })),
+      }),
+    );
+    const r = await runLoop(inputFor(freshRun(), { validate, build: { ...BUILD, decisions } }));
+    assert.equal(r.status, "ready");
+    const posted = prBody(lastWriterPrompt());
+    assert.ok(fencedIn(finalPrompt(), posted));
+    assert.ok(posted.length <= 4000);
+    assert.deepEqual(checkDescription(posted, { kind: "story", specDir: "docs/specs/smr-1" }), {
+      leak: [],
+      format: [],
+    });
+    const missing = [...choices, ...questions, ...decisions.map((d) => d.question)].filter(
+      (x) => !cardPrompt().includes(x),
+    );
+    assert.deepEqual(missing, [], "the card comment lists each in full");
+  });
+
+  test("writer-pr never returning a body halts the run as declared", async () => {
+    use(happy({ "writer-pr": () => null }));
+    const d = freshRun();
+    await assert.rejects(runLoop(inputFor(d)), (error: unknown) => {
+      const stopped = stopOf(d, error);
+      assert.equal(stopped.status, "blocked");
+      return error instanceof Halt;
+    });
+    assert.equal(postings().length, 0, "nothing posts a description");
+    assert.ok(calls.find((c) => c.label === "report the halt")?.prompt.includes("Comment on card"));
   });
 });

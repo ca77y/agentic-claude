@@ -115,7 +115,7 @@ Configuration does not authorize execution; the user's request does.
 
 ## Pull request
 
-- Create or update: write `.forge/prs/smoke.md` with `# <title>`, then `## Summary`, `## Spec`, `## Verification`; a repair appends `## Repair <n>`.
+- Create or update: write `.forge/prs/smoke.md` with `# <title>` and the body the brief supplies, unchanged; an update replaces the body with the one the brief supplies.
 - Review trigger and status: none.
 
 ## Restrictions

@@ -74,6 +74,16 @@ const CLERK_SCHEMA = {
   },
 } as const;
 
+// An evidence check also names the raw notes the page cites, one per source, so a resumed run can count its sources.
+const EVIDENCE_SCHEMA = {
+  ...CLERK_SCHEMA,
+  required: [...CLERK_SCHEMA.required, "notes"],
+  properties: {
+    ...CLERK_SCHEMA.properties,
+    notes: { ...STRINGS, description: "Each raw note the page cites, relative to the worktree root" },
+  },
+} as const;
+
 const RESEARCH_SCHEMA = {
   type: "object",
   required: ["findings", "sources", "contradictions", "limits", "planProblem"],
@@ -133,6 +143,14 @@ interface Ctx {
   question: string;
   plan: string;
   worktree: string;
+  /** The distinct sources this run retrieved; null when the pages were already committed. */
+  sources: number | null;
+  /** The raw notes the evidence checks found the pages citing, one per source. */
+  notes: Set<string>;
+  /** True when an evidence check named no raw note, so the notes counted are a lower bound. */
+  notesPartial: boolean;
+  /** Each final check's latest verdict, by its label. */
+  verdicts: Map<string, string>;
 }
 
 export type ResearchResult = NotStarted | Stopped | (LoopResult & { workflow: "research"; report: string });
@@ -314,15 +332,18 @@ async function checkLibrary(c: Ctx, pages: readonly string[]): Promise<Problem[]
   const checks = [
     ...pages.map((page) => ({
       label: `evidence: ${page}`,
-      brief: `Assignment: answer and evidence support. In the worktree ${c.worktree}, check the wiki page ${page}, line by line, against the raw-note blocks it cites.`,
+      brief: `Assignment: answer and evidence support. In the worktree ${c.worktree}, check the wiki page ${page}, line by line, against the raw-note blocks it cites, and name each raw note it cites.`,
+      schema: EVIDENCE_SCHEMA,
     })),
     {
       label: "summaries",
       brief: `Assignment: answer and evidence support. In the worktree ${c.worktree}, check the summary of each raw note among ${changed}, one note at a time, against that note's own key evidence and Limitations. A summary that claims more than its body records, or drops a hedge its body states, is a finding. Then check that each of their index lines carries the note's title and summary word for word.`,
+      schema: CLERK_SCHEMA,
     },
     {
       label: "library integrity",
       brief: `Assignment: library integrity. In the worktree ${c.worktree}, check ${changed}.`,
+      schema: CLERK_SCHEMA,
     },
   ];
   const verdicts = await parallel(
@@ -332,12 +353,22 @@ async function checkLibrary(c: Ctx, pages: readonly string[]): Promise<Problem[]
           agentType: "slopify:library-clerk",
           label: k.label,
           phase: "Validate",
-          schema: CLERK_SCHEMA,
+          schema: k.schema,
         }),
     ),
   );
+  // The pages as they stand now: a repair may change which notes they cite.
+  c.notes.clear();
+  c.notesPartial = false;
   return checks.flatMap((k, i) => {
     const v = must(verdicts[i], "validate", `A verdict on ${k.label}.`);
+    c.verdicts.set(k.label, v.verdict === "pass" ? "passed" : v.verdict === "fail" ? "failed" : "could not run");
+    if ("notes" in v) {
+      // Only a raw note is a source: a clerk may also name a wiki page the page links.
+      const raw = v.notes.map((n) => n.trim()).filter((n) => n.startsWith("library/raw/"));
+      for (const n of raw) c.notes.add(n);
+      if (raw.length === 0) c.notesPartial = true;
+    }
     const found = (v.verdict === "pass" ? [] : v.findings).map((f) => ({
       source: "library-clerk",
       location: k.label,
@@ -389,16 +420,23 @@ export default async function run(): Promise<ResearchResult> {
       question: found.story,
       plan: `.tmp/research/${found.slug}.plan.md`,
       worktree: d.state.worktree,
+      sources: null,
+      notes: new Set(),
+      notesPartial: false,
+      verdicts: new Map(),
     };
     let pages = resume.findings;
     // Committed pages are the checkpoint: a rerun goes straight to the loop.
     if (pages.length === 0) {
       const context = await ground(c);
       const planned = await plan(c, context);
-      pages = await persist(c, await retrieve(c, planned.subQuestions), planned.limits);
+      const evidence = await retrieve(c, planned.subQuestions);
+      c.sources = bySource(evidence).size;
+      pages = await persist(c, evidence, planned.limits);
     }
     const result = await runLoop({
       d,
+      kind: "research",
       where: d.WHERE,
       story: found.story,
       cardId: found.cardId,
@@ -413,6 +451,16 @@ export default async function run(): Promise<ResearchResult> {
         check: () => checkLibrary(c, pages),
         revise: (problems) => repair(c, problems),
         severity: "severity-research.md",
+        trust: () => {
+          // A resumed run retrieved nothing itself: it counts the raw notes the committed pages cite.
+          const n = c.sources ?? (c.notes.size > 0 ? c.notes.size : null);
+          const how = c.sources === null ? "each a raw note the committed pages cite" : "each recorded in its raw note";
+          const bound = c.sources === null && c.notesPartial ? "at least " : "";
+          return [
+            ...[...c.verdicts].map(([label, verdict]) => `The library-clerk check "${label}" ${verdict}.`),
+            ...(n === null ? [] : [`The research rests on ${bound}${String(n)} source${n === 1 ? "" : "s"}, ${how}.`]),
+          ];
+        },
       },
     });
     return { ...result, workflow: WORKFLOW, report: reportOf(WORKFLOW, result) };

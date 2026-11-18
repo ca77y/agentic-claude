@@ -7,7 +7,7 @@ How `deliver-trivial` takes a trivial story from a card or a prompt to a reviewe
 ```text
  /slopify:deliver-trivial SMR-12     or a plain prompt
  │
- 1 READ ──────── scout-card (haiku) reads the issue
+ 1 READ ──────── scout-card (haiku) reads the issue, scout-checkpoint (haiku) the run state ⛔ H5
  │               a prompt gets a new card from pusher, so all work is on the board  ⛔ H1
  2 WORKSPACE ─── pusher (sonnet) creates and prepares the worktree, starts the issue
  3 BUILD ─────── coder (opus) writes a failing test → commit
@@ -18,11 +18,14 @@ How `deliver-trivial` takes a trivial story from a card or a prompt to a reviewe
  │               scout-docs (haiku) finds docs the diff affects
  │               writer-docs (sonnet) fixes them, only if it found any → commit
  4 VALIDATE ──── validator (sonnet) runs the app as TESTING.md says, once
- 5 PUSH ──────── pusher pushes, opens the PR ready, which fires the review            ⛔ H2
+ 5 PUSH ──────── writer-pr (sonnet) writes the PR description whole, lens-pr (haiku)
+ │               checks it                                                          ⛔ H4
+ │               pusher pushes, opens the PR ready, which fires the review          ⛔ H2
  6 REVIEW ────── watcher (haiku) reads the findings
  │   ▲ ≤3 fix    judge × 1 (opus) rules on every finding
  │   │  rounds   each blocker/major: failing test → commit → coder → commit → checks
  │   │           scout-docs, then writer-docs if it found any
+ │   │           writer-pr rewrites the description, lens-pr checks it
  │   └────────── pusher pushes and requests the review
  ▼
  clean → PR ready, issue In Review            not clean → PR turns draft, saying why
@@ -38,9 +41,11 @@ How `deliver-trivial` takes a trivial story from a card or a prompt to a reviewe
 - **`judge` rules only on review findings.** A failing check or validator run goes straight back to `coder`.
 - **No gateway `judge`, and no recurrence rulings.** A finding that comes back stays open and keeps the PR a draft.
 - **A scout finds the affected docs**, because no spec lists them.
-- **`coder` decides how, not what**, and lists the choices worth knowing under Assumptions. With no spec to send it back to, a question about what to build that the issue or prompt leaves open keeps the PR a draft, listed for you to settle.
+- **`coder` decides how, not what**, and the choices worth knowing reach you in the PR description as confirmations. With no spec to send it back to, a question about what to build that the issue or prompt leaves open keeps the PR a draft, listed for you to settle.
 
-The PR, its sections, the loop limits, test first, and what the run is allowed to do are as in `STORY.md`, except that the criteria table has one row.
+The loop limits, test first, and what the run is allowed to do are as in `STORY.md`.
+
+The PR description is written and checked as in [`STORY.md`](STORY.md#the-pr-description): four parts, **What changes**, **Needs you**, **Why trust it**, and **Not done**, rewritten whole in every round that opens or updates the PR. Here **What changes** opens with one sentence saying what changed, with no `Spec:` line, because there is no spec. **Why trust it** rests on the test and the app run: the run's one criterion, or the whole change as one, and its result.
 
 ## Halt conditions
 
@@ -49,3 +54,5 @@ The PR, its sections, the loop limits, test first, and what the run is allowed t
 | H1  | The issue can't be read, the argument says nothing, or `answers` isn't a map or holds an object or a list | Read     | `not-started`, no board write                                |
 | H2  | The push is denied, or PR creation fails                                                                  | Push     | `blocked`; finished work stays committed on the local branch |
 | H3  | Infrastructure: a stop signal, a required tool denied, or a budget, usage, or agent limit reached         | Any      | `blocked`, with the state reported on the issue              |
+| H4  | `writer-pr` returns no description in any attempt of a stage                                              | Push     | `blocked`; finished work stays committed on the local branch |
+| H5  | On a rerun, a checkpoint item the scout returned for a ledger key isn't a ledger line                     | Read     | `blocked`, naming the key                                    |

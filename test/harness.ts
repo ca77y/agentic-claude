@@ -40,3 +40,41 @@ function fakeAgent(prompt: string, opts: { agentType?: string; label?: string })
 export function installAgents(): void {
   Object.assign(globalThis, { phase: () => null, log: () => null, parallel: runAll, agent: fakeAgent });
 }
+
+/** A run where each agent follows its default script, unless a test overrides it; any other agent returns nothing. */
+export function scriptOf(defaults: Record<string, Script>, over: Partial<Record<string, Script>> = {}): Script {
+  const agents = { ...defaults, ...over };
+  return (type, label, prompt) => agents[type]?.(type, label, prompt) ?? null;
+}
+
+// A description in the shared PR format, as writer-pr returns it; a story's names the spec folder its brief gives.
+export function prBody(prompt: string, outcome = "The change is delivered."): string {
+  const spec = /Spec: ([\w./-]+)/.exec(prompt)?.[1];
+  return [
+    "## What changes",
+    "",
+    outcome,
+    ...(spec ? ["", `Spec: ${spec}`] : []),
+    "",
+    "## Why trust it",
+    "",
+    "- Every check passes.",
+  ].join("\n");
+}
+export const PR_WRITER: Script = (_t, _l, prompt) => ({ body: prBody(prompt) });
+export const PR_LENS_PASS = { verdict: "pass", evaluated: "x", findings: [], limits: "none" };
+export const PR_AGENTS: Record<string, Script> = { "writer-pr": PR_WRITER, "lens-pr": () => PR_LENS_PASS };
+export const isPosting = (c: { type: string; prompt: string }): boolean =>
+  c.type === "pusher" && /open the branch's PR|update the PR/i.test(c.prompt);
+
+/** Each pusher dispatch that opens or updates the PR has writer-pr, then lens-pr, since the one before it. */
+export function describedBeforeEachPosting(): boolean {
+  let from = 0;
+  return calls.every((c, i) => {
+    if (!isPosting(c)) return true;
+    const stage = calls.slice(from, i);
+    from = i + 1;
+    const writer = stage.findIndex((s) => s.type === "writer-pr");
+    return writer !== -1 && stage.slice(writer).some((s) => s.type === "lens-pr");
+  });
+}

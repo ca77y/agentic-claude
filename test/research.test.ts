@@ -3,7 +3,17 @@ import assert from "node:assert/strict";
 import { beforeEach, describe, test } from "node:test";
 
 import research from "../src/slopify/workflows/research.ts";
-import { calls, current, installAgents, type Reply, type Script } from "./harness.ts";
+import {
+  PR_AGENTS,
+  calls,
+  current,
+  describedBeforeEachPosting,
+  installAgents,
+  isPosting,
+  scriptOf,
+  type Reply,
+  type Script,
+} from "./harness.ts";
 
 installAgents();
 
@@ -81,14 +91,39 @@ const DEFAULTS: Record<string, Script> = {
   checks: () => ({ commands: [{ command: "lint", exitCode: 0, failingLines: "" }] }),
   watcher: () => ({ outcome: "finished", waitingFor: "none", limitMinutes: 60, reference: "r", findings: [] }),
   pusher: (_t, _l, prompt) => (prompt.includes("open the branch's PR") ? PR : OK_PUSH),
+  ...PR_AGENTS,
 };
-const happy = (over: Partial<Record<string, Script>> = {}): Script => {
-  const agents = { ...DEFAULTS, ...over };
-  return (type, label, prompt) => agents[type]?.(type, label, prompt) ?? null;
-};
+const happy = (over: Partial<Record<string, Script>> = {}): Script => scriptOf(DEFAULTS, over);
 const count = (type: string, label?: string): number =>
   calls.filter((c) => c.type === type && (label === undefined || c.label.includes(label))).length;
 const integratePrompt = (): string => calls.find((c) => c.label === "integrate")?.prompt ?? "";
+const described = (type: string): string[] => calls.filter((c) => c.type === type).map((c) => c.prompt);
+const trustLine = (prompt: string, check: string, verdict: string): boolean =>
+  prompt.split("\n").some((line) => line.includes(`"${check}"`) && line.includes(` ${verdict}`));
+const RESUMED = {
+  answer: "a",
+  gaps: [],
+  evidence: [
+    { source: "worktree", location: "x", excerpt: "/p/wt" },
+    {
+      source: "done-findings",
+      location: "x",
+      excerpt: "2026-11-09T10:00:00Z done findings library/wiki/parser-speed.md",
+    },
+  ],
+};
+// A resumed run whose committed pages are these.
+const resumedWith = (pages: readonly string[]) => ({
+  ...RESUMED,
+  evidence: [
+    RESUMED.evidence[0],
+    { source: "done-findings", location: "x", excerpt: `2026-11-09T10:00:00Z done findings ${pages.join(" ")}` },
+  ],
+});
+const lastDescribed = (type: string): string => described(type).at(-1) ?? "";
+// Every source count the prompt states, as written.
+const counts = (prompt: string): string[] =>
+  Array.from(prompt.matchAll(/(?:at least )?\b\d+ sources?\b/gi), (m) => m[0]);
 
 async function run(args: unknown, script: Script) {
   current.script = script;
@@ -114,9 +149,173 @@ describe("research", () => {
       ),
     );
     assert.ok(
-      calls.some((c) => c.label === "push the round" && c.prompt.includes("Findings: `library/wiki/parser-speed.md`")),
+      calls.some((c) => c.type === "writer-pr" && c.prompt.includes("library/wiki/parser-speed.md")),
+      "writer-pr is told the main page",
     );
     assert.ok(calls.find((c) => c.label === "plan")?.prompt.includes(".tmp/research/smr-30.plan.md"));
+  });
+
+  test("every push that opens or updates the PR runs writer-pr, then lens-pr, then pusher (research)", async () => {
+    const r = await run("SMR-30", happy());
+    assert.equal(r.status, "ready");
+    assert.ok(calls.filter((c) => isPosting(c)).length >= 2);
+    assert.ok(describedBeforeEachPosting());
+  });
+
+  test("writer-pr and lens-pr are given the citations checked and the source count that Why trust it rests on", async () => {
+    const r = await run("SMR-30", happy());
+    assert.equal(r.status, "ready");
+    for (const type of ["writer-pr", "lens-pr"]) {
+      const prompts = calls.filter((c) => c.type === type).map((c) => c.prompt);
+      assert.ok(prompts.length > 0, `${type} ran`);
+      for (const prompt of prompts) {
+        for (const check of ["evidence: library/wiki/parser-speed.md", "library integrity"]) {
+          assert.ok(
+            prompt.split("\n").some((line) => line.includes(check) && /\bpass(?:ed)?\b/i.test(line)),
+            `${type} is told the clerk check "${check}" passed`,
+          );
+        }
+        assert.match(prompt, /\b2 sources\b/i, `${type} is told the source count`);
+      }
+    }
+  });
+
+  test("a resumed run gives writer-pr and lens-pr the source count, from the raw notes the committed pages cite", async () => {
+    const notes = ["library/raw/a.md", "library/raw/b.md", "library/raw/c.md"];
+    const r = await run(
+      "SMR-30",
+      happy({
+        "scout-checkpoint": () => RESUMED,
+        // The evidence check reads each committed page against the raw notes it cites, one note per source.
+        "library-clerk": (_t, label) => (label.startsWith("evidence: ") ? { ...PASS, notes } : PASS),
+      }),
+    );
+    assert.equal(r.status, "ready");
+    assert.equal(count("library-researcher"), 0);
+    for (const type of ["writer-pr", "lens-pr"]) {
+      const prompts = described(type);
+      assert.ok(prompts.length > 0, `${type} ran`);
+      for (const prompt of prompts) {
+        assert.ok(trustLine(prompt, "library integrity", "passed"), `${type} is told the integrity check passed`);
+        assert.match(prompt, /\b3 sources\b/i, `${type} is told the source count on a resumed run`);
+      }
+    }
+  });
+
+  test("a resumed run counts only the raw notes the pages cite after a repair, not those an earlier round named", async () => {
+    let checks = 0;
+    const r = await run(
+      "SMR-30",
+      happy({
+        "scout-checkpoint": () => RESUMED,
+        "library-clerk": (_t, label) => {
+          if (!label.startsWith("evidence: ")) return PASS;
+          checks += 1;
+          // The repair drops the page's citation of c.
+          return checks === 1
+            ? {
+                ...FAIL,
+                findings: ["cites c for a claim c does not make"],
+                notes: ["library/raw/a.md", "library/raw/b.md", "library/raw/c.md"],
+              }
+            : { ...PASS, notes: ["library/raw/a.md", "library/raw/b.md"] };
+        },
+      }),
+    );
+    assert.equal(r.status, "ready");
+    assert.equal(count("library-scribe", "repair"), 1);
+    for (const type of ["writer-pr", "lens-pr"]) {
+      assert.deepEqual(counts(lastDescribed(type)), ["2 sources"], `${type} is told the count after the repair`);
+    }
+  });
+
+  test("a resumed run counts a raw note two pages cite once, however the clerk spaces its path", async () => {
+    const r = await run(
+      "SMR-30",
+      happy({
+        "scout-checkpoint": () => resumedWith(["library/wiki/parser-speed.md", "library/wiki/parser-input.md"]),
+        "library-clerk": (_t, label) =>
+          label === "evidence: library/wiki/parser-speed.md"
+            ? { ...PASS, notes: ["library/raw/a.md", "library/raw/b.md"] }
+            : label === "evidence: library/wiki/parser-input.md"
+              ? { ...PASS, notes: [" library/raw/b.md ", "library/raw/c.md"] }
+              : PASS,
+      }),
+    );
+    assert.equal(r.status, "ready");
+    for (const type of ["writer-pr", "lens-pr"]) {
+      assert.deepEqual(counts(lastDescribed(type)), ["3 sources"], `${type} counts the shared note once`);
+    }
+  });
+
+  test("a resumed run counts only raw notes among the paths a clerk names", async () => {
+    await run(
+      "SMR-30",
+      happy({
+        "scout-checkpoint": () => RESUMED,
+        "library-clerk": (_t, label) =>
+          label.startsWith("evidence: ")
+            ? { ...PASS, notes: ["library/raw/a.md", "library/raw/b.md", "library/wiki/parser-input.md"] }
+            : PASS,
+      }),
+    );
+    for (const type of ["writer-pr", "lens-pr"]) {
+      assert.deepEqual(counts(lastDescribed(type)), ["2 sources"], `${type} is not told a wiki page is a source`);
+    }
+  });
+
+  test("a resumed run never states a flat source count when an evidence check could not name its notes", async () => {
+    await run(
+      "SMR-30",
+      happy({
+        "scout-checkpoint": () => resumedWith(["library/wiki/parser-speed.md", "library/wiki/parser-input.md"]),
+        "library-clerk": (_t, label) =>
+          label === "evidence: library/wiki/parser-speed.md"
+            ? { ...PASS, notes: ["library/raw/a.md", "library/raw/b.md"] }
+            : label === "evidence: library/wiki/parser-input.md"
+              ? { verdict: "unverified", findings: [], evidence: "the page could not be read", notes: [] }
+              : PASS,
+      }),
+    );
+    const prompts = [...described("writer-pr"), ...described("lens-pr")];
+    assert.ok(prompts.length > 0, "the PR is described");
+    for (const prompt of prompts) {
+      for (const stated of counts(prompt)) {
+        assert.match(stated, /^at least /i, `a count that misses a page's notes is a lower bound, not "${stated}"`);
+      }
+    }
+  });
+
+  test("says 1 source, not 1 sources, when the research rests on one source", async () => {
+    await run("SMR-30", happy({ "library-researcher": () => evidenceFor("https://same.example") }));
+    for (const prompt of [...described("writer-pr"), ...described("lens-pr")]) {
+      assert.match(prompt, /\b1 source\b/i);
+      assert.doesNotMatch(prompt, /\b1 sources\b/i);
+    }
+  });
+
+  test("tells writer-pr and lens-pr a clerk check that failed or could not run, not that it passed", async () => {
+    await run(
+      "SMR-30",
+      happy({
+        "library-clerk": (_t, label) =>
+          label === "library integrity"
+            ? { ...FAIL, findings: ["broken link in the index"] }
+            : label.startsWith("evidence: ")
+              ? { verdict: "unverified", findings: [], evidence: "the raw note is missing" }
+              : PASS,
+      }),
+    );
+    const prompts = [...described("writer-pr"), ...described("lens-pr")];
+    assert.ok(prompts.length > 0, "the PR is described");
+    for (const prompt of prompts) {
+      assert.ok(trustLine(prompt, "library integrity", "failed"), "the failed check is reported as failed");
+      assert.ok(
+        trustLine(prompt, "evidence: library/wiki/parser-speed.md", "could not run"),
+        "the unverified check is reported as could not run",
+      );
+      assert.ok(!trustLine(prompt, "library integrity", "passed"), "the failed check is never reported as passed");
+    }
   });
 
   test("writes one raw note for a source two sub-questions share", async () => {
@@ -182,7 +381,11 @@ describe("research", () => {
           gaps: [],
           evidence: [
             { source: "worktree", location: "x", excerpt: "/p/wt" },
-            { source: "done-findings", location: "x", excerpt: "library/wiki/parser-speed.md" },
+            {
+              source: "done-findings",
+              location: "x",
+              excerpt: "2026-11-09T10:00:00Z done findings library/wiki/parser-speed.md",
+            },
           ],
         }),
       }),

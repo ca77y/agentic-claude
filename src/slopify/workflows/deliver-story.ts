@@ -99,7 +99,7 @@ ARG>>>`,
   if (!isDeliverable(fact(cardRes, "labels"))) return refuse(d, cardId);
 
   const specDir = specRel.replace(/\.md$/, "");
-  const resume = await readResume(d, `card ${cardId}`, specDir);
+  const resume = await readResume(d, cardId, specDir);
   const stopped = await workspace(d, {
     cardId,
     boardBranch,
@@ -122,6 +122,7 @@ ARG>>>`,
 
   const result = await runLoop({
     d,
+    kind: "story",
     where: how.where,
     story,
     cardId,

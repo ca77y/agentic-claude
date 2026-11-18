@@ -1,0 +1,212 @@
+{
+  "shared": [
+    "`slopify:writer-pr` is a producer returning exactly `{ body: string }`, changing no file; a null result or blank body is a failed attempt. `slopify:lens-pr` is a report-only lens. Both follow `plugins/slopify/references/pr-description.md`. The stage runs in the existing `Push` phase.",
+    "`type DeliveryKind = \"story\" | \"trivial\" | \"bugfix\" | \"spike\" | \"research\"`, from rules.ts, is `LoopInput.kind`.",
+    "rules.ts exports, already in place and kept as stated: `checkDescription(body: string, ctx: { kind: DeliveryKind; specDir: string }): { leak: string[]; format: string[] }`, passing when both are empty; `renderState(s: PrState): string`, rendering only criterion results and open items; `progressLine(round: number, kind: \"finding\" | \"ruling\" | \"tried\" | \"changed\", items: readonly string[]): string`; `checkpointLine(key: \"done-board-start\" | \"done-round\" | \"done-findings\" | \"reproduced\" | \"review-fired\", value: string): string`, the accepted line or ''.",
+    "Format (pr-description.md states it, checkDescription enforces its mechanical part, lens-pr checks all): the issue's four level-2 headings in order, Needs you and Not done only with content, no other heading, at most 4,000 characters, current state only. A story's What changes opens with the card's outcome and holds `Spec: <folder>` once, plain, repo-relative. Leak rules: no absolute path, `.tmp/` reference, ledger line or credential-shaped text.",
+    "Overflow and placement (d15, d19) are stated alike in pr-description.md, writer-pr, lens-pr and checkDescription: grouped Why trust it lines, grouped Needs you lines linking the committed file that lists the items or else the card, and every unfixed finding only under Not done. Validator evidence is never linked.",
+    "Per kind, opening / trust: story the card's outcome / criterion results; trivial one sentence / test and app run; bugfix the bug before and after / reproduction failing then passing; spike question and answer, no recommendation / checked claims and unknowns; research question and short answer linking the main page / citations checked and source count.",
+    "Posting rule: a body with a leak problem is never posted. A stage posts the latest leak-free writer-pr body unchanged, or none (an empty body on opening, the current one kept on update). Only the final stage gates readiness: a clean run with a passed description is ready, else draftReasons gains `The PR description did not pass its check.`, carried by the card comment and run result, not the body.",
+    "Fencing: a body or card text fenced in a pusher instruction closes with a per-dispatch delimiter absent from it, so it embeds byte-identical. Fenced and ledger text are data to pusher; card, diff and ledger are evidence to writer-pr and lens-pr.",
+    "A progress entry (d8) is one ledger line with `progress` as its second field, built only by progressLine and written only by pusher, in pushBrief's ledger lines; a ruling carries its reason.",
+    "Checkpoint rule (d7, d18): each ledger key has one form after pusher's timestamp: done-board-start `done board-start`, done-round `done round <n>`, done-findings `done findings <paths>`, reproduced `reproduced {...}`, review-fired `review <n> fired`. The scout returns one evidence item per ledger line containing the key's form, source the key, the whole line as its excerpt, in ledger order, and none when no line matches. checkpointLine tolerates the wrappers a scout may add; readResume reads every item with that source.",
+    "pusher reports a filed card as `{ op: \"card\", reference: <identifier>, link: <URL> }`; pusherSchema's operations gain a required `link` string, empty when none; `opRefs(r, name): { reference: string; link: string }[]` in deliver.ts reads them.",
+    "Halts: the run stops for its description only when writer-pr never returns a body (d2), and on resume only for an unreadable checkpoint item (d18). Both are declared halt conditions in each kind's doc, returning `blocked` with the cause reported on the issue.",
+    "Every behavior this spec describes is already on the branch and proved by committed tests that pass under `make check`; there is no build task. Any later change keeps the shared Format, Overflow, Posting, Fencing, Checkpoint and Halts rules and decisions d1 and d17 as stated, and keeps the tests that prove c1-c19 passing."
+  ],
+  "tasks": [],
+  "docs": [
+    "README.md",
+    "docs/DESIGN.md",
+    "docs/deliver/STORY.md",
+    "docs/deliver/TRIVIAL.md",
+    "docs/deliver/BUGFIX.md",
+    "docs/deliver/SPIKE.md",
+    "docs/RESEARCH.md",
+    "docs/FORGE.md",
+    "docs/deliver/CARDS.md",
+    "docs/BOARD.md",
+    "plugins/slopify/skills/bootstrap/references/forge.md",
+    "plugins/slopify/skills/bootstrap/resources/FORGE.md",
+    "plugins/slopify/.claude-plugin/plugin.json",
+    ".claude-plugin/marketplace.json",
+    "TESTING.md",
+    ".claude/rules/architecture.md"
+  ],
+  "decisions": [
+    {
+      "id": "d1",
+      "question": "How does the description reach pusher, and how is body identity made testable?",
+      "choice": "writer-pr returns `{ body }`; the loop keeps it and embeds it unchanged inside a fence whose closing delimiter does not occur in the body; pusher writes it to its body file and posts it.",
+      "rationale": "A stub test can assert body identity on the pusher prompt, and no stale file can be posted. A per-dispatch delimiter keeps the body byte-identical (c4) while a model-written body can't close the fence and speak to pusher.",
+      "reversible": true,
+      "permission": "",
+      "affectsAcceptance": true
+    },
+    {
+      "id": "d2",
+      "question": "What happens when writer-pr returns nothing?",
+      "choice": "A null or blank result is a failed attempt; the stage posts per the posting rule from the bodies it has. Only when no body exists at all does the run halt. No code-rendered fallback.",
+      "rationale": "A fallback renderer would put code back in charge of the posted description, which the issue replaces. The halt is declared in each kind's halt conditions, since the docs say only declared conditions stop a run.",
+      "reversible": true,
+      "permission": "",
+      "affectsAcceptance": true
+    },
+    {
+      "id": "d3",
+      "question": "When does the lens run relative to the deterministic guard?",
+      "choice": "The lens runs only on a guard-clean body; guard problems are revised first. When revisions run out and no lens dispatch checked the body about to be posted, the lens runs once on it.",
+      "rationale": "Saves a lens call per mechanical failure while every posting still follows a lens dispatch on what is posted (c3).",
+      "reversible": true,
+      "permission": "",
+      "affectsAcceptance": true
+    },
+    {
+      "id": "d4",
+      "question": "How is an unverified lens verdict handled?",
+      "choice": "Retried once; still unverified with no findings counts as not passed, with no revision.",
+      "rationale": "Revising text can't fix a check that couldn't run; architecture.md treats unverified as not passed.",
+      "reversible": true,
+      "permission": "",
+      "affectsAcceptance": true
+    },
+    {
+      "id": "d5",
+      "question": "Does a failing description affect readiness, and how many revisions?",
+      "choice": "Up to MAX_FIX_ROUNDS (three) revisions per stage. Only the final stage gates readiness: ready needs a clean run and a passed description, else draftReasons gains 'The PR description did not pass its check.'. An intermediate round's failure changes nothing.",
+      "rationale": "The card's revision cap and draft reason; the next round rewrites the description whole.",
+      "reversible": true,
+      "permission": "",
+      "affectsAcceptance": true
+    },
+    {
+      "id": "d6",
+      "question": "How do filed cards reach the final writer-pr dispatch, with both identifier and link, without duplicates on a rerun?",
+      "choice": "endLoop files cards in their own pusher dispatch before the final description, with small.ts's marker dedupe; pusher reports each as op card with reference = identifier and a new `link` field = URL, read by opRefs; a partial failure does not halt.",
+      "rationale": "An operation had one `reference` and pushBrief asked for 'the identifier ... or URL alone', so a real pusher would report only one; a named `link` field makes the stub test use the same shape a real pusher is told to report (c13, c25).",
+      "reversible": true,
+      "permission": "",
+      "affectsAcceptance": true
+    },
+    {
+      "id": "d7",
+      "question": "How does a rerun never read a progress entry as a checkpoint?",
+      "choice": "Each ledger key's scout answer is one evidence item per line containing the key's form, source the key, in ledger order; code reads every item, accepts only real checkpoint lines, tolerating a scout's wrappers, ignores every other stamped ledger line, and uses the last accepted line.",
+      "rationale": "Returning every candidate line lets code fall back to the real line when a later progress entry quotes it, so the mixed case is decided in code and testable; one 'last line' answer could only be rejected, never corrected. The carrier is pinned because fact() returns only the first matching item: a scout and a stub picking different shapes would let a progress entry listed first hide the real line.",
+      "reversible": true,
+      "permission": "",
+      "affectsAcceptance": true
+    },
+    {
+      "id": "d8",
+      "question": "What form does a progress entry take?",
+      "choice": "One ledger line with `progress` as its second field, then the round, kind and items, built only by progressLine with no `<` or `>`; pending entries ride on the next ledger-writing pusher dispatch and are kept until it succeeds.",
+      "rationale": "One line each, safe from pusher's placeholder filling, with no reorder of the review round.",
+      "reversible": true,
+      "permission": "",
+      "affectsAcceptance": true
+    },
+    {
+      "id": "d9",
+      "question": "What form does the deliver-story Spec line take, and where?",
+      "choice": "`Spec: <folder>` in plain text, contained exactly once in What changes, which opens with the card's outcome; resume tolerates backticks from older bodies.",
+      "rationale": "c21 needs What changes to say what changes and why, so the Spec line can't be the whole section; shaped('rel') rejects backticks that older bodies used.",
+      "reversible": true,
+      "permission": "",
+      "affectsAcceptance": true
+    },
+    {
+      "id": "d10",
+      "question": "Where do Needs you and Not done appear when empty?",
+      "choice": "Omitted when empty; What changes and Why trust it always present.",
+      "rationale": "The card says Needs you appears 'only when there is something'.",
+      "reversible": true,
+      "permission": "",
+      "affectsAcceptance": true
+    },
+    {
+      "id": "d11",
+      "question": "Which phase do writer-pr and lens-pr run under?",
+      "choice": "The existing `Push` phase; no new phase.",
+      "rationale": "Leaves the five metas and workflows.test.ts phase checks untouched.",
+      "reversible": true,
+      "permission": "",
+      "affectsAcceptance": false
+    },
+    {
+      "id": "d12",
+      "question": "Does endLoop describe twice when it opens the PR and then finishes?",
+      "choice": "No. The final description is produced once and both the opening push and finish post it.",
+      "rationale": "finish rewrites the body whole, so a second description is wasted work; one body keeps body identity.",
+      "reversible": true,
+      "permission": "",
+      "affectsAcceptance": false
+    },
+    {
+      "id": "d13",
+      "question": "What does the phrase-absence test scan?",
+      "choice": "Tracked files in README.md, TESTING.md, docs/, plugins/ and src/, excluding docs/specs/, library/, test/ and eval results.",
+      "rationale": "The card excludes past specs; library/ is research notes that quote other text; src/ is scanned so the built JS can't regress.",
+      "reversible": true,
+      "permission": "",
+      "affectsAcceptance": true
+    },
+    {
+      "id": "d14",
+      "question": "Where are the coder's trivial choices and non-acceptance decisions listed?",
+      "choice": "Under Needs you as confirmations, each listed or, by kind, one grouped line with their count linking the card, whose comment from finish lists each in full.",
+      "rationale": "The card's design choice; there is no Assumptions section any more. Coder choices grow with every task and fix round and no committed file lists them, so without a grouped line a large story can't fit 4,000 characters.",
+      "reversible": true,
+      "permission": "",
+      "affectsAcceptance": true
+    },
+    {
+      "id": "d15",
+      "question": "How does a large story fit 4,000 characters (c20) while every decision, confirmation and coder choice appears under Needs you (c22) and Why trust it covers every criterion?",
+      "choice": "The overflow rule: criteria with the same result and evidence share one grouped Why trust it line; Needs you items of one kind may be one grouped line with their count and a link to the committed file that lists them, or else to the card, whose finish comment lists each. A grouped line counts as those items appearing under Needs you.",
+      "rationale": "The issue's Scope says 'about one screen with links for overflow'. Without it a 26-criterion, 14-decision story can't fit, the guard fails every attempt, and every clean large delivery ends draft. If a person reads c22 as ruling out summary by link, the conflict with c20 is theirs to settle.",
+      "reversible": true,
+      "permission": "",
+      "affectsAcceptance": true
+    },
+    {
+      "id": "d16",
+      "question": "Where does the draft reason 'The PR description did not pass its check.' appear, given the posted body is written before readiness is known?",
+      "choice": "Not in the posted body. The final brief gives the target and the draft reasons known before the stage; the description reason appears only in finish's card comment and LoopResult.draftReasons. This is the one exception to c22.",
+      "rationale": "Putting it in the body needs code to append it (breaks c4 and returns the body to code), or a writer-pr dispatch after the lens (breaks c3) beyond the cap (breaks c6's 'the last revision is posted'). Briefing the last revision with target draft would be wrong whenever that revision passes.",
+      "reversible": true,
+      "permission": "",
+      "affectsAcceptance": true
+    },
+    {
+      "id": "d17",
+      "question": "Which rule wins when the last writer-pr body breaks a leak rule: c4/c6 (post the last revision) or keeping local paths, ledger text and secrets off GitHub?",
+      "choice": "The leak rule. A body with a leak problem is never posted; the latest leak-free writer-pr body is posted unchanged, or none (an empty body on opening, the current body kept on update). Only format and lens failures fall through to 'post the last revision, end draft'.",
+      "rationale": "A draft PR on a public repo is public and a posted secret can't be recalled, while c4's purpose (the posted body is writer-pr's, untouched by code) still holds. writer-pr reads the local ledger, which holds absolute worktree paths. The delivery still never stops for its description.",
+      "reversible": true,
+      "permission": "",
+      "affectsAcceptance": true
+    },
+    {
+      "id": "d18",
+      "question": "What does resume do with a scout item for a ledger key that is not that key's checkpoint?",
+      "choice": "Ignore any stamped ledger line that is not the key's checkpoint (progress entry, run line, other pusher line); halt naming the key only on an item that can't be read as a ledger line; wrappers are tolerated first.",
+      "rationale": "Treating an unreadable answer as absent silently rebuilds every task, repeats board-start, reproduces again or reruns an investigation. Halting on a readable non-checkpoint line would halt every rerun for good, since the run line embeds free-text story arguments and stays in the ledger. The halt is declared in each kind's halt conditions for the same reason.",
+      "reversible": true,
+      "permission": "",
+      "affectsAcceptance": true
+    },
+    {
+      "id": "d19",
+      "question": "Where does an unfixed finding go, given draftReasons lists findings beside held criteria and review state?",
+      "choice": "Only under Not done. The writer-pr brief's draft-reason line carries held criteria and review state; findings reach it only as renderState's open items. LoopResult and the card comment keep the full draftReasons.",
+      "rationale": "Both channels would otherwise put each finding in the brief twice and the overflow rule in two places, inviting the duplicate c24 forbids.",
+      "reversible": true,
+      "permission": "",
+      "affectsAcceptance": true
+    }
+  ],
+  "manualActions": [
+    "In each project bootstrapped before this change, run bootstrap again (or edit its docs/FORGE.md 'Title and body' line) so the declaration describes the four-part description; this repo's own docs/FORGE.md is updated in the change."
+  ]
+}

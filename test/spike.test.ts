@@ -3,7 +3,16 @@ import assert from "node:assert/strict";
 import { beforeEach, describe, test } from "node:test";
 
 import deliverSpike from "../src/slopify/workflows/deliver-spike.ts";
-import { calls, current, installAgents, type Reply, type Script } from "./harness.ts";
+import {
+  PR_AGENTS,
+  calls,
+  current,
+  describedBeforeEachPosting,
+  installAgents,
+  isPosting,
+  type Reply,
+  type Script,
+} from "./harness.ts";
 
 installAgents();
 
@@ -65,6 +74,7 @@ const DEFAULTS: Record<string, Script> = {
   checks: () => ({ commands: [{ command: "lint", exitCode: 0, failingLines: "" }] }),
   watcher: () => ({ outcome: "not-declared", waitingFor: "none", limitMinutes: 60, reference: "r", findings: [] }),
   pusher: (_t, label, prompt) => pusher(label, prompt),
+  ...PR_AGENTS,
 };
 const happy = (over: Partial<Record<string, Script>> = {}): Script => {
   const agents = { ...DEFAULTS, ...over };
@@ -75,6 +85,7 @@ const happy = (over: Partial<Record<string, Script>> = {}): Script => {
   };
 };
 const briefOf = (label: string): string => calls.find((c) => c.label === label)?.prompt ?? "";
+const described = (type: string): string[] => calls.filter((c) => c.type === type).map((c) => c.prompt);
 
 // Every case starts from the same prompt.
 async function run(script: Script) {
@@ -88,6 +99,36 @@ beforeEach(() => {
 });
 
 describe("deliver-spike", () => {
+  test("a rerun over a committed findings document reads its measurements and unknowns back for the description", async () => {
+    const r = await run(
+      happy({
+        "scout-checkpoint": () => ({
+          answer: "a",
+          gaps: [],
+          evidence: [
+            { source: "done-findings", location: "x", excerpt: "2026-11-09T10:00:00Z done findings docs/spikes/x.md" },
+          ],
+        }),
+        "scout-docs": (_t, label) =>
+          label === "read the findings"
+            ? {
+                answer: "a",
+                gaps: [],
+                evidence: [
+                  { source: "measured", location: "x", excerpt: "a million sums take 0.4 s" },
+                  { source: "unknown", location: "x", excerpt: "cold start time" },
+                ],
+              }
+            : SCOUT,
+      }),
+    );
+    assert.notEqual(r.status, "blocked");
+    const brief = described("writer-pr").at(-1) ?? "";
+    assert.ok(brief.includes("Measured, as the findings document records: a million sums take 0.4 s"));
+    assert.ok(brief.includes("Unknown: cold start time"));
+    assert.equal(calls.filter((c) => c.type === "coder").length, 0, "a rerun builds no prototype");
+    assert.ok(briefOf("read the findings").includes("In the worktree /p/wt,"), "the scout reads the story's worktree");
+  });
   test("files a card for a prompt without writing a ledger, which has no checkout yet", async () => {
     await run(happy());
     const filing = briefOf("file the card");
@@ -125,6 +166,49 @@ describe("deliver-spike", () => {
     const push = briefOf("push the round");
     assert.ok(push.includes("When docs/FORGE.md declares no review, fire nothing: that is not unmet."));
     assert.ok(push.includes("fired <the trigger time, or none when docs/FORGE.md declares no review>"));
+  });
+
+  test("every push that opens or updates the PR runs writer-pr, then lens-pr, then pusher (deliver-spike)", async () => {
+    const r = await run(happy());
+    assert.equal(r.status, "ready");
+    assert.ok(calls.filter((c) => isPosting(c)).length >= 2);
+    assert.ok(describedBeforeEachPosting());
+  });
+
+  test("writer-pr and lens-pr are given the claims checked and the unknowns that Why trust it rests on", async () => {
+    const r = await run(happy());
+    assert.equal(r.status, "ready");
+    for (const type of ["writer-pr", "lens-pr"]) {
+      const prompts = described(type);
+      assert.ok(prompts.length > 0, `${type} ran`);
+      for (const prompt of prompts) {
+        for (const check of ["lens-evidence", "lens-question", "lens-neutrality"]) {
+          assert.ok(
+            prompt.split("\n").some((line) => line.includes(check) && /\bpass(?:ed)?\b/i.test(line)),
+            `${type} is told the check "${check}" passed`,
+          );
+        }
+        assert.ok(
+          prompt.split("\n").some((line) => line.includes(CLAIM.claim) && line.includes("0.02 s")),
+          `${type} is told the measured claim and its value`,
+        );
+      }
+    }
+  });
+
+  test("writer-pr and lens-pr are given each claim the prototype left unknown", async () => {
+    const r = await run(happy({ qa: () => ({ results: [{ claim: "c1", confirmed: false, reason: "too noisy" }] }) }));
+    assert.ok("status" in r);
+    for (const type of ["writer-pr", "lens-pr"]) {
+      const prompts = described(type);
+      assert.ok(prompts.length > 0, `${type} ran`);
+      for (const prompt of prompts) {
+        assert.ok(
+          prompt.split("\n").some((line) => line.includes(CLAIM.claim) && line.includes("too noisy")),
+          `${type} is told the unknown claim and why it wasn't measured`,
+        );
+      }
+    }
   });
 
   test("tells pusher that an operation the brief doesn't ask for is not unmet", async () => {

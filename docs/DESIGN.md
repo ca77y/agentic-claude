@@ -23,10 +23,10 @@ How the plugins are built, within the principles in [`.claude/rules/architecture
 
 ## Agent roles and tiers
 
-- **Scouts and checks** run on haiku. Each has one small task whose answer can be checked: gather one kind of evidence, or test one property. They fan out widely, and each returns evidence with its claim. `lens-consistency` runs on sonnet, because it reads the whole spec against the rules and the code it touches.
+- **Scouts and checks** run on haiku. Each has one small task whose answer can be checked: gather one kind of evidence, or test one property. They fan out widely, and each returns evidence with its claim. `lens-pr` checks a PR description against the shared format and the run's results; its findings go only to `writer-pr`, never to `judge`. `lens-consistency` runs on sonnet, because it reads the whole spec against the rules and the code it touches.
 - **`designer`** runs on opus. It produces one full approach from a stance the script gives it, independently of the other designers.
 - **`judge`** runs on opus. Most dispatches rule on one item, such as one review finding or one validation verdict. In a spec's challenge, one dispatch rules on all the cheap checks' findings of a round together, merging duplicates. A gateway dispatch checks a whole round before it is pushed. It confirms, overturns, or dismisses what a cheaper agent or the forge's reviewer reported, against the evidence and the rubric in its brief. It never downgrades a confirmed defect, and it never accepts a pass that lacks evidence.
-- **Producers** change files: `writer-spec` for specs, `writer-docs` for documents, `writer-findings` for a spike's plan and findings, `writer-card` for stories, and `coder` for code and tests. `writer-docs` and `writer-card` run on sonnet, the rest on opus. A spec translates the issue's product requirements into technical requirements and interfaces, and stops above the code. `coder` decides how to meet them inside its task's files, and lists the choices worth knowing as assumptions; a question about what to build goes back as a spec problem. Code is written test first: one dispatch commits a failing test, and a separate dispatch makes it pass without changing any committed test. `qa` checks the history for that.
+- **Producers** write the work: most change files, and one returns its work instead. `writer-spec` for specs, `writer-docs` for documents, `writer-findings` for a spike's plan and findings, `writer-card` for stories, `writer-pr` for a delivery's PR description, and `coder` for code and tests. `writer-docs`, `writer-card`, and `writer-pr` run on sonnet, the rest on opus. `writer-pr` changes no file: it returns the description as its result, and the script hands it to `pusher` unchanged. A spec translates the issue's product requirements into technical requirements and interfaces, and stops above the code. `coder` decides how to meet them inside its task's files, and lists the choices worth knowing as assumptions; a question about what to build goes back as a spec problem. Code is written test first: one dispatch commits a failing test, and a separate dispatch makes it pass without changing any committed test. `qa` checks the history for that.
 - **`qa`** runs on sonnet. It validates one `coder` change against what that change was meant to do, for example one fix against its finding.
 - **`simplifier`** runs on opus once `qa` passes, and reports code a `coder` change adds but doesn't need. Every other reviewer asks what is missing or wrong, so refinement only adds; `simplifier` asks only what could go, and each finding goes to whoever can act on it: one in the change's test to the test's writer, any other to the coder. A `judge` rules once when the coder asks to put back what it trimmed from a test.
 - **`validator`** runs on sonnet. It drives the running app as the project's `TESTING.md` describes, and returns per-criterion verdicts with evidence.
@@ -48,7 +48,7 @@ How the plugins are built, within the principles in [`.claude/rules/architecture
 
 What counts as `blocker` or `major` depends on what the PR changes. The rows above are the definitions for code, kept in `plugins/slopify/references/severity-code.md`. A research run rates its library pages by `severity-research.md`, and a spike its findings by `severity-spike.md`: there, a claim its cited source doesn't support, a claim credited to the wrong source, or a broken citation is `major`. The judge's brief names the reference, so the agent that checks a document and the judge that rates its problems use the same standard. `minor`, `nit`, and `pre-existing` mean the same in every flow, and a problem is rated by what it is, never softened by wording elsewhere.
 
-Minor problems and nits go to the PR's Suggestions section, and the run reports a ready PR with suggestions as having no blocking findings, not as clean. A minor problem never starts a fix round, but a round that runs for a blocker or a major also applies the minor problems its writer can fix: every one in a document, and a `docs` problem in code. An applied problem leaves the Suggestions section. A pre-existing problem goes on one new card with the run's other pre-existing problems, which a person can split.
+Minor problems and nits go under the PR description's **Not done** part, and the run reports a ready PR with such open items as having no blocking findings, not as clean. A minor problem never starts a fix round, but a round that runs for a blocker or a major also applies the minor problems its writer can fix: every one in a document, and a `docs` problem in code. An applied problem leaves **Not done**. A pre-existing problem goes on one new card with the run's other pre-existing problems, which a person can split.
 
 Each confirmed `blocker` or `major` has one kind:
 
@@ -61,20 +61,20 @@ Each confirmed `blocker` or `major` has one kind:
 
 Two kinds of problem aren't defects in the change. They have no severity, and no producer sees them:
 
-| Kind            | The problem                                                                                                        | Next step                                     |
-| --------------- | ------------------------------------------------------------------------------------------------------------------ | --------------------------------------------- |
-| `cannot-verify` | A tool, simulator, or credential stopped working, the check hits a blind spot, or the proof is missing or unusable | Listed in the PR, as `TESTING.md` decides     |
-| `decision`      | Only a person can settle what the criterion should mean                                                            | Listed in the PR's Needs confirmation section |
+| Kind            | The problem                                                                                                        | Next step                                 |
+| --------------- | ------------------------------------------------------------------------------------------------------------------ | ----------------------------------------- |
+| `cannot-verify` | A tool, simulator, or credential stopped working, the check hits a blind spot, or the proof is missing or unusable | Listed in the PR, as `TESTING.md` decides |
+| `decision`      | Only a person can settle what the criterion should mean                                                            | Listed in the PR's Needs you part         |
 
-Two statuses sit beside the scale. A finding is `unverified` when the judge couldn't check it. A check is `cannot-verify` when the environment can't run it or its proof can't be produced. Neither goes to a producer, and both are listed in the PR.
+Two statuses sit beside the scale. A finding is `unverified` when the judge couldn't check it. A check is `cannot-verify` when the environment can't run it or its proof can't be produced. Neither goes to a producer, and both are listed in the PR description: a `cannot-verify` check that keeps the PR a draft under **Needs you**, an `unverified` finding under **Not done**.
 
-An `unverified` finding doesn't block and goes in its own PR section. Whether a `cannot-verify` criterion or an `uncategorized` criterion keeps the PR a draft is decided only by the target project's `TESTING.md`. Each category states `ready` or `draft`, and so does `uncategorized`. Anything else, including no statement at all, means `draft`.
+An `unverified` finding doesn't block and is listed under **Not done**. Whether a `cannot-verify` criterion or an `uncategorized` criterion keeps the PR a draft is decided only by the target project's `TESTING.md`. Each category states `ready` or `draft`, and so does `uncategorized`. Anything else, including no statement at all, means `draft`.
 
 ## Decisions
 
 - An agent that designs or writes a spec, and would ask a question, instead picks the most reasonable option, cites what grounds the choice, and continues. Each choice becomes a decision with these fields: `id`, `question`, `choice`, `rationale`, `reversible`, and `affectsAcceptance`.
-- A decision that changes behavior a criterion describes is listed as **Needs confirmation** in the PR and in the issue comment. It doesn't stop the run or keep the PR a draft. The human confirms it when reviewing the PR, and a wrong choice is corrected by a rerun with `answers`.
-- An irreversible change, such as a migration on shared data, deleting a public API, or changing production config, is built only when the card or prompt explicitly permits it. Otherwise only its reversible part is built, and the rest goes under **Manual actions** in the PR for a person to do. In a spec, each decision's `reversible` and `permission` fields record this, and the script sends an irreversible decision with no permission back to `writer-spec`.
+- A decision that changes behavior a criterion describes is listed under **Needs you** in the PR and in the issue comment. It doesn't stop the run or keep the PR a draft. The human confirms it when reviewing the PR, and a wrong choice is corrected by a rerun with `answers`.
+- An irreversible change, such as a migration on shared data, deleting a public API, or changing production config, is built only when the card or prompt explicitly permits it. Otherwise only its reversible part is built, and the rest goes under **Needs you** in the PR as a manual action for a person to do. In a spec, each decision's `reversible` and `permission` fields record this, and the script sends an irreversible decision with no permission back to `writer-spec`.
 - Producers have no field that halts the run. Only the halt conditions a workflow lists stop it.
 
 ## Loops and results
@@ -93,10 +93,10 @@ An `unverified` finding doesn't block and goes in its own PR section. Whether a 
 
 - A workflow keeps no state between runs. It learns where a run stands from its durable checkpoints:
   - the commits on the story branch;
-  - the PR and its description;
+  - the PR and its description, which names a story's spec folder on its `Spec: <folder>` line;
   - the committed spec folder, and `.tmp/evidence/` in the worktree;
-  - an append-only `.tmp/ledger.md` that only `pusher` writes.
+  - an append-only `.tmp/ledger.md` that only `pusher` writes. It holds checkpoint lines and progress entries, the findings, rulings, attempts, and changes of each round. A progress entry is local: it is never posted to a PR, a comment, or a card, and never read as a checkpoint.
 - A scout reads the checkpoints at the start of each run.
 - Specs are written and read by agents, and stay in the repository as context for later failures. Humans compact or remove them.
-- A rerun skips every stage its checkpoints show complete and still current. Once the PR exists, a rerun resumes at the review. Answers to a `draft` or `blocked` result go in `answers`, a map keyed by id. Each answer is plain text: a string, or a number or boolean read as text. `answers` that isn't a map, or an answer that is an object or a list, ends the run as `not-started` before any agent works, naming what to fix, and a `null` answer counts as unanswered.
+- A rerun skips every stage its checkpoints show complete and still current. Once the PR exists, a rerun validates the work once more, without building, and resumes at the review, so its PR description rests on evidence from this run. Answers to a `draft` or `blocked` result go in `answers`, a map keyed by id. Each answer is plain text: a string, or a number or boolean read as text. `answers` that isn't a map, or an answer that is an object or a list, ends the run as `not-started` before any agent works, naming what to fix, and a `null` answer counts as unanswered.
 - A rerun in the same session can instead resume through the workflow runtime, which replays earlier dispatches from the cache.

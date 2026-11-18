@@ -21,11 +21,15 @@ How `deliver-bugfix` fixes a bug on its own, from a card or a prompt to a review
  5 DELIVER ───── the flow in TRIVIAL.md, except:
                  the first test is the reproduction as a regression test
                  validator runs the reproduction's steps again in the app
-                 the PR has a Reproduced section: the steps and the behavior before the fix
-                 the criteria table shows the same steps after it
+                 the PR description shows the reproduction: the steps and the behavior
+                 before the fix, and the same steps after it
 ```
 
 Everything else, including the review and its fixes, is as in [`TRIVIAL.md`](TRIVIAL.md).
+
+## The PR description
+
+`writer-pr` writes it and `lens-pr` checks it as in [`STORY.md`](STORY.md#the-pr-description): four parts, **What changes**, **Needs you**, **Why trust it**, and **Not done**, rewritten whole in every round that opens or updates the PR. Here **What changes** opens with the bug, before and after the fix, and **Why trust it** rests on the reproduction: failing before the fix and passing after it. The brief gives `writer-pr` the reproduction's steps and the behavior seen before the fix. There is no `Spec:` line.
 
 ## Decisions
 

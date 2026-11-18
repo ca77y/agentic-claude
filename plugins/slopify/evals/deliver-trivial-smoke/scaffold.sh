@@ -127,7 +127,7 @@ Configuration does not authorize execution; the user's request does.
 
 ## Pull request
 
-- Create or update: write `.forge/prs/smoke.md` with `# <title>` and the body the delivery renders, under a `Draft: yes` line while it's a draft; marking it ready removes that line.
+- Create or update: write `.forge/prs/smoke.md` with `# <title>` and the body the brief supplies, unchanged, under a `Draft: yes` line while it's a draft; marking it ready removes that line.
 - Review trigger and status: none.
 
 ## Restrictions

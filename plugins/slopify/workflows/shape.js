@@ -190,6 +190,67 @@ var SHAPED_LABEL = "Shaped";
 function hasLabel(labels, label) {
   return labels.split(/[,\n]/).map((l) => l.trim()).includes(label);
 }
+var STAMP = String.raw`\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z`;
+var FS_ROOTS = [
+  "home",
+  "root",
+  "tmp",
+  "private",
+  "var",
+  "etc",
+  "opt",
+  "usr",
+  "mnt",
+  "srv",
+  "workspaces?",
+  "repo",
+  "runner",
+  "github/workspace",
+  "proc"
+];
+var NOT_ROUTE = String.raw`(?<![\w.:/~-]|\b(?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s+)`;
+var NO_PARAM = String.raw`(?![^\s\x60)\]]*\/[:{])`;
+var NOT_NAMED_ROUTE = String.raw`(?![^\s\x60)\]]*\x60?\s+(?:route|endpoint)s?\b)`;
+var HOME_ROOTS = ["Users", "Volumes"];
+var LEDGER_ENTRY = String.raw`(?:run \d+:|done (?:spec|findings|board-start|round|publish) |reproduced \{|review \d+ (?:fired|ended)\b|delivery (?:ready|draft)\b|progress \d+ )`;
+var LEAKS = [
+  [
+    [
+      /(?<![\w.:/~-])~\/[\w.-]*\w/,
+      new RegExp(String.raw`${NOT_ROUTE}\/(?:${HOME_ROOTS.join("|")})\b(?![.-]\w)${NO_PARAM}`),
+      new RegExp(String.raw`${NOT_ROUTE}\/(?:${FS_ROOTS.join("|")})\b(?![.-]\w)${NO_PARAM}${NOT_NAMED_ROUTE}`),
+      new RegExp(String.raw`${NOT_ROUTE}(?<!\]\()(?:\/\w[\w.-]*)+\/\w[\w-]*\.[A-Za-z]\w*\b${NO_PARAM}`),
+      new RegExp(String.raw`${NOT_ROUTE}(?:\/\w[\w.-]*)+\x60?\s+(?:directory|folder|file)\b`),
+      /\b[A-Z]:\\\w/i,
+      /\bfile:\/\//
+    ],
+    "It holds an absolute path; name files relative to the repo root."
+  ],
+  [[/\.tmp\//], "It refers to .tmp/, which is never committed; link nothing under it."],
+  [[new RegExp(String.raw`${STAMP}\s+${LEDGER_ENTRY}`)], "It holds a ledger line; describe the current state instead."],
+  [
+    [
+      /\bgh[pousr]_\w{30,}/,
+      /\bgithub_pat_\w{20,}/,
+      /\bsk-[\w-]{20,}/,
+      /\bAKIA[0-9A-Z]{16}\b/,
+      /\bxox[abprs]-[\w-]{10,}/,
+      /\blin_api_\w{20,}/,
+      /-----BEGIN [A-Z ]*PRIVATE KEY-----/,
+      /\b(?:\w*_)?(?:password|passwd|api_?key)\s*[:=]\s*\S/i,
+      /\bBearer\s+[\w.~+/-]{16,}/,
+      /\beyJ[\w-]{8,}\.eyJ[\w-]{8,}\.[\w-]{8,}/
+    ],
+    "It holds credential-shaped text; remove the secret."
+  ]
+];
+var CHECKPOINT_FORMS = {
+  "done-board-start": String.raw`done board-start\b`,
+  "done-round": String.raw`done round \d+\b`,
+  "done-findings": String.raw`done findings \S`,
+  reproduced: String.raw`reproduced \{`,
+  "review-fired": String.raw`review \d+ fired\b`
+};
 
 // src/slopify/lib/schemas.ts
 function described(schema, description) {
@@ -217,11 +278,12 @@ function pusherSchema(notes = {}) {
       done: { type: "boolean" },
       operations: arrayOf({
         type: "object",
-        required: ["op", "result", "reference"],
+        required: ["op", "result", "reference", "link"],
         properties: {
           op: { type: "string" },
           result: { type: "string" },
-          reference: described({ type: "string" }, notes.reference)
+          reference: described({ type: "string" }, notes.reference),
+          link: { type: "string", description: "The URL of a card you filed; empty when none" }
         }
       }),
       unmet: described(STRINGS, notes.unmet),
@@ -254,10 +316,8 @@ var REPAIR_SCHEMA = {
   required: ["changed"],
   properties: { changed: { ...STRINGS, description: "Paths changed, relative to the worktree root" } }
 };
-var opRef = (r, name) => {
-  const o = (r?.operations ?? []).find((x) => x.op.toLowerCase() === name);
-  return o ? o.reference.trim() : "";
-};
+var opRefs = (r, name) => (r?.operations ?? []).filter((x) => x.op.toLowerCase() === name).map((x) => ({ reference: x.reference.trim(), link: x.link }));
+var opRef = (r, name) => opRefs(r, name)[0]?.reference ?? "";
 function callPusher(prompt, label, phaseTitle) {
   return dispatch(prompt, { agentType: "slopify:pusher", label, phase: phaseTitle, schema: PUSHER_SCHEMA });
 }
@@ -317,7 +377,7 @@ ${instruction}
 ${ln.length > 0 ? `Append these lines, in this order, to the ledger (create it, with its directory, if absent). Stamp each with the current time in front and fill every <placeholder> from what you just did:
 ${ln.map((l) => `- ${l}`).join("\n")}` : "Append no ledger lines."}
 
-Report each operation you performed as an operations entry whose op is exactly one of worktree, branch, prepare, delivery-start, card, commit, push, pr, review-trigger, or ledger, with its reference: the identifier, sha, path, or URL alone. Set done only when every operation this brief asks for is complete. List in unmet only an operation this brief asks for that is unbound or failed; one it doesn't ask for is neither performed nor unmet.`;
+Report each operation you performed as an operations entry whose op is exactly one of worktree, branch, prepare, delivery-start, card, commit, push, pr, review-trigger, or ledger, with its reference: the identifier, sha, path, or URL alone, and its link: a filed card's URL, else empty. Set done only when every operation this brief asks for is complete. List in unmet only an operation this brief asks for that is unbound or failed; one it doesn't ask for is neither performed nor unmet.`;
   }
   function pushStop(step, r) {
     return stop(step, [

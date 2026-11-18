@@ -1,5 +1,5 @@
 // The fixed tables of a delivery: what happens to each ruled problem, when a loop ends, what runs in parallel, and the
-// PR description. Agents report what they found; these functions decide what runs next.
+// mechanical checks of what writer-pr writes. Agents report what they found; these functions decide what runs next.
 
 export const MAX_FIX_ROUNDS = 3;
 export const MAX_INNER_TRIES = 3;
@@ -141,26 +141,6 @@ export interface Listed {
   text: string;
   detail?: string;
 }
-export interface PrBody {
-  issue: string;
-  specDir: string;
-  /** The documents a spike or a research run adds. */
-  documents?: readonly string[];
-  draftReasons: readonly Listed[];
-  needsConfirmation: readonly Listed[];
-  /** Irreversible steps nothing explicitly permits, left for a person to do. */
-  manualActions: readonly string[];
-  /** A bug's reproduction, as it behaved before the fix; the criteria table shows it after. */
-  reproduced?: readonly Listed[];
-  criteria: readonly CriterionRow[];
-  assumptions: readonly string[];
-  unverified: readonly Listed[];
-  notValidated: readonly Listed[];
-  knownDebt: readonly Listed[];
-  suggestions: readonly Listed[];
-  testChanges: readonly string[];
-}
-
 const items = (list: readonly Listed[]): string =>
   list.map((x) => `- ${x.text}${x.detail ? `\n  ${x.detail}` : ""}`).join("\n");
 const cell = (s: string): string => s.replaceAll("|", String.raw`\|`).replaceAll("\n", " ");
@@ -177,26 +157,6 @@ function criteriaTable(rows: readonly CriterionRow[]): string {
     "| --- | --- | --- | --- | --- |",
     ...lines,
   ].join("\n");
-}
-
-// The PR description, rendered from the run state and written again after every round.
-export function renderBody(b: PrBody): string {
-  return [
-    `Issue: ${b.issue}${b.specDir ? `\n\nSpec: \`${b.specDir}\`` : ""}${b.documents?.length ? `\n\nFindings: ${b.documents.map((p) => `\`${p}\``).join(", ")}` : ""}`,
-    section("Why this is a draft", items(b.draftReasons)),
-    section("Needs confirmation", items(b.needsConfirmation)),
-    section("Manual actions", b.manualActions.map((a) => `- ${a}`).join("\n")),
-    section("Reproduced", items(b.reproduced ?? [])),
-    section("Criteria", criteriaTable(b.criteria)),
-    section("Assumptions", b.assumptions.map((a) => `- ${a}`).join("\n")),
-    section("Unverified findings", items(b.unverified)),
-    section("Not validated", items(b.notValidated)),
-    section("Known debt", items(b.knownDebt)),
-    section(`Suggestions (${String(b.suggestions.length)})`, items(b.suggestions)),
-    section("Test changes", b.testChanges.map((t) => `- ${t}`).join("\n")),
-  ]
-    .filter(Boolean)
-    .join("\n\n");
 }
 
 export interface Reproduction {
@@ -219,4 +179,193 @@ export function parseReproduction(line: string): Reproduction | null {
   } catch {
     return null;
   }
+}
+
+export type DeliveryKind = "story" | "trivial" | "bugfix" | "spike" | "research";
+
+// What writer-pr is told about the run's current state: criterion results and open items, never fix-attempt counts.
+export interface PrState {
+  criteria: readonly CriterionRow[];
+  open: readonly Listed[];
+}
+
+// What writer-pr is told about the run's current state, rendered as evidence for it, not as the PR description.
+export function renderState(s: PrState): string {
+  return [section("Criterion results", criteriaTable(s.criteria)), section("Open items", items(s.open))]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+const PARTS = ["What changes", "Needs you", "Why trust it", "Not done"];
+const MAX_DESCRIPTION = 4000;
+const STAMP = String.raw`\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z`;
+
+// An absolute filesystem path is a slash-led word under one of these roots, or one of two or more segments ending in a
+// file name with an extension, or any slash-led word the text names as a directory, folder or file. A URL route (one
+// after an HTTP method or with a :param or {param} segment) and a slash command are not. A word named as a route or
+// endpoint is not either, unless it is under a home-directory root or ends in a file name, which stay paths whatever
+// word follows them. A markdown link target ending in a file name is root-relative, not a path, unless it is under a
+// root above.
+const FS_ROOTS = [
+  "home",
+  "root",
+  "tmp",
+  "private",
+  "var",
+  "etc",
+  "opt",
+  "usr",
+  "mnt",
+  "srv",
+  "workspaces?",
+  "repo",
+  "runner",
+  "github/workspace",
+  "proc",
+];
+
+const NOT_ROUTE = String.raw`(?<![\w.:/~-]|\b(?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s+)`;
+const NO_PARAM = String.raw`(?![^\s\x60)\]]*\/[:{])`;
+const NOT_NAMED_ROUTE = String.raw`(?![^\s\x60)\]]*\x60?\s+(?:route|endpoint)s?\b)`;
+const HOME_ROOTS = ["Users", "Volumes"];
+// What follows pusher's timestamp on a ledger line, per references/pusher-ledger.md; a timestamp followed by other text,
+// such as a bug's quoted output, is not a ledger line.
+const LEDGER_ENTRY = String.raw`(?:run \d+:|done (?:spec|findings|board-start|round|publish) |reproduced \{|review \d+ (?:fired|ended)\b|delivery (?:ready|draft)\b|progress \d+ )`;
+
+const LEAKS: readonly [readonly RegExp[], string][] = [
+  [
+    [
+      /(?<![\w.:/~-])~\/[\w.-]*\w/,
+      new RegExp(String.raw`${NOT_ROUTE}\/(?:${HOME_ROOTS.join("|")})\b(?![.-]\w)${NO_PARAM}`),
+      new RegExp(String.raw`${NOT_ROUTE}\/(?:${FS_ROOTS.join("|")})\b(?![.-]\w)${NO_PARAM}${NOT_NAMED_ROUTE}`),
+      new RegExp(String.raw`${NOT_ROUTE}(?<!\]\()(?:\/\w[\w.-]*)+\/\w[\w-]*\.[A-Za-z]\w*\b${NO_PARAM}`),
+      new RegExp(String.raw`${NOT_ROUTE}(?:\/\w[\w.-]*)+\x60?\s+(?:directory|folder|file)\b`),
+      /\b[A-Z]:\\\w/i,
+      /\bfile:\/\//,
+    ],
+    "It holds an absolute path; name files relative to the repo root.",
+  ],
+  [[/\.tmp\//], "It refers to .tmp/, which is never committed; link nothing under it."],
+  [[new RegExp(String.raw`${STAMP}\s+${LEDGER_ENTRY}`)], "It holds a ledger line; describe the current state instead."],
+  [
+    [
+      /\bgh[pousr]_\w{30,}/,
+      /\bgithub_pat_\w{20,}/,
+      /\bsk-[\w-]{20,}/,
+      /\bAKIA[0-9A-Z]{16}\b/,
+      /\bxox[abprs]-[\w-]{10,}/,
+      /\blin_api_\w{20,}/,
+      /-----BEGIN [A-Z ]*PRIVATE KEY-----/,
+      /\b(?:\w*_)?(?:password|passwd|api_?key)\s*[:=]\s*\S/i,
+      /\bBearer\s+[\w.~+/-]{16,}/,
+      /\beyJ[\w-]{8,}\.eyJ[\w-]{8,}\.[\w-]{8,}/,
+    ],
+    "It holds credential-shaped text; remove the secret.",
+  ],
+];
+
+interface Part {
+  title: string;
+  level: number;
+  lines: string[];
+}
+
+// Splits the body at its headings, skipping fenced code; the text before the first heading has an empty title.
+function partsOf(body: string): Part[] {
+  const out: Part[] = [{ title: "", level: 0, lines: [] }];
+  let fenced = false;
+  for (const line of body.split("\n")) {
+    if (/^ {0,3}(?:```|~~~)/.test(line)) fenced = !fenced;
+    const h = fenced ? null : /^ {0,3}(#{1,6})(?:\s(.*))?$/.exec(line);
+    if (h) out.push({ title: h[2]?.trim() ?? "", level: h[1]?.length ?? 0, lines: [] });
+    else out.at(-1)?.lines.push(line);
+  }
+  return out;
+}
+
+const isPart = (p: Part): boolean => p.level === 2 && PARTS.includes(p.title);
+const content = (p: Part): string[] => p.lines.map((l) => l.trim()).filter(Boolean);
+
+function specProblem(parts: readonly Part[], specDir: string): string[] {
+  const changes = parts.find((p) => p.title === "What changes");
+  const specLines = parts.flatMap((p) =>
+    content(p)
+      .filter((l) => l.startsWith("Spec:"))
+      .map((l) => ({ p, l })),
+  );
+  const [only] = specLines;
+  const want = `Spec: ${specDir}`;
+  if (!only) return [`What changes has no Spec line; add \`${want}\`.`];
+  if (specLines.length > 1) return ["The Spec line is given more than once; keep one in What changes."];
+  if (only.p !== changes) return ["The Spec line sits outside What changes; move it there."];
+  if (only.l !== want) return [`The Spec line must read \`${want}\`, plain and repo-relative.`];
+  return content(changes)[0] === want ? ["What changes opens with the Spec line; open with the card's outcome."] : [];
+}
+
+// The mechanical part of the PR description format in references/pr-description.md: one plain problem per broken rule.
+export function checkDescription(
+  body: string,
+  ctx: { kind: DeliveryKind; specDir: string },
+): { leak: string[]; format: string[] } {
+  const leak = LEAKS.filter(([res]) => res.some((re) => re.test(body))).map(([, problem]) => problem);
+  const [before, ...headed] = partsOf(body);
+  const format: string[] = [];
+  if (body.length > MAX_DESCRIPTION) {
+    format.push(
+      `It is ${String(body.length)} characters, over ${String(MAX_DESCRIPTION)}; group lines and link the rest.`,
+    );
+  }
+  if (before && content(before).length > 0) format.push("Text comes before What changes; start with that heading.");
+  if (headed.some((p) => !isPart(p))) {
+    format.push(`It has a heading other than the level-2 ${PARTS.join(", ")}.`);
+  }
+  const known = headed.filter((p) => isPart(p));
+  const order = known.map((p) => PARTS.indexOf(p.title));
+  if (new Set(order).size < order.length) format.push("A part is given more than once.");
+  else if (order.some((n, i) => i > 0 && n < (order[i - 1] ?? 0)))
+    format.push(`The parts are not in the order ${PARTS.join(", ")}.`);
+  for (const required of ["What changes", "Why trust it"]) {
+    if (known.every((p) => p.title !== required)) format.push(`It has no ${required} part.`);
+  }
+  const empty = known.filter((p) => content(p).length === 0).map((p) => p.title);
+  if (empty.length > 0) format.push(`${empty.join(", ")} has no content; leave out a part with nothing to say.`);
+  if (ctx.kind === "story") format.push(...specProblem(headed, ctx.specDir));
+  return { leak, format };
+}
+
+const MAX_PROGRESS = 2000;
+
+// One progress entry for the ledger, on one line and with no angle bracket, so pusher can't take it for a placeholder.
+export function progressLine(
+  round: number,
+  kind: "finding" | "ruling" | "tried" | "changed",
+  entries: readonly string[],
+): string {
+  const text = entries.map((e) => e.replaceAll(/[<>]/g, "").replaceAll(/\s+/g, " ").trim()).join("; ");
+  const line = `progress ${String(round)} ${kind}: ${text}`;
+  return line.length > MAX_PROGRESS ? `${line.slice(0, MAX_PROGRESS - 3)}...` : line;
+}
+
+export type CheckpointKey = "done-board-start" | "done-round" | "done-findings" | "reproduced" | "review-fired";
+
+const CHECKPOINT_FORMS: Record<CheckpointKey, string> = {
+  "done-board-start": String.raw`done board-start\b`,
+  "done-round": String.raw`done round \d+\b`,
+  "done-findings": String.raw`done findings \S`,
+  reproduced: String.raw`reproduced \{`,
+  "review-fired": String.raw`review \d+ fired\b`,
+};
+
+// The ledger line a scout returned for a checkpoint key, with the wrappers a scout may add removed, or '' when it isn't
+// one: the key's form must follow pusher's timestamp directly, so a progress entry or run line quoting it never counts.
+export function checkpointLine(key: CheckpointKey, value: string): string {
+  const line = value
+    .trim()
+    .replace(/^```[^\n]*\n([\s\S]*?)\n?```$/, "$1")
+    .trim()
+    .replace(/^[-*]\s+/, "")
+    .replace(/^(["`])(.*)\1$/s, "$2")
+    .trim();
+  const re = new RegExp(`^${STAMP} ${CHECKPOINT_FORMS[key]}.*$`);
+  return re.test(line) ? line : "";
 }

@@ -10,7 +10,16 @@ import deliverSpike from "../src/slopify/workflows/deliver-spike.ts";
 import deliverStory from "../src/slopify/workflows/deliver-story.ts";
 import deliverTrivial from "../src/slopify/workflows/deliver-trivial.ts";
 import research from "../src/slopify/workflows/research.ts";
-import { calls, current, installAgents, type Reply, type Script } from "./harness.ts";
+import {
+  PR_AGENTS,
+  calls,
+  current,
+  describedBeforeEachPosting,
+  installAgents,
+  isPosting,
+  type Reply,
+  type Script,
+} from "./harness.ts";
 
 installAgents();
 
@@ -64,6 +73,7 @@ const DEFAULTS: Record<string, Script> = {
   "lens-consistency": () => LENS_PASS,
   judge: (_t, label) => (label === "decide" ? VIABLE : rulings(problem("major"))),
   "library-reader": () => ({ summary: "s", supported: [], gaps: [] }),
+  ...PR_AGENTS,
 };
 const happy = (over: Partial<Record<string, Script>> = {}): Script => {
   const agents = { ...DEFAULTS, ...over };
@@ -426,6 +436,16 @@ describe("deliver-story's intake", () => {
     assert.ok(count("designer") > 0);
   });
 
+  test("every push that opens or updates the PR runs writer-pr, then lens-pr, then pusher (deliver-story)", async () => {
+    current.script = storyRun;
+    Object.assign(globalThis, { args: "SMR-1" });
+    const r = await deliverStory();
+    assert.equal(r.status, "ready");
+    assert.ok(calls.filter((c) => isPosting(c)).length >= 2);
+    assert.ok(describedBeforeEachPosting());
+    assert.match(calls.findLast((c) => c.type === "writer-pr")?.prompt ?? "", /Spec: docs\/specs\/\S+/);
+  });
+
   test("asks for the issue when the argument is empty", async () => {
     current.script = happy();
     Object.assign(globalThis, { args: "" });
@@ -496,7 +516,7 @@ const promptRun: Script = (type, label, prompt) => {
 
 const REPRO_OK = { reproduced: true, steps: ["run add(1, 1)"], observed: "got 0", reason: "" };
 const REPRO_NO = { reproduced: false, steps: [], observed: "", reason: "it passed every time" };
-const KEPT = 'reproduced {"steps":["run add(1, 1)"],"observed":"got 0"}';
+const KEPT = '2026-11-09T10:00:00Z reproduced {"steps":["run add(1, 1)"],"observed":"got 0"}';
 const BUG_CARD = {
   answer: "a",
   gaps: [],
@@ -521,6 +541,28 @@ const bugRun =
       ? { done: true, unmet: [], operations: [{ op: "worktree", reference: "/p/wt" }] }
       : promptRun(type, label, prompt);
   };
+// A Deliverable story whose spec is already committed, so the run goes straight to the loop.
+const storyRun: Script = (type, label, prompt) => {
+  if (type === "scout-checkpoint") {
+    return {
+      ...SCOUT,
+      evidence: [
+        { source: "worktree", location: "x", excerpt: "/p/wt" },
+        { source: "build-json", location: "x", excerpt: JSON.stringify(SPEC.build) },
+        { source: "validate-json", location: "x", excerpt: JSON.stringify(SPEC.validate) },
+      ],
+    };
+  }
+  if (type === "validator") {
+    return {
+      results: [{ id: "c1", result: "pass", ran: "p", evidence: ["e.png"], detail: "", setting: "draft" }],
+      uncategorizedSetting: "draft",
+    };
+  }
+  return type === "judge" && label === "gateway"
+    ? { missed: [], docsToAdd: [] }
+    : (SMALL_AGENTS[type]?.(type, label, prompt) ?? card("Feature, Deliverable")(type, label, prompt));
+};
 const createBrief = (): string => calls.find((c) => c.label === "create the worktree")?.prompt ?? "";
 const failedReport = (): string => calls.find((c) => c.label === "report the failed reproduction")?.prompt ?? "";
 
@@ -613,9 +655,128 @@ describe("the small workflows", () => {
     await deliverBugfix();
     const validator = calls.find((c) => c.type === "validator");
     assert.ok(validator?.prompt.includes("run add(1, 1)"));
-    const opened = calls.find((c) => c.label === "push the round");
-    assert.ok(opened?.prompt.includes("## Reproduced"));
-    assert.ok(opened?.prompt.includes("Before the fix: got 0"));
+    const described = calls.find((c) => c.type === "writer-pr")?.prompt ?? "";
+    assert.ok(described.includes("run add(1, 1)"), "writer-pr is told the reproduction");
+    assert.ok(described.includes("got 0"), "writer-pr is told how the bug behaved before the fix");
+  });
+
+  test("every push that opens or updates the PR runs writer-pr, then lens-pr, then pusher (deliver-trivial)", async () => {
+    current.script = promptRun;
+    Object.assign(globalThis, { args: "Add mul to calc.py" });
+    const r = await deliverTrivial();
+    assert.equal(r.status, "ready");
+    assert.ok(calls.filter((c) => isPosting(c)).length >= 2);
+    assert.ok(describedBeforeEachPosting());
+  });
+
+  test("deliver-trivial gives writer-pr and lens-pr the test result that Why trust it rests on, beside the app run", async () => {
+    current.script = promptRun;
+    Object.assign(globalThis, { args: "Add mul to calc.py" });
+    const r = await deliverTrivial();
+    assert.equal(r.status, "ready");
+    for (const type of ["writer-pr", "lens-pr"]) {
+      const prompts = calls.filter((c) => c.type === type).map((c) => c.prompt);
+      assert.ok(prompts.length > 0, `${type} ran`);
+      for (const prompt of prompts) {
+        assert.ok(
+          prompt.split("\n").some((line) => line.includes("t.py") && /\bpass(?:es|ed)?\b/i.test(line)),
+          `${type} is told the change's test, t.py, and that it passed`,
+        );
+      }
+    }
+  });
+
+  test("deliver-trivial still gives writer-pr and lens-pr the passed test on a rerun that resumes after the build", async () => {
+    current.script = promptRun;
+    Object.assign(globalThis, { args: "Add mul to calc.py" });
+    await deliverTrivial();
+    // The done-round lines the first run had pusher append, read back as the scout returns them.
+    const rounds = calls
+      .filter((c) => c.type === "pusher")
+      .flatMap((c) => c.prompt.split("\n"))
+      .filter((line) => line.startsWith("- ") && line.includes("done round"))
+      .map((line) => `2026-11-09T10:00:00Z ${line.slice(2).replaceAll(/<[^<>]*>/g, "none")}`);
+    assert.ok(rounds.length > 0, "the first run wrote a done-round checkpoint");
+    calls.length = 0;
+    current.script = (type, label, prompt) =>
+      type === "scout-checkpoint"
+        ? {
+            ...SCOUT,
+            evidence: [
+              { source: "worktree", location: "x", excerpt: "/p/wt" },
+              { source: "pr", location: "x", excerpt: "PR-1" },
+              ...rounds.map((excerpt) => ({ source: "done-round", location: "x", excerpt })),
+            ],
+          }
+        : promptRun(type, label, prompt);
+    Object.assign(globalThis, { args: "SMR-50" });
+    const r = await deliverTrivial();
+    assert.equal(r.status, "ready");
+    assert.equal(
+      calls.filter((c) => c.label === "change: test").length,
+      0,
+      "the rerun resumes after the build, writing no test",
+    );
+    for (const type of ["writer-pr", "lens-pr"]) {
+      const prompts = calls.filter((c) => c.type === type).map((c) => c.prompt);
+      assert.ok(prompts.length > 0, `${type} ran`);
+      for (const prompt of prompts) {
+        assert.ok(
+          prompt.split("\n").some((line) => line.includes("t.py") && /\bpass(?:es|ed)?\b/i.test(line)),
+          `${type} is told, on the rerun, the change's test t.py and that it passed`,
+        );
+      }
+    }
+  });
+
+  test("deliver-trivial claims no passed test to writer-pr and lens-pr when the change's test never passes", async () => {
+    // qa never passes the first change, t.py, so it escalates; the review round's fix has its own test, fix.py.
+    current.script = (type, label, prompt) => {
+      if (type === "qa") {
+        const findings = [{ location: "calc.py", problem: "wrong", blocking: true }];
+        return { verdict: "fail", evaluated: "x", findings, limits: "", testAtFault: false };
+      }
+      const reply = promptRun(type, label, prompt);
+      return type === "coder" && label.startsWith("fix-") && label.endsWith(": test")
+        ? { ...reply, tests: ["fix.py"] }
+        : reply;
+    };
+    Object.assign(globalThis, { args: "Add mul to calc.py" });
+    await deliverTrivial();
+    for (const type of ["writer-pr", "lens-pr"]) {
+      const prompts = calls.filter((c) => c.type === type).map((c) => c.prompt);
+      assert.ok(prompts.length > 0, `${type} ran`);
+      for (const prompt of prompts) {
+        assert.ok(
+          prompt.split("\n").every((line) => !line.includes("t.py") || !/\bpass(?:es|ed)?\b/i.test(line)),
+          `${type} is not told that t.py passed`,
+        );
+      }
+    }
+  });
+
+  test("deliver-bugfix's Why trust it rests on the reproduction, with no test-passes line from the trivial path", async () => {
+    current.script = bugRun(REPRO_OK);
+    Object.assign(globalThis, { args: "SMR-13" });
+    const r = await deliverBugfix();
+    assert.equal(r.status, "ready");
+    for (const type of ["writer-pr", "lens-pr"]) {
+      const prompts = calls.filter((c) => c.type === type).map((c) => c.prompt);
+      assert.ok(prompts.length > 0, `${type} ran`);
+      for (const prompt of prompts) {
+        assert.ok(prompt.includes("run add(1, 1)"), `${type} is told the reproduction`);
+        assert.ok(!prompt.includes("The change's test"), `${type} is not given the trivial test-passes trust line`);
+      }
+    }
+  });
+
+  test("every push that opens or updates the PR runs writer-pr, then lens-pr, then pusher (deliver-bugfix)", async () => {
+    current.script = bugRun(REPRO_OK);
+    Object.assign(globalThis, { args: "SMR-13" });
+    const r = await deliverBugfix();
+    assert.equal(r.status, "ready");
+    assert.ok(calls.filter((c) => isPosting(c)).length >= 2);
+    assert.ok(describedBeforeEachPosting());
   });
 
   test("deliver-bugfix labels the card Unreproducible after three tries, saying why, and opens no worktree", async () => {

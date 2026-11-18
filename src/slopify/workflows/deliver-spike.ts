@@ -369,7 +369,8 @@ ${list([...planAssumptions, ...measured.assumptions])}`;
 
 // ---- The document's checks and revisions --------------------------------------
 
-async function checkDocument(d: Run, story: string, docRel: string): Promise<Problem[]> {
+// verdicts gets each lens's latest verdict, by name, for the description's Why trust it.
+async function checkDocument(d: Run, story: string, docRel: string, verdicts: Map<string, string>): Promise<Problem[]> {
   const doc = `${d.state.worktree}/${docRel}`;
   const lenses = [
     [
@@ -382,7 +383,7 @@ async function checkDocument(d: Run, story: string, docRel: string): Promise<Pro
       `The findings document is ${doc}. Its Options and trade-offs section lists options with their costs and conditions; only ranking or advising one is a recommendation.`,
     ],
   ] as const;
-  const verdicts = await parallel(
+  const results = await parallel(
     lenses.map(
       ([name, brief]) =>
         () =>
@@ -390,7 +391,8 @@ async function checkDocument(d: Run, story: string, docRel: string): Promise<Pro
     ),
   );
   return lenses.flatMap(([name], i) => {
-    const v: LensResult = must(verdicts[i], "validate", `A verdict from ${name}.`);
+    const v: LensResult = must(results[i], "validate", `A verdict from ${name}.`);
+    verdicts.set(name, v.verdict === "pass" ? "passed" : v.verdict === "fail" ? "failed" : "could not run");
     const problems = defectsOf(v).map((f) => ({ source: name, location: f.location, text: f.problem }));
     // A check that couldn't run found nothing, which is not the same as passing.
     if (v.verdict === "unverified" && problems.length === 0) {
@@ -437,6 +439,24 @@ function prototypeReport(claims: readonly Claim[], m: Measured): string {
     .join("\n");
 }
 
+// On a rerun the committed findings document is the record of what was measured and what stays unknown, so the
+// description's Why trust it reads them back from it.
+async function settledIn(d: Run, docRel: string): Promise<string[]> {
+  const read = must(
+    await scout(
+      "scout-docs",
+      `${d.WHERE}\nIn the worktree ${d.state.worktree}, read the findings document ${docRel}. Report each measurement it records as an evidence item with source measured and the claim with its value as the excerpt, and each unknown it names as an evidence item with source unknown and the unknown as the excerpt. Change nothing.`,
+      { label: "read the findings", phase: "Locate" },
+    ),
+    "locate",
+    "The measurements and unknowns in the findings document.",
+  );
+  const lines = { measured: "Measured, as the findings document records: ", unknown: "Unknown: " };
+  return read.evidence
+    .filter((e) => e.source === "measured" || e.source === "unknown")
+    .map((e) => `${e.source === "measured" ? lines.measured : lines.unknown}${e.excerpt}`);
+}
+
 export default async function run(): Promise<SpikeResult> {
   const input = inputOf(args, "question");
   const arg = textOf(input["question"]);
@@ -458,15 +478,26 @@ export default async function run(): Promise<SpikeResult> {
     const docRel = resume.findings[0] ?? `docs/spikes/${name}.md`;
     // A committed document is the checkpoint: a rerun goes straight to the loop, and the document holds the measurements.
     let prototyped = "";
+    // What the description's Why trust it rests on: each check's verdict, each confirmed measurement, each unknown.
+    const verdicts = new Map<string, string>();
+    let settled: string[] = [];
     if (resume.findings.length === 0) {
       const evidence = await ground(d, story);
       const planned = await plan(d, story, evidence);
       const measured = await prototype(d, slug, planned.claims);
       prototyped = prototypeReport(planned.claims, measured);
+      const text = (id: string): string => planned.claims.find((c) => c.id === id)?.claim ?? id;
+      settled = [
+        ...measured.measurements.map((x) => `Measured and confirmed by a separate qa: ${text(x.claim)} ${x.value}`),
+        ...measured.unknowns.map((u) => `Unknown: ${u}`),
+      ];
       await writeFindings(d, story, docRel, evidence, planNotes(planned.claims, measured, planned.assumptions));
+    } else {
+      settled = await settledIn(d, docRel);
     }
     const result = await runLoop({
       d,
+      kind: "spike",
       where: d.WHERE,
       story,
       cardId,
@@ -478,9 +509,10 @@ export default async function run(): Promise<SpikeResult> {
       built: true,
       document: {
         paths: [docRel],
-        check: () => checkDocument(d, story, docRel),
+        check: () => checkDocument(d, story, docRel, verdicts),
         revise: (problems) => reviseDocument(d, docRel, problems),
         severity: "severity-spike.md",
+        trust: () => [...[...verdicts].map(([name, verdict]) => `The check "${name}" ${verdict}.`), ...settled],
       },
     });
     return {
