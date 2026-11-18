@@ -1477,7 +1477,14 @@ async function fileCards(l: Loop): Promise<void> {
   // The problems the change found but didn't introduce share one card, which a person can split.
   if (l.preExisting.length > 0) {
     const old = `Problems the delivery of ${l.cardId} found but didn't introduce, each with its location and what is wrong:\n${list(l.preExisting.map((i) => entryText(i)))}`;
-    cards.push(`Marker line: <!-- deliver-preexisting ${l.cardId} -->\n${fenced("CARD", old)}`);
+    // Keyed by the set of problems, so a rerun that finds a new one files a new card instead of reusing the old one.
+    const set = slugged(
+      l.preExisting
+        .map((i) => i.text)
+        .toSorted((a, b) => a.localeCompare(b))
+        .join(" "),
+    );
+    cards.push(`Marker line: <!-- deliver-preexisting ${l.cardId} ${set} -->\n${fenced("CARD", old)}`);
   }
   const r = await inOrder(l, () =>
     callPusher(

@@ -1868,7 +1868,10 @@ ${fenced("CARD", entryText(i))}`
   if (l.preExisting.length > 0) {
     const old = `Problems the delivery of ${l.cardId} found but didn't introduce, each with its location and what is wrong:
 ${list(l.preExisting.map((i) => entryText(i)))}`;
-    cards.push(`Marker line: <!-- deliver-preexisting ${l.cardId} -->
+    const set = slugged(
+      l.preExisting.map((i) => i.text).toSorted((a, b) => a.localeCompare(b)).join(" ")
+    );
+    cards.push(`Marker line: <!-- deliver-preexisting ${l.cardId} ${set} -->
 ${fenced("CARD", old)}`);
   }
   const r = await inOrder(

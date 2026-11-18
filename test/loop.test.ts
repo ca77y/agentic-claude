@@ -822,7 +822,7 @@ describe("the PR's other sections", () => {
     assert.equal(r.status, "ready");
     assert.equal(count("coder", "fix-"), 0);
     assert.ok(filingPrompt().includes("old bug"));
-    assert.ok(filingPrompt().includes("deliver-preexisting"));
+    assert.match(filingPrompt(), /deliver-preexisting SMR-1 [a-z0-9-]+ -->/);
   });
 });
 
