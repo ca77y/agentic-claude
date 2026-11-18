@@ -41,7 +41,7 @@ async function resumeOf(items: readonly Item[]): Promise<Resume> {
         }
       : null;
   const d = createDeliver({ workflow: "deliver-story", projectRoot: "/p", storyArg: "SMR-1" });
-  return readResume(d, "card SMR-1", "");
+  return readResume(d, "SMR-1", "");
 }
 // A progress entry, as progressLine builds it, quoting text.
 const progress = (kind: string, text: string): string => `${T} progress 2 ${kind}: ${text}`;
@@ -148,6 +148,7 @@ describe("readResume", () => {
         );
       }
     }
+    assert.ok(calls.some((c) => c.label === "report the halt" && c.prompt.includes("Comment on card SMR-1")));
   });
 
   test("with no spec folder passed, a backticked Spec line yields the folder", async () => {

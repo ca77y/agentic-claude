@@ -747,6 +747,16 @@ function must(value, step, what) {
   if (value === null || value === void 0) throw new Halt(step, what, "the agent did not return");
   return value;
 }
+async function haltOnCard(d, cardId, halt) {
+  await callPusher(
+    d.pushBrief(
+      `Comment on card ${cardId} that the run stopped at ${halt.step}, because ${halt.message} It needs ${halt.needs}`
+    ),
+    "report the halt",
+    "Push"
+  );
+  throw halt;
+}
 function stopOf(d, error) {
   if (error instanceof Halt)
     return d.stop(error.step, [need(error.step, 1, "prerequisite", error.needs, error.message)]);
@@ -1697,7 +1707,12 @@ async function describe(l, target) {
   return outOfRevisions(l, target, wrote, posting);
 }
 async function outOfRevisions(l, target, wrote, posting) {
-  if (!wrote) throw new Halt("describe", "A PR description from writer-pr.", "writer-pr returned no description");
+  if (!wrote)
+    return haltOnCard(
+      l.d,
+      l.cardId,
+      new Halt("describe", "A PR description from writer-pr.", "writer-pr returned no description.")
+    );
   if (posting && !posting.checked) await lensPr(l, target, posting.body);
   return { body: posting?.body ?? null, passed: false };
 }
@@ -2107,12 +2122,26 @@ function accepted(cp, key) {
   }
   return lines;
 }
-async function readResume(d, identifies, specDir) {
+async function ledgerLines(d, cardId, cp) {
+  try {
+    return {
+      "done-findings": accepted(cp, "done-findings"),
+      reproduced: accepted(cp, "reproduced"),
+      "done-round": accepted(cp, "done-round"),
+      "review-fired": accepted(cp, "review-fired"),
+      "done-board-start": accepted(cp, "done-board-start")
+    };
+  } catch (error) {
+    if (error instanceof Halt) return haltOnCard(d, cardId, error);
+    throw error;
+  }
+}
+async function readResume(d, cardId, specDir) {
   const cp = must(
     await scout(
       "scout-checkpoint",
       `${d.WHERE}
-Report where this run stands. It is the delivery of ${identifies}.
+Report where this run stands. It is the delivery of card ${cardId}.
 Report these keys, each as an evidence item with source set to the key; leave out a key that does not exist.
 For each ledger key below, return one evidence item for each ledger line that contains the key's form right after pusher's timestamp, with source set to the key and the whole line as its excerpt, in ledger order; return none when no line matches:
 ${d.branchOnly ? "- worktree: the main checkout, only when it has this run's branch checked out; there is no worktree\n- branch, ledger" : "- worktree, branch, ledger"}
@@ -2136,9 +2165,10 @@ ${d.branchOnly ? "- worktree: the main checkout, only when it has this run's bra
   state.branch = shaped("branch", val(cp, "branch"));
   state.ledger = shaped("path", val(cp, "ledger"));
   state.pr = shaped("ref", val(cp, "pr"));
-  const lastFindings = accepted(cp, "done-findings").at(-1) ?? "";
-  const lastRepro = accepted(cp, "reproduced").at(-1);
-  const rounds = accepted(cp, "done-round");
+  const lines = await ledgerLines(d, cardId, cp);
+  const lastFindings = lines["done-findings"].at(-1) ?? "";
+  const lastRepro = lines.reproduced.at(-1);
+  const rounds = lines["done-round"];
   const passedTests = [
     ...new Set(
       rounds.flatMap(
@@ -2151,13 +2181,10 @@ ${d.branchOnly ? "- worktree: the main checkout, only when it has this run's bra
     build: parseBuild(fact(cp, "build-json")),
     validate: parseValidate(fact(cp, "validate-json")),
     specDir: shaped("rel", spec) || specDir,
-    reviewFired: Math.max(
-      0,
-      ...accepted(cp, "review-fired").map((l) => Number(/review (\d+) fired/.exec(l)?.[1] ?? 0))
-    ),
+    reviewFired: Math.max(0, ...lines["review-fired"].map((l) => Number(/review (\d+) fired/.exec(l)?.[1] ?? 0))),
     built: rounds.length > 0,
     ...passedTests.length > 0 && { passedTests },
-    boardStartDone: accepted(cp, "done-board-start").length > 0,
+    boardStartDone: lines["done-board-start"].length > 0,
     findings: lastFindings.replace(/^.*? done findings /, "").split(/\s+/).map((p) => shaped("rel", p)).filter(Boolean),
     reproduced: lastRepro ? parseReproduction(lastRepro) : null
   };
@@ -2216,7 +2243,7 @@ async function findCard(d, arg, cardType) {
   const name = (specRel.split("/").pop() ?? slug).replace(/\.md$/, "");
   return { story, cardId, boardBranch, slug, name, cardType };
 }
-var resumeOf = (d, f) => readResume(d, `card ${f.cardId}`, "");
+var resumeOf = (d, f) => readResume(d, f.cardId, "");
 function openWork(d, f, resume, lines = []) {
   return workspace(d, {
     cardId: f.cardId,

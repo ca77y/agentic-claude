@@ -1,7 +1,7 @@
 // Where a delivery stands, from its durable checkpoints: the worktree, the PR, the ledger, and the committed spec.
 import { fact, scout, shaped, type ScoutResult } from "./family.ts";
 import { val } from "./deliver.ts";
-import { Halt, must, type Run } from "./loop.ts";
+import { Halt, haltOnCard, must, type Run } from "./loop.ts";
 import { checkpointLine, parseReproduction, type CheckpointKey, type Reproduction } from "./rules.ts";
 import { parseBuild, parseValidate, type Build, type Validate } from "./spec.ts";
 
@@ -47,13 +47,29 @@ function accepted(cp: ScoutResult, key: CheckpointKey): string[] {
   return lines;
 }
 
-// Read the checkpoints into the run's state. identifies names the run; specDir is empty when only the PR knows it.
-export async function readResume(d: Run, identifies: string, specDir: string): Promise<Resume> {
+// The ledger lines for every key, or the halt an unreadable one raises, reported on the card.
+async function ledgerLines(d: Run, cardId: string, cp: ScoutResult): Promise<Record<CheckpointKey, string[]>> {
+  try {
+    return {
+      "done-findings": accepted(cp, "done-findings"),
+      reproduced: accepted(cp, "reproduced"),
+      "done-round": accepted(cp, "done-round"),
+      "review-fired": accepted(cp, "review-fired"),
+      "done-board-start": accepted(cp, "done-board-start"),
+    };
+  } catch (error) {
+    if (error instanceof Halt) return haltOnCard(d, cardId, error);
+    throw error;
+  }
+}
+
+// Read the checkpoints into the run's state. specDir is empty when only the PR knows it.
+export async function readResume(d: Run, cardId: string, specDir: string): Promise<Resume> {
   const cp = must(
     await scout(
       "scout-checkpoint",
       `${d.WHERE}
-Report where this run stands. It is the delivery of ${identifies}.
+Report where this run stands. It is the delivery of card ${cardId}.
 Report these keys, each as an evidence item with source set to the key; leave out a key that does not exist.
 For each ledger key below, return one evidence item for each ledger line that contains the key's form right after pusher's timestamp, with source set to the key and the whole line as its excerpt, in ledger order; return none when no line matches:
 ${d.branchOnly ? "- worktree: the main checkout, only when it has this run's branch checked out; there is no worktree\n- branch, ledger" : "- worktree, branch, ledger"}
@@ -78,9 +94,10 @@ ${d.branchOnly ? "- worktree: the main checkout, only when it has this run's bra
   state.branch = shaped("branch", val(cp, "branch"));
   state.ledger = shaped("path", val(cp, "ledger"));
   state.pr = shaped("ref", val(cp, "pr"));
-  const lastFindings = accepted(cp, "done-findings").at(-1) ?? "";
-  const lastRepro = accepted(cp, "reproduced").at(-1);
-  const rounds = accepted(cp, "done-round");
+  const lines = await ledgerLines(d, cardId, cp);
+  const lastFindings = lines["done-findings"].at(-1) ?? "";
+  const lastRepro = lines.reproduced.at(-1);
+  const rounds = lines["done-round"];
   const passedTests = [
     ...new Set(
       rounds.flatMap((l) =>
@@ -98,13 +115,10 @@ ${d.branchOnly ? "- worktree: the main checkout, only when it has this run's bra
     build: parseBuild(fact(cp, "build-json")),
     validate: parseValidate(fact(cp, "validate-json")),
     specDir: shaped("rel", spec) || specDir,
-    reviewFired: Math.max(
-      0,
-      ...accepted(cp, "review-fired").map((l) => Number(/review (\d+) fired/.exec(l)?.[1] ?? 0)),
-    ),
+    reviewFired: Math.max(0, ...lines["review-fired"].map((l) => Number(/review (\d+) fired/.exec(l)?.[1] ?? 0))),
     built: rounds.length > 0,
     ...(passedTests.length > 0 && { passedTests }),
-    boardStartDone: accepted(cp, "done-board-start").length > 0,
+    boardStartDone: lines["done-board-start"].length > 0,
     findings: lastFindings
       .replace(/^.*? done findings /, "")
       .split(/\s+/)

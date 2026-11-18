@@ -43,7 +43,7 @@ How `research` answers a question from new sources and adds the answer to the pr
 
 ## The PR description
 
-`writer-pr` writes it and `lens-pr` checks it as in [`deliver/STORY.md`](deliver/STORY.md#the-pr-description): four parts, **What changes**, **Needs you**, **Why trust it**, and **Not done**, rewritten whole in every round that opens or updates the PR. Here **What changes** opens with the question and a short answer linking the pages the run added. **Why trust it** rests on the citations checked and the source count. There is no `Spec:` line.
+`writer-pr` writes it and `lens-pr` checks it as in [`deliver/STORY.md`](deliver/STORY.md#the-pr-description): four parts, **What changes**, **Needs you**, **Why trust it**, and **Not done**, rewritten whole in every round that opens or updates the PR. Here **What changes** opens with the question and a short answer linking the main page the run added, and any other pages it touched. **Why trust it** rests on the citations checked and the source count. There is no `Spec:` line.
 
 ## Halt conditions
 

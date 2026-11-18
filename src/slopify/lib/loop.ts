@@ -59,6 +59,19 @@ export function must<T>(value: T | null | undefined, step: string, what: string)
   if (value === null || value === undefined) throw new Halt(step, what, "the agent did not return");
   return value;
 }
+// A halt the person must see on the card: pusher comments the cause there, then the halt ends the run. A comment that
+// fails doesn't change the halt.
+export async function haltOnCard(d: Run, cardId: string, halt: Halt): Promise<never> {
+  await callPusher(
+    d.pushBrief(
+      `Comment on card ${cardId} that the run stopped at ${halt.step}, because ${halt.message} It needs ${halt.needs}`,
+    ),
+    "report the halt",
+    "Push",
+  );
+  throw halt;
+}
+
 // A halt as the run's blocked result; anything else is a bug in the script and keeps propagating.
 export function stopOf(d: Run, error: unknown): Stopped {
   if (error instanceof Halt)
@@ -1256,7 +1269,12 @@ async function outOfRevisions(
   wrote: boolean,
   posting: { body: string; checked: boolean } | null,
 ): Promise<Described> {
-  if (!wrote) throw new Halt("describe", "A PR description from writer-pr.", "writer-pr returned no description");
+  if (!wrote)
+    return haltOnCard(
+      l.d,
+      l.cardId,
+      new Halt("describe", "A PR description from writer-pr.", "writer-pr returned no description."),
+    );
   if (posting && !posting.checked) await lensPr(l, target, posting.body);
   return { body: posting?.body ?? null, passed: false };
 }

@@ -1383,5 +1383,6 @@ describe("the PR description", () => {
       return error instanceof Halt;
     });
     assert.equal(postings().length, 0, "nothing posts a description");
+    assert.ok(calls.find((c) => c.label === "report the halt")?.prompt.includes("Comment on card"));
   });
 });
