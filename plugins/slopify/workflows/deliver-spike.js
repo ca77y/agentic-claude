@@ -2677,7 +2677,7 @@ async function settledIn(d, docRel) {
     await scout(
       "scout-docs",
       `${d.WHERE}
-Read the findings document ${docRel} in the worktree. Report each measurement it records as an evidence item with source measured and the claim with its value as the excerpt, and each unknown it names as an evidence item with source unknown and the unknown as the excerpt. Change nothing.`,
+In the worktree ${d.state.worktree}, read the findings document ${docRel}. Report each measurement it records as an evidence item with source measured and the claim with its value as the excerpt, and each unknown it names as an evidence item with source unknown and the unknown as the excerpt. Change nothing.`,
       { label: "read the findings", phase: "Locate" }
     ),
     "locate",

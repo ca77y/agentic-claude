@@ -445,7 +445,7 @@ async function settledIn(d: Run, docRel: string): Promise<string[]> {
   const read = must(
     await scout(
       "scout-docs",
-      `${d.WHERE}\nRead the findings document ${docRel} in the worktree. Report each measurement it records as an evidence item with source measured and the claim with its value as the excerpt, and each unknown it names as an evidence item with source unknown and the unknown as the excerpt. Change nothing.`,
+      `${d.WHERE}\nIn the worktree ${d.state.worktree}, read the findings document ${docRel}. Report each measurement it records as an evidence item with source measured and the claim with its value as the excerpt, and each unknown it names as an evidence item with source unknown and the unknown as the excerpt. Change nothing.`,
       { label: "read the findings", phase: "Locate" },
     ),
     "locate",

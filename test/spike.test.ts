@@ -127,6 +127,7 @@ describe("deliver-spike", () => {
     assert.ok(brief.includes("Measured, as the findings document records: a million sums take 0.4 s"));
     assert.ok(brief.includes("Unknown: cold start time"));
     assert.equal(calls.filter((c) => c.type === "coder").length, 0, "a rerun builds no prototype");
+    assert.ok(briefOf("read the findings").includes("In the worktree /p/wt,"), "the scout reads the story's worktree");
   });
   test("files a card for a prompt without writing a ledger, which has no checkout yet", async () => {
     await run(happy());
