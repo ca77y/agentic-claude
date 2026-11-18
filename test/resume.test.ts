@@ -138,6 +138,19 @@ describe("readResume", () => {
     assert.deepEqual(await resumeOf(fenced), realOnly, "fenced");
   });
 
+  test("a scout's absence answer for a key is no checkpoint, and doesn't halt", async () => {
+    for (const answer of ["none", "None (no findings document exists)"]) {
+      assert.deepEqual(
+        await resumeOf([
+          ["done-round", answer],
+          ["done-findings", answer],
+        ]),
+        await resumeOf([]),
+      );
+    }
+    assert.equal(calls.filter((c) => c.label === "report the halt").length, 0);
+  });
+
   test("an item that can't be read as a ledger line halts naming the key", async () => {
     for (const [key, line] of REAL) {
       for (const bad of [`The last matching line is: ${line}`, line.slice(T.length + 1)]) {

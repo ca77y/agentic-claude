@@ -2173,6 +2173,7 @@ function accepted(cp, key) {
   for (const e of cp.evidence) {
     if (e.source !== key) continue;
     const item = e.excerpt.trim();
+    if (absent(item)) continue;
     if (!LEDGER_LINE.test(item)) {
       throw new Halt(
         "locate",
