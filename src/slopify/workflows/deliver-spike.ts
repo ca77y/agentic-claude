@@ -439,6 +439,24 @@ function prototypeReport(claims: readonly Claim[], m: Measured): string {
     .join("\n");
 }
 
+// On a rerun the committed findings document is the record of what was measured and what stays unknown, so the
+// description's Why trust it reads them back from it.
+async function settledIn(d: Run, docRel: string): Promise<string[]> {
+  const read = must(
+    await scout(
+      "scout-docs",
+      `${d.WHERE}\nRead the findings document ${docRel} in the worktree. Report each measurement it records as an evidence item with source measured and the claim with its value as the excerpt, and each unknown it names as an evidence item with source unknown and the unknown as the excerpt. Change nothing.`,
+      { label: "read the findings", phase: "Locate" },
+    ),
+    "locate",
+    "The measurements and unknowns in the findings document.",
+  );
+  const lines = { measured: "Measured, as the findings document records: ", unknown: "Unknown: " };
+  return read.evidence
+    .filter((e) => e.source === "measured" || e.source === "unknown")
+    .map((e) => `${e.source === "measured" ? lines.measured : lines.unknown}${e.excerpt}`);
+}
+
 export default async function run(): Promise<SpikeResult> {
   const input = inputOf(args, "question");
   const arg = textOf(input["question"]);
@@ -474,6 +492,8 @@ export default async function run(): Promise<SpikeResult> {
         ...measured.unknowns.map((u) => `Unknown: ${u}`),
       ];
       await writeFindings(d, story, docRel, evidence, planNotes(planned.claims, measured, planned.assumptions));
+    } else {
+      settled = await settledIn(d, docRel);
     }
     const result = await runLoop({
       d,

@@ -99,6 +99,35 @@ beforeEach(() => {
 });
 
 describe("deliver-spike", () => {
+  test("a rerun over a committed findings document reads its measurements and unknowns back for the description", async () => {
+    const r = await run(
+      happy({
+        "scout-checkpoint": () => ({
+          answer: "a",
+          gaps: [],
+          evidence: [
+            { source: "done-findings", location: "x", excerpt: "2026-11-09T10:00:00Z done findings docs/spikes/x.md" },
+          ],
+        }),
+        "scout-docs": (_t, label) =>
+          label === "read the findings"
+            ? {
+                answer: "a",
+                gaps: [],
+                evidence: [
+                  { source: "measured", location: "x", excerpt: "a million sums take 0.4 s" },
+                  { source: "unknown", location: "x", excerpt: "cold start time" },
+                ],
+              }
+            : SCOUT,
+      }),
+    );
+    assert.notEqual(r.status, "blocked");
+    const brief = described("writer-pr").at(-1) ?? "";
+    assert.ok(brief.includes("Measured, as the findings document records: a million sums take 0.4 s"));
+    assert.ok(brief.includes("Unknown: cold start time"));
+    assert.equal(calls.filter((c) => c.type === "coder").length, 0, "a rerun builds no prototype");
+  });
   test("files a card for a prompt without writing a ledger, which has no checkout yet", async () => {
     await run(happy());
     const filing = briefOf("file the card");
