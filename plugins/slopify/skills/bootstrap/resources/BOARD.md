@@ -25,6 +25,7 @@ Configuration does not authorize execution; the user's request does. An operatio
 - Bug format: {{BUG_TEMPLATE_MAPPING}}
 - Spike format: {{SPIKE_TEMPLATE_MAPPING}}
 - Deliverable: the label `Deliverable` marks a card as written by the shaping process, and is added when that process files or updates it. Only a card with this label can go through a full story delivery.
+- Shaped: the label `Shaped` marks a card the shaping process filed, and is added every time it files or updates one. Shaping a card with this label again only applies the answers its comments give, without new grounding or advice.
 - Unreproducible: the label `Unreproducible` marks a Bug card whose bug an automated fix could not reproduce.
 
 ## Statuses

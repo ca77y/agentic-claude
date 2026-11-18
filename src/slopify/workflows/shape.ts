@@ -4,6 +4,7 @@ import {
   STRINGS,
   advise,
   defectsOf,
+  fact,
   lens,
   scout,
   slugged,
@@ -13,7 +14,7 @@ import {
 import { callPusher, createDeliver, list, opRef, show, slugOf, type Stopped } from "../lib/deliver.ts";
 import { inputOf, textOf, type NotStarted } from "../lib/input.ts";
 import { must, pushed, stopOf, type Run } from "../lib/loop.ts";
-import { MAX_FIX_ROUNDS } from "../lib/rules.ts";
+import { MAX_FIX_ROUNDS, SHAPED_LABEL, hasLabel } from "../lib/rules.ts";
 import { confirmedProblems } from "../lib/judge.ts";
 import { libraryReaderSchema } from "../lib/schemas.ts";
 
@@ -22,11 +23,11 @@ export const meta = {
   description:
     "Turn an idea into a card of the kind the user asks for, story, bug, or spike, written from the plugin's card template: scouts and advisors ground it, writer-card drafts it, cheap checks and a judge refine it, and pusher files it, labelled Deliverable when a story has no open question",
   whenToUse:
-    "Run only when the user invokes /slopify:shape or asks for the slopify shape workflow. Args: {idea?, card?, kind?, projectRoot?}, or the idea as a plain string; card names an existing card to start from, such as one whose open questions are now answered; kind is story, bug, or spike, and story when not given; projectRoot defaults to the session project directory.",
+    "Run only when the user invokes /slopify:shape or asks for the slopify shape workflow. Args: {idea?, card?, kind?, projectRoot?}, or the idea as a plain string; card names an existing card to start from, such as one whose open questions are now answered; a card shape already filed, labelled Shaped, skips Ground and Advise; kind is story, bug, or spike, and story when not given; projectRoot defaults to the session project directory.",
   phases: [
     {
       title: "Read",
-      detail: "scout-card reads the named card and its comments; scout-related-cards searches the board",
+      detail: "scout-card reads the named card, its labels, and its comments; scout-related-cards searches the board",
     },
     { title: "Ground", detail: "library-reader and scouts, by kind" },
     { title: "Advise", detail: "advisors, by kind" },
@@ -35,7 +36,7 @@ export const meta = {
       title: "Check",
       detail: "lenses by kind, then one judge rules on the round's findings; writer-card revises, up to three times",
     },
-    { title: "File", detail: "pusher creates or updates the card, and its Deliverable label" },
+    { title: "File", detail: "pusher creates or updates the card, labels it Shaped, and sets its Deliverable label" },
   ],
 } as const satisfies WorkflowMeta;
 
@@ -89,6 +90,8 @@ interface Card {
   cardId: string;
   /** The card's text and comments, when shape starts from one. */
   current: string;
+  /** shape filed the card before, so its grounding and advice are already in it. */
+  shaped: boolean;
   draft: string;
 }
 
@@ -125,7 +128,7 @@ async function read(
       cardArg
         ? scout(
             "scout-card",
-            `${d.WHERE}\nRead card ${cardArg} through the read bindings in docs/BOARD.md. Report its identifier as the evidence item card, and its title, body, and every comment, verbatim, as the evidence item text. Change nothing.`,
+            `${d.WHERE}\nRead card ${cardArg} through the read bindings in docs/BOARD.md. Report its identifier as the evidence item card, its labels, comma-separated, as the evidence item labels, and its title, body, and every comment, verbatim, as the evidence item text. Change nothing.`,
             { label: "read the card", phase: "Read" },
           )
         : Promise.resolve(null),
@@ -192,6 +195,32 @@ async function adviseAll(d: Run, c: Card, evidence: string): Promise<string> {
 }
 
 // ---- Draft and check --------------------------------------------------------
+
+async function draft(d: Run, c: Card, related: ScoutResult): Promise<string[]> {
+  const evidence = await ground(d, c, related);
+  const views = await adviseAll(d, c, evidence);
+  phase("Draft");
+  return write(
+    d,
+    c,
+    `Write the card from its kind's template, starting from the card's current text when there is one.\n\nEvidence:\n${evidence}\n\nAdvisors:\n${views}`,
+    "draft",
+    "Draft",
+  );
+}
+
+// A card shape filed already carries its grounding and advice, so a rerun only applies what changed on it.
+async function reshape(d: Run, c: Card): Promise<string[]> {
+  log(`${c.cardId} is labelled ${SHAPED_LABEL}, so Ground and Advise are skipped.`);
+  phase("Draft");
+  return write(
+    d,
+    c,
+    "Revise the card from its current text: apply each answer its comments give to its open questions, and remove each question answered. Keep the rest as it is.",
+    "apply the answers",
+    "Draft",
+  );
+}
 
 async function write(d: Run, c: Card, task: string, label: string, phaseTitle: string): Promise<string[]> {
   const w = must(
@@ -287,16 +316,17 @@ async function file(d: Run, c: Card, slug: string, deliverable: boolean): Promis
   const target = c.cardId
     ? `Update card ${c.cardId} with it.`
     : `Search the board for a card whose body holds the line ${marker}, and update that card with it; create a card only when there is none.`;
-  const label =
+  const deliverableLabel =
     c.kind === "story"
       ? deliverable
-        ? `Make sure the card has the label ${DELIVERABLE}.`
-        : `Make sure the card doesn't have the label ${DELIVERABLE}.`
+        ? ` Make sure the card has the label ${DELIVERABLE}.`
+        : ` Make sure the card doesn't have the label ${DELIVERABLE}.`
       : "";
+  const label = `Make sure the card has the label ${SHAPED_LABEL}.${deliverableLabel}`;
   const r = pushed(
     await callPusher(
       `${d.WHERE}
-The user's invocation of shape authorizes exactly this: write the card draft below to one card on the board, as docs/BOARD.md declares, and set its ${DELIVERABLE} label as asked. Nothing else: no commit, branch, push, PR, or other card. Work exactly as docs/BOARD.md binds it.
+The user's invocation of shape authorizes exactly this: write the card draft below to one card on the board, as docs/BOARD.md declares, and set its ${SHAPED_LABEL} and ${DELIVERABLE} labels as asked. Nothing else: no commit, branch, push, PR, or other card. Work exactly as docs/BOARD.md binds it.
 
 The draft is ${c.draft}. Use its text exactly as written, with one trailing line, ${marker}, which lets a rerun find this card. ${target} ${label} Keep every label the card already has otherwise. Report the card's identifier as the operation card.`,
       c.cardId ? "update the card" : "file the card",
@@ -324,18 +354,10 @@ export default async function run(): Promise<NotStarted | Stopped | Shaped> {
       idea,
       cardId,
       current: card?.evidence.find((e) => e.source === "text")?.excerpt ?? "",
+      shaped: hasLabel(fact(card, "labels"), SHAPED_LABEL),
       draft: `.tmp/shape/${slug}.md`,
     };
-    const evidence = await ground(d, c, related);
-    const views = await adviseAll(d, c, evidence);
-    phase("Draft");
-    const drafted = await write(
-      d,
-      c,
-      `Write the card from its kind's template, starting from the card's current text when there is one.\n\nEvidence:\n${evidence}\n\nAdvisors:\n${views}`,
-      "draft",
-      "Draft",
-    );
+    const drafted = c.shaped ? await reshape(d, c) : await draft(d, c, related);
     const openQuestions = await refine(d, c, drafted);
     const deliverable = c.kind === "story" && openQuestions.length === 0;
     const filed = await file(d, c, slug, deliverable);

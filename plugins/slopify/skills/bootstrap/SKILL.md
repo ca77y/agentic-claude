@@ -4,11 +4,12 @@ description: Create a project's board, forge, and testing declarations (`docs/BO
 disable-model-invocation: true
 ---
 
-Set the project up so the rest of the plugin can take it as ground truth. Create what is missing, and fix what exists and is wrong, missing, or unclear, keeping project customizations. This is local setup: it creates no external projects, cards, branches, commits, PRs, or messages, researches nothing, creates no source content, and never touches raw notes or wiki pages.
+Set the project up so the rest of the plugin can take it as ground truth. Create what is missing, and fix what exists and is wrong, missing, or unclear, keeping project customizations. This is local setup: apart from the tracker labels the plugin needs, it creates no external projects, cards, labels, branches, commits, PRs, or messages, researches nothing, creates no source content, and never touches raw notes or wiki pages.
 
 Setup is complete when all of these hold:
 
 - `docs/BOARD.md` meets `${CLAUDE_SKILL_DIR}/references/board.md`, with every binding true of the tracker. Every project has a board, because every workflow files its work as a card.
+- The `Deliverable`, `Shaped`, and `Unreproducible` labels exist on the tracker, as `${CLAUDE_SKILL_DIR}/references/board.md` says.
 - `docs/FORGE.md` meets `${CLAUDE_SKILL_DIR}/references/forge.md`. A project may choose no forge; the file records that instead of inventing one.
 - `TESTING.md` meets `${CLAUDE_SKILL_DIR}/references/testing.md`.
 - The root instructions and `.claude/rules/` meet `${CLAUDE_SKILL_DIR}/references/instructions.md`.
@@ -20,4 +21,4 @@ Setup is complete when all of these hold:
 
 Configuring an operation never authorizes running it. If a choice would broaden a permission, report the conflict instead of writing it.
 
-Report the created and updated paths, the existing content kept, and the remaining gaps, including a missing `Deliverable` or `Unreproducible` label and anything the testing harness doesn't run.
+Report the created and updated paths, the existing content kept, and the labels created, and the remaining gaps, including a label it couldn't create and anything the testing harness doesn't run.

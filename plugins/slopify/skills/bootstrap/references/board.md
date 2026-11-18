@@ -6,4 +6,4 @@ The Cards section maps every part of each template in `${CLAUDE_PLUGIN_ROOT}/ref
 
 The Delivery section says which card operations happen at each point of a delivery, whatever status the card is in. Write conditions per operation and name no agent, skill, slash command, or model, so the declaration works for any orchestrator.
 
-The `Deliverable` and `Unreproducible` labels must exist on the tracker. If either doesn't, report that the user needs to create it.
+The `Deliverable`, `Shaped`, and `Unreproducible` labels must exist on the tracker, where the workflows read and set them. Create each one that doesn't, in the team or project the board declares, and add nothing else. When the tracker can't create a label, report that the user needs to create it.

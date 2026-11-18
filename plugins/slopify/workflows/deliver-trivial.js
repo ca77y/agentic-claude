@@ -527,7 +527,7 @@ function createDeliver(config) {
   const { workflow: WORKFLOW, projectRoot, storyArg } = config;
   const branchOnly = config.branchOnly === true;
   const WHERE = projectRoot ? `The project is at ${projectRoot}.` : "The project is the session project directory.";
-  const AUTH = `Authorization, from the user's invocation of /slopify:${WORKFLOW}: the story branch and worktree, attributable commits, the pushes the brief asks for, opening or updating this task's PR, marking it ready, or converting it to a draft, the declared review trigger, the one issue comment and label the brief asks for when the run ends or halts, and filing the issues the brief lists. It does not authorize merging, releases, any other message, rewriting docs/BOARD.md or docs/FORGE.md, or changing a card's content. Work exactly as docs/BOARD.md and docs/FORGE.md declare; an operation that is not bound is unmet, never improvised. Stage explicit paths only.`;
+  const AUTH = `Authorization, from the user's invocation of /slopify:${WORKFLOW}: the story branch and worktree, attributable commits, the pushes the brief asks for, opening or updating this task's PR, marking it ready, or converting it to a draft, the declared review trigger, the card status moves and PR attachment docs/BOARD.md declares for a delivery, the one issue comment and label the brief asks for when the run ends or halts, and filing the issues the brief lists. It does not authorize merging, releases, any other message, rewriting docs/BOARD.md or docs/FORGE.md, or changing a card's content. Work exactly as docs/BOARD.md and docs/FORGE.md declare; an operation that is not bound is unmet, never improvised. Stage explicit paths only.`;
   const completed = [];
   const state = {
     worktree: "",
@@ -1113,12 +1113,15 @@ ${c.item.reason}` : "",
     NO_WRITES
   ].filter(Boolean).join("\n\n");
 }
+var testOnly = (c) => c.item?.kind === "test";
+var FAIL_FIRST = "It must fail on the current code on its merit: an assertion about the behavior fails, never a compile, type, or import error. When the test names code that doesn't exist yet, add the smallest stub that lets it compile and run, such as a declaration with the right signature that doesn't do the work, and list it in stubs; change no other production code. End by running the Checks commands TESTING.md declares: each must pass except for the new test's failing assertions.";
+var GUARD = "The problem is in the tests, so the test may already pass on the current code; that is expected, not a problem. It must fail on its merit if the behavior it states broke: check this by breaking the behavior in a temporary copy. Change no production code; when the current code doesn't do what the test states, the test fails and the fix makes it pass. End by running the Checks commands TESTING.md declares, and return their output.";
 async function writeTest(l, c, reason) {
   const t = must(
     await callCoder(
       `${changeBrief(l, c)}
 
-Write a new test or change an existing one, so that it states the required behavior. It must fail on the current code on its merit: an assertion about the behavior fails, never a compile, type, or import error. When the test names code that doesn't exist yet, add the smallest stub that lets it compile and run, such as a declaration with the right signature that doesn't do the work, and list it in stubs; change no other production code. End by running the Checks commands TESTING.md declares: each must pass except for the new test's failing assertions. Return that output. When the behavior can't be expressed as a test, return noTest with the reason instead.${reason ? `
+Write a new test or change an existing one, so that it states the required behavior. ${testOnly(c) ? GUARD : FAIL_FIRST} Return that output. When the behavior can't be expressed as a test, return noTest with the reason instead.${reason ? `
 
 An earlier attempt showed the test has to change: ${reason}` : ""}`,
       `${c.id}: test`,
@@ -1132,13 +1135,15 @@ An earlier attempt showed the test has to change: ${reason}` : ""}`,
   l.manualActions.push(...t.manualActions);
   if (t.specProblem) return { paths: [], commit: "", noTest: "", specProblem: t.specProblem };
   if (t.noTest || t.tests.length === 0) return { paths: [], commit: "", noTest: t.noTest, specProblem: "" };
-  const sha = await commit(l, [...t.tests, ...t.stubs], `add a failing test for ${c.id}`, coderRepair(l, c));
+  const message = `add a ${testOnly(c) ? "" : "failing "}test for ${c.id}`;
+  const sha = await commit(l, [...t.tests, ...t.stubs], message, coderRepair(l, c));
   return { paths: t.tests, commit: sha, noTest: "", specProblem: "" };
 }
 function qaBrief(l, c, test) {
+  const fails = testOnly(c) ? "Check in a temporary copy that the test fails on one of its assertions when the behavior it states is broken, and that it passes at HEAD." : "Check in a temporary copy that the test fails at that commit on one of its assertions, not on a compile, type, or import error, and that it passes at HEAD.";
   const history = test.commit ? `The test commit is ${test.commit}, and its protected paths are:
 ${list(test.paths)}
-Check in a temporary copy that the test fails at that commit on one of its assertions, not on a compile, type, or import error, and that it passes at HEAD. Check that nothing after that commit touches a protected path, and that nothing skips, weakens, or excludes the test, for example by loosening a tolerance, regenerating a snapshot, or changing the test config.` : `This change has no test, because: ${test.noTest}. Judge that reason.`;
+${fails} Check that nothing after that commit touches a protected path, and that nothing skips, weakens, or excludes the test, for example by loosening a tolerance, regenerating a snapshot, or changing the test config.` : `This change has no test, because: ${test.noTest}. Judge that reason.`;
   return `${changeBrief(l, c)}
 
 Validate one change and its history.
@@ -1186,6 +1191,17 @@ async function failingChecks(l) {
   return lines.join("\n");
 }
 var DONE = { reason: "", rewriteTest: false };
+var TRIM_SCHEMA = {
+  type: "object",
+  required: ["keep", "reason"],
+  properties: {
+    keep: {
+      type: "boolean",
+      description: "true when the trimmed test stands; false when the test needs what the coder asks for"
+    },
+    reason: { type: "string", description: "What the evidence shows" }
+  }
+};
 function specStopped(l, c, problem) {
   const route = l.reviseSpec ? "revise-spec" : "escalate";
   listRouted(
@@ -1202,7 +1218,7 @@ function specStopped(l, c, problem) {
   );
   return { reason: "", rewriteTest: false };
 }
-async function tryFix(l, c, cycle, lastFailure, attempt) {
+async function tryFix(l, c, cycle, lastFailure, attempt, state) {
   const fix = must(
     await callCoder(
       fixPrompt(l, c, cycle, lastFailure),
@@ -1218,50 +1234,94 @@ async function tryFix(l, c, cycle, lastFailure, attempt) {
   l.changedThisRound.push(...fix.changed);
   const sha = fix.changed.length === 0 ? "" : await commit(l, fix.changed, `implement ${c.id}`, coderRepair(l, c));
   if (fix.specProblem) return specStopped(l, c, fix.specProblem);
-  if (fix.testProblem) return { reason: fix.testProblem, rewriteTest: true };
+  if (fix.testProblem)
+    return state.trim ? ruleOnTrim(l, c, state, fix.testProblem) : { reason: fix.testProblem, rewriteTest: true };
   if (sha === null) return DONE;
   const failing = await failingChecks(l);
   if (failing) return { reason: failing, rewriteTest: false };
-  if (l.small && l.round > 0) {
+  if (l.small && l.round > 0 && !testOnly(c)) {
     if (l.kind === "trivial") l.passedTests = unique([...l.passedTests, ...cycle.paths]);
-    return { reason: "", rewriteTest: false };
+    return DONE;
   }
   const verdict = await qaOf(l, c, cycle);
   if (verdict.verdict !== "pass") {
-    const reason2 = verdict.findings.map((f) => `${f.location}: ${f.problem}`).join("\n") || verdict.limits;
-    return { reason: reason2, rewriteTest: verdict.testAtFault };
+    const reason = verdict.findings.map((f) => `${f.location}: ${f.problem}`).join("\n") || verdict.limits;
+    return { reason, rewriteTest: verdict.testAtFault };
   }
-  const reason = await unneeded(l, c, cycle, sha);
-  if (!reason && l.kind === "trivial") l.passedTests = unique([...l.passedTests, ...cycle.paths]);
-  return { reason, rewriteTest: false };
+  const result = await unneeded(l, c, cycle, sha, state);
+  if (!result.reason && l.kind === "trivial") l.passedTests = unique([...l.passedTests, ...cycle.paths]);
+  return result;
 }
-async function unneeded(l, c, cycle, fixCommit) {
+async function unneeded(l, c, cycle, fixCommit, state) {
   const base = cycle.commit || fixCommit;
   const diff = base ? `the diff from the parent of ${base} to HEAD` : "the change's uncommitted diff";
+  const settled2 = state.rulings.length > 0 ? `
+
+A judge already ruled on these, so report nothing against them:
+${list(state.rulings)}` : "";
   const v = must(
     await dispatch(
       `${changeBrief(l, c)}
 
 Judge ${diff}, in the worktree ${worktreeOf(l)}, for code it adds but doesn't need.${cycle.paths.length > 0 ? ` Its test is in:
-${list(cycle.paths)}` : ""}`,
+${list(cycle.paths)}` : ""}${settled2}`,
       { agentType: "slopify:simplifier", label: `${c.id}: simplify`, phase: "Build", schema: LENS_SCHEMA }
     ),
     "build",
     `A simplifier verdict on ${c.id}.`
   );
-  return defectsOf(v).map((f) => `${f.location}: ${f.problem}`).join("\n");
+  const found = defectsOf(v);
+  const inTest = (location) => cycle.paths.some((p) => location.startsWith(p));
+  const text = (fs) => fs.map((f) => `${f.location}: ${f.problem}`).join("\n");
+  const test = text(found.filter((f) => inTest(f.location)));
+  return test ? { reason: test, rewriteTest: true, trim: true } : { reason: text(found), rewriteTest: false };
+}
+async function ruleOnTrim(l, c, state, problem) {
+  const ruled = must(
+    await dispatch(
+      `${changeBrief(l, c)}
+
+In the worktree ${worktreeOf(l)}, the simplifier found the change's test held more than it needs, and the test was rewritten without it:
+<<<SIMPLIFIER
+${state.trim}
+SIMPLIFIER>>>
+The coder now says the test needs it:
+<<<CODER
+${problem}
+CODER>>>
+Rule against the code and the change's criteria which stands. The trimmed test stands unless the coder shows a behavior the change must handle that it no longer checks.`,
+      { agentType: "slopify:judge", label: `${c.id}: rule on the test`, phase: "Build", schema: TRIM_SCHEMA }
+    ),
+    "build",
+    `A ruling on ${c.id}'s test.`
+  );
+  state.trim = "";
+  if (ruled.keep) {
+    state.rulings.push(`The test stays without what the simplifier removed: ${ruled.reason}`);
+    return {
+      reason: `A judge ruled the test stands as it is: ${ruled.reason} Make it pass without asking to change it.`,
+      rewriteTest: false
+    };
+  }
+  state.rulings.push(`The test keeps what the coder asked for: ${problem} (${ruled.reason})`);
+  return { reason: `${problem}
+A judge ruled the test needs this: ${ruled.reason}`, rewriteTest: true };
 }
 async function runChange(l, c) {
+  const state = { trim: "", rulings: [] };
   let test = await writeTest(l, c, "");
-  let last = { reason: "", rewriteTest: false };
+  let last = DONE;
   for (let attempt = 1; attempt <= MAX_INNER_TRIES; attempt += 1) {
-    if (last.rewriteTest) test = await writeTest(l, c, last.reason);
-    if (test.specProblem) return specStopped(l, c, test.specProblem).reason;
-    if (test.commit === null) return "";
-    last = await tryFix(l, c, test, last.rewriteTest ? "" : last.reason, attempt);
-    if (!last.reason) return "";
+    if (last.rewriteTest) {
+      test = await writeTest(l, c, last.reason);
+      state.trim = last.trim ? last.reason : "";
+    }
+    if (test.specProblem) return specStopped(l, c, test.specProblem);
+    if (test.commit === null) return DONE;
+    last = await tryFix(l, c, test, last.rewriteTest ? "" : last.reason, attempt, state);
+    if (!last.reason) return DONE;
   }
-  return last.reason;
+  return last;
 }
 function criteriaOf(l, ids) {
   return (l.validate?.criteria ?? []).filter((c) => ids.includes(c.id));
@@ -1287,7 +1347,7 @@ async function changeHoldingHalt(l, c) {
   } catch (error) {
     if (!(error instanceof Halt)) throw error;
     l.halted ??= error;
-    return "";
+    return DONE;
   }
 }
 async function runChanges(l, changes) {
@@ -1300,13 +1360,15 @@ async function runChanges(l, changes) {
     if (l.halted) throw l.halted;
     for (const [i, c] of wave.entries()) {
       const remaining = left[i];
-      if (remaining === "") continue;
+      if (remaining?.reason === "") continue;
+      const reason = remaining?.reason ?? "the inner loop didn't return";
       l.open.push({
-        problem: c.item?.problem ?? { source: "qa", location: c.id, text: remaining ?? "the inner loop didn't return" },
+        problem: c.item?.problem ?? { source: "qa", location: c.id, text: reason },
         route: "coder",
         severity: "blocker",
         fingerprint: c.item?.fingerprint ?? c.id,
-        reason: remaining ?? "the inner loop didn't return"
+        reason,
+        kind: remaining?.rewriteTest ? "test" : c.item?.kind ?? "code"
       });
     }
   }
@@ -1564,7 +1626,7 @@ function listRouted(l, route, item, kind) {
     "needs-confirmation": l.confirmations,
     suggestion: l.suggestions,
     "known-debt": l.knownDebt,
-    "new-issue": l.newIssues,
+    "new-issue": l.preExisting,
     "split-issue": l.newIssues
   };
   lists[route]?.push(entry);
@@ -1615,7 +1677,7 @@ async function judgeProblems(l, problems, phaseTitle) {
     listRouted(
       l,
       route,
-      { problem: p, route, severity: v.severity, fingerprint: v.fingerprint, reason: v.reason },
+      { problem: p, route, severity: v.severity, fingerprint: v.fingerprint, reason: v.reason, kind: v.kind },
       v.kind
     );
   }
@@ -1864,11 +1926,18 @@ async function reviewRound(l) {
   );
 }
 async function fileCards(l) {
-  if (l.newIssues.length === 0) return;
+  const followups = [...l.newIssues, ...l.preExisting];
+  if (followups.length === 0) return;
   const cards = l.newIssues.map(
     (i) => `Marker line: <!-- deliver-followup ${l.cardId} ${slugged(i.text)} -->
 ${fenced("CARD", entryText(i))}`
   );
+  if (l.preExisting.length > 0) {
+    const old = `Problems the delivery of ${l.cardId} found but didn't introduce, each with its location and what is wrong:
+${list(l.preExisting.map((i) => entryText(i)))}`;
+    cards.push(`Marker line: <!-- deliver-preexisting ${l.cardId} -->
+${fenced("CARD", old)}`);
+  }
   const r = await inOrder(
     l,
     () => callPusher(
@@ -1882,25 +1951,40 @@ ${cards.join("\n\n")}`
     )
   );
   l.filed = opRefs(r, "card");
-  if (!pushOk(r)) l.unfiled = l.newIssues.map((i) => ({ ...i, text: `Follow-up card not confirmed filed: ${i.text}` }));
+  if (!pushOk(r)) l.unfiled = followups.map((i) => ({ ...i, text: `Follow-up card not confirmed filed: ${i.text}` }));
 }
 async function finish(l, ready, reasons) {
   const { state } = l.d;
   const items2 = [...needsYou(l), ...l.unfiled.map((x) => entryText(x)), ...reasons.map((x) => x.text)];
-  const card = ready ? `Perform the operations docs/BOARD.md declares for when the PR's review is clean on card ${l.cardId} (for example moving it to In Review), and comment on the card with the evidence and assumptions:
+  const card = ready ? `Perform each operation docs/BOARD.md declares for when the PR's review is clean on card ${l.cardId}, such as a status move, and comment on the card with the evidence and assumptions:
 ${list(items2)}` : `Comment on card ${l.cardId} with what is open:
 ${list(items2)}`;
   pushed(
     await pushWithProgress(
       l,
       `Update the PR ${state.pr}. ${bodyInstruction(l, l.final?.body ?? null, false)}
-${ready ? "Mark the PR ready for review if it is a draft, as docs/FORGE.md declares.\n" : "Convert the PR to a draft, as docs/FORGE.md declares, so it shows the work is unfinished.\n"}${card}`,
+${ready ? "Mark the PR ready for review if it is a draft, as docs/FORGE.md declares.\n" : "Convert the PR to a draft, as docs/FORGE.md declares, so it shows the work is unfinished.\n"}`,
       [`delivery ${ready ? "ready" : "draft"}`],
       ready ? "mark the PR ready" : "report the draft",
       "Push"
     ),
     "The final PR update."
   );
+  const updated = pushed(
+    await inOrder(
+      l,
+      () => callPusher(
+        l.d.pushBrief(
+          `${card}
+Read docs/BOARD.md first. Report each card operation you performed, the comment included, as an operation named card.`
+        ),
+        "update the card",
+        "Push"
+      )
+    ),
+    "The card update."
+  );
+  if (!opRef(updated, "card")) throw new Halt("push", "The card update.", "pusher reported no card operation");
 }
 async function validateSmall(l) {
   if (l.round > 0 && l.affected.length === 0) return;
@@ -1965,6 +2049,7 @@ function freshLoop(input) {
     unfiled: [],
     progress: [],
     final: null,
+    preExisting: [],
     review: { clean: false, note: "" },
     changedThisRound: [],
     passedTests: [...input.small?.passedTests ?? []],

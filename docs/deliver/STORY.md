@@ -233,7 +233,9 @@ This is the inner loop. Every code change runs through it, from the first build 
 
    Any failed check is a `blocker` and goes back to step 2, or to step 1 when the test itself is at fault.
 
-4. **Simplify.** Once `qa` passes, a fresh `simplifier` (opus) reads the change's diff for code it adds but doesn't need: a helper or file used once, an option nothing exercises, handling for a case that can't happen, or a new mechanism where an existing one does the job. Each finding names what to remove, merge, or narrow, and goes back to step 2 like a failed `qa` check. `qa` judges whether the change is right; `simplifier` judges only whether it is bigger than it needs to be.
+   A problem the `judge` rules `test`-kind is in the tests, such as missing coverage, so its test may already pass on the current code. For it, `qa` checks instead that the test fails when the behavior it states is broken.
+
+4. **Simplify.** Once `qa` passes, a fresh `simplifier` (opus) reads the change's diff for code it adds but doesn't need: a helper or file used once, an option nothing exercises, handling for a case that can't happen, or a new mechanism where an existing one does the job. Each finding names what to remove, merge, or narrow. A finding in the change's test goes back to step 1, since its test paths are protected from the `coder`, and any other goes back to step 2. When a `coder` then says the trimmed test needs what was removed, one `judge` rules between them, and later tries keep to that ruling instead of trading the test back and forth. `qa` judges whether the change is right; `simplifier` judges only whether it is bigger than it needs to be.
 
 ## Halt conditions
 
@@ -267,6 +269,6 @@ Invoking `deliver-story` authorizes the following:
 - opening and updating the story's PR, as a draft or ready;
 - the issue's status moves the board declares for delivery start and for review;
 - one comment on the issue when the run ends or halts;
-- filing a card for each `pre-existing` finding, and for each finding the judge splits off with `split-to-issue`.
+- filing one card that lists every `pre-existing` finding, which a person can split, and one card for each finding the judge splits off with `split-to-issue`.
 
 It never merges, approves, or force-pushes.

@@ -31,7 +31,7 @@ Read `docs/FORGE.md` for the review: how its start and finish are detected, how 
 
    Convert a declared timestamp to epoch seconds with `date -u -d "<time>" +%s` (GNU) or `date -j -u -f '%Y-%m-%dT%H:%M:%SZ' "<time>" +%s` (BSD). When the start arrives during this dispatch, wait for the finish in the time that remains of the same 9 minutes.
 
-4. When the wait ends, check again. Not yet started or finished, with the limit not passed: `pending`. Limit passed: `timed-out`. Finished: read the result through the binding. A review that ran and did not complete is `failed`. One that ended without reviewing the change, such as a run that skipped the PR because it is a draft, or reports that it reviewed nothing, is `skipped`, with no findings. One that reviewed the change and completed is `finished`.
+4. When the wait ends, check again. Not yet started or finished, with the limit not passed: `pending`. Limit passed: `timed-out`. Finished: read the result through the binding. A review that ran and did not complete is `failed`, and so is one whose result shows a step it didn't finish, such as an unchecked item in its progress list, even when its run reports success: findings it never posted aren't absent. One that ended without reviewing the change, such as a run that skipped the PR because it is a draft, or reports that it reviewed nothing, is `skipped`, with no findings. One that reviewed the change and completed is `finished`.
 
 If the harness refuses or cuts short a call that long, wait in consecutive shorter bounded calls whose total stays within the same 9 minutes. If it allows no waiting at all, check once and report `pending`. Never start a background job, which outlives this dispatch.
 

@@ -23,6 +23,7 @@ lint:
 	npm run --silent lint:dup
 	npm run --silent lint:pins
 	npm run --silent lint:blocks
+	npm run --silent lint:index
 	npm run --silent lint:types
 	claude plugin validate --strict .
 	for p in $(PLUGINS); do claude plugin validate --strict "$$p" || exit 1; done

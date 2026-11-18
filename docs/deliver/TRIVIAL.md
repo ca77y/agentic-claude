@@ -36,7 +36,7 @@ How `deliver-trivial` takes a trivial story from a card or a prompt to a reviewe
 - **No how phase:** no designs, advisors, spec, or challenge.
 - **No label:** this flow doesn't need `Deliverable`, so it can start from a prompt. A prompt always gets a card first.
 - **Checks inside the inner loop:** a fix isn't validated until the project's checks pass.
-- **`qa` and `simplifier` run once**, on the first change. A review fix has only the checks.
+- **`qa` and `simplifier` run once**, on the first change. A review fix has only the checks, except a `test`-kind fix, whose test may pass on the current code: `qa` proves it by breaking the behavior it states.
 - **The app runs once**, before the PR opens, and again only if that run failed. With no criteria, the validator treats the whole change as one, under whichever `TESTING.md` category covers it. When none fits, it reports `cannot-verify`, and `TESTING.md`'s **Uncategorized** setting decides whether the PR stays a draft.
 - **`judge` rules only on review findings.** A failing check or validator run goes straight back to `coder`.
 - **No gateway `judge`, and no recurrence rulings.** A finding that comes back stays open and keeps the PR a draft.

@@ -19,7 +19,8 @@ How `research` answers a question from new sources and adds the answer to the pr
  6 PERSIST ───── library-scribe × N, one raw note per source, in parallel
  │               then one library-scribe integrates: the wiki page or pages that answer
  │               the question, and the index, taxonomy, and log → commit
- 7 VALIDATE ──── checks (haiku), library-clerk × 1 per wiki page on its evidence, and
+ 7 VALIDATE ──── checks (haiku), library-clerk × 1 per wiki page on its evidence,
+ │               library-clerk on the raw notes' summaries against their bodies, and
  │               library-clerk on the changed files' integrity → judge × 1 (opus)
  8 PUSH ──────── writer-pr (sonnet) writes the PR description whole, lens-pr (haiku)
  │               checks it                                                                ⛔ H4
