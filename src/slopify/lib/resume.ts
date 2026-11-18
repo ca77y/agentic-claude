@@ -58,7 +58,8 @@ async function ledgerLines(d: Run, cardId: string, cp: ScoutResult): Promise<Rec
       "done-board-start": accepted(cp, "done-board-start"),
     };
   } catch (error) {
-    if (error instanceof Halt) return haltOnCard(d, cardId, error);
+    if (error instanceof Halt)
+      return haltOnCard(d, cardId, error, "a checkpoint in its local ledger couldn't be read.");
     throw error;
   }
 }

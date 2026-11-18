@@ -61,11 +61,10 @@ export function must<T>(value: T | null | undefined, step: string, what: string)
 }
 // A halt the person must see on the card: pusher comments the cause there, then the halt ends the run. A comment that
 // fails doesn't change the halt.
-export async function haltOnCard(d: Run, cardId: string, halt: Halt): Promise<never> {
+export async function haltOnCard(d: Run, cardId: string, halt: Halt, cause: string): Promise<never> {
+  // The cause is written for the card: the halt's own evidence can quote a ledger line, which never leaves the checkout.
   await callPusher(
-    d.pushBrief(
-      `Comment on card ${cardId} that the run stopped at ${halt.step}, because ${halt.message} It needs ${halt.needs}`,
-    ),
+    d.pushBrief(`Comment on card ${cardId} that the run stopped at ${halt.step}, because ${cause}`),
     "report the halt",
     "Push",
   );
@@ -1375,6 +1374,7 @@ async function outOfRevisions(
       l.d,
       l.cardId,
       new Halt("describe", "A PR description from writer-pr.", "writer-pr returned no description."),
+      "no PR description could be written for it.",
     );
   if (posting && !posting.checked) await lensPr(l, target, posting.body);
   return { body: posting?.body ?? null, passed: false };

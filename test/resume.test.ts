@@ -148,7 +148,12 @@ describe("readResume", () => {
         );
       }
     }
-    assert.ok(calls.some((c) => c.label === "report the halt" && c.prompt.includes("Comment on card SMR-1")));
+    const reports = calls.filter((c) => c.label === "report the halt");
+    assert.ok(reports.length > 0 && reports.every((c) => c.prompt.includes("Comment on card SMR-1")));
+    assert.ok(
+      reports.every((c) => !c.prompt.includes(T)),
+      "no ledger line reaches the card comment",
+    );
   });
 
   test("with no spec folder passed, a backticked Spec line yields the folder", async () => {

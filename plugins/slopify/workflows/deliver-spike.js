@@ -755,11 +755,9 @@ function must(value, step, what) {
   if (value === null || value === void 0) throw new Halt(step, what, "the agent did not return");
   return value;
 }
-async function haltOnCard(d, cardId, halt) {
+async function haltOnCard(d, cardId, halt, cause) {
   await callPusher(
-    d.pushBrief(
-      `Comment on card ${cardId} that the run stopped at ${halt.step}, because ${halt.message} It needs ${halt.needs}`
-    ),
+    d.pushBrief(`Comment on card ${cardId} that the run stopped at ${halt.step}, because ${cause}`),
     "report the halt",
     "Push"
   );
@@ -1781,7 +1779,8 @@ async function outOfRevisions(l, target, wrote, posting) {
     return haltOnCard(
       l.d,
       l.cardId,
-      new Halt("describe", "A PR description from writer-pr.", "writer-pr returned no description.")
+      new Halt("describe", "A PR description from writer-pr.", "writer-pr returned no description."),
+      "no PR description could be written for it."
     );
   if (posting && !posting.checked) await lensPr(l, target, posting.body);
   return { body: posting?.body ?? null, passed: false };
@@ -2189,7 +2188,8 @@ async function ledgerLines(d, cardId, cp) {
       "done-board-start": accepted(cp, "done-board-start")
     };
   } catch (error) {
-    if (error instanceof Halt) return haltOnCard(d, cardId, error);
+    if (error instanceof Halt)
+      return haltOnCard(d, cardId, error, "a checkpoint in its local ledger couldn't be read.");
     throw error;
   }
 }
