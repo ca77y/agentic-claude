@@ -2037,19 +2037,22 @@ async function validateDocument(l, doc) {
   ]);
   await judgeProblems(l, [...v.problems, ...found], "Judge");
 }
-async function round(l, last) {
-  if (l.round > 0 || !l.built) {
-    await buildRound(l);
-    note(l, "changed", unique(l.changedThisRound));
-  }
+async function validate(l, afterBuild) {
   if (l.document) {
     await validateDocument(l, l.document);
   } else if (l.small) {
     await validateSmall(l);
   } else {
     await judgeProblems(l, await validateRound(l), "Judge");
-    await gateway(l);
+    if (afterBuild) await gateway(l);
   }
+}
+async function round(l, last) {
+  if (l.round > 0 || !l.built) {
+    await buildRound(l);
+    note(l, "changed", unique(l.changedThisRound));
+  }
+  await validate(l, true);
   await pushRound(l, last);
 }
 function freshLoop(input) {
@@ -2103,6 +2106,7 @@ async function runLoop(input) {
   const l = freshLoop(input);
   if (input.startAtReview > 0) {
     l.reviewNumber = input.startAtReview;
+    await validate(l, false);
     await reviewRound(l);
   } else {
     await round(l, false);
@@ -2928,13 +2932,13 @@ ARG>>>`,
   });
   if (stopped) return stopped;
   const howInput = { d, where: how.where, story, storyRevision, cardId, specDir, answers: how.answers };
-  let { build, validate } = resume;
-  if (build && validate) {
+  let { build, validate: validate2 } = resume;
+  if (build && validate2) {
     d.skip("how");
   } else {
     const decided = await runHow(howInput);
     if ("exhausted" in decided) return brokenWorkflow(d, cardId, decided.exhausted);
-    ({ build, validate } = decided);
+    ({ build, validate: validate2 } = decided);
     d.done("how");
   }
   const result = await runLoop({
@@ -2944,7 +2948,7 @@ ARG>>>`,
     story,
     cardId,
     build,
-    validate,
+    validate: validate2,
     specDir,
     answers: how.answers,
     // Once the PR exists, a rerun resumes at its review.

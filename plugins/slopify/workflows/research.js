@@ -1936,19 +1936,22 @@ async function validateDocument(l, doc) {
   ]);
   await judgeProblems(l, [...v.problems, ...found], "Judge");
 }
-async function round(l, last) {
-  if (l.round > 0 || !l.built) {
-    await buildRound(l);
-    note(l, "changed", unique(l.changedThisRound));
-  }
+async function validate(l, afterBuild) {
   if (l.document) {
     await validateDocument(l, l.document);
   } else if (l.small) {
     await validateSmall(l);
   } else {
     await judgeProblems(l, await validateRound(l), "Judge");
-    await gateway(l);
+    if (afterBuild) await gateway(l);
   }
+}
+async function round(l, last) {
+  if (l.round > 0 || !l.built) {
+    await buildRound(l);
+    note(l, "changed", unique(l.changedThisRound));
+  }
+  await validate(l, true);
   await pushRound(l, last);
 }
 function freshLoop(input) {
@@ -2002,6 +2005,7 @@ async function runLoop(input) {
   const l = freshLoop(input);
   if (input.startAtReview > 0) {
     l.reviewNumber = input.startAtReview;
+    await validate(l, false);
     await reviewRound(l);
   } else {
     await round(l, false);

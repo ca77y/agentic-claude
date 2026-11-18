@@ -1560,19 +1560,25 @@ async function validateDocument(l: Loop, doc: LoopDocument): Promise<void> {
   await judgeProblems(l, [...v.problems, ...found], "Judge");
 }
 
-async function round(l: Loop, last: boolean): Promise<void> {
-  if (l.round > 0 || !l.built) {
-    await buildRound(l);
-    note(l, "changed", unique(l.changedThisRound));
-  }
+// The evidence the description's Why trust it rests on. The gateway looks for what a build round missed, so a rerun
+// that only re-validates skips it.
+async function validate(l: Loop, afterBuild: boolean): Promise<void> {
   if (l.document) {
     await validateDocument(l, l.document);
   } else if (l.small) {
     await validateSmall(l);
   } else {
     await judgeProblems(l, await validateRound(l), "Judge");
-    await gateway(l);
+    if (afterBuild) await gateway(l);
   }
+}
+
+async function round(l: Loop, last: boolean): Promise<void> {
+  if (l.round > 0 || !l.built) {
+    await buildRound(l);
+    note(l, "changed", unique(l.changedThisRound));
+  }
+  await validate(l, true);
   await pushRound(l, last);
 }
 
@@ -1630,7 +1636,9 @@ function nextStep(l: Loop): "clean" | "held" | "fix" | "end" {
 export async function runLoop(input: LoopInput): Promise<LoopResult> {
   const l = freshLoop(input);
   if (input.startAtReview > 0) {
+    // A rerun at review validates the work once more, so its description has evidence of its own to rest on.
     l.reviewNumber = input.startAtReview;
+    await validate(l, false);
     await reviewRound(l);
   } else {
     await round(l, false);

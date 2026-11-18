@@ -863,14 +863,16 @@ describe("the review's outcome", () => {
 });
 
 describe("starting points", () => {
-  test("a rerun after the PR opened starts at the review and builds nothing when it's clean", async () => {
+  test("a rerun after the PR opened validates once, builds nothing, and goes ready when the review is clean", async () => {
     use(happy());
     const d = freshRun();
     d.state.pr = "PR-9";
     const r = await runLoop(inputFor(d, { startAtReview: 1, built: true }));
     assert.equal(r.status, "ready");
     assert.equal(count("coder"), 0);
-    assert.equal(count("validator"), 0);
+    assert.equal(count("validator"), 1, "the description has criterion results to rest on");
+    assert.equal(count("judge", "gateway"), 0);
+    assert.ok(!(calls.find((c) => c.type === "writer-pr")?.prompt ?? "").includes("No criterion results"));
   });
 
   test("a rerun whose tasks are built starts at validation", async () => {
