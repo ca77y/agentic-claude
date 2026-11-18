@@ -51,7 +51,7 @@ A delivery ends in a PR unless one of the halt conditions below holds. Anything 
  │  │                  then writer-docs (sonnet) updates the listed docs against that code → commit
  │  │   VALIDATE ───── checks (haiku) runs the TESTING.md checks
  │  │                  validator (sonnet) follows each criterion's category path
- │  │                  lens-docs (haiku) × N, one per listed doc: are its claims true?
+ │  │                  lens-docs (haiku) × N, one per listed doc: are the claims this branch touched true?
  │  │   JUDGE ──────── judge × 1 (opus) rules on every problem: severity and kind
  │  │                  no proof → cannot-verify
  │  │   GATEWAY ────── judge (opus): anything missed? a doc not on the list → added

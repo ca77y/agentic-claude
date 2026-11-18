@@ -1047,7 +1047,7 @@ async function checkDocs(l: Loop): Promise<Problem[]> {
       (doc) => () =>
         lens(
           "lens-docs",
-          `${l.where}\nIn the worktree ${worktreeOf(l)}, judge this document against the code: ${doc}`,
+          `${l.where}\nIn the worktree ${worktreeOf(l)}, judge this document against the code: ${doc}\nJudge only what this branch touched, against the target branch docs/FORGE.md declares: claims in lines of the document the branch changed, and claims anywhere in it about code the branch changed. A claim neither touches is out of scope, even when it is wrong.`,
           {
             label: `docs: ${doc}`,
             phase: "Validate",
