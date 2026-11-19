@@ -98,15 +98,22 @@ interface Evidence {
 }
 const item = (source: string, excerpt: string): Evidence => ({ source, location: "x", excerpt });
 
-// One requested item about the spec folder's files: a file's contents when the item asks for one file's contents,
-// else the names of the files it mentions that exist; nothing when none does.
+// One requested item about the spec folder's files: a file's contents when the item asks for one file's contents
+// (in consecutive parts, one item each, when it asks for parts of at most some number of characters), else the names
+// of the files it mentions that exist; nothing when none does. copy applies to each excerpt on its own.
 function fileItem(files: Record<string, string>, key: string, ask: string, copy: (s: string) => string): Evidence[] {
   const names = SPEC_FILES.filter((n) => ask.includes(n));
   if (names.length === 0) return [];
   const [only] = names;
   if (names.length === 1 && only && /contents/i.test(ask)) {
     const text = files[only];
-    return text === undefined ? [] : [item(key, copy(text))];
+    if (text === undefined) return [];
+    const size = Number(/at most ([\d,]+) characters/i.exec(ask)?.[1]?.replaceAll(",", "") ?? 0);
+    return size <= 0
+      ? [item(key, copy(text))]
+      : Array.from({ length: Math.ceil(text.length / size) }, (_, i) =>
+          item(key, copy(text.slice(i * size, (i + 1) * size))),
+        );
   }
   const present = names.filter((n) => files[n] !== undefined);
   return present.length > 0 ? [item(key, present.join(" "))] : [];
@@ -332,21 +339,42 @@ describe("a rerun of deliver-story", () => {
     assert.deepEqual(roundsPushed(), pushedFromSmall, "and pushes the same rounds as the small rerun");
   });
 
-  // The scout's copy is the only way the script sees build.json; a copy cut short can't be built from, and the
-  // committed spec is never written again, so the honest outcome is a stop on the card.
-  test("over a complete spec whose ~100 KB build.json the scout cut short, redoes nothing and stops on the card", async () => {
+  // The scout copies no excerpt longer than 60,000 characters, so a ~100 KB build.json never comes back whole in one
+  // excerpt; the rerun still resumes at the build, exactly as it does over a small one.
+  test("over a challenged ~100 KB build.json that no single scout excerpt holds whole, goes to the build like a small one", async () => {
+    const small = freshDisk();
+    await deliver({ disk: small, over: BLOCKED_IN_BUILD });
+    await deliver({ disk: small, copy: cut });
+    const pushedFromSmall = roundsPushed();
+
     const disk = freshDisk();
     await deliver({ disk, build: BIG, over: BLOCKED_IN_BUILD });
     const result = (await deliver({ disk, build: BIG, copy: cut })) as { status?: string };
     assert.deepEqual(howSteps(), NONE, "no design, advice, decision, spec, or challenge");
     assert.equal(specCommits(), 0, "the rerun commits no spec again");
     assert.deepEqual(Object.keys(disk.folders), [FOLDER]);
-    assert.equal(count("coder"), 0, "nothing is built from a partial spec");
+    assert.equal(count("coder"), 2 * BIG.tasks.length, "every task of the committed build.json is built, test first");
     assert.ok(
-      calls.some((c) => c.type === "pusher" && c.label === "report the halt" && c.prompt.includes("SMR-1")),
-      "the stop is reported on the card",
+      calls.every((c) => c.label !== "report the halt"),
+      "the rerun does not halt",
     );
-    assert.equal(result.status, "blocked");
+    assert.notEqual(result.status, "blocked");
+    assert.deepEqual(roundsPushed(), pushedFromSmall, "and pushes the same rounds as the small rerun");
+  });
+
+  test("with a finished build round but no done challenge line, as an older run left it, challenges nothing again", async () => {
+    const disk = freshDisk();
+    await deliver({ disk, over: blockedAfterRound0() });
+    assert.ok(disk.ledger.some((l) => l.includes(" done challenge ")));
+    disk.ledger = disk.ledger.filter((l) => !l.includes(" done challenge "));
+    await deliver({ disk });
+    assert.deepEqual(howSteps(), NONE, "no design, advice, decision, spec, or challenge");
+    assert.equal(specCommits(), 0, "the rerun commits no spec again");
+    const pushed = roundsPushed();
+    assert.ok(
+      pushed.length > 0 && pushed.every((n) => n >= 1),
+      `the rerun's rounds follow round 0: ${JSON.stringify(pushed)}`,
+    );
   });
 
   test("finds the first run's spec folder when the story's first line now begins \"Line 1:\", and leaves one folder", async () => {
