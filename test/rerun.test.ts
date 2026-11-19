@@ -98,10 +98,13 @@ interface Evidence {
 }
 const item = (source: string, excerpt: string): Evidence => ({ source, location: "x", excerpt });
 
+/** How a scout copies one file's contents: the excerpts it was asked for in, to the excerpts it returns. */
+type Copy = (parts: string[]) => string[];
+
 // One requested item about the spec folder's files: a file's contents when the item asks for one file's contents
 // (in consecutive parts, one item each, when it asks for parts of at most some number of characters), else the names
-// of the files it mentions that exist; nothing when none does. copy applies to each excerpt on its own.
-function fileItem(files: Record<string, string>, key: string, ask: string, copy: (s: string) => string): Evidence[] {
+// of the files it mentions that exist; nothing when none does. copy turns the asked excerpts into the returned ones.
+function fileItem(files: Record<string, string>, key: string, ask: string, copy: Copy): Evidence[] {
   const names = SPEC_FILES.filter((n) => ask.includes(n));
   if (names.length === 0) return [];
   const [only] = names;
@@ -109,18 +112,18 @@ function fileItem(files: Record<string, string>, key: string, ask: string, copy:
     const text = files[only];
     if (text === undefined) return [];
     const size = Number(/at most ([\d,]+) characters/i.exec(ask)?.[1]?.replaceAll(",", "") ?? 0);
-    return size <= 0
-      ? [item(key, copy(text))]
-      : Array.from({ length: Math.ceil(text.length / size) }, (_, i) =>
-          item(key, copy(text.slice(i * size, (i + 1) * size))),
-        );
+    const parts =
+      size <= 0
+        ? [text]
+        : Array.from({ length: Math.ceil(text.length / size) }, (_, i) => text.slice(i * size, (i + 1) * size));
+    return copy(parts).map((part) => item(key, part));
   }
   const present = names.filter((n) => files[n] !== undefined);
   return present.length > 0 ? [item(key, present.join(" "))] : [];
 }
 
 // A faithful scout-checkpoint over the disk. copy is how it copies a file's contents into an excerpt.
-function checkpoint(disk: Disk, prompt: string, copy: (s: string) => string): Reply {
+function checkpoint(disk: Disk, prompt: string, copy: Copy): Reply {
   const evidence: Evidence[] = [item("worktree", "/p/wt")];
   const folder = folderFor(disk, prompt);
   const files = folder === undefined ? undefined : disk.folders[folder];
@@ -144,7 +147,7 @@ interface Run {
   disk: Disk;
   firstLine?: string;
   build?: typeof SMALL;
-  copy?: (s: string) => string;
+  copy?: Copy;
   /** Overrides for this run, such as the dispatch that blocks a first run; undefined leaves the default reply. */
   over?: Override;
 }
@@ -202,7 +205,7 @@ function scriptOf(o: Run): Script {
   const scripted: Record<string, Script> = {
     ...PR_AGENTS,
     pusher,
-    "scout-checkpoint": (_type, _label, prompt) => checkpoint(disk, prompt, o.copy ?? ((s) => s)),
+    "scout-checkpoint": (_type, _label, prompt) => checkpoint(disk, prompt, o.copy ?? ((parts) => parts)),
     coder: (_type, label) =>
       label.endsWith(": test")
         ? {
@@ -284,8 +287,14 @@ function blockedAfterRound0(): Override {
   };
 }
 
-// A scout that copies at most 60,000 characters of any excerpt, as a long file may come back cut short.
-const cut = (s: string): string => s.slice(0, 60_000);
+// A scout that copies at most some number of characters of any excerpt, as a long file may come back cut short.
+const cutAt =
+  (max: number): Copy =>
+  (parts) =>
+    parts.map((s) => s.slice(0, max));
+const cut = cutAt(60_000);
+// A scout that leaves out the third excerpt of a file it copies in more than two.
+const dropThird: Copy = (parts) => (parts.length > 2 ? parts.filter((_, i) => i !== 2) : parts);
 
 beforeEach(() => {
   calls.length = 0;
@@ -361,6 +370,35 @@ describe("a rerun of deliver-story", () => {
     assert.notEqual(result.status, "blocked");
     assert.deepEqual(roundsPushed(), pushedFromSmall, "and pushes the same rounds as the small rerun");
   });
+
+  // The committed files are whole and parse on disk; only the scout's copy of them is wrong. That is no reason to stop
+  // or to redo the how phase: the rerun resumes at the build exactly as it does over a small spec.
+  for (const [fault, copy] of [
+    ["cuts every excerpt at 10,000 characters", cutAt(10_000)],
+    ["leaves out one excerpt of the file", dropThird],
+  ] as const) {
+    test(`over a challenged ~100 KB build.json that parses on disk, when the scout ${fault}, goes to the build like a small one`, async () => {
+      const small = freshDisk();
+      await deliver({ disk: small, over: BLOCKED_IN_BUILD });
+      await deliver({ disk: small, copy });
+      const pushedFromSmall = roundsPushed();
+
+      const disk = freshDisk();
+      await deliver({ disk, build: BIG, over: BLOCKED_IN_BUILD });
+      const before = structuredClone(disk.folders);
+      const result = (await deliver({ disk, build: BIG, copy })) as { status?: string };
+      assert.ok(
+        calls.every((c) => c.label !== "report the halt"),
+        "the rerun does not halt over a file that is fine on disk",
+      );
+      assert.notEqual(result.status, "blocked");
+      assert.deepEqual(howSteps(), NONE, "no design, advice, decision, spec, or challenge");
+      assert.equal(specCommits(), 0, "the rerun commits no spec again");
+      assert.deepEqual(disk.folders, before, "the committed spec folder is left as it was");
+      assert.equal(count("coder"), 2 * BIG.tasks.length, "every task of the committed build.json is built, test first");
+      assert.deepEqual(roundsPushed(), pushedFromSmall, "and pushes the same rounds as the small rerun");
+    });
+  }
 
   for (const broken of ["build.json", "validate.json"] as const) {
     test(`over a complete spec whose committed ${broken} does not parse, stops on the card, naming the spec folder, and builds nothing`, async () => {
