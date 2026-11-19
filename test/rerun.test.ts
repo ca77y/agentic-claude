@@ -224,11 +224,11 @@ function scriptOf(o: Run): Script {
   };
 }
 
-async function deliver(o: Run): Promise<void> {
+async function deliver(o: Run): Promise<unknown> {
   calls.length = 0;
   current.script = scriptOf(o);
   Object.assign(globalThis, { args: "SMR-1" });
-  await deliverStory();
+  return deliverStory();
 }
 
 const count = (type: string): number => calls.filter((c) => c.type === type).length;
@@ -314,7 +314,7 @@ describe("a rerun of deliver-story", () => {
     assert.equal(specCommits(), 0);
   });
 
-  test("resumes at the same point whether build.json is small or ~100 KB, however the scout copies it", async () => {
+  test("resumes at the same point whether build.json is small or ~100 KB", async () => {
     const small = freshDisk();
     await deliver({ disk: small, over: BLOCKED_IN_BUILD });
     await deliver({ disk: small });
@@ -325,11 +325,28 @@ describe("a rerun of deliver-story", () => {
 
     const big = freshDisk();
     await deliver({ disk: big, build: BIG, over: BLOCKED_IN_BUILD });
-    await deliver({ disk: big, build: BIG, copy: cut });
-    assert.deepEqual(howSteps(), fromSmall, "a ~100 KB build.json the scout cut short resumes like a small one");
+    await deliver({ disk: big, build: BIG });
+    assert.deepEqual(howSteps(), fromSmall, "a ~100 KB build.json resumes like a small one");
     assert.equal(specCommits(), 0, "the rerun commits no spec again");
-    assert.ok(count("coder") > 0, "a ~100 KB build.json the scout cut short still reaches the build");
+    assert.ok(count("coder") > 0, "the ~100 KB rerun builds");
     assert.deepEqual(roundsPushed(), pushedFromSmall, "and pushes the same rounds as the small rerun");
+  });
+
+  // The scout's copy is the only way the script sees build.json; a copy cut short can't be built from, and the
+  // committed spec is never written again, so the honest outcome is a stop on the card.
+  test("over a complete spec whose ~100 KB build.json the scout cut short, redoes nothing and stops on the card", async () => {
+    const disk = freshDisk();
+    await deliver({ disk, build: BIG, over: BLOCKED_IN_BUILD });
+    const result = (await deliver({ disk, build: BIG, copy: cut })) as { status?: string };
+    assert.deepEqual(howSteps(), NONE, "no design, advice, decision, spec, or challenge");
+    assert.equal(specCommits(), 0, "the rerun commits no spec again");
+    assert.deepEqual(Object.keys(disk.folders), [FOLDER]);
+    assert.equal(count("coder"), 0, "nothing is built from a partial spec");
+    assert.ok(
+      calls.some((c) => c.type === "pusher" && c.label === "report the halt" && c.prompt.includes("SMR-1")),
+      "the stop is reported on the card",
+    );
+    assert.equal(result.status, "blocked");
   });
 
   test("finds the first run's spec folder when the story's first line now begins \"Line 1:\", and leaves one folder", async () => {
