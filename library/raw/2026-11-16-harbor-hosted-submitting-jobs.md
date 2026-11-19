@@ -13,7 +13,7 @@ related:
   - "[[library/raw/2026-11-16-harbor-trial-config-source|Harbor trial config.py (AgentConfig) source]]"
   - "[[library/raw/2026-11-16-harbor-framework-harbor|Harbor framework README]]"
 created: 2026-11-16
-updated: 2026-11-16
+updated: 2026-11-17
 ---
 
 # Harbor hosted docs, submitting jobs
@@ -40,3 +40,20 @@ updated: 2026-11-16
 ## Relevance
 
 - Shows how Harbor expresses a multi-arm comparison with repeated attempts: one job, several agent entries, shared tasks.
+
+## Update 2026-11-17
+
+> [!quote] Source
+> **URL**: https://github.com/harbor-framework/harbor/blob/main/docs-mintlify/hosted-harbor/submitting-jobs.mdx
+> **Accessed**: 2026-11-17
+> **Method/Context**: Re-read of this note while checking `library/raw` for evidence on single-agent versus multi-agent coding evals (SMR-376). Branch `tokwieci/smr-376-research-published-evals-of-single-agent-vs`, HEAD 50d66a9, clean working tree. No new fetch of the source page.
+
+## Key evidence
+
+- A content search of `library/raw` for "multi-agent", "orchestrat" and "single-agent" matched this note at line 36, in the Limitations bullet, together with two other Harbor notes. The match concerns Harbor job configuration, not eval results. ^e3
+  - Quotation: "I did not confirm that the local `harbor run -c` path takes the same `n_attempts` and multi-agent keys."
+  - Inference: this note records no success, token or latency comparison between a single agent and an orchestrated design. Its "multi-agent" wording refers to a job config that lists several agents, which is not the same thing as an orchestrated multi-agent system.
+
+## Limitations
+
+- The other two matching notes, `library/raw/2026-11-16-harbor-hosted-cli-docs.md` (line 40) and `library/raw/2026-11-16-harbor-trial-config-source.md` (line 35), are not recorded here. This section rests only on this note.
