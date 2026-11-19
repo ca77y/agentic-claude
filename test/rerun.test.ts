@@ -362,6 +362,26 @@ describe("a rerun of deliver-story", () => {
     assert.deepEqual(roundsPushed(), pushedFromSmall, "and pushes the same rounds as the small rerun");
   });
 
+  for (const broken of ["build.json", "validate.json"] as const) {
+    test(`over a complete spec whose committed ${broken} does not parse, stops on the card, naming the spec folder, and builds nothing`, async () => {
+      const disk = freshDisk();
+      await deliver({ disk, over: BLOCKED_IN_BUILD });
+      const files = disk.folders[FOLDER] ?? {};
+      files[broken] = '{"tasks": [';
+      const before = structuredClone(disk.folders);
+      const result = (await deliver({ disk })) as { status?: string };
+      assert.equal(result.status, "blocked", "the rerun stops");
+      const reports = calls.filter((c) => c.label === "report the halt");
+      assert.equal(reports.length, 1, "the halt is reported once");
+      assert.ok(reports[0]?.prompt.includes("card SMR-1"), "on the card");
+      assert.ok(reports[0]?.prompt.includes(FOLDER), "naming the spec folder");
+      assert.equal(count("coder"), 0, "nothing is built");
+      assert.deepEqual(howSteps(), NONE, "no design, advice, decision, spec, or challenge");
+      assert.equal(specCommits(), 0, "no spec is committed");
+      assert.deepEqual(disk.folders, before, "the spec folder is left as it was");
+    });
+  }
+
   test("with a finished build round but no done challenge line, as an older run left it, challenges nothing again", async () => {
     const disk = freshDisk();
     await deliver({ disk, over: blockedAfterRound0() });
