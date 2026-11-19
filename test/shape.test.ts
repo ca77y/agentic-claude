@@ -40,6 +40,14 @@ const count = (type: string, label?: string): number =>
   calls.filter((c) => c.type === type && (label === undefined || c.label.includes(label))).length;
 const filing = (): string => calls.find((c) => c.type === "pusher")?.prompt ?? "";
 
+// What Linear does to a card body when it saves it (SMR-372): identifier-like text, in any case,
+// even inside an HTML comment, becomes an issue mention.
+const linearSave = (body: string): string =>
+  body.replaceAll(/\b([a-z]{2,5})-(\d+)\b/gi, (_m, k: string, n: string) => {
+    const id = `${k.toUpperCase()}-${n}`;
+    return `<issue id="uuid" label="${id}" href="https://linear.app/x/issue/${id}/t" />`;
+  });
+
 async function run(args: unknown, script: Script) {
   current.script = script;
   Object.assign(globalThis, { args });
@@ -193,6 +201,63 @@ describe("shape", () => {
       happy({ pusher: () => ({ done: false, unmet: ["no create binding"], operations: [] }) }),
     );
     assert.equal(r.status, "blocked");
+  });
+
+  // SMR-372: a pusher that searches for the exact marker and reads its write
+  // back, as its brief and pusher-board.md say, then can't find or confirm a marker that holds one.
+  describe("on a board that links card identifiers when it saves a card", () => {
+    let board: { id: string; body: string }[] = [];
+    const pusher: Script = (_t, _l, prompt) => {
+      const marker = /<!--.*?-->/.exec(prompt)?.[0] ?? "";
+      const named = /Update card (\S+) with it\./.exec(prompt)?.[1];
+      let card = board.find((c) => (named ? c.id === named : c.body.includes(marker)));
+      if (!card) {
+        card = { id: named ?? `SMR-${String(400 + board.length)}`, body: "" };
+        board.push(card);
+      }
+      card.body = linearSave(`Full card content.\n\n${marker}`);
+      const operations = [{ op: "card", reference: card.id }];
+      return card.body.endsWith(marker)
+        ? { done: true, unmet: [], operations }
+        : { done: false, unmet: [`the trailing line ${marker} reads back changed`], operations };
+    };
+    const IDEA = "Split out of SMR-317, see the owner's comment: which sessions reach Garmin and Strava";
+
+    beforeEach(() => {
+      board = [];
+    });
+
+    test("reports a card filed from an idea that names a card as filed, not blocked", async () => {
+      const r = await run(IDEA, happy({ pusher }));
+      assert.equal(board.length, 1);
+      assert.equal(r.status, "done");
+      assert.ok("card" in r && r.card === board[0]?.id);
+    });
+
+    test("a rerun on an idea that names a card finds the card the first run filed", async () => {
+      await run(IDEA, happy({ pusher }));
+      calls.length = 0;
+      const r = await run(IDEA, happy({ pusher }));
+      assert.deepEqual(
+        board.map((c) => c.id),
+        ["SMR-400"],
+      );
+      assert.equal(r.status, "done");
+    });
+
+    test("reports a named card as filed, though its own identifier is in the slug", async () => {
+      board = [{ id: "SMR-8", body: "Multiply" }];
+      const card: Reply = {
+        ...SCOUT,
+        evidence: [
+          { source: "card", location: "x", excerpt: "SMR-8" },
+          { source: "text", location: "x", excerpt: "Multiply" },
+        ],
+      };
+      const r = await run({ card: "SMR-8" }, happy({ pusher, "scout-card": () => card }));
+      assert.equal(r.status, "done");
+      assert.ok("card" in r && r.card === "SMR-8");
+    });
   });
 
   test("asks for the idea when given nothing", async () => {
