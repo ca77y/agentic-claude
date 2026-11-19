@@ -312,7 +312,9 @@ async function refine(d: Run, c: Card, firstOpen: readonly string[]): Promise<st
 
 async function file(d: Run, c: Card, slug: string, deliverable: boolean): Promise<string> {
   phase("File");
-  const marker = `<!-- shape ${slug} -->`;
+  // The board turns text shaped like a card identifier (smr-317) into a link when it saves the card, even
+  // inside a comment, so the marker joins letters to the digits after them and reads back as written.
+  const marker = `<!-- shape ${slug.replaceAll(/([a-z])-(?=\d)/g, "$1")} -->`;
   const target = c.cardId
     ? `Update card ${c.cardId} with it.`
     : `Search the board for a card whose body holds the line ${marker}, and update that card with it; create a card only when there is none.`;

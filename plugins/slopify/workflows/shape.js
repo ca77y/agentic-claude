@@ -864,7 +864,7 @@ ${list(confirmed)}`,
 }
 async function file(d, c, slug, deliverable) {
   phase("File");
-  const marker = `<!-- shape ${slug} -->`;
+  const marker = `<!-- shape ${slug.replaceAll(/([a-z])-(?=\d)/g, "$1")} -->`;
   const target = c.cardId ? `Update card ${c.cardId} with it.` : `Search the board for a card whose body holds the line ${marker}, and update that card with it; create a card only when there is none.`;
   const deliverableLabel = c.kind === "story" ? deliverable ? ` Make sure the card has the label ${DELIVERABLE}.` : ` Make sure the card doesn't have the label ${DELIVERABLE}.` : "";
   const label = `Make sure the card has the label ${SHAPED_LABEL}.${deliverableLabel}`;
