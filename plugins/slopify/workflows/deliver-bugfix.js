@@ -2284,9 +2284,11 @@ async function ledgerLines(d, cardId, cp) {
 }
 var SPEC_FILES = ["build.json", "validate.json", "RATIONALE.md"];
 var specDirAsk = (cardId, specDir) => specDir ? `the story's spec folder: the folder the latest \`done spec\` ledger line names, else the one folder under docs/specs whose name begins with ${cardId.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-")}-; leave it out when there is none` : `the spec folder on the PR description's "Spec:" line`;
-var PART = 2e4;
-var wholeFile = (name) => `the exact contents of ${name} in that folder, in consecutive parts of at most ${PART.toLocaleString("en-US")} characters, one evidence item per part, in order, each part copied exactly with no character added or dropped`;
+var PART = 5e3;
+var wholeFile = (name) => `the exact contents of ${name} in that folder, whole, in one evidence item, copied exactly with no character added or dropped`;
+var fileInParts = (name) => `the exact contents of ${name} in that folder again, in consecutive parts of at most ${PART.toLocaleString("en-US")} characters, one evidence item per part, in order, each part copied exactly with no character added or dropped`;
 var joined = (cp, key) => cp.evidence.filter((e) => e.source === key).map((e) => e.excerpt).join("");
+var parsedCopy = (cp, key, parse) => parse(joined(cp, key)) ?? parse(joined(cp, `${key}-parts`));
 async function readResume(d, cardId, specDir) {
   const cp = must(
     await scout(
@@ -2306,7 +2308,9 @@ ${d.branchOnly ? "- worktree: the main checkout, only when it has this run's bra
 - spec-dir: ${specDirAsk(cardId, specDir)}, relative to the worktree root
 - spec-files: the names of those of ${SPEC_FILES.join(", ")} that exist in that folder
 - build-json: ${wholeFile("build.json")}
-- validate-json: ${wholeFile("validate.json")}`,
+- build-json-parts: ${fileInParts("build.json")}
+- validate-json: ${wholeFile("validate.json")}
+- validate-json-parts: ${fileInParts("validate.json")}`,
       { label: "read checkpoints", phase: "Locate" }
     ),
     "locate",
@@ -2333,8 +2337,8 @@ ${d.branchOnly ? "- worktree: the main checkout, only when it has this run's bra
   const roundNumbers = rounds.map((l) => Number(/ done round (\d+)/.exec(l)?.[1] ?? 0));
   const spec = val(cp, "spec-dir").replace(/^Spec:\s*/i, "").replaceAll("`", "");
   return {
-    build: parseBuild(joined(cp, "build-json")),
-    validate: parseValidate(joined(cp, "validate-json")),
+    build: parsedCopy(cp, "build-json", parseBuild),
+    validate: parsedCopy(cp, "validate-json", parseValidate),
     specDir: shaped("rel", spec) || specDir,
     reviewFired: Math.max(0, ...lines["review-fired"].map((l) => Number(/review (\d+) fired/.exec(l)?.[1] ?? 0))),
     specComplete: SPEC_FILES.every((name) => listed.includes(name)),

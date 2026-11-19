@@ -82,15 +82,21 @@ const specDirAsk = (cardId: string, specDir: string): string =>
     ? `the story's spec folder: the folder the latest \`done spec\` ledger line names, else the one folder under docs/specs whose name begins with ${cardId.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-")}-; leave it out when there is none`
     : 'the spec folder on the PR description\'s "Spec:" line';
 
-// A spec file can be far longer than one excerpt holds, so the scout copies it in parts, which join back into the file.
-const PART = 20_000;
+// A spec file can be far longer than one excerpt holds whole, and a long copy can come back cut short or missing a
+// part, so the scout copies each file twice: once in one excerpt, and once in short consecutive parts that join back
+// into the file. Two copies made in different ways rarely fail together, and the first that parses is the file.
+const PART = 5000;
 const wholeFile = (name: string): string =>
-  `the exact contents of ${name} in that folder, in consecutive parts of at most ${PART.toLocaleString("en-US")} characters, one evidence item per part, in order, each part copied exactly with no character added or dropped`;
+  `the exact contents of ${name} in that folder, whole, in one evidence item, copied exactly with no character added or dropped`;
+const fileInParts = (name: string): string =>
+  `the exact contents of ${name} in that folder again, in consecutive parts of at most ${PART.toLocaleString("en-US")} characters, one evidence item per part, in order, each part copied exactly with no character added or dropped`;
 const joined = (cp: ScoutResult, key: string): string =>
   cp.evidence
     .filter((e) => e.source === key)
     .map((e) => e.excerpt)
     .join("");
+const parsedCopy = <T>(cp: ScoutResult, key: string, parse: (text: string) => T | null): T | null =>
+  parse(joined(cp, key)) ?? parse(joined(cp, `${key}-parts`));
 
 // Read the checkpoints into the run's state. specDir is empty when only the PR knows it; otherwise it is the folder
 // a story's spec goes in when the worktree holds none yet.
@@ -113,7 +119,9 @@ ${d.branchOnly ? "- worktree: the main checkout, only when it has this run's bra
 - spec-dir: ${specDirAsk(cardId, specDir)}, relative to the worktree root
 - spec-files: the names of those of ${SPEC_FILES.join(", ")} that exist in that folder
 - build-json: ${wholeFile("build.json")}
-- validate-json: ${wholeFile("validate.json")}`,
+- build-json-parts: ${fileInParts("build.json")}
+- validate-json: ${wholeFile("validate.json")}
+- validate-json-parts: ${fileInParts("validate.json")}`,
       { label: "read checkpoints", phase: "Locate" },
     ),
     "locate",
@@ -149,8 +157,8 @@ ${d.branchOnly ? "- worktree: the main checkout, only when it has this run's bra
     .replace(/^Spec:\s*/i, "")
     .replaceAll("`", "");
   return {
-    build: parseBuild(joined(cp, "build-json")),
-    validate: parseValidate(joined(cp, "validate-json")),
+    build: parsedCopy(cp, "build-json", parseBuild),
+    validate: parsedCopy(cp, "validate-json", parseValidate),
     specDir: shaped("rel", spec) || specDir,
     reviewFired: Math.max(0, ...lines["review-fired"].map((l) => Number(/review (\d+) fired/.exec(l)?.[1] ?? 0))),
     specComplete: SPEC_FILES.every((name) => listed.includes(name)),

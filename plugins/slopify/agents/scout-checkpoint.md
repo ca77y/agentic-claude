@@ -18,7 +18,7 @@ The brief defines each key it asks for. Report it as the brief defines it, locat
 
 The ledger-line keys are `done-board-start`, `done-round`, `done-findings`, `done-challenge`, `reproduced`, and `review-fired`; the `ledger` key is not one, and is reported as its path like any other key. For a ledger-line key, the brief gives the form its checkpoint takes. Return each whole ledger line that contains that form right after pusher's timestamp as its own evidence item, source the key and excerpt the whole line, in ledger order. A progress entry or run line that merely quotes the form doesn't have it there: don't return it, and don't count it. The key is absent when no line has the form right after pusher's timestamp.
 
-The spec keys are read from the worktree, not the ledger: `spec-dir` is a folder relative to the worktree root, `spec-files` lists the names of the spec files the brief names that exist in that folder, and `build-json` and `validate-json` are those files' exact contents, copied in the consecutive parts the brief sets, one evidence item per part, in order, with no character added or dropped, so the parts join back into the file.
+The spec keys are read from the worktree, not the ledger: `spec-dir` is a folder relative to the worktree root, `spec-files` lists the names of the spec files the brief names that exist in that folder, `build-json` and `validate-json` are those files' exact contents, each whole in one evidence item, and `build-json-parts` and `validate-json-parts` are the same contents again, copied in the consecutive parts the brief sets, one evidence item per part, in order. Copy every excerpt with no character added or dropped, so each copy is the file.
 
 ## Doing it well
 
