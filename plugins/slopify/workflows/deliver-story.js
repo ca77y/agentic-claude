@@ -2923,7 +2923,7 @@ async function committedSpec(d, cardId, resume) {
       "A whole copy of the committed build.json and validate.json.",
       `the spec folder ${resume.specDir} holds every file, but its build.json or validate.json, joined from the scout's parts, does not parse`
     ),
-    "its committed spec couldn't be read back whole, and it is never written again."
+    `the build.json or validate.json in its committed spec folder ${resume.specDir} doesn't parse, and a committed spec is never written again. Fix or remove that folder, then run again.`
   );
 }
 async function deliver(d, storyArg, how) {
