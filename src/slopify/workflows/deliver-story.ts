@@ -50,7 +50,7 @@ async function brokenWorkflow(d: Run, cardId: string, tried: readonly string[]):
   return d.stop("how", [{ id: "how-1", kind: "validation", what, evidence: "" }]);
 }
 
-// A committed spec with all three files is never written again: a rerun reads it back, and halts when it can't.
+// A committed spec with all three files is never written again: a rerun reads it back in parts, and halts when it doesn't parse.
 async function committedSpec(d: Run, cardId: string, resume: Resume): Promise<HowResult> {
   const { build, validate } = resume;
   return build && validate
@@ -61,7 +61,7 @@ async function committedSpec(d: Run, cardId: string, resume: Resume): Promise<Ho
         new Halt(
           "how",
           "A whole copy of the committed build.json and validate.json.",
-          `the spec folder ${resume.specDir} holds every file, but its build.json or validate.json came back cut short or unreadable`,
+          `the spec folder ${resume.specDir} holds every file, but its build.json or validate.json, joined from the scout's parts, does not parse`,
         ),
         "its committed spec couldn't be read back whole, and it is never written again.",
       );

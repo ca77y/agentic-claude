@@ -103,7 +103,7 @@ The issue says why and what. This stage decides how, and it deserves more time a
    - `writer-spec` revises for every `spec` problem, and records each one and its reason in `RATIONALE.md`. It never revises around a `decision` problem: it picks the most reasonable reading and records it as a decision with `affectsAcceptance` set, which reaches the person under **Needs you**. Advisors and the judge don't report a recorded decision again, and a round whose only problems are decisions ends the challenge.
    - After a revision, the next round checks the revision. The code doesn't change during the challenge, so a claim or criterion that held and kept its wording isn't checked again. Only the advisors whose findings the revision was for check it, each for its own findings: they report each one the revision didn't fix and each `blocker` or `major` the revision introduced. The other advisors aren't dispatched again, because the checks, lenses, and judge cover every round.
 
-   A `major` still open after the last revision's round is recorded and the run continues. A `blocker` still open halts the run. A challenge that finishes is recorded as a `done challenge` ledger line. A rerun finding a committed spec with `build.json`, `validate.json`, and `RATIONALE.md` and that line goes straight to the build; one finding the three files but no line challenges the committed spec again, without the claim checks, since the writer's claims aren't in the spec folder. A committed spec whose `build.json` or `validate.json` can't be read back whole halts the run on the card, because a committed spec is never written again.
+   A `major` still open after the last revision's round is recorded and the run continues. A `blocker` still open halts the run. A challenge that finishes is recorded as a `done challenge` ledger line. A rerun finding a committed spec with `build.json`, `validate.json`, and `RATIONALE.md` and that line, or a finished round, which only follows a passed challenge, goes straight to the build; one finding the three files but no line challenges the committed spec again, without the claim checks, since the writer's claims aren't in the spec folder. `scout-checkpoint` copies each of those two files in consecutive parts that join back into the file, so a rerun reads the committed spec whole however large it is. A committed spec whose `build.json` or `validate.json` still doesn't parse halts the run on the card (H8), because a committed spec is never written again.
 
 #### The spec
 
@@ -241,17 +241,18 @@ This is the inner loop. Every code change runs through it, from the first build 
 
 These are the only conditions that stop the run:
 
-| #   | Condition                                                                                         | Found at | What the user gets                                                                   |
-| --- | ------------------------------------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------ |
-| H1  | The card can't be read, or `answers` isn't a map or holds an object or a list                     | Intake   | `not-started`, no board write                                                        |
-| H2  | The issue doesn't have the `Deliverable` label                                                    | Intake   | `not-started`, and an issue comment saying to run `shape`                            |
-| H3  | The how phase's loops are exhausted: no design survives, or a `blocker` stays open in the spec    | How      | `blocked`, and an issue comment saying the workflow is broken, with everything tried |
-| H4  | The push is denied, or PR creation fails                                                          | Push     | `blocked`; finished work stays committed on the local branch                         |
-| H5  | Infrastructure: a stop signal, a required tool denied, or a budget, usage, or agent limit reached | Any      | `blocked`, with the state reported on the issue                                      |
-| H6  | `writer-pr` returns no description in any attempt of a stage                                      | Push     | `blocked`; finished work stays committed on the local branch                         |
-| H7  | On a rerun, a checkpoint item the scout returned for a ledger key isn't a ledger line             | Intake   | `blocked`, naming the key                                                            |
+| #   | Condition                                                                                                | Found at | What the user gets                                                                   |
+| --- | -------------------------------------------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------ |
+| H1  | The card can't be read, or `answers` isn't a map or holds an object or a list                            | Intake   | `not-started`, no board write                                                        |
+| H2  | The issue doesn't have the `Deliverable` label                                                           | Intake   | `not-started`, and an issue comment saying to run `shape`                            |
+| H3  | The how phase's loops are exhausted: no design survives, or a `blocker` stays open in the spec           | How      | `blocked`, and an issue comment saying the workflow is broken, with everything tried |
+| H4  | The push is denied, or PR creation fails                                                                 | Push     | `blocked`; finished work stays committed on the local branch                         |
+| H5  | Infrastructure: a stop signal, a required tool denied, or a budget, usage, or agent limit reached        | Any      | `blocked`, with the state reported on the issue                                      |
+| H6  | `writer-pr` returns no description in any attempt of a stage                                             | Push     | `blocked`; finished work stays committed on the local branch                         |
+| H7  | On a rerun, a checkpoint item the scout returned for a ledger key isn't a ledger line                    | Intake   | `blocked`, naming the key                                                            |
+| H8  | On a rerun, the committed spec has all three files but its `build.json` or `validate.json` doesn't parse | How      | `blocked`, and an issue comment naming the spec folder                               |
 
-Every other problem is recorded and the run keeps going. Once a PR exists, the worst outcome is a draft that says exactly what is open, except when H4, H5, H6, or H7 holds.
+Every other problem is recorded and the run keeps going. Once a PR exists, the worst outcome is a draft that says exactly what is open, except when H4, H5, H6, H7, or H8 holds.
 
 ## TESTING.md
 

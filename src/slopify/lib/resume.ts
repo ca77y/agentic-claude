@@ -1,5 +1,5 @@
 // Where a delivery stands, from its durable checkpoints: the worktree, the PR, the ledger, and the committed spec.
-import { absent, fact, scout, shaped, type ScoutResult } from "./family.ts";
+import { absent, scout, shaped, type ScoutResult } from "./family.ts";
 import { val } from "./deliver.ts";
 import { Halt, haltOnCard, must, type Run } from "./loop.ts";
 import { checkpointLine, parseReproduction, type CheckpointKey, type Reproduction } from "./rules.ts";
@@ -13,7 +13,7 @@ export interface Resume {
   reviewFired: number;
   /** The spec folder holds build.json, validate.json, and RATIONALE.md. */
   specComplete: boolean;
-  /** The ledger shows the spec's challenge finished. */
+  /** The ledger shows the spec's challenge finished, or a finished round, which only follows a passed challenge. */
   challenged: boolean;
   /** The ledger shows a finished round, so the spec's tasks are built. */
   built: boolean;
@@ -82,6 +82,16 @@ const specDirAsk = (cardId: string, specDir: string): string =>
     ? `the story's spec folder: the folder the latest \`done spec\` ledger line names, else the one folder under docs/specs whose name begins with ${cardId.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-")}-; leave it out when there is none`
     : 'the spec folder on the PR description\'s "Spec:" line';
 
+// A spec file can be far longer than one excerpt holds, so the scout copies it in parts, which join back into the file.
+const PART = 20_000;
+const wholeFile = (name: string): string =>
+  `the exact contents of ${name} in that folder, in consecutive parts of at most ${PART.toLocaleString("en-US")} characters, one evidence item per part, in order, each part copied exactly with no character added or dropped`;
+const joined = (cp: ScoutResult, key: string): string =>
+  cp.evidence
+    .filter((e) => e.source === key)
+    .map((e) => e.excerpt)
+    .join("");
+
 // Read the checkpoints into the run's state. specDir is empty when only the PR knows it; otherwise it is the folder
 // a story's spec goes in when the worktree holds none yet.
 export async function readResume(d: Run, cardId: string, specDir: string): Promise<Resume> {
@@ -102,8 +112,8 @@ ${d.branchOnly ? "- worktree: the main checkout, only when it has this run's bra
 - done-challenge: \`done challenge <folder>\`
 - spec-dir: ${specDirAsk(cardId, specDir)}, relative to the worktree root
 - spec-files: the names of those of ${SPEC_FILES.join(", ")} that exist in that folder
-- build-json: the exact contents of build.json in that folder
-- validate-json: the exact contents of validate.json in that folder`,
+- build-json: ${wholeFile("build.json")}
+- validate-json: ${wholeFile("validate.json")}`,
       { label: "read checkpoints", phase: "Locate" },
     ),
     "locate",
@@ -139,12 +149,13 @@ ${d.branchOnly ? "- worktree: the main checkout, only when it has this run's bra
     .replace(/^Spec:\s*/i, "")
     .replaceAll("`", "");
   return {
-    build: parseBuild(fact(cp, "build-json")),
-    validate: parseValidate(fact(cp, "validate-json")),
+    build: parseBuild(joined(cp, "build-json")),
+    validate: parseValidate(joined(cp, "validate-json")),
     specDir: shaped("rel", spec) || specDir,
     reviewFired: Math.max(0, ...lines["review-fired"].map((l) => Number(/review (\d+) fired/.exec(l)?.[1] ?? 0))),
     specComplete: SPEC_FILES.every((name) => listed.includes(name)),
-    challenged: lines["done-challenge"].length > 0,
+    // A finished round proves the challenge passed, even when an older run left no `done challenge` line.
+    challenged: lines["done-challenge"].length > 0 || rounds.length > 0,
     built: rounds.length > 0,
     nextRound: rounds.length > 0 ? Math.max(...roundNumbers) + 1 : 0,
     ...(passedTests.length > 0 && { passedTests }),

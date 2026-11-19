@@ -2177,6 +2177,9 @@ async function ledgerLines(d, cardId, cp) {
 }
 var SPEC_FILES = ["build.json", "validate.json", "RATIONALE.md"];
 var specDirAsk = (cardId, specDir) => specDir ? `the story's spec folder: the folder the latest \`done spec\` ledger line names, else the one folder under docs/specs whose name begins with ${cardId.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-")}-; leave it out when there is none` : `the spec folder on the PR description's "Spec:" line`;
+var PART = 2e4;
+var wholeFile = (name) => `the exact contents of ${name} in that folder, in consecutive parts of at most ${PART.toLocaleString("en-US")} characters, one evidence item per part, in order, each part copied exactly with no character added or dropped`;
+var joined = (cp, key) => cp.evidence.filter((e) => e.source === key).map((e) => e.excerpt).join("");
 async function readResume(d, cardId, specDir) {
   const cp = must(
     await scout(
@@ -2195,8 +2198,8 @@ ${d.branchOnly ? "- worktree: the main checkout, only when it has this run's bra
 - done-challenge: \`done challenge <folder>\`
 - spec-dir: ${specDirAsk(cardId, specDir)}, relative to the worktree root
 - spec-files: the names of those of ${SPEC_FILES.join(", ")} that exist in that folder
-- build-json: the exact contents of build.json in that folder
-- validate-json: the exact contents of validate.json in that folder`,
+- build-json: ${wholeFile("build.json")}
+- validate-json: ${wholeFile("validate.json")}`,
       { label: "read checkpoints", phase: "Locate" }
     ),
     "locate",
@@ -2223,12 +2226,13 @@ ${d.branchOnly ? "- worktree: the main checkout, only when it has this run's bra
   const roundNumbers = rounds.map((l) => Number(/ done round (\d+)/.exec(l)?.[1] ?? 0));
   const spec = val(cp, "spec-dir").replace(/^Spec:\s*/i, "").replaceAll("`", "");
   return {
-    build: parseBuild(fact(cp, "build-json")),
-    validate: parseValidate(fact(cp, "validate-json")),
+    build: parseBuild(joined(cp, "build-json")),
+    validate: parseValidate(joined(cp, "validate-json")),
     specDir: shaped("rel", spec) || specDir,
     reviewFired: Math.max(0, ...lines["review-fired"].map((l) => Number(/review (\d+) fired/.exec(l)?.[1] ?? 0))),
     specComplete: SPEC_FILES.every((name) => listed.includes(name)),
-    challenged: lines["done-challenge"].length > 0,
+    // A finished round proves the challenge passed, even when an older run left no `done challenge` line.
+    challenged: lines["done-challenge"].length > 0 || rounds.length > 0,
     built: rounds.length > 0,
     nextRound: rounds.length > 0 ? Math.max(...roundNumbers) + 1 : 0,
     ...passedTests.length > 0 && { passedTests },
