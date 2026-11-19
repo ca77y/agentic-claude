@@ -11,8 +11,14 @@ export interface Resume {
   specDir: string;
   /** The highest review number the ledger shows fired; 0 when none. */
   reviewFired: number;
+  /** The spec folder holds build.json, validate.json, and RATIONALE.md. */
+  specComplete: boolean;
+  /** The ledger shows the spec's challenge finished. */
+  challenged: boolean;
   /** The ledger shows a finished round, so the spec's tasks are built. */
   built: boolean;
+  /** One past the highest round number the ledger shows finished; 0 when none. */
+  nextRound: number;
   /** A trivial run's passed test paths, from the `passed <paths>` tail of every done round line; absent when none. */
   passedTests?: string[];
   boardStartDone: boolean;
@@ -54,6 +60,7 @@ async function ledgerLines(d: Run, cardId: string, cp: ScoutResult): Promise<Rec
   try {
     return {
       "done-findings": accepted(cp, "done-findings"),
+      "done-challenge": accepted(cp, "done-challenge"),
       reproduced: accepted(cp, "reproduced"),
       "done-round": accepted(cp, "done-round"),
       "review-fired": accepted(cp, "review-fired"),
@@ -66,7 +73,17 @@ async function ledgerLines(d: Run, cardId: string, cp: ScoutResult): Promise<Rec
   }
 }
 
-// Read the checkpoints into the run's state. specDir is empty when only the PR knows it.
+const SPEC_FILES = ["build.json", "validate.json", "RATIONALE.md"];
+
+// Where the scout finds the spec folder. A story keeps the one folder its first run committed, whatever its title says
+// now, so the brief names no path built from the title; the path the title gives is the fallback when none exists.
+const specDirAsk = (cardId: string, specDir: string): string =>
+  specDir
+    ? `the story's spec folder: the folder the latest \`done spec\` ledger line names, else the one folder under docs/specs whose name begins with ${cardId.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-")}-; leave it out when there is none`
+    : 'the spec folder on the PR description\'s "Spec:" line';
+
+// Read the checkpoints into the run's state. specDir is empty when only the PR knows it; otherwise it is the folder
+// a story's spec goes in when the worktree holds none yet.
 export async function readResume(d: Run, cardId: string, specDir: string): Promise<Resume> {
   const cp = must(
     await scout(
@@ -82,7 +99,9 @@ ${d.branchOnly ? "- worktree: the main checkout, only when it has this run's bra
 - done-findings: \`done findings <paths>\`
 - reproduced: \`reproduced {...}\`
 - review-fired: \`review <n> fired\`
-- spec-dir: ${specDir ? `the folder ${specDir}, if it exists in the worktree` : 'the spec folder on the PR description\'s "Spec:" line'}, relative to the worktree root
+- done-challenge: \`done challenge <folder>\`
+- spec-dir: ${specDirAsk(cardId, specDir)}, relative to the worktree root
+- spec-files: the names of those of ${SPEC_FILES.join(", ")} that exist in that folder
 - build-json: the exact contents of build.json in that folder
 - validate-json: the exact contents of validate.json in that folder`,
       { label: "read checkpoints", phase: "Locate" },
@@ -111,6 +130,11 @@ ${d.branchOnly ? "- worktree: the main checkout, only when it has this run's bra
       ),
     ),
   ];
+  const listed = cp.evidence
+    .filter((e) => e.source === "spec-files")
+    .map((e) => e.excerpt)
+    .join(" ");
+  const roundNumbers = rounds.map((l) => Number(/ done round (\d+)/.exec(l)?.[1] ?? 0));
   const spec = val(cp, "spec-dir")
     .replace(/^Spec:\s*/i, "")
     .replaceAll("`", "");
@@ -119,7 +143,10 @@ ${d.branchOnly ? "- worktree: the main checkout, only when it has this run's bra
     validate: parseValidate(fact(cp, "validate-json")),
     specDir: shaped("rel", spec) || specDir,
     reviewFired: Math.max(0, ...lines["review-fired"].map((l) => Number(/review (\d+) fired/.exec(l)?.[1] ?? 0))),
+    specComplete: SPEC_FILES.every((name) => listed.includes(name)),
+    challenged: lines["done-challenge"].length > 0,
     built: rounds.length > 0,
+    nextRound: rounds.length > 0 ? Math.max(...roundNumbers) + 1 : 0,
     ...(passedTests.length > 0 && { passedTests }),
     boardStartDone: lines["done-board-start"].length > 0,
     findings: lastFindings

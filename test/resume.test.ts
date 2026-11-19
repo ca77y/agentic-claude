@@ -19,6 +19,7 @@ const REAL: Item[] = [
   ["done-findings", `${T} done findings docs/a.md docs/b.md`],
   ["reproduced", `${T} reproduced ${REPRO}`],
   ["review-fired", `${T} review 3 fired`],
+  ["done-challenge", `${T} done challenge docs/specs/smr-1-x`],
 ];
 const FORMS: Record<string, string> = {
   "done-board-start": "done board-start",
@@ -26,6 +27,7 @@ const FORMS: Record<string, string> = {
   "done-findings": "done findings docs/x.md",
   reproduced: 'reproduced {"steps":["x"],"observed":"y"}',
   "review-fired": "review 9 fired",
+  "done-challenge": "done challenge docs/specs/smr-1-y",
 };
 
 async function resumeOf(items: readonly Item[]): Promise<Resume> {
@@ -61,6 +63,7 @@ describe("readResume", () => {
       "`done findings <paths>`",
       "`reproduced {...}`",
       "`review <n> fired`",
+      "`done challenge <folder>`",
     ]) {
       assert.ok(brief.includes(form), form);
     }
@@ -87,7 +90,10 @@ describe("readResume", () => {
         validate: null,
         specDir: "",
         reviewFired: 3,
+        specComplete: false,
+        challenged: true,
         built: true,
+        nextRound: 3,
         boardStartDone: true,
         findings: ["docs/a.md", "docs/b.md"],
         reproduced: { steps: ["run add(1, 1)"], observed: "got 0" },

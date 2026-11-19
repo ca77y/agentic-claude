@@ -346,12 +346,14 @@ export function progressLine(
   return line.length > MAX_PROGRESS ? `${line.slice(0, MAX_PROGRESS - 3)}...` : line;
 }
 
-export type CheckpointKey = "done-board-start" | "done-round" | "done-findings" | "reproduced" | "review-fired";
+export type CheckpointKey =
+  "done-board-start" | "done-round" | "done-findings" | "done-challenge" | "reproduced" | "review-fired";
 
 const CHECKPOINT_FORMS: Record<CheckpointKey, string> = {
   "done-board-start": String.raw`done board-start\b`,
   "done-round": String.raw`done round \d+\b`,
   "done-findings": String.raw`done findings \S`,
+  "done-challenge": String.raw`done challenge \S`,
   reproduced: String.raw`reproduced \{`,
   "review-fired": String.raw`review \d+ fired\b`,
 };

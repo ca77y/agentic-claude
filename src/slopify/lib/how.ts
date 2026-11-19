@@ -657,11 +657,25 @@ ${gathered}`,
     "add the spec",
     "Spec",
   );
-  const challenged = await challenge(o, spec);
-  return challenged.blockers.length > 0
-    ? { exhausted: challenged.blockers }
-    : { build: challenged.spec.build, validate: challenged.spec.validate };
+  return challengeAndRecord(o, spec);
 }
+
+// A finished challenge goes in the ledger, so a rerun over the committed spec goes straight to the build.
+async function challengeAndRecord(o: HowInput, spec: SpecResult): Promise<HowResult | HowExhausted> {
+  const challenged = await challenge(o, spec);
+  if (challenged.blockers.length > 0) return { exhausted: challenged.blockers };
+  await callPusher(
+    o.d.pushBrief("Change and commit nothing; only append the ledger line below.", [`done challenge ${o.specDir}`]),
+    "record the challenge",
+    "Challenge",
+  );
+  return { build: challenged.spec.build, validate: challenged.spec.validate };
+}
+
+/** A rerun over a committed spec whose challenge didn't finish challenges it again. The writer's claims about the code
+ * aren't in the spec folder, so the claim checks are left to the lenses and advisors. */
+export const rechallenge = (o: HowInput, build: Build, validate: Validate): Promise<HowResult | HowExhausted> =>
+  challengeAndRecord(o, { build, validate, claims: [] });
 
 /** A later round found the spec wrong: the advisors weigh in, the writer revises, and the tasks it changed run again. */
 export function specReviser(o: HowInput) {

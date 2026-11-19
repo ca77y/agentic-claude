@@ -248,6 +248,7 @@ var CHECKPOINT_FORMS = {
   "done-board-start": String.raw`done board-start\b`,
   "done-round": String.raw`done round \d+\b`,
   "done-findings": String.raw`done findings \S`,
+  "done-challenge": String.raw`done challenge \S`,
   reproduced: String.raw`reproduced \{`,
   "review-fired": String.raw`review \d+ fired\b`
 };

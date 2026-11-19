@@ -462,6 +462,7 @@ var CHECKPOINT_FORMS = {
   "done-board-start": String.raw`done board-start\b`,
   "done-round": String.raw`done round \d+\b`,
   "done-findings": String.raw`done findings \S`,
+  "done-challenge": String.raw`done challenge \S`,
   reproduced: String.raw`reproduced \{`,
   "review-fired": String.raw`review \d+ fired\b`
 };
@@ -1055,8 +1056,9 @@ In the worktree ${worktree2}, run the Checks commands TESTING.md declares, and r
 var worktreeOf = (l) => l.d.state.worktree;
 var rowsOf = (l) => Object.values(l.rows);
 var itemText = (i) => `${i.problem.location}: ${i.problem.text}`;
+var ledgerRound = (l) => l.round + (l.firstRound ?? 0);
 function note(l, kind, entries) {
-  if (entries.length > 0) l.progress.push(progressLine(l.round, kind, entries));
+  if (entries.length > 0) l.progress.push(progressLine(ledgerRound(l), kind, entries));
 }
 function inOrder(l, step) {
   const turn = async () => {
@@ -1906,7 +1908,7 @@ Fire the review trigger only if docs/FORGE.md says opening doesn't fire it. ${no
   const lines = [
     ...open ? ["done publish <the PR reference>"] : [],
     ...state.pr || open ? [`review ${String(number)} fired <the trigger time, or none when docs/FORGE.md declares no review>`] : [],
-    `done round ${String(l.round)}${l.passedTests.length > 0 ? ` passed ${l.passedTests.join(" ")}` : ""}`
+    `done round ${String(ledgerRound(l))}${l.passedTests.length > 0 ? ` passed ${l.passedTests.join(" ")}` : ""}`
   ];
   const r = pushed(
     await pushWithProgress(l, steps, lines, "push the round", "Push"),
@@ -2703,9 +2705,19 @@ ${gathered}`,
     "add the spec",
     "Spec"
   );
-  const challenged = await challenge(o, spec);
-  return challenged.blockers.length > 0 ? { exhausted: challenged.blockers } : { build: challenged.spec.build, validate: challenged.spec.validate };
+  return challengeAndRecord(o, spec);
 }
+async function challengeAndRecord(o, spec) {
+  const challenged = await challenge(o, spec);
+  if (challenged.blockers.length > 0) return { exhausted: challenged.blockers };
+  await callPusher(
+    o.d.pushBrief("Change and commit nothing; only append the ledger line below.", [`done challenge ${o.specDir}`]),
+    "record the challenge",
+    "Challenge"
+  );
+  return { build: challenged.spec.build, validate: challenged.spec.validate };
+}
+var rechallenge = (o, build, validate2) => challengeAndRecord(o, { build, validate: validate2, claims: [] });
 function specReviser(o) {
   return async (problems) => {
     phase("Advise");
@@ -2809,6 +2821,7 @@ async function ledgerLines(d, cardId, cp) {
   try {
     return {
       "done-findings": accepted(cp, "done-findings"),
+      "done-challenge": accepted(cp, "done-challenge"),
       reproduced: accepted(cp, "reproduced"),
       "done-round": accepted(cp, "done-round"),
       "review-fired": accepted(cp, "review-fired"),
@@ -2820,6 +2833,8 @@ async function ledgerLines(d, cardId, cp) {
     throw error;
   }
 }
+var SPEC_FILES2 = ["build.json", "validate.json", "RATIONALE.md"];
+var specDirAsk = (cardId, specDir) => specDir ? `the story's spec folder: the folder the latest \`done spec\` ledger line names, else the one folder under docs/specs whose name begins with ${cardId.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-")}-; leave it out when there is none` : `the spec folder on the PR description's "Spec:" line`;
 async function readResume(d, cardId, specDir) {
   const cp = must(
     await scout(
@@ -2835,7 +2850,9 @@ ${d.branchOnly ? "- worktree: the main checkout, only when it has this run's bra
 - done-findings: \`done findings <paths>\`
 - reproduced: \`reproduced {...}\`
 - review-fired: \`review <n> fired\`
-- spec-dir: ${specDir ? `the folder ${specDir}, if it exists in the worktree` : `the spec folder on the PR description's "Spec:" line`}, relative to the worktree root
+- done-challenge: \`done challenge <folder>\`
+- spec-dir: ${specDirAsk(cardId, specDir)}, relative to the worktree root
+- spec-files: the names of those of ${SPEC_FILES2.join(", ")} that exist in that folder
 - build-json: the exact contents of build.json in that folder
 - validate-json: the exact contents of validate.json in that folder`,
       { label: "read checkpoints", phase: "Locate" }
@@ -2860,13 +2877,18 @@ ${d.branchOnly ? "- worktree: the main checkout, only when it has this run's bra
       )
     )
   ];
+  const listed = cp.evidence.filter((e) => e.source === "spec-files").map((e) => e.excerpt).join(" ");
+  const roundNumbers = rounds.map((l) => Number(/ done round (\d+)/.exec(l)?.[1] ?? 0));
   const spec = val(cp, "spec-dir").replace(/^Spec:\s*/i, "").replaceAll("`", "");
   return {
     build: parseBuild(fact(cp, "build-json")),
     validate: parseValidate(fact(cp, "validate-json")),
     specDir: shaped("rel", spec) || specDir,
     reviewFired: Math.max(0, ...lines["review-fired"].map((l) => Number(/review (\d+) fired/.exec(l)?.[1] ?? 0))),
+    specComplete: SPEC_FILES2.every((name) => listed.includes(name)),
+    challenged: lines["done-challenge"].length > 0,
     built: rounds.length > 0,
+    nextRound: rounds.length > 0 ? Math.max(...roundNumbers) + 1 : 0,
     ...passedTests.length > 0 && { passedTests },
     boardStartDone: lines["done-board-start"].length > 0,
     findings: lastFindings.replace(/^.*? done findings /, "").split(/\s+/).map((p) => shaped("rel", p)).filter(Boolean),
@@ -2886,6 +2908,19 @@ ${what}`),
     "Spec"
   );
   return d.stop("how", [{ id: "how-1", kind: "validation", what, evidence: "" }]);
+}
+async function committedSpec(d, cardId, resume) {
+  const { build, validate: validate2 } = resume;
+  return build && validate2 ? { build, validate: validate2 } : haltOnCard(
+    d,
+    cardId,
+    new Halt(
+      "how",
+      "A whole copy of the committed build.json and validate.json.",
+      `the spec folder ${resume.specDir} holds every file, but its build.json or validate.json came back cut short or unreadable`
+    ),
+    "its committed spec couldn't be read back whole, and it is never written again."
+  );
 }
 async function deliver(d, storyArg, how) {
   phase("Locate");
@@ -2923,8 +2958,8 @@ ARG>>>`,
       next: "Ask the user for the card to deliver; a story reaches delivery only as a card shape filed."
     };
   if (!isDeliverable(fact(cardRes, "labels"))) return refuse(d, cardId);
-  const specDir = specRel.replace(/\.md$/, "");
-  const resume = await readResume(d, cardId, specDir);
+  const resume = await readResume(d, cardId, specRel.replace(/\.md$/, ""));
+  const { specDir } = resume;
   const stopped = await workspace(d, {
     cardId,
     boardBranch,
@@ -2934,15 +2969,18 @@ ARG>>>`,
   });
   if (stopped) return stopped;
   const howInput = { d, where: how.where, story, storyRevision, cardId, specDir, answers: how.answers };
-  let { build, validate: validate2 } = resume;
-  if (build && validate2) {
+  let spec;
+  if (resume.specComplete && resume.challenged) {
+    spec = await committedSpec(d, cardId, resume);
     d.skip("how");
   } else {
-    const decided = await runHow(howInput);
+    const committed = resume.specComplete ? await committedSpec(d, cardId, resume) : null;
+    const decided = committed ? await rechallenge(howInput, committed.build, committed.validate) : await runHow(howInput);
     if ("exhausted" in decided) return brokenWorkflow(d, cardId, decided.exhausted);
-    ({ build, validate: validate2 } = decided);
+    spec = decided;
     d.done("how");
   }
+  const { build, validate: validate2 } = spec;
   const result = await runLoop({
     d,
     kind: "story",
@@ -2956,6 +2994,7 @@ ARG>>>`,
     // Once the PR exists, a rerun resumes at its review.
     startAtReview: d.state.pr ? Math.max(resume.reviewFired, 1) : 0,
     built: resume.built,
+    firstRound: resume.nextRound,
     reviseSpec: specReviser(howInput)
   });
   return { ...result, workflow: "deliver-story", specDir, report: reportOf("deliver-story", result, specDir) };

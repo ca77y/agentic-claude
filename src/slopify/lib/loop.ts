@@ -346,6 +346,8 @@ export interface LoopInput {
   startAtReview: number;
   /** The spec's tasks are already built, so the first round starts at validation. */
   built: boolean;
+  /** The ledger number of this run's first round: one past the last finished round a rerun found; 0 when none. */
+  firstRound?: number;
   /** The short flow for a trivial story or a bug: no spec, and what the first test has to state. */
   small?: { firstTest: string; reproduced?: readonly Listed[]; passedTests?: readonly string[] };
   /** A spike's or a research run's flow: the PR changes documents, which their own checks validate and their own writer revises. */
@@ -419,8 +421,11 @@ const worktreeOf = (l: Loop): string => l.d.state.worktree;
 const rowsOf = (l: Loop): CriterionState[] => Object.values(l.rows);
 const itemText = (i: OpenItem): string => `${i.problem.location}: ${i.problem.text}`;
 
+// A round's number in the ledger, which a rerun continues from where the earlier runs left it.
+const ledgerRound = (l: Loop): number => l.round + (l.firstRound ?? 0);
+
 function note(l: Loop, kind: Parameters<typeof progressLine>[1], entries: readonly string[]): void {
-  if (entries.length > 0) l.progress.push(progressLine(l.round, kind, entries));
+  if (entries.length > 0) l.progress.push(progressLine(ledgerRound(l), kind, entries));
 }
 
 // Commits and pushes go through one git index, so parallel inner loops take turns.
@@ -1404,7 +1409,7 @@ async function pushRound(l: Loop, last: boolean): Promise<void> {
     ...(state.pr || open
       ? [`review ${String(number)} fired <the trigger time, or none when docs/FORGE.md declares no review>`]
       : []),
-    `done round ${String(l.round)}${l.passedTests.length > 0 ? ` passed ${l.passedTests.join(" ")}` : ""}`,
+    `done round ${String(ledgerRound(l))}${l.passedTests.length > 0 ? ` passed ${l.passedTests.join(" ")}` : ""}`,
   ];
   const r = pushed(
     await pushWithProgress(l, steps, lines, "push the round", "Push"),

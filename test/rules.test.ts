@@ -499,6 +499,7 @@ describe("checkpointLine", () => {
     "done-board-start": "done board-start SMR-1",
     "done-round": "done round 2",
     "done-findings": "done findings docs/a.md docs/b.md",
+    "done-challenge": "done challenge docs/specs/smr-1-x",
     reproduced: reproductionLine({ steps: ["run add(1, 1)"], observed: "got 0" }),
     "review-fired": `review 1 fired ${T}`,
   };

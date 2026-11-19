@@ -1,10 +1,10 @@
 import { scout, fact, slugged } from "../lib/family.ts";
 import { callPusher, createDeliver, type Stopped } from "../lib/deliver.ts";
 import { locate, refuseCard, workspace } from "../lib/deliver-steps.ts";
-import { runHow, specReviser, type HowInput } from "../lib/how.ts";
+import { rechallenge, runHow, specReviser, type HowInput, type HowResult } from "../lib/how.ts";
 import { answersOf, answersRejected, flagOf, inputOf, textOf, type NotStarted } from "../lib/input.ts";
-import { must, reportOf, runLoop, stopOf, type LoopResult, type Run } from "../lib/loop.ts";
-import { readResume } from "../lib/resume.ts";
+import { Halt, haltOnCard, must, reportOf, runLoop, stopOf, type LoopResult, type Run } from "../lib/loop.ts";
+import { readResume, type Resume } from "../lib/resume.ts";
 import { isDeliverable } from "../lib/rules.ts";
 
 export const meta = {
@@ -50,6 +50,23 @@ async function brokenWorkflow(d: Run, cardId: string, tried: readonly string[]):
   return d.stop("how", [{ id: "how-1", kind: "validation", what, evidence: "" }]);
 }
 
+// A committed spec with all three files is never written again: a rerun reads it back, and halts when it can't.
+async function committedSpec(d: Run, cardId: string, resume: Resume): Promise<HowResult> {
+  const { build, validate } = resume;
+  return build && validate
+    ? { build, validate }
+    : haltOnCard(
+        d,
+        cardId,
+        new Halt(
+          "how",
+          "A whole copy of the committed build.json and validate.json.",
+          `the spec folder ${resume.specDir} holds every file, but its build.json or validate.json came back cut short or unreadable`,
+        ),
+        "its committed spec couldn't be read back whole, and it is never written again.",
+      );
+}
+
 async function deliver(
   d: Run,
   storyArg: string,
@@ -91,8 +108,8 @@ ARG>>>`,
     };
   if (!isDeliverable(fact(cardRes, "labels"))) return refuse(d, cardId);
 
-  const specDir = specRel.replace(/\.md$/, "");
-  const resume = await readResume(d, cardId, specDir);
+  const resume = await readResume(d, cardId, specRel.replace(/\.md$/, ""));
+  const { specDir } = resume;
   const stopped = await workspace(d, {
     cardId,
     boardBranch,
@@ -103,15 +120,20 @@ ARG>>>`,
   if (stopped) return stopped;
 
   const howInput: HowInput = { d, where: how.where, story, storyRevision, cardId, specDir, answers: how.answers };
-  let { build, validate } = resume;
-  if (build && validate) {
+  let spec: HowResult;
+  if (resume.specComplete && resume.challenged) {
+    spec = await committedSpec(d, cardId, resume);
     d.skip("how");
   } else {
-    const decided = await runHow(howInput);
+    const committed = resume.specComplete ? await committedSpec(d, cardId, resume) : null;
+    const decided = committed
+      ? await rechallenge(howInput, committed.build, committed.validate)
+      : await runHow(howInput);
     if ("exhausted" in decided) return brokenWorkflow(d, cardId, decided.exhausted);
-    ({ build, validate } = decided);
+    spec = decided;
     d.done("how");
   }
+  const { build, validate } = spec;
 
   const result = await runLoop({
     d,
@@ -126,6 +148,7 @@ ARG>>>`,
     // Once the PR exists, a rerun resumes at its review.
     startAtReview: d.state.pr ? Math.max(resume.reviewFired, 1) : 0,
     built: resume.built,
+    firstRound: resume.nextRound,
     reviseSpec: specReviser(howInput),
   });
   return { ...result, workflow: "deliver-story", specDir, report: reportOf("deliver-story", result, specDir) };
