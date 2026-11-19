@@ -697,6 +697,14 @@ function locate(d, cardRes, storyArg, fallbackSlug, ask) {
   const specRel = specRelOf(cardRes, cardId, read.storySource, read.story, slug);
   return { ...read, cardId, boardBranch, slug, specRel };
 }
+async function refuseCard(d, cardId, next) {
+  await callPusher(
+    d.pushBrief(`Comment on card ${cardId}, as docs/BOARD.md declares: ${next} Do nothing else.`),
+    "comment on the issue",
+    "Locate"
+  );
+  return { status: "not-started", next };
+}
 var PREPARE = `prepare that checkout as docs/FORGE.md's "Worktree preparation" line declares`;
 async function createWorktree(d, o) {
   const { state, stop, done, pushBrief, pushStop } = d;
@@ -2867,15 +2875,7 @@ ${d.branchOnly ? "- worktree: the main checkout, only when it has this run's bra
 }
 
 // src/slopify/workflows/deliver-story.ts
-async function refuse(d, cardId) {
-  const next = `Issue ${cardId} has no Deliverable label. Run /slopify:shape on it first, then invoke again.`;
-  await callPusher(
-    d.pushBrief(`Comment on card ${cardId}, as docs/BOARD.md declares: ${next} Do nothing else.`),
-    "comment on the issue",
-    "Locate"
-  );
-  return { status: "not-started", next };
-}
+var refuse = (d, cardId) => refuseCard(d, cardId, `Issue ${cardId} has no Deliverable label. Run /slopify:shape on it first, then invoke again.`);
 async function brokenWorkflow(d, cardId, tried) {
   const what = `The how phase ran out of attempts, so the workflow is broken for this issue. Everything tried:
 ${tried.map((t) => `- ${t}`).join("\n")}`;

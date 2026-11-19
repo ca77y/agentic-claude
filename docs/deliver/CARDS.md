@@ -2,7 +2,7 @@
 
 What each delivery reads from a card, so that whatever writes the issue gives it everything the run needs. `shape` writes stories to this contract. The parts are encoded in the plugin's [card templates](../../plugins/slopify/references/card-templates.md), which each project's `docs/BOARD.md` maps to its issue store and `bootstrap` checks. A card in the project's own format holds these parts under the headings `docs/BOARD.md` declares.
 
-A card holds intent, never the state of the code, which can change while it waits; see [`DESIGN.md`](../DESIGN.md). Every delivery reads the card through `scout-card`: its title, body, comments, labels, relations, and the branch name the board gives it. The title and body are the story text. Each run takes a digest of that text, so a rerun can tell when the card changed.
+A card holds intent, never the state of the code, which can change while it waits; see [`DESIGN.md`](../DESIGN.md). Every delivery reads the card through `scout-card`: its title, body, comments, labels, relations, and the branch name the board gives it. The title and body are the story text. Each run takes a digest of that text, so a rerun can tell when the card changed. A trivial story, bug, or question card that still lists anything under `## Open questions` is refused with a comment on the card, because no spec phase would settle it; the story contract below covers the same ground through its `Deliverable` label.
 
 ## Story, for `deliver-story`
 

@@ -1,6 +1,7 @@
 // The steps every delivery shares around its own: reading the card, and the workspace.
 import { fact, absent, shaped, type Need, type ScoutResult } from "./family.ts";
 import { need, slugOf, val, pushOk, opRef, callPusher, type Deliver, type Stopped } from "./deliver.ts";
+import type { NotStarted } from "./input.ts";
 
 type Run = Deliver;
 
@@ -108,6 +109,23 @@ export function locate(
   const slug = slugOf(cardId) || fallbackSlug;
   const specRel = specRelOf(cardRes, cardId, read.storySource, read.story, slug);
   return { ...read, cardId, boardBranch, slug, specRel };
+}
+
+/** The questions scout-card listed under the card's Open questions section; empty when it has none. */
+export const openQuestionsOf = (cardRes: ScoutResult | null): string[] =>
+  val(cardRes, "open-questions")
+    .split("\n")
+    .map((q) => q.trim())
+    .filter(Boolean);
+
+// The card's author is who can fix what stops the run, so the reason goes on the card as well as to the user.
+export async function refuseCard(d: Run, cardId: string, next: string): Promise<NotStarted> {
+  await callPusher(
+    d.pushBrief(`Comment on card ${cardId}, as docs/BOARD.md declares: ${next} Do nothing else.`),
+    "comment on the issue",
+    "Locate",
+  );
+  return { status: "not-started", next };
 }
 
 // ---- Workspace --------------------------------------------------------------

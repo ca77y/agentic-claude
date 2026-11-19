@@ -2183,6 +2183,15 @@ function locate(d, cardRes, storyArg, fallbackSlug, ask) {
   const specRel = specRelOf(cardRes, cardId, read.storySource, read.story, slug);
   return { ...read, cardId, boardBranch, slug, specRel };
 }
+var openQuestionsOf = (cardRes) => val(cardRes, "open-questions").split("\n").map((q) => q.trim()).filter(Boolean);
+async function refuseCard(d, cardId, next) {
+  await callPusher(
+    d.pushBrief(`Comment on card ${cardId}, as docs/BOARD.md declares: ${next} Do nothing else.`),
+    "comment on the issue",
+    "Locate"
+  );
+  return { status: "not-started", next };
+}
 var PREPARE = `prepare that checkout as docs/FORGE.md's "Worktree preparation" line declares`;
 async function createWorktree(d, o) {
   const { state, stop, done, pushBrief, pushStop } = d;
@@ -2364,6 +2373,7 @@ The argument below names one card on the board, or is the work itself as a promp
 - story-revision: the story revision digest
 - field-re: the field regex you used for it
 - branch: the branch name the board gives the card, or the single word none
+- open-questions: each question under the card's Open questions section, one per line, quoted exactly; leave it out when the card has no such section or the section is empty
 Change nothing on the board or forge.
 
 Argument:
@@ -2372,13 +2382,16 @@ ${arg}
 ARG>>>`,
     { label: "read the work", phase: "Locate" }
   );
-  return locate(d, cardRes, arg, slugged(arg, "change"), {
+  const located = locate(d, cardRes, arg, slugged(arg, "change"), {
     readable: "A readable card, or a prompt.",
     input: "A card or a prompt saying what to change.",
     arg: "story",
     criteria: false
   });
+  return "stop" in located ? located : { ...located, openQuestions: openQuestionsOf(cardRes) };
 }
+var openQuestionsNext = (cardId, questions) => `Card ${cardId} has open questions. Answer them in a comment and run /slopify:shape on the card to apply your answers, or edit the card to answer them and remove them from its Open questions section, then invoke again.
+${list(questions)}`;
 async function findCard(d, arg, cardType) {
   let located = await readWork(d, arg);
   if ("stop" in located) return { status: "not-started", next: located.stop.needs.map((n) => n.what).join(" ") };
@@ -2386,7 +2399,8 @@ async function findCard(d, arg, cardType) {
     located = await readWork(d, await fileCard(d, located.story, located.slug, cardType));
     if ("stop" in located) return { status: "not-started", next: located.stop.needs.map((n) => n.what).join(" ") };
   }
-  const { story, cardId, boardBranch, slug, specRel } = located;
+  const { story, cardId, boardBranch, slug, specRel, openQuestions } = located;
+  if (openQuestions.length > 0) return refuseCard(d, cardId, openQuestionsNext(cardId, openQuestions));
   const name = (specRel.split("/").pop() ?? slug).replace(/\.md$/, "");
   return { story, cardId, boardBranch, slug, name, cardType };
 }

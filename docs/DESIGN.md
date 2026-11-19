@@ -85,7 +85,7 @@ An `unverified` finding doesn't block and is listed under **Not done**. Whether 
   - `ready`: the PR exists and its review is clean.
   - `draft`: the PR exists, and its description lists what is open.
   - `blocked`: one of the workflow's halt conditions held.
-  - `not-started`: the issue couldn't be read or isn't marked deliverable, `answers` was given as something other than a map, or an answer isn't plain text.
+  - `not-started`: the issue couldn't be read, a story isn't marked deliverable, a card for any other delivery lists open questions, `answers` was given as something other than a map, or an answer isn't plain text.
 - A `blocked` or `draft` result names what it needs by id, along with the stages completed and how to rerun.
 - The issue is the acceptance source. A workflow may clarify a criterion in the spec, keeping the original wording beside the clarification. It never rewrites the issue.
 

@@ -1,6 +1,6 @@
 import { scout, fact, slugged } from "../lib/family.ts";
 import { callPusher, createDeliver, type Stopped } from "../lib/deliver.ts";
-import { locate, workspace } from "../lib/deliver-steps.ts";
+import { locate, refuseCard, workspace } from "../lib/deliver-steps.ts";
 import { runHow, specReviser, type HowInput } from "../lib/how.ts";
 import { answersOf, answersRejected, flagOf, inputOf, textOf, type NotStarted } from "../lib/input.ts";
 import { must, reportOf, runLoop, stopOf, type LoopResult, type Run } from "../lib/loop.ts";
@@ -37,15 +37,8 @@ export const meta = {
 type Delivered = LoopResult & { workflow: "deliver-story"; specDir: string; report: string };
 
 // An issue only reaches delivery through shape, so a missing label is the one thing to say to its author.
-async function refuse(d: Run, cardId: string): Promise<NotStarted> {
-  const next = `Issue ${cardId} has no Deliverable label. Run /slopify:shape on it first, then invoke again.`;
-  await callPusher(
-    d.pushBrief(`Comment on card ${cardId}, as docs/BOARD.md declares: ${next} Do nothing else.`),
-    "comment on the issue",
-    "Locate",
-  );
-  return { status: "not-started", next };
-}
+const refuse = (d: Run, cardId: string): Promise<NotStarted> =>
+  refuseCard(d, cardId, `Issue ${cardId} has no Deliverable label. Run /slopify:shape on it first, then invoke again.`);
 
 async function brokenWorkflow(d: Run, cardId: string, tried: readonly string[]): Promise<Stopped> {
   const what = `The how phase ran out of attempts, so the workflow is broken for this issue. Everything tried:\n${tried.map((t) => `- ${t}`).join("\n")}`;

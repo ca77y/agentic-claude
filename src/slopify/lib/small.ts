@@ -1,7 +1,7 @@
 // What deliver-trivial and deliver-bugfix share: from a card or a prompt to a reviewed PR, with no spec.
 import { scout, slugged } from "./family.ts";
-import { MARKED, callPusher, createDeliver, fenced, opRef, pushOk, type Stopped } from "./deliver.ts";
-import { locate, workspace } from "./deliver-steps.ts";
+import { MARKED, callPusher, createDeliver, fenced, list, opRef, pushOk, type Stopped } from "./deliver.ts";
+import { locate, openQuestionsOf, refuseCard, workspace } from "./deliver-steps.ts";
 import { answersOf, answersRejected, flagOf, inputOf, textOf, type NotStarted } from "./input.ts";
 import { Halt, reportOf, runLoop, stopOf, type LoopResult, type Run } from "./loop.ts";
 import { readResume, type Resume } from "./resume.ts";
@@ -63,6 +63,7 @@ The argument below names one card on the board, or is the work itself as a promp
 - story-revision: the story revision digest
 - field-re: the field regex you used for it
 - branch: the branch name the board gives the card, or the single word none
+- open-questions: each question under the card's Open questions section, one per line, quoted exactly; leave it out when the card has no such section or the section is empty
 Change nothing on the board or forge.
 
 Argument:
@@ -71,13 +72,18 @@ ${arg}
 ARG>>>`,
     { label: "read the work", phase: "Locate" },
   );
-  return locate(d, cardRes, arg, slugged(arg, "change"), {
+  const located = locate(d, cardRes, arg, slugged(arg, "change"), {
     readable: "A readable card, or a prompt.",
     input: "A card or a prompt saying what to change.",
     arg: "story",
     criteria: false,
   });
+  return "stop" in located ? located : { ...located, openQuestions: openQuestionsOf(cardRes) };
 }
+
+// With no spec phase to settle them, an open question would leave the run guessing what the card asks for.
+const openQuestionsNext = (cardId: string, questions: readonly string[]): string =>
+  `Card ${cardId} has open questions. Answer them in a comment and run /slopify:shape on the card to apply your answers, or edit the card to answer them and remove them from its Open questions section, then invoke again.\n${list(questions)}`;
 
 export interface Found {
   story: string;
@@ -100,7 +106,8 @@ export async function findCard(d: Run, arg: string, cardType: string): Promise<F
     located = await readWork(d, await fileCard(d, located.story, located.slug, cardType));
     if ("stop" in located) return { status: "not-started", next: located.stop.needs.map((n) => n.what).join(" ") };
   }
-  const { story, cardId, boardBranch, slug, specRel } = located;
+  const { story, cardId, boardBranch, slug, specRel, openQuestions } = located;
+  if (openQuestions.length > 0) return refuseCard(d, cardId, openQuestionsNext(cardId, openQuestions));
   const name = (specRel.split("/").pop() ?? slug).replace(/\.md$/, "");
   return { story, cardId, boardBranch, slug, name, cardType };
 }

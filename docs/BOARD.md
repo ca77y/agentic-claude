@@ -20,7 +20,7 @@ Configuration does not authorize execution; the user's request does. An operatio
 
 - Identity and spec naming: the issue identifier (`SMR-200`), shared by board, branch, PR, and spec. A spec is a folder, `docs/specs/<lowercase identifier>-<slug>/`, for example `docs/specs/smr-200-card-content-access/`.
 - Type and priority: exactly one of the labels `Bug`, `Improvement`, `Feature`, `Research`; priority `1` Urgent, `2` High, `3` Medium, `4` Low.
-- Deliverable: the label `Deliverable` marks a card as written by the shaping process, and is added when that process files or updates it. Only a card with this label can go through a full story delivery.
+- Deliverable: the label `Deliverable` marks a story card the shaping process filed with no open question left and every check passed, and comes off when shaping the card again leaves a question open. Only a card with this label can go through a full story delivery.
 - Shaped: the label `Shaped` marks a card the shaping process filed, and is added every time it files or updates one. Shaping a card with this label again only applies the answers its comments give, without new grounding or advice.
 - Unreproducible: the label `Unreproducible` marks a Bug card whose bug an automated fix could not reproduce.
 - Card, spec, and docs: a card holds the why and the what; a spec holds the how for one unit of work, is written and read by agents, stays in the repository as context for later failures, and is never kept current; humans compact or remove it. Durable knowledge belongs in `docs/`, outside `docs/specs/`.
@@ -37,7 +37,7 @@ Configuration does not authorize execution; the user's request does. An operatio
 
 ## Delivery
 
-- When delivery starts: from `Backlog` or `Todo`, move the card to `In Progress`; asking for delivery is the user's readiness decision. In any other status, leave it, and report a card in `Done`, `Canceled`, or `Duplicate`. An archived card (`archivedAt` set) gets no card write during the delivery; report it. A full story delivery refuses a card without the `Deliverable` label; the short flow for trivial stories and bugs refuses none.
+- When delivery starts: from `Backlog` or `Todo`, move the card to `In Progress`; asking for delivery is the user's readiness decision. In any other status, leave it, and report a card in `Done`, `Canceled`, or `Duplicate`. An archived card (`archivedAt` set) gets no card write during the delivery; report it. A full story delivery refuses a card without the `Deliverable` label; every other delivery needs no label, and refuses a card that still lists open questions.
 - When the PR opens: attach the PR.
 - When the PR's review is clean: move the card to `In Review` only if it is `In Progress`.
 - On a later round: no card operation.

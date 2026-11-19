@@ -9,6 +9,7 @@ How `deliver-spike` answers a bounded technical question with a findings documen
  │
  1 READ ──────── scout-card (haiku) reads the issue, scout-checkpoint (haiku) the run state ⛔ H5
  │               a prompt gets a new spike card from pusher, so every spike is on the board  ⛔ H1
+ │               a card that lists open questions stops the run with a comment  ⛔ H6
  2 WORKSPACE ─── pusher (sonnet) creates and prepares the worktree, starts the issue
  3 GROUND ────── in parallel: library-reader, scout-code, scout-feasibility,
  │               scout-upstream-docs, scout-known-issues, scout-prior-art (sonnet)
@@ -67,3 +68,4 @@ One file, `docs/spikes/<id>-<slug>.md`, named like a spec folder. Unlike a spec 
 | H3  | Infrastructure: a stop signal, a required tool denied, or a budget, usage, or agent limit reached         | Any      | `blocked`, with the state reported on the issue             |
 | H4  | `writer-pr` returns no description in any attempt of a stage                                              | Push     | `blocked`; the document stays committed on the local branch |
 | H5  | On a rerun, a checkpoint item the scout returned for a ledger key isn't a ledger line                     | Read     | `blocked`, naming the key                                   |
+| H6  | The card lists open questions                                                                             | Read     | `not-started`, and an issue comment listing them            |

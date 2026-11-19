@@ -566,7 +566,39 @@ const storyRun: Script = (type, label, prompt) => {
 const createBrief = (): string => calls.find((c) => c.label === "create the worktree")?.prompt ?? "";
 const failedReport = (): string => calls.find((c) => c.label === "report the failed reproduction")?.prompt ?? "";
 
+// SMR-1 read back with a question left under its Open questions section.
+const questioned: Script = (type, label, prompt) => {
+  const r = card("Feature")(type, label, prompt);
+  return type === "scout-card" && r
+    ? {
+        ...r,
+        evidence: [
+          ...(r["evidence"] as object[]),
+          { source: "open-questions", location: "x", excerpt: "Which users see it?" },
+        ],
+      }
+    : r;
+};
+
 describe("the small workflows", () => {
+  test("refuses a card with open questions, says so on the card, and builds nothing", async () => {
+    current.script = questioned;
+    Object.assign(globalThis, { args: "SMR-1" });
+    const r = await deliverTrivial();
+    assert.equal(r.status, "not-started");
+    assert.ok("next" in r && r.next.includes("Which users see it?"));
+    assert.ok(calls.some((c) => c.label === "comment on the issue" && c.prompt.includes("open questions")));
+    assert.equal(count("coder"), 0);
+  });
+
+  test("deliver-bugfix refuses a card with open questions before reproducing it", async () => {
+    current.script = questioned;
+    Object.assign(globalThis, { args: "SMR-1" });
+    const r = await deliverBugfix();
+    assert.equal(r.status, "not-started");
+    assert.equal(count("coder"), 0);
+  });
+
   test("deliver-trivial files a card for a prompt, then delivers against that card", async () => {
     current.script = promptRun;
     Object.assign(globalThis, { args: "Add mul to calc.py" });

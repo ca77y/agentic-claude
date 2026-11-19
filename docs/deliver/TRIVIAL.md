@@ -9,6 +9,7 @@ How `deliver-trivial` takes a trivial story from a card or a prompt to a reviewe
  │
  1 READ ──────── scout-card (haiku) reads the issue, scout-checkpoint (haiku) the run state ⛔ H5
  │               a prompt gets a new card from pusher, so all work is on the board  ⛔ H1
+ │               a card that lists open questions stops the run with a comment  ⛔ H6
  2 WORKSPACE ─── pusher (sonnet) creates and prepares the worktree, starts the issue
  3 BUILD ─────── coder (opus) writes a failing test → commit
  │   ▲ ≤3 tries  coder (opus) makes it pass → commit
@@ -34,7 +35,7 @@ How `deliver-trivial` takes a trivial story from a card or a prompt to a reviewe
 ## What differs from `deliver-story`
 
 - **No how phase:** no designs, advisors, spec, or challenge.
-- **No label:** this flow doesn't need `Deliverable`, so it can start from a prompt. A prompt always gets a card first.
+- **No label:** this flow doesn't need `Deliverable`, so it can start from a prompt. A prompt always gets a card first. A card that still lists open questions is refused, because with no spec phase nothing would settle them: the run comments on the card and returns `not-started`.
 - **Checks inside the inner loop:** a fix isn't validated until the project's checks pass.
 - **`qa` and `simplifier` run once**, on the first change. A review fix has only the checks, except a `test`-kind fix, whose test may pass on the current code: `qa` proves it by breaking the behavior it states.
 - **The app runs once**, before the PR opens, and again only if that run failed. With no criteria, the validator treats the whole change as one, under whichever `TESTING.md` category covers it. When none fits, it reports `cannot-verify`, and `TESTING.md`'s **Uncategorized** setting decides whether the PR stays a draft.
@@ -56,3 +57,4 @@ The PR description is written and checked as in [`STORY.md`](STORY.md#the-pr-des
 | H3  | Infrastructure: a stop signal, a required tool denied, or a budget, usage, or agent limit reached         | Any      | `blocked`, with the state reported on the issue              |
 | H4  | `writer-pr` returns no description in any attempt of a stage                                              | Push     | `blocked`; finished work stays committed on the local branch |
 | H5  | On a rerun, a checkpoint item the scout returned for a ledger key isn't a ledger line                     | Read     | `blocked`, naming the key                                    |
+| H6  | The card lists open questions                                                                             | Read     | `not-started`, and an issue comment listing them             |
