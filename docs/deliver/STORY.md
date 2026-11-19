@@ -30,6 +30,7 @@ A delivery ends in a PR unless one of the halt conditions below holds. Anything 
  │   │                           each compares all 3 designs
  │   └── none viable  DECIDE     judge (opus) picks one and grafts the best of the others  ⛔ H3
  │                    SPEC       writer-spec (opus) writes the spec folder → pusher commits it
+ │                    rerun: a committed spec is read back, never rewritten  ⛔ H8
  │   ▲  ≤3 revisions  CHALLENGE  check-claim × N, check-criterion × N (haiku),
  │   │                           lens-scope, lens-consistency (sonnet), lens-altitude (haiku)
  │   │                           the 6 advisors, fresh, try to break the spec: blocker or major only
