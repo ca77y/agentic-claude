@@ -295,6 +295,9 @@ const cutAt =
 const cut = cutAt(60_000);
 // A scout that leaves out the third excerpt of a file it copies in more than two.
 const dropThird: Copy = (parts) => (parts.length > 2 ? parts.filter((_, i) => i !== 2) : parts);
+// A scout whose every way of copying a long file fails: a copy in one excerpt comes back cut short, and a copy in
+// several excerpts comes back missing one, so no copy of a ~100 KB file the scout returns is whole.
+const noWholeCopy: Copy = (parts) => (parts.length > 2 ? dropThird(parts) : cut(parts));
 
 beforeEach(() => {
   calls.length = 0;
@@ -376,6 +379,8 @@ describe("a rerun of deliver-story", () => {
   for (const [fault, copy] of [
     ["cuts every excerpt at 10,000 characters", cutAt(10_000)],
     ["leaves out one excerpt of the file", dropThird],
+    ["cuts every excerpt at 4,000 characters, so neither a whole copy nor a copy in parts is whole", cutAt(4000)],
+    ["cuts a copy in one excerpt short and leaves out one excerpt of a copy in parts", noWholeCopy],
   ] as const) {
     test(`over a challenged ~100 KB build.json that parses on disk, when the scout ${fault}, goes to the build like a small one`, async () => {
       const small = freshDisk();
