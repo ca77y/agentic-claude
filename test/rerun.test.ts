@@ -320,12 +320,16 @@ describe("a rerun of deliver-story", () => {
     await deliver({ disk: small });
     const fromSmall = howSteps();
     assert.deepEqual(fromSmall, NONE);
+    assert.ok(count("coder") > 0, "the small rerun builds");
+    const pushedFromSmall = roundsPushed();
 
     const big = freshDisk();
     await deliver({ disk: big, build: BIG, over: BLOCKED_IN_BUILD });
     await deliver({ disk: big, build: BIG, copy: cut });
     assert.deepEqual(howSteps(), fromSmall, "a ~100 KB build.json the scout cut short resumes like a small one");
     assert.equal(specCommits(), 0, "the rerun commits no spec again");
+    assert.ok(count("coder") > 0, "a ~100 KB build.json the scout cut short still reaches the build");
+    assert.deepEqual(roundsPushed(), pushedFromSmall, "and pushes the same rounds as the small rerun");
   });
 
   test("finds the first run's spec folder when the story's first line now begins \"Line 1:\", and leaves one folder", async () => {
