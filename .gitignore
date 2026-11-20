@@ -26,3 +26,9 @@ node_modules/
 
 # Obsidian community plugin code, installed per machine through Obsidian
 .obsidian/plugins/
+
+# Terraform local state and provider cache
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.*
+terraform/*.tfplan
