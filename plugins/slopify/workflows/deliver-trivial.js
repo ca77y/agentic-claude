@@ -471,6 +471,10 @@ function pusherSchema(notes = {}) {
       hookRejection: {
         type: "string",
         description: "The failing output of a commit hook that rejected a commit; empty when no hook rejected one"
+      },
+      alreadyCommitted: {
+        type: "boolean",
+        description: "True only when a commit had nothing to commit because its listed content is already committed"
       }
     }
   };
@@ -1075,7 +1079,6 @@ function pushWithProgress(l, instruction, lines, label, phaseTitle) {
     return ok;
   });
 }
-var NOTHING_TO_COMMIT = "nothing to commit";
 async function commit(l, paths, message, repair) {
   const all = [.../* @__PURE__ */ new Set([...l.uncommitted, ...paths])];
   const send = () => inOrder(
@@ -1101,7 +1104,7 @@ ${list(all)}`
     });
     return null;
   }
-  const already = !!r && r.unmet.length > 0 && r.unmet.every((u) => u.includes(NOTHING_TO_COMMIT));
+  const already = r?.alreadyCommitted === true;
   const sha = already ? "" : opRef(pushed(r, `A commit of ${all.join(", ")}.`), "commit");
   l.uncommitted = l.uncommitted.filter((x) => !all.includes(x));
   return sha;

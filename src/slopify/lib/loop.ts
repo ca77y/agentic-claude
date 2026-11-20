@@ -471,8 +471,6 @@ function pushWithProgress(l: Loop, instruction: string, lines: readonly string[]
   });
 }
 
-const NOTHING_TO_COMMIT = "nothing to commit";
-
 // A hook rejection its producer couldn't repair is a problem like any other, so it stays open for the next round
 // instead of ending the delivery. Returns the commit, or null when the hook rejected it.
 async function commit(l: Loop, paths: readonly string[], message: string, repair: HookRepair): Promise<string | null> {
@@ -500,8 +498,8 @@ async function commit(l: Loop, paths: readonly string[], message: string, repair
     return null;
   }
   // A commit whose listed content is already committed, as a rebuilt change's often is, is done; pusher-forge.md has
-  // pusher report it, and only it, with these words.
-  const already = !!r && r.unmet.length > 0 && r.unmet.every((u) => u.includes(NOTHING_TO_COMMIT));
+  // pusher report it, and only it, in the typed alreadyCommitted field.
+  const already = r?.alreadyCommitted === true;
   const sha = already ? "" : opRef(pushed(r, `A commit of ${all.join(", ")}.`), "commit");
   l.uncommitted = l.uncommitted.filter((x) => !all.includes(x));
   return sha;
