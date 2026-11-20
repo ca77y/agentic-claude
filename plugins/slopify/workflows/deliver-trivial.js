@@ -1075,6 +1075,7 @@ function pushWithProgress(l, instruction, lines, label, phaseTitle) {
     return ok;
   });
 }
+var NOTHING_TO_COMMIT = "nothing to commit";
 async function commit(l, paths, message, repair) {
   const all = [.../* @__PURE__ */ new Set([...l.uncommitted, ...paths])];
   const send = () => inOrder(
@@ -1100,7 +1101,7 @@ ${list(all)}`
     });
     return null;
   }
-  const already = !!r && r.unmet.length > 0 && r.unmet.every((u) => u.includes("nothing to commit"));
+  const already = !!r && r.unmet.length > 0 && r.unmet.every((u) => u.includes(NOTHING_TO_COMMIT));
   const sha = already ? "" : opRef(pushed(r, `A commit of ${all.join(", ")}.`), "commit");
   l.uncommitted = l.uncommitted.filter((x) => !all.includes(x));
   return sha;
@@ -1424,9 +1425,10 @@ async function reviseSpec(l, items2) {
     items2.map((i) => `${i.problem.location}: ${i.problem.text}`),
     { build: l.build, validate: l.validate }
   );
+  const built = new Set(l.build?.tasks.map((t) => t.id));
   l.build = revised.build;
   l.validate = revised.validate;
-  return revised.rerun.map((t) => ({ ...changeOfTask(l, t), rebuild: true }));
+  return revised.rerun.map((t) => ({ ...changeOfTask(l, t), rebuild: built.has(t.id) }));
 }
 async function updateDocs(l, problems) {
   if (l.docs.length === 0 && problems.length === 0) return;

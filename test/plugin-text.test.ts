@@ -91,3 +91,21 @@ describe("a shortened or misordered progress entry (SMR-404)", () => {
     );
   });
 });
+
+describe("a commit with nothing left to commit (SMR-405)", () => {
+  const commitRule =
+    text("plugins/slopify/references/pusher-forge.md")
+      .split("\n")
+      .find((l) => l.startsWith("- **Commit.**")) ?? "";
+
+  test("pusher-forge.md has pusher report an already-committed commit with the words the delivery loop counts as done", () => {
+    assert.ok(commitRule, "pusher-forge.md has the commit rule");
+    assert.match(commitRule, /already committed/i);
+    assert.ok(commitRule.includes("`nothing to commit:`"), "the commit rule fixes the words of the report");
+    assert.ok(
+      text("src/slopify/lib/loop.ts").includes('NOTHING_TO_COMMIT = "nothing to commit"'),
+      "the delivery loop counts those words as done",
+    );
+    assert.match(commitRule, /never use those words for any other failure/i);
+  });
+});

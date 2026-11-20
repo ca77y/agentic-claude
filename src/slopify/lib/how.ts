@@ -677,8 +677,8 @@ export function specReviser(o: HowInput) {
       "revise the spec",
       "Spec",
     );
-    // The writer's task list is the whole spec, so every task whose files or criteria a problem names runs again. When no
-    // problem names one, the tasks the revision changed run again: a task, or one of its criteria, that differs from before.
+    // The writer's task list is the whole spec, so the tasks the revision affects run again: each task whose id, files, or
+    // criteria a problem names, and each task that is new or differs from before, in itself or in one of its criteria.
     const named = (t: Task): boolean =>
       problems.some((p) => [t.id, ...t.files, ...t.criteria].some((x) => p.includes(x)));
     const criteriaOf = (v: Validate | null, t: Task) =>
@@ -691,11 +691,10 @@ export function specReviser(o: HowInput) {
         criteriaOf(previous.validate, t) !== criteriaOf(spec.validate, t)
       );
     };
-    const rerun = spec.build.tasks.filter((t) => named(t));
     return {
       build: spec.build,
       validate: spec.validate,
-      rerun: rerun.length > 0 ? rerun : spec.build.tasks.filter((t) => changed(t)),
+      rerun: spec.build.tasks.filter((t) => named(t) || changed(t)),
     };
   };
 }
