@@ -5,8 +5,8 @@
       "wording": "A request with a cap of N files at most N cards. (Deterministic)",
       "category": "Deterministic",
       "path": "make check, plus node --test test/split.test.ts test/shape-split.test.ts",
-      "evidence": "make check exit 0; the split cap tests pass: cap N with N+2 parts gives exactly N pusher create dispatches, a pusher reporting done:false still uses a slot, and a stated cap of 50 with no arg files at most 20",
-      "firstTest": "test/shape-split.test.ts: 'a split with a cap of 2 and a plan of 4 parts dispatches exactly 2 card creates and names the other 2 as over the cap'"
+      "evidence": "make check exit 0; the split cap tests pass: with a `cap` arg of N and N+2 uncovered parts, exactly N pusher create dispatches and 2 parts reported over the cap; with no `cap` arg, a planner statedCap of 2 and four uncovered parts, exactly 2 creates and 2 parts reported over the cap of 2; a stated cap of 50 with no arg files at most 20; covered parts take no slot",
+      "firstTest": "test/shape-split.test.ts: 'with no cap arg, a request stating a cap of 2 with four parts dispatches exactly 2 card creates and names the other 2 as over the cap of 2'"
     },
     {
       "id": "c2",
@@ -21,7 +21,7 @@
       "wording": "Given a request with a part that depends on another part, and stubbed model output, the card filed for the dependent part carries a relation to the card filed for the part it depends on. (Deterministic)",
       "category": "Deterministic",
       "path": "make check, plus node --test test/shape-split.test.ts test/plugin-text.test.ts",
-      "evidence": "make check exit 0; on the fake board the dependent part's card holds exactly the id of the card filed for its dependency in blockedBy; plugin-text tests show docs/BOARD.md and pusher-board.md bind adding relations",
+      "evidence": "make check exit 0; on the fake board the dependent part's card holds exactly the id of the card filed for its dependency in blockedBy, with the dependency filed first; plugin-text tests show docs/BOARD.md and pusher-board.md bind blockedBy/relatedTo on Create and that a named relation with no binding creates nothing",
       "firstTest": "test/shape-split.test.ts: 'part b depends on part a, so b's card on the board is blocked by a's card'"
     },
     {
@@ -37,7 +37,7 @@
       "wording": "Given a request with a part that gets no card, and stubbed model output, the report names that part. (Deterministic)",
       "category": "Deterministic",
       "path": "make check, plus node --test test/split.test.ts test/shape-split.test.ts",
-      "evidence": "make check exit 0; the report names a planner-omitted part with its reason, an over-cap part with 'over the cap of N', and a part not filed for missing template parts",
+      "evidence": "make check exit 0; the report names a planner-omitted part with its reason, an over-cap part with the cap, and a part not filed for missing template parts",
       "firstTest": "test/shape-split.test.ts: 'a part the planner leaves out is named in the report with its reason'"
     },
     {
@@ -45,7 +45,7 @@
       "wording": "Given a board card that covers a part of the request, including one an earlier run filed, and stubbed model output, the run files no card for that part. (Deterministic)",
       "category": "Deterministic",
       "path": "make check, plus node --test test/shape-split.test.ts",
-      "evidence": "make check exit 0; with a fake-board card covering a part (by advisor-fit duplicateOf found in that part's related evidence, and by an earlier run's hidden line) no writer-card or pusher dispatch runs for that part, and a rerun on the same request leaves the board size unchanged",
+      "evidence": "make check exit 0; with a fake-board card covering a part, found by advisor-fit duplicateOf in that part's related evidence (as a bare identifier and inside a URL location) and by an earlier run's hidden line, no writer-card or pusher dispatch runs for that part; a rerun on the same request leaves the board size unchanged; after a create that halts H2, a rerun finds that card by its hidden line and files no second card for its part",
       "firstTest": "test/shape-split.test.ts: 'a rerun on the same request files no card, finding each part's card by its hidden line'"
     },
     {
