@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { beforeEach, describe, test } from "node:test";
 
 import { createDeliver } from "../src/slopify/lib/deliver.ts";
+import { specReviser } from "../src/slopify/lib/how.ts";
 import { runLoop, stopOf, Halt, type LoopInput, type Run } from "../src/slopify/lib/loop.ts";
 import type { Build, Validate } from "../src/slopify/lib/spec.ts";
 import { checkDescription } from "../src/slopify/lib/rules.ts";
@@ -1654,5 +1655,146 @@ describe("a progress line the pusher refuses", () => {
     assert.ok(!(r instanceof Halt), `the run halted: ${String(r)}`);
     assert.ok(count("watcher") > 0, "the run reached the Review phase");
     assert.ok(["ready", "draft"].includes((r as { status: string }).status));
+  });
+});
+
+// SMR-405: a spec revision during the build reruns only the tasks it changed, and a rebuild of a change that is already
+// committed neither demands a new failing test nor blocks on a commit with nothing left to commit.
+const revisionTask = (id: string, file: string, criterion: string, todo: string) => ({
+  id,
+  dependsOn: [],
+  files: [file],
+  criteria: [criterion],
+  todo,
+  reuse: [],
+  create: [],
+});
+const SPEC_JUDGE: Script = (_t, label) => (label === "gateway" ? GATEWAY_OK : ruling({ kind: "spec" }));
+const C2 = { ...PASS_ROW, id: "c2" };
+// The first review finds a problem at a location that names no task, file, or criterion, and it is ruled a spec fault.
+const specFinding = (): Script => {
+  let review = 0;
+  return () => {
+    review += 1;
+    return review === 1
+      ? { ...CLEAN_REVIEW, findings: [{ id: "f1", location: "design", text: "the design keeps a legacy path" }] }
+      : CLEAN_REVIEW;
+  };
+};
+const listedPaths = (prompt: string): string[] =>
+  prompt
+    .split("\n")
+    .filter((x) => x.startsWith("- "))
+    .map((x) => x.slice(2).trim());
+
+// Models git in the worktree: a path is dirty only while a producer has written content not yet committed. On the
+// rebuild the coder writes back what is already committed, so git has nothing to commit. `neverWritten` is a path a
+// producer reports changed but never wrote.
+function gitLike(neverWritten = ""): Script {
+  const dirty = new Set<string>();
+  let tests = 0;
+  let fixes = 0;
+  return happy({
+    watcher: specFinding(),
+    judge: SPEC_JUDGE,
+    coder: (_t, label) => {
+      if (label.endsWith(": test")) {
+        tests += 1;
+        if (tests === 1) dirty.add("a.test.ts");
+        return { ...OK_TEST, failingOutput: tests === 1 ? "red" : "" };
+      }
+      fixes += 1;
+      if (fixes === 1) dirty.add("src/a.ts");
+      return { ...OK_FIX, changed: neverWritten && fixes === 1 ? ["src/a.ts", neverWritten] : ["src/a.ts"] };
+    },
+    pusher: (_t, label, prompt) => {
+      if (!label.startsWith("commit:")) return pusher(prompt);
+      const listed = listedPaths(prompt);
+      if (neverWritten && listed.includes(neverWritten))
+        return { done: false, unmet: [`commit: pathspec '${neverWritten}' did not match any files`], operations: [] };
+      if (listed.every((p) => !dirty.has(p)))
+        return { done: false, unmet: ["commit: nothing to commit, working tree clean"], operations: [] };
+      for (const p of listed) dirty.delete(p);
+      return OK_PUSH;
+    },
+  });
+}
+// The revision changes t1, so it is rebuilt, though its test and fix are already committed and pass.
+const rebuilding = (d: Run): LoopInput =>
+  inputFor(d, {
+    reviseSpec: async () => {
+      await Promise.resolve();
+      const tasks = BUILD.tasks.map((t) => ({ ...t, todo: `${t.todo}, revised` }));
+      return { build: { ...BUILD, tasks }, validate: VALIDATE, rerun: tasks };
+    },
+  });
+async function rebuildOutcome(d: Run): Promise<{ status: string; needs: string }> {
+  try {
+    const r = await runLoop(rebuilding(d));
+    return { status: r.status, needs: "" };
+  } catch (error) {
+    const s = stopOf(d, error);
+    return { status: s.status, needs: JSON.stringify(s.needs) };
+  }
+}
+
+describe("a spec revision during the build", () => {
+  test("reruns only the tasks the revision changed, when the problem names none", async () => {
+    const t1 = revisionTask("t1", "src/a.ts", "c1", "remove the client");
+    const two: Build = { ...BUILD, tasks: [t1, revisionTask("t2", "src/b.ts", "c2", "remove the server")] };
+    const validate: Validate = {
+      criteria: [...VALIDATE.criteria, ...VALIDATE.criteria.map((c) => ({ ...c, id: "c2" }))],
+    };
+    const revised = { ...two, tasks: [t1, revisionTask("t2", "src/b.ts", "c2", "remove the server, revised")] };
+    const agents = happy({
+      watcher: specFinding(),
+      judge: SPEC_JUDGE,
+      "writer-spec": () => ({ build: revised, validate, claims: [] }),
+      validator: () => ({ results: [PASS_ROW, C2], uncategorizedSetting: "draft" }),
+    });
+    use((type, label, prompt) => (type.startsWith("advisor-") ? { findings: [] } : agents(type, label, prompt)));
+    const d = freshRun();
+    await runLoop(
+      inputFor(d, {
+        build: two,
+        validate,
+        reviseSpec: specReviser({
+          d,
+          where: "project",
+          story: "the issue",
+          storyRevision: "abc",
+          cardId: "SMR-1",
+          specDir: "docs/specs/smr-1",
+          answers: {},
+        }),
+      }),
+    );
+    assert.equal(count("writer-spec"), 1, "the spec was revised once");
+    assert.equal(count("coder", "t2: test"), 2, "t2, which the revision changed, is built again");
+    assert.equal(count("coder", "t1: test"), 1, "t1, which the revision left unchanged, is not built again");
+  });
+
+  test("lets a rebuilt change's existing, passing test stand instead of demanding a new failing test", async () => {
+    use(gitLike());
+    await rebuildOutcome(freshRun());
+    const briefs = calls.filter((c) => c.type === "coder" && c.label === "t1: test").map((c) => c.prompt);
+    assert.equal(briefs.length, 2, "t1 is rebuilt once after the revision");
+    assert.ok(
+      briefs[1]?.includes("may already pass"),
+      "the rebuild's test brief demands a new failing test though t1's test is committed and passing",
+    );
+  });
+
+  test("counts a commit whose listed content is already committed as done, and does not block", async () => {
+    use(gitLike());
+    const r = await rebuildOutcome(freshRun());
+    assert.notEqual(r.status, "blocked", `the run ended blocked: ${r.needs}`);
+  });
+
+  test("still blocks on a commit that fails because a listed path was never written", async () => {
+    use(gitLike("src/never.ts"));
+    const r = await rebuildOutcome(freshRun());
+    assert.equal(r.status, "blocked");
+    assert.ok(r.needs.includes("src/never.ts"), r.needs);
   });
 });
