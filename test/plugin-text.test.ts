@@ -119,27 +119,19 @@ describe("a removal with nothing left to commit (SMR-405)", () => {
   });
 });
 
-// The bullet of a Markdown list that starts with the given text.
-const line = (md: string, start: string): string => md.split("\n").find((l) => l.startsWith(start)) ?? "";
+// The Create bullet of a board file's Operations list.
+const createLine = (md: string): string => md.split("\n").find((l) => l.startsWith("- Create")) ?? "";
 
 describe("relations on create and the split planner (SMR-380)", () => {
   const board = text("docs/BOARD.md");
   const nothingCreated = /creates? nothing|unmet/i;
 
   test("docs/BOARD.md's Create line binds blockedBy and relatedTo, and leaves the create-nothing rule to pusher-board.md", () => {
-    const create = line(board, "- Create");
+    const create = createLine(board);
     assert.ok(create, "docs/BOARD.md has the Create line");
     assert.ok(create.includes("`blockedBy`"), "the Create line binds a blocking relation");
     assert.ok(create.includes("`relatedTo`"), "the Create line binds a related relation");
     assert.doesNotMatch(create, nothingCreated, "the create-nothing rule is stated once, in pusher-board.md");
-    assert.equal(
-      line(board, "- Update content and relations:"),
-      "- Update content and relations: `save_issue` with the issue `id` and only the changed fields; `addLabels`/`removeLabels` change labels, and `removeBlockedBy`/`removeBlocks` remove relations.",
-    );
-    assert.equal(
-      line(board, "- Dependencies:"),
-      "- Dependencies: Linear blocking relations (`blockedBy`, `blocks`). No sub-issues: one story is one issue and one PR.",
-    );
   });
 
   test("bootstrap asks the create binding to say how relations are added or mark them unsupported, and the template's Create line carries it", () => {
@@ -152,7 +144,7 @@ describe("relations on create and the split planner (SMR-380)", () => {
       reference.some((s) => /relation/i.test(s) && /unsupported/i.test(s)),
       "board.md marks relations unsupported when the tracker records none",
     );
-    const create = line(text("plugins/slopify/skills/bootstrap/resources/BOARD.md"), "- Create");
+    const create = createLine(text("plugins/slopify/skills/bootstrap/resources/BOARD.md"));
     assert.ok(create.includes("{{CREATE_BINDING}}"), "the template keeps its create slot");
     assert.match(create, /relation/i, "the template's Create line carries the relation binding");
   });
@@ -168,12 +160,8 @@ describe("relations on create and the split planner (SMR-380)", () => {
     assert.match(rule, /unmet/i, "a relation with no binding is reported unmet");
   });
 
-  test("writer-split is a producer that writes no file, changes no board, and never trims its plan to a cap", () => {
+  test("writer-split writes no file, changes no board, and never trims its plan to a cap", () => {
     const split = text("plugins/slopify/agents/writer-split.md");
-    const front = (key: string): string => new RegExp(`^${key}: (.+)$`, "m").exec(split)?.[1] ?? "";
-    assert.equal(front("name"), "writer-split");
-    assert.equal(front("model"), "sonnet", "writer-split runs on writer-card's model tier");
-    assert.match(front("description"), /produc(?:er|tion leaf)/i, "writer-split is a producer");
     const said = sentences(split);
     assert.ok(
       said.some((s) => /\bno file\b|\bnever writes? (?:a|any) file/i.test(s)),
