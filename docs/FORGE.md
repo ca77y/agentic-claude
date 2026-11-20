@@ -14,7 +14,7 @@ Configuration does not authorize execution; the user's request does. An operatio
 - Story worktree path and its ignore rule: `.worktrees/<gitBranchName without its tokwieci/ prefix>` (for example `.worktrees/smr-200-card-content-access`), or `.worktrees/<slug>` without an issue, ignored by `.worktrees/`. Create it with `git fetch origin master` then `git worktree add <path> -b <branch> origin/master`, so unpushed local `master` commits stay out of the PR; recover it for an existing branch with `git worktree add <path> <branch>`. A repair reuses the PR's worktree.
 - Worktree preparation: run `make install` in the checkout, so the pre-commit hook and `make check` have their dev tools; it is safe to run again.
 - Spike prototypes: the local branch `spike/<slug>` and the worktree `.worktrees/spike-<slug>`, from the spike's slug; the prototype is throwaway, never pushed or merged, and deleting a never-pushed prototype is allowed.
-- Cleanup after merge: the user's; on request, `git worktree remove <path>` and `git branch -d <branch>`.
+- Cleanup after merge: whoever merges a PR cleans up right after, in the same session: `git worktree remove <path>` for the PR's worktree, `git branch -D <branch>` (a squash merge leaves the branch unmerged in git's eyes), and `git push origin --delete <branch>`. The request to merge authorizes this cleanup.
 
 ## Commits and push
 
@@ -36,6 +36,6 @@ Autonomous work never does these; an explicit user request for one authorizes it
 
 - Commit to, check out in a story worktree, or push `master`.
 - Merge, enable auto-merge, or close a PR; open a second PR for a story.
-- Force-push, amend or rebase pushed history, or delete a branch, tag, or remote ref.
+- Force-push, amend or rebase pushed history, or delete a branch, tag, or remote ref, apart from the cleanup after a merge.
 - Cut a release or tag, touch another repository, or add a remote.
-- Remove a worktree.
+- Remove a worktree, apart from the cleanup after a merge.
