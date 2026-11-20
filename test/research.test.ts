@@ -155,17 +155,17 @@ describe("research", () => {
     assert.ok(calls.find((c) => c.label === "plan")?.prompt.includes(".tmp/research/smr-30.plan.md"));
   });
 
-  test("every push that opens or updates the PR runs writer-pr, then lens-pr, then pusher (research)", async () => {
+  test("every push that opens or updates the PR runs writer-pr, then pusher (research)", async () => {
     const r = await run("SMR-30", happy());
     assert.equal(r.status, "ready");
     assert.ok(calls.filter((c) => isPosting(c)).length >= 2);
     assert.ok(describedBeforeEachPosting());
   });
 
-  test("writer-pr and lens-pr are given the citations checked and the source count that Why trust it rests on", async () => {
+  test("writer-pr is given the citations checked and the source count that Why trust it rests on", async () => {
     const r = await run("SMR-30", happy());
     assert.equal(r.status, "ready");
-    for (const type of ["writer-pr", "lens-pr"]) {
+    for (const type of ["writer-pr"]) {
       const prompts = calls.filter((c) => c.type === type).map((c) => c.prompt);
       assert.ok(prompts.length > 0, `${type} ran`);
       for (const prompt of prompts) {
@@ -180,7 +180,7 @@ describe("research", () => {
     }
   });
 
-  test("a resumed run gives writer-pr and lens-pr the source count, from the raw notes the committed pages cite", async () => {
+  test("a resumed run gives writer-pr the source count, from the raw notes the committed pages cite", async () => {
     const notes = ["library/raw/a.md", "library/raw/b.md", "library/raw/c.md"];
     const r = await run(
       "SMR-30",
@@ -192,7 +192,7 @@ describe("research", () => {
     );
     assert.equal(r.status, "ready");
     assert.equal(count("library-researcher"), 0);
-    for (const type of ["writer-pr", "lens-pr"]) {
+    for (const type of ["writer-pr"]) {
       const prompts = described(type);
       assert.ok(prompts.length > 0, `${type} ran`);
       for (const prompt of prompts) {
@@ -224,7 +224,7 @@ describe("research", () => {
     );
     assert.equal(r.status, "ready");
     assert.equal(count("library-scribe", "repair"), 1);
-    for (const type of ["writer-pr", "lens-pr"]) {
+    for (const type of ["writer-pr"]) {
       assert.deepEqual(counts(lastDescribed(type)), ["2 sources"], `${type} is told the count after the repair`);
     }
   });
@@ -243,7 +243,7 @@ describe("research", () => {
       }),
     );
     assert.equal(r.status, "ready");
-    for (const type of ["writer-pr", "lens-pr"]) {
+    for (const type of ["writer-pr"]) {
       assert.deepEqual(counts(lastDescribed(type)), ["3 sources"], `${type} counts the shared note once`);
     }
   });
@@ -259,7 +259,7 @@ describe("research", () => {
             : PASS,
       }),
     );
-    for (const type of ["writer-pr", "lens-pr"]) {
+    for (const type of ["writer-pr"]) {
       assert.deepEqual(counts(lastDescribed(type)), ["2 sources"], `${type} is not told a wiki page is a source`);
     }
   });
@@ -277,7 +277,7 @@ describe("research", () => {
               : PASS,
       }),
     );
-    const prompts = [...described("writer-pr"), ...described("lens-pr")];
+    const prompts = [...described("writer-pr")];
     assert.ok(prompts.length > 0, "the PR is described");
     for (const prompt of prompts) {
       for (const stated of counts(prompt)) {
@@ -288,13 +288,13 @@ describe("research", () => {
 
   test("says 1 source, not 1 sources, when the research rests on one source", async () => {
     await run("SMR-30", happy({ "library-researcher": () => evidenceFor("https://same.example") }));
-    for (const prompt of [...described("writer-pr"), ...described("lens-pr")]) {
+    for (const prompt of described("writer-pr")) {
       assert.match(prompt, /\b1 source\b/i);
       assert.doesNotMatch(prompt, /\b1 sources\b/i);
     }
   });
 
-  test("tells writer-pr and lens-pr a clerk check that failed or could not run, not that it passed", async () => {
+  test("tells writer-pr a clerk check that failed or could not run, not that it passed", async () => {
     await run(
       "SMR-30",
       happy({
@@ -306,7 +306,7 @@ describe("research", () => {
               : PASS,
       }),
     );
-    const prompts = [...described("writer-pr"), ...described("lens-pr")];
+    const prompts = [...described("writer-pr")];
     assert.ok(prompts.length > 0, "the PR is described");
     for (const prompt of prompts) {
       assert.ok(trustLine(prompt, "library integrity", "failed"), "the failed check is reported as failed");

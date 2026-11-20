@@ -9,6 +9,7 @@ import {
   list,
   opRef,
   pushOk,
+  val,
   type Stopped,
 } from "./deliver.ts";
 import { locate, openQuestionsOf, refuseCard, workspace } from "./deliver-steps.ts";
@@ -74,6 +75,7 @@ The argument below names one card on the board, or is the work itself as a promp
 - field-re: the field regex you used for it
 - branch: the branch name the board gives the card, or the single word none
 - open-questions: each question under the card's Open questions section, one per line, quoted exactly; leave it out when the card has no such section or the section is empty
+- expected: the text under the card's Expected section, quoted exactly; leave it out when the card has no such section
 Change nothing on the board or forge.
 
 Argument:
@@ -88,7 +90,9 @@ ARG>>>`,
     arg: "story",
     criteria: false,
   });
-  return "stop" in located ? located : { ...located, openQuestions: openQuestionsOf(cardRes) };
+  return "stop" in located
+    ? located
+    : { ...located, openQuestions: openQuestionsOf(cardRes), expected: val(cardRes, "expected") };
 }
 
 // With no spec phase to settle them, an open question would leave the run guessing what the card asks for.
@@ -103,6 +107,8 @@ export interface Found {
   /** The card's identifier and title slug, as a spec folder would be named. */
   name: string;
   cardType: string;
+  /** The card's Expected section, or empty when it has none. */
+  expected: string;
 }
 export interface Started extends Found {
   resume: Resume;
@@ -116,10 +122,10 @@ export async function findCard(d: Run, arg: string, cardType: string): Promise<F
     located = await readWork(d, await fileCard(d, located.story, located.slug, cardType));
     if ("stop" in located) return { status: "not-started", next: located.stop.needs.map((n) => n.what).join(" ") };
   }
-  const { story, cardId, boardBranch, slug, specRel, openQuestions } = located;
+  const { story, cardId, boardBranch, slug, specRel, openQuestions, expected } = located;
   if (openQuestions.length > 0) return refuseCard(d, cardId, openQuestionsNext(cardId, openQuestions));
   const name = (specRel.split("/").pop() ?? slug).replace(/\.md$/, "");
-  return { story, cardId, boardBranch, slug, name, cardType };
+  return { story, cardId, boardBranch, slug, name, cardType, expected };
 }
 
 export const resumeOf = (d: Run, f: Found): Promise<Resume> => readResume(d, f.cardId, "");
@@ -145,7 +151,7 @@ export async function startWork(d: Run, arg: string, cardType: string): Promise<
 }
 
 export async function deliverSmall(d: Run, started: Started, input: SmallFlow): Promise<SmallResult> {
-  const { story, cardId, resume } = started;
+  const { story, cardId, resume, expected } = started;
   const result = await runLoop({
     d,
     kind: input.kind,
@@ -153,7 +159,8 @@ export async function deliverSmall(d: Run, started: Started, input: SmallFlow): 
     story,
     cardId,
     build: null,
-    validate: WHOLE_CHANGE(story, input.validationPath ?? CATEGORY_PATH),
+    // A bug's criterion is what should happen instead; a card with no Expected section is its own criterion.
+    validate: WHOLE_CHANGE(expected || story, input.validationPath ?? CATEGORY_PATH),
     specDir: "",
     answers: input.answers,
     // Once the PR exists, a rerun resumes at its review.

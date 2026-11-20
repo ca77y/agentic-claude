@@ -22,13 +22,13 @@ How `research` answers a question from new sources and adds the answer to the pr
  7 VALIDATE ──── checks (haiku), library-clerk × 1 per wiki page on its evidence,
  │               library-clerk on the raw notes' summaries against their bodies, and
  │               library-clerk on the changed files' integrity → judge × 1 (opus)
- 8 PUSH ──────── writer-pr (sonnet) writes the PR description whole, lens-pr (haiku)
- │               checks it                                                                ⛔ H4
+ 8 PUSH ──────── writer-pr (opus) writes the PR description whole
+ │               code checks its headings, length, and leaks                              ⛔ H4
  │               pusher pushes, opens the PR ready, which fires the review                    ⛔ H2
  9 REVIEW ────── watcher (haiku) reads the findings
  │   ▲ ≤3 fix    judge × 1 (opus) rules on every finding
  │   │  rounds   library-scribe repairs the pages → commit, then step 7 again
- │   │           writer-pr rewrites the description, lens-pr checks it
+ │   │           writer-pr rewrites the description
  │   └────────── pusher pushes and requests the review
  ▼
  clean → PR ready, issue In Review            not clean → PR turns draft, saying why
@@ -44,7 +44,7 @@ How `research` answers a question from new sources and adds the answer to the pr
 
 ## The PR description
 
-`writer-pr` writes it and `lens-pr` checks it as in [`deliver/STORY.md`](deliver/STORY.md#the-pr-description): four parts, **What changes**, **Needs you**, **Why trust it**, and **Not done**, rewritten whole in every round that opens or updates the PR. Here **What changes** opens with the question and a short answer linking the main page the run added, and any other pages it touched. **Why trust it** rests on the citations checked and the source count. There is no `Spec:` line.
+`writer-pr` writes it as in [`deliver/STORY.md`](deliver/STORY.md#the-pr-description): four parts, **What changes**, **Needs you**, **Why trust it**, and **Not done**, rewritten whole in every round that opens or updates the PR. Here **What changes** opens with the question and a short answer linking the main page the run added, and any other pages it touched. **Why trust it** rests on the citations checked and the source count. There is no `Spec:` line.
 
 ## Halt conditions
 

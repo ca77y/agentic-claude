@@ -62,19 +62,17 @@ export function prBody(prompt: string, outcome = "The change is delivered."): st
   ].join("\n");
 }
 export const PR_WRITER: Script = (_t, _l, prompt) => ({ body: prBody(prompt) });
-export const PR_LENS_PASS = { verdict: "pass", evaluated: "x", findings: [], limits: "none" };
-export const PR_AGENTS: Record<string, Script> = { "writer-pr": PR_WRITER, "lens-pr": () => PR_LENS_PASS };
+export const PR_AGENTS: Record<string, Script> = { "writer-pr": PR_WRITER };
 export const isPosting = (c: { type: string; prompt: string }): boolean =>
   c.type === "pusher" && /open the branch's PR|update the PR/i.test(c.prompt);
 
-/** Each pusher dispatch that opens or updates the PR has writer-pr, then lens-pr, since the one before it. */
+/** Each pusher dispatch that opens or updates the PR has writer-pr since the one before it. */
 export function describedBeforeEachPosting(): boolean {
   let from = 0;
   return calls.every((c, i) => {
     if (!isPosting(c)) return true;
     const stage = calls.slice(from, i);
     from = i + 1;
-    const writer = stage.findIndex((s) => s.type === "writer-pr");
-    return writer !== -1 && stage.slice(writer).some((s) => s.type === "lens-pr");
+    return stage.some((s) => s.type === "writer-pr");
   });
 }

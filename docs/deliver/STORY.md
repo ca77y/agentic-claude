@@ -55,8 +55,8 @@ A delivery ends in a PR unless one of the halt conditions below holds. Anything 
  │  │   JUDGE ──────── judge × 1 (opus) rules on every problem: severity and kind
  │  │                  no proof → cannot-verify
  │  │   GATEWAY ────── judge (opus): anything missed? a doc not on the list → added
- │  │   DESCRIBE ───── PR exists or opens: writer-pr (sonnet) writes the description whole,
- │  │                  lens-pr (haiku) checks it                                          ⛔ H6
+ │  │   DESCRIBE ───── PR exists or opens: writer-pr (opus) writes the description whole,
+ │  │                  code checks its headings, length, and leaks                        ⛔ H6
  │  │   PUSH ───────── pusher pushes (even if something is still flagged)                  ⛔ H4
  │  │                  no PR yet: opens it ready once nothing blocks, or on the last round
  │  │                  PR exists: requests the review
@@ -151,7 +151,7 @@ This stage is two nested loops. The inner loop makes one change correct, and onl
    - A finding that conflicts with the spec's design is kind `spec`, which brings in the advisors. `coder` doesn't improvise around a wrong spec.
 4. **Gateway.** One `judge` (opus) reads every `qa` verdict, the validator's evidence, the `lens-docs` results, and the round's diff, and decides whether anything was missed. Whatever it flags is judged like any other problem and becomes open for the next round. A document the change affects that isn't on the `docs` list is added to it.
 5. **Push.** `pusher` commits and pushes the round's work, even when something is still flagged, so every attempt stays in git history.
-   - Before each push that opens the PR or updates it, `writer-pr` writes the PR's whole description and `lens-pr` checks it, as [the PR description](#the-pr-description) says. `pusher` posts the body `writer-pr` returned, unchanged.
+   - Before each push that opens the PR or updates it, `writer-pr` writes the PR's whole description, as [the PR description](#the-pr-description) says. `pusher` posts the body `writer-pr` returned, unchanged.
    - If no PR exists, `pusher` opens one ready for review once no `blocker` or `major` is open, or on the last round either way. Opening it fires the review. It is never opened as a draft, because a review may skip drafts; when a PR is a draft, as after an earlier run, `pusher` marks it ready before firing the next review. `pusher` then attaches it to the issue.
    - If a PR exists, `pusher` updates its description and requests the review as `docs/FORGE.md` declares.
    - Anything still flagged is listed in the description under **Not done**.
@@ -190,7 +190,7 @@ Validation can also be run on its own with `/slopify:validate <branch or PR>`. I
 
 #### The PR description
 
-The description is written for the person who reviews the PR. `writer-pr` (sonnet) writes it whole, from the card, the diff against the target branch, the ledger, the run's criterion results and open items, the reasons the PR is a draft, and any follow-up cards filed. It runs in every round that opens or updates the PR, and again once the run's end is known, and it rewrites the description from scratch each time. Its format is [`references/pr-description.md`](../../plugins/slopify/references/pr-description.md). It has four level-2 parts, in this order and with no other heading, in at most 4,000 characters:
+The description is written for the person who reviews the PR. `writer-pr` (opus) writes it whole, from the card, the diff against the target branch, the ledger, the run's criterion results and open items, the reasons the PR is a draft, and any follow-up cards filed. It runs in every round that opens or updates the PR, and again once the run's end is known, and it rewrites the description from scratch each time. Its format is [`references/pr-description.md`](../../plugins/slopify/references/pr-description.md). It has four level-2 parts, in this order and with no other heading, in at most 4,000 characters:
 
 - **What changes** is always present and opens with the card's outcome, and it holds the spec folder exactly once, on a line `Spec: <folder>` in plain text, the folder relative to the repository root. A rerun does not read the folder from that line: it derives the folder again from the card (its spec path, else its identifier and title), so a changed story title changes the folder.
 - **Needs you** is present only when something is in it: each decision the reviewer must make or confirm, each confirmation, such as a decision that changes no criterion, each manual action (an irreversible step the issue didn't explicitly permit, left for a person), and each reason the PR is a draft, such as a `cannot-verify` or `uncategorized` criterion that `TESTING.md` sets to `draft`.
@@ -199,7 +199,7 @@ The description is written for the person who reviews the PR. `writer-pr` (sonne
 
 It states the change as it stands: no rulings, fingerprints, round counts, what was tried, or agent names. When the content doesn't fit, criteria with the same result and evidence share one **Why trust it** line, and **Needs you** items of one kind may be one line with their count and a link to the committed file that lists them, or else to the card. Validator evidence is never linked. The description never holds an absolute filesystem path (a URL route or a slash command is not one), a `.tmp/` reference, a ledger line, or text shaped like a credential.
 
-`lens-pr` (haiku) checks the description against the format, for readability, and against what its brief gives, never judging whether the run's evidence is strong enough: the headings and their order, the length, process detail, the opening line, the `Spec:` line, each **Why trust it** line against a criterion result, each open item appearing once, and leaks. Code checks the mechanical part of the format first, so the lens runs only on a description that passes it. A problem goes back to `writer-pr` with the previous description, at most three times in a stage, and the revision is checked again. A lens that couldn't judge twice counts as not passed, and no revision follows. Its findings go only to `writer-pr`: they never go to `judge` or count as problems with the change.
+No agent reviews the description. Code checks its mechanical part: the headings and their order, the length, the `Spec:` line, and leaks. A problem goes back to `writer-pr` with the previous description, at most three times in a stage, and the revision is checked again. Everything else in the format, such as plain words, no process detail, and each **Why trust it** line matching a result, is `writer-pr`'s to get right, which is why it runs on opus. Its problems never go to `judge` or count as problems with the change.
 
 `pusher` posts the last description `writer-pr` returned, unchanged, with one exception: a description that breaks a leak rule is never posted. The latest description without a leak is posted instead, or none: a PR opens with an empty description, and an existing PR keeps its current one. When the revisions run out, the last description is posted and the PR ends a draft.
 

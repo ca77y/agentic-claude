@@ -436,7 +436,7 @@ describe("deliver-story's intake", () => {
     assert.ok(count("designer") > 0);
   });
 
-  test("every push that opens or updates the PR runs writer-pr, then lens-pr, then pusher (deliver-story)", async () => {
+  test("every push that opens or updates the PR runs writer-pr, then pusher (deliver-story)", async () => {
     current.script = storyRun;
     Object.assign(globalThis, { args: "SMR-1" });
     const r = await deliverStory();
@@ -692,7 +692,7 @@ describe("the small workflows", () => {
     assert.ok(described.includes("got 0"), "writer-pr is told how the bug behaved before the fix");
   });
 
-  test("every push that opens or updates the PR runs writer-pr, then lens-pr, then pusher (deliver-trivial)", async () => {
+  test("every push that opens or updates the PR runs writer-pr, then pusher (deliver-trivial)", async () => {
     current.script = promptRun;
     Object.assign(globalThis, { args: "Add mul to calc.py" });
     const r = await deliverTrivial();
@@ -701,12 +701,12 @@ describe("the small workflows", () => {
     assert.ok(describedBeforeEachPosting());
   });
 
-  test("deliver-trivial gives writer-pr and lens-pr the test result that Why trust it rests on, beside the app run", async () => {
+  test("deliver-trivial gives writer-pr the test result that Why trust it rests on, beside the app run", async () => {
     current.script = promptRun;
     Object.assign(globalThis, { args: "Add mul to calc.py" });
     const r = await deliverTrivial();
     assert.equal(r.status, "ready");
-    for (const type of ["writer-pr", "lens-pr"]) {
+    for (const type of ["writer-pr"]) {
       const prompts = calls.filter((c) => c.type === type).map((c) => c.prompt);
       assert.ok(prompts.length > 0, `${type} ran`);
       for (const prompt of prompts) {
@@ -718,7 +718,7 @@ describe("the small workflows", () => {
     }
   });
 
-  test("deliver-trivial still gives writer-pr and lens-pr the passed test on a rerun that resumes after the build", async () => {
+  test("deliver-trivial still gives writer-pr the passed test on a rerun that resumes after the build", async () => {
     current.script = promptRun;
     Object.assign(globalThis, { args: "Add mul to calc.py" });
     await deliverTrivial();
@@ -749,7 +749,7 @@ describe("the small workflows", () => {
       0,
       "the rerun resumes after the build, writing no test",
     );
-    for (const type of ["writer-pr", "lens-pr"]) {
+    for (const type of ["writer-pr"]) {
       const prompts = calls.filter((c) => c.type === type).map((c) => c.prompt);
       assert.ok(prompts.length > 0, `${type} ran`);
       for (const prompt of prompts) {
@@ -761,7 +761,7 @@ describe("the small workflows", () => {
     }
   });
 
-  test("deliver-trivial claims no passed test to writer-pr and lens-pr when the change's test never passes", async () => {
+  test("deliver-trivial claims no passed test to writer-pr when the change's test never passes", async () => {
     // qa never passes the first change, t.py, so it escalates; the review round's fix has its own test, fix.py.
     current.script = (type, label, prompt) => {
       if (type === "qa") {
@@ -775,7 +775,7 @@ describe("the small workflows", () => {
     };
     Object.assign(globalThis, { args: "Add mul to calc.py" });
     await deliverTrivial();
-    for (const type of ["writer-pr", "lens-pr"]) {
+    for (const type of ["writer-pr"]) {
       const prompts = calls.filter((c) => c.type === type).map((c) => c.prompt);
       assert.ok(prompts.length > 0, `${type} ran`);
       for (const prompt of prompts) {
@@ -792,7 +792,7 @@ describe("the small workflows", () => {
     Object.assign(globalThis, { args: "SMR-13" });
     const r = await deliverBugfix();
     assert.equal(r.status, "ready");
-    for (const type of ["writer-pr", "lens-pr"]) {
+    for (const type of ["writer-pr"]) {
       const prompts = calls.filter((c) => c.type === type).map((c) => c.prompt);
       assert.ok(prompts.length > 0, `${type} ran`);
       for (const prompt of prompts) {
@@ -802,7 +802,22 @@ describe("the small workflows", () => {
     }
   });
 
-  test("every push that opens or updates the PR runs writer-pr, then lens-pr, then pusher (deliver-bugfix)", async () => {
+  test("deliver-bugfix validates against the card's Expected section, not the whole card", async () => {
+    const expected = { source: "expected", location: "x", excerpt: "add(1, 1) returns 2" };
+    current.script = (type, label, prompt) =>
+      type === "scout-card"
+        ? { ...BUG_CARD, evidence: [...BUG_CARD.evidence, expected] }
+        : bugRun(REPRO_OK)(type, label, prompt);
+    Object.assign(globalThis, { args: "SMR-13" });
+    await deliverBugfix();
+    for (const type of ["validator", "writer-pr"]) {
+      const prompt = calls.find((c) => c.type === type)?.prompt ?? "";
+      assert.ok(prompt.includes("add(1, 1) returns 2"), `${type} is given the Expected section`);
+    }
+    assert.ok(!calls.find((c) => c.type === "validator")?.prompt.includes("add subtracts\n\nBody"));
+  });
+
+  test("every push that opens or updates the PR runs writer-pr, then pusher (deliver-bugfix)", async () => {
     current.script = bugRun(REPRO_OK);
     Object.assign(globalThis, { args: "SMR-13" });
     const r = await deliverBugfix();

@@ -1841,19 +1841,6 @@ ${NO_WRITES}`,
   );
   return w?.body ?? "";
 }
-async function lensPr(l, target, body) {
-  const brief = `${describeContext(l, target)}
-
-Check this PR description against references/pr-description.md and the above:
-${fenced("BODY", body)}`;
-  for (let tries = 0; tries < 2; tries += 1) {
-    const v = await lens("lens-pr", brief, { label: "check the description", phase: "Push" });
-    if (v?.verdict === "pass") return [];
-    const found = v ? defectsOf(v).map((f) => `${f.location}: ${f.problem}`) : [];
-    if (found.length > 0) return found;
-  }
-  return null;
-}
 async function describe(l, target) {
   await l.commits;
   let previous = null;
@@ -1867,28 +1854,17 @@ async function describe(l, target) {
     }
     wrote = true;
     const { leak, format } = checkDescription(body, { kind: l.kind, specDir: l.specDir });
-    if (leak.length === 0) posting = { body, checked: false };
+    if (leak.length === 0) posting = body;
     const problems = [...leak, ...format];
-    if (problems.length === 0) {
-      const found = await lensPr(l, target, body);
-      if (found === null || found.length === 0) return { body, passed: found !== null };
-      if (posting) posting.checked = true;
-      problems.push(...found);
-    }
+    if (problems.length === 0) return { body, passed: true };
     previous = { body, problems };
   }
-  return outOfRevisions(l, target, wrote, posting);
-}
-async function outOfRevisions(l, target, wrote, posting) {
-  if (!wrote)
-    return haltOnCard(
-      l.d,
-      l.cardId,
-      new Halt("describe", "A PR description from writer-pr.", "writer-pr returned no description."),
-      "no PR description could be written for it."
-    );
-  if (posting && !posting.checked) await lensPr(l, target, posting.body);
-  return { body: posting?.body ?? null, passed: false };
+  return wrote ? { body: posting, passed: false } : haltOnCard(
+    l.d,
+    l.cardId,
+    new Halt("describe", "A PR description from writer-pr.", "writer-pr returned no description."),
+    "no PR description could be written for it."
+  );
 }
 function bodyInstruction(l, body, opening) {
   if (body === null) return opening ? "Open it with an empty description." : "Leave the PR's description as it is.";
@@ -2296,6 +2272,7 @@ The argument below names one card on the board, or is the work itself as a promp
 - field-re: the field regex you used for it
 - branch: the branch name the board gives the card, or the single word none
 - open-questions: each question under the card's Open questions section, one per line, quoted exactly; leave it out when the card has no such section or the section is empty
+- expected: the text under the card's Expected section, quoted exactly; leave it out when the card has no such section
 Change nothing on the board or forge.
 
 Argument:
@@ -2310,7 +2287,7 @@ ARG>>>`,
     arg: "story",
     criteria: false
   });
-  return "stop" in located ? located : { ...located, openQuestions: openQuestionsOf(cardRes) };
+  return "stop" in located ? located : { ...located, openQuestions: openQuestionsOf(cardRes), expected: val(cardRes, "expected") };
 }
 var openQuestionsNext = (cardId, questions) => `Card ${cardId} has open questions. Answer them in a comment and run /slopify:shape on the card to apply your answers, or edit the card to answer them and remove them from its Open questions section, then invoke again.
 ${list(questions)}`;
@@ -2321,10 +2298,10 @@ async function findCard(d, arg, cardType) {
     located = await readWork(d, await fileCard(d, located.story, located.slug, cardType));
     if ("stop" in located) return { status: "not-started", next: located.stop.needs.map((n) => n.what).join(" ") };
   }
-  const { story, cardId, boardBranch, slug, specRel, openQuestions } = located;
+  const { story, cardId, boardBranch, slug, specRel, openQuestions, expected } = located;
   if (openQuestions.length > 0) return refuseCard(d, cardId, openQuestionsNext(cardId, openQuestions));
   const name = (specRel.split("/").pop() ?? slug).replace(/\.md$/, "");
-  return { story, cardId, boardBranch, slug, name, cardType };
+  return { story, cardId, boardBranch, slug, name, cardType, expected };
 }
 var resumeOf = (d, f) => readResume(d, f.cardId, "");
 function openWork(d, f, resume, lines = []) {
@@ -2344,7 +2321,7 @@ async function startWork(d, arg, cardType) {
   return await openWork(d, found, resume) ?? { ...found, resume };
 }
 async function deliverSmall(d, started, input) {
-  const { story, cardId, resume } = started;
+  const { story, cardId, resume, expected } = started;
   const result = await runLoop({
     d,
     kind: input.kind,
@@ -2352,7 +2329,8 @@ async function deliverSmall(d, started, input) {
     story,
     cardId,
     build: null,
-    validate: WHOLE_CHANGE(story, input.validationPath ?? CATEGORY_PATH),
+    // A bug's criterion is what should happen instead; a card with no Expected section is its own criterion.
+    validate: WHOLE_CHANGE(expected || story, input.validationPath ?? CATEGORY_PATH),
     specDir: "",
     answers: input.answers,
     // Once the PR exists, a rerun resumes at its review.

@@ -8,20 +8,19 @@ const text = (path: string): string => {
   const url = new URL(path, root);
   return existsSync(url) ? readFileSync(url, "utf8") : "";
 };
-// A front matter field's value, read from the first line that sets it.
-const field = (md: string, key: string): string => new RegExp(`^${key}: (.+)$`, "m").exec(md)?.[1] ?? "";
 const sentences = (md: string): string[] => md.split(/(?<=[.!?])\s+|\n\s*\n/);
 const saysLocal = (doc: string): boolean =>
   sentences(doc).some((s) => /progress entr/i.test(s) && /\blocal\b/i.test(s));
 
 const writerPr = text("plugins/slopify/agents/writer-pr.md");
-const lensPr = text("plugins/slopify/agents/lens-pr.md");
+// A front matter field's value in writer-pr.md, read from the first line that sets it.
+const field = (key: string): string => new RegExp(`^${key}: (.+)$`, "m").exec(writerPr)?.[1] ?? "";
 const reference = text("plugins/slopify/references/pr-description.md");
 const headingsInOrder = /What changes[\s\S]*?Needs you[\s\S]*?Why trust it[\s\S]*?Not done/;
 
 describe("PR description agents", () => {
   test("writer-pr's instructions require the four headings in order, no other heading, at most 4,000 characters, and no process detail", () => {
-    assert.equal(field(writerPr, "name"), "writer-pr");
+    assert.equal(field("name"), "writer-pr");
     assert.match(writerPr, /produc(er|tion leaf)/i, "writer-pr is a producer");
     assert.match(writerPr, /pr-description\.md/, "writer-pr names the reference it follows");
     const rules = `${writerPr}\n${reference}`;
@@ -32,36 +31,25 @@ describe("PR description agents", () => {
     assert.match(rules, /grouped/i, "the overflow rule groups lines");
   });
 
-  test("lens-pr is report-only and checks headings, order, the 4,000-character limit, process detail, and Why trust it lines against criterion results", () => {
-    assert.equal(field(lensPr, "name"), "lens-pr");
-    for (const tool of ["Edit", "Write", "NotebookEdit"]) {
-      assert.ok(field(lensPr, "disallowedTools").split(/,\s*/).includes(tool), `lens-pr disallows ${tool}`);
-    }
-    const contract = /## Report-only contract\n[\s\S]*$/.exec(text("plugins/slopify/agents/lens-docs.md"))?.[0].trim();
-    assert.ok(contract);
-    assert.ok(lensPr.includes(contract), "lens-pr carries lens-docs.md's Report-only contract verbatim");
-    assert.match(lensPr, /pr-description\.md/, "lens-pr names the reference it checks against");
-    const rules = `${lensPr}\n${reference}`;
-    assert.match(rules, headingsInOrder);
-    assert.match(rules, /4,000 characters/);
-    assert.match(rules, /process detail/i);
+  test("writer-pr runs on opus, rests Why trust it only on the brief's results, and states an evidence limit once", () => {
+    assert.equal(field("model"), "opus");
     assert.ok(
-      sentences(lensPr).some((s) => s.includes("Why trust it") && /criterion result/i.test(s)),
-      "lens-pr checks each Why trust it line against the criterion results",
+      sentences(writerPr).some((s) => s.includes("Why trust it") && /only from the results the brief gives/i.test(s)),
+      "Why trust it rests only on the brief's results",
     );
     assert.ok(
-      sentences(lensPr).some((s) => s.includes("Why trust it") && /grouped/i.test(s)),
-      "lens-pr accepts a grouped Why trust it line",
+      sentences(writerPr).some((s) => /\blimit\b/i.test(s) && /\bonce\b/i.test(s)),
+      "an evidence limit is stated once",
+    );
+    assert.equal(
+      existsSync(new URL("plugins/slopify/agents/lens-pr.md", root)),
+      false,
+      "no agent reviews the description",
     );
   });
 
-  test("writer-pr's and lens-pr's instructions both require the Spec: <folder> line", () => {
-    for (const [name, agent] of [
-      ["writer-pr", writerPr],
-      ["lens-pr", lensPr],
-    ] as const) {
-      assert.match(`${agent}\n${reference}`, /Spec: <folder>/, `${name} works from the Spec line rule`);
-    }
+  test("writer-pr's instructions require the Spec: <folder> line", () => {
+    assert.match(`${writerPr}\n${reference}`, /Spec: <folder>/);
   });
 });
 

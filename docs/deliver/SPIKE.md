@@ -24,13 +24,13 @@ How `deliver-spike` answers a bounded technical question with a findings documen
  7 VALIDATE ──── checks (haiku) runs the TESTING.md checks
  │               lens-evidence, lens-question, lens-neutrality (haiku), on the document
  │               judge × 1 (opus) rules on every problem
- 8 PUSH ──────── writer-pr (sonnet) writes the PR description whole, lens-pr (haiku)
- │               checks it                                                          ⛔ H4
+ 8 PUSH ──────── writer-pr (opus) writes the PR description whole
+ │               code checks its headings, length, and leaks                        ⛔ H4
  │               pusher pushes, opens the PR ready, which fires the review            ⛔ H2
  9 REVIEW ────── watcher (haiku) reads the findings
  │   ▲ ≤3 fix    judge × 1 (opus) rules on every finding
  │   │  rounds   writer revises the document → commit, then step 7 again
- │   │           writer-pr rewrites the description, lens-pr checks it
+ │   │           writer-pr rewrites the description
  │   └────────── pusher pushes and requests the review
  ▼
  clean → PR ready, issue In Review            not clean → PR turns draft, saying why
@@ -57,7 +57,7 @@ One file, `docs/spikes/<id>-<slug>.md`, named like a spec folder. Unlike a spec 
 
 ## The PR description
 
-`writer-pr` writes it and `lens-pr` checks it as in [`STORY.md`](STORY.md#the-pr-description): four parts, **What changes**, **Needs you**, **Why trust it**, and **Not done**, rewritten whole in every round that opens or updates the PR. Here **What changes** opens with the question and its answer, with no recommendation, as the document makes none. **Why trust it** rests on the claims checked and the unknowns. There is no `Spec:` line.
+`writer-pr` writes it as in [`STORY.md`](STORY.md#the-pr-description): four parts, **What changes**, **Needs you**, **Why trust it**, and **Not done**, rewritten whole in every round that opens or updates the PR. Here **What changes** opens with the question and its answer, with no recommendation, as the document makes none. **Why trust it** rests on the claims checked and the unknowns. There is no `Spec:` line.
 
 ## Halt conditions
 

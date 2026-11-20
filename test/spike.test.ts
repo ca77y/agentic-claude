@@ -168,17 +168,17 @@ describe("deliver-spike", () => {
     assert.ok(push.includes("fired <the trigger time, or none when docs/FORGE.md declares no review>"));
   });
 
-  test("every push that opens or updates the PR runs writer-pr, then lens-pr, then pusher (deliver-spike)", async () => {
+  test("every push that opens or updates the PR runs writer-pr, then pusher (deliver-spike)", async () => {
     const r = await run(happy());
     assert.equal(r.status, "ready");
     assert.ok(calls.filter((c) => isPosting(c)).length >= 2);
     assert.ok(describedBeforeEachPosting());
   });
 
-  test("writer-pr and lens-pr are given the claims checked and the unknowns that Why trust it rests on", async () => {
+  test("writer-pr is given the claims checked and the unknowns that Why trust it rests on", async () => {
     const r = await run(happy());
     assert.equal(r.status, "ready");
-    for (const type of ["writer-pr", "lens-pr"]) {
+    for (const type of ["writer-pr"]) {
       const prompts = described(type);
       assert.ok(prompts.length > 0, `${type} ran`);
       for (const prompt of prompts) {
@@ -196,10 +196,10 @@ describe("deliver-spike", () => {
     }
   });
 
-  test("writer-pr and lens-pr are given each claim the prototype left unknown", async () => {
+  test("writer-pr is given each claim the prototype left unknown", async () => {
     const r = await run(happy({ qa: () => ({ results: [{ claim: "c1", confirmed: false, reason: "too noisy" }] }) }));
     assert.ok("status" in r);
-    for (const type of ["writer-pr", "lens-pr"]) {
+    for (const type of ["writer-pr"]) {
       const prompts = described(type);
       assert.ok(prompts.length > 0, `${type} ran`);
       for (const prompt of prompts) {

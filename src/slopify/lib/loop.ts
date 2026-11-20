@@ -1276,7 +1276,7 @@ const entryText = (x: Listed): string => [x.text, x.detail].filter(Boolean).join
 interface Described {
   /** The latest leak-free body writer-pr returned, or null when it returned none. */
   body: string | null;
-  /** Whether that body passed both checkDescription and lens-pr. */
+  /** Whether that body passed checkDescription. */
   passed: boolean;
 }
 interface Revision {
@@ -1294,7 +1294,7 @@ function needsYou(l: Loop): string[] {
   ];
 }
 
-// What writer-pr writes from and lens-pr checks against. target is the final stage's readiness, and null before it.
+// What writer-pr writes from. target is the final stage's readiness, and null before it.
 function describeContext(l: Loop, target: boolean | null): string {
   const open = [
     ...l.escalated.map((i) => openEntry(i)),
@@ -1349,24 +1349,12 @@ async function writePr(l: Loop, target: boolean | null, previous: Revision | nul
   return w?.body ?? "";
 }
 
-// The lens's problems with a body, or null when it couldn't judge it after one more try.
-async function lensPr(l: Loop, target: boolean | null, body: string): Promise<string[] | null> {
-  const brief = `${describeContext(l, target)}\n\nCheck this PR description against references/pr-description.md and the above:\n${fenced("BODY", body)}`;
-  for (let tries = 0; tries < 2; tries += 1) {
-    const v = await lens("lens-pr", brief, { label: "check the description", phase: "Push" });
-    if (v?.verdict === "pass") return [];
-    const found = v ? defectsOf(v).map((f) => `${f.location}: ${f.problem}`) : [];
-    if (found.length > 0) return found;
-  }
-  return null;
-}
-
-// writer-pr writes the whole description, checkDescription and then lens-pr check it, and their problems send it back
-// to be rewritten. A body that leaks is never posted, so the stage keeps the latest one that doesn't.
+// writer-pr writes the whole description, and checkDescription's problems send it back to be rewritten. A body that
+// leaks is never posted, so the stage keeps the latest one that doesn't; with no body at all, the run halts.
 async function describe(l: Loop, target: boolean | null): Promise<Described> {
   await l.commits;
   let previous: Revision | null = null;
-  let posting: { body: string; checked: boolean } | null = null;
+  let posting: string | null = null;
   let wrote = false;
   for (let attempt = 0; attempt <= MAX_FIX_ROUNDS; attempt += 1) {
     const body = await writePr(l, target, previous);
@@ -1376,36 +1364,19 @@ async function describe(l: Loop, target: boolean | null): Promise<Described> {
     }
     wrote = true;
     const { leak, format } = checkDescription(body, { kind: l.kind, specDir: l.specDir });
-    if (leak.length === 0) posting = { body, checked: false };
+    if (leak.length === 0) posting = body;
     const problems = [...leak, ...format];
-    if (problems.length === 0) {
-      const found = await lensPr(l, target, body);
-      if (found === null || found.length === 0) return { body, passed: found !== null };
-      if (posting) posting.checked = true;
-      problems.push(...found);
-    }
+    if (problems.length === 0) return { body, passed: true };
     previous = { body, problems };
   }
-  return outOfRevisions(l, target, wrote, posting);
-}
-
-// With revisions used up, the latest leak-free body is posted unchanged, after lens-pr has seen it; with no body at
-// all, the run halts.
-async function outOfRevisions(
-  l: Loop,
-  target: boolean | null,
-  wrote: boolean,
-  posting: { body: string; checked: boolean } | null,
-): Promise<Described> {
-  if (!wrote)
-    return haltOnCard(
-      l.d,
-      l.cardId,
-      new Halt("describe", "A PR description from writer-pr.", "writer-pr returned no description."),
-      "no PR description could be written for it.",
-    );
-  if (posting && !posting.checked) await lensPr(l, target, posting.body);
-  return { body: posting?.body ?? null, passed: false };
+  return wrote
+    ? { body: posting, passed: false }
+    : haltOnCard(
+        l.d,
+        l.cardId,
+        new Halt("describe", "A PR description from writer-pr.", "writer-pr returned no description."),
+        "no PR description could be written for it.",
+      );
 }
 
 function bodyInstruction(l: Loop, body: string | null, opening: boolean): string {

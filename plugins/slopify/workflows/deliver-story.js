@@ -1867,19 +1867,6 @@ ${NO_WRITES}`,
   );
   return w?.body ?? "";
 }
-async function lensPr(l, target, body) {
-  const brief = `${describeContext(l, target)}
-
-Check this PR description against references/pr-description.md and the above:
-${fenced("BODY", body)}`;
-  for (let tries = 0; tries < 2; tries += 1) {
-    const v = await lens("lens-pr", brief, { label: "check the description", phase: "Push" });
-    if (v?.verdict === "pass") return [];
-    const found = v ? defectsOf(v).map((f) => `${f.location}: ${f.problem}`) : [];
-    if (found.length > 0) return found;
-  }
-  return null;
-}
 async function describe(l, target) {
   await l.commits;
   let previous = null;
@@ -1893,28 +1880,17 @@ async function describe(l, target) {
     }
     wrote = true;
     const { leak, format } = checkDescription(body, { kind: l.kind, specDir: l.specDir });
-    if (leak.length === 0) posting = { body, checked: false };
+    if (leak.length === 0) posting = body;
     const problems = [...leak, ...format];
-    if (problems.length === 0) {
-      const found = await lensPr(l, target, body);
-      if (found === null || found.length === 0) return { body, passed: found !== null };
-      if (posting) posting.checked = true;
-      problems.push(...found);
-    }
+    if (problems.length === 0) return { body, passed: true };
     previous = { body, problems };
   }
-  return outOfRevisions(l, target, wrote, posting);
-}
-async function outOfRevisions(l, target, wrote, posting) {
-  if (!wrote)
-    return haltOnCard(
-      l.d,
-      l.cardId,
-      new Halt("describe", "A PR description from writer-pr.", "writer-pr returned no description."),
-      "no PR description could be written for it."
-    );
-  if (posting && !posting.checked) await lensPr(l, target, posting.body);
-  return { body: posting?.body ?? null, passed: false };
+  return wrote ? { body: posting, passed: false } : haltOnCard(
+    l.d,
+    l.cardId,
+    new Halt("describe", "A PR description from writer-pr.", "writer-pr returned no description."),
+    "no PR description could be written for it."
+  );
 }
 function bodyInstruction(l, body, opening) {
   if (body === null) return opening ? "Open it with an empty description." : "Leave the PR's description as it is.";

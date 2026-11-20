@@ -69,7 +69,7 @@ describe("agent listings", () => {
       .split("|")
       .map((c) => c.trim());
 
-  test("README's workflow lists and agent families, DESIGN and plugin.json list writer-pr and lens-pr", (t) => {
+  test("README's workflow lists and agent families, DESIGN and plugin.json list writer-pr", (t) => {
     // The Area table's 'Agents its workflows dispatch' cell holds one list per workflow, each opening `<name>`: or
     // `<name>` and `<name>`:.
     const lists = [row("Delivery")[3] ?? "", row("Library")[3] ?? ""].flatMap((cell) =>
@@ -84,10 +84,8 @@ describe("agent listings", () => {
       const list = lists.find((l) => l.startsWith(label)) ?? "";
       assert.ok(list !== "", `README lists the agents of ${label}`);
       assert.match(list, /`writer-pr`/, `README's ${label} list names writer-pr`);
-      assert.match(list, /`lens-pr`/, `README's ${label} list names lens-pr`);
     }
     assert.match(row("Producers")[2] ?? "", /`writer-pr`/, "README's Producers row");
-    assert.match(row("Lenses")[2] ?? "", /`lens-pr`/, "README's Lenses row");
 
     const design = read("docs/DESIGN.md");
     assert.match(
@@ -95,12 +93,10 @@ describe("agent listings", () => {
       /`writer-pr`/,
       "DESIGN's producer list",
     );
-    assert.match(design, /`lens-pr`/, "DESIGN names the description lens");
 
     const manifest = "plugins/slopify/.claude-plugin/plugin.json";
     const plugin = JSON.parse(read(manifest)) as { description: string; version: string };
     assert.match(plugin.description, /writer-pr/, "plugin.json's description");
-    assert.match(plugin.description, /lens-pr/, "plugin.json's description");
 
     // The test runs git from the developer's or CI's own PATH, as `make check` does.
     /* eslint-disable sonarjs/no-os-command-from-path */
