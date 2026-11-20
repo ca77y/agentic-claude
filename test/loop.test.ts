@@ -1688,9 +1688,10 @@ const listedPaths = (prompt: string): string[] =>
     .map((x) => x.slice(2).trim());
 
 // Models git in the worktree: a path is dirty only while a producer has written content not yet committed. On the
-// rebuild the coder writes back what is already committed, so git has nothing to commit. `neverWritten` is a path a
-// producer reports changed but never wrote.
-function gitLike(neverWritten = ""): Script {
+// rebuild the coder writes back what is already committed, so git has nothing to commit, and pusher reports that in
+// its typed `alreadyCommitted` field. `failing` is a path the first fix reports changed whose commit fails, with the
+// unmet entry pusher returns for it.
+function gitLike(failing?: { path: string; unmet: string }): Script {
   const dirty = new Set<string>();
   let tests = 0;
   let fixes = 0;
@@ -1705,15 +1706,21 @@ function gitLike(neverWritten = ""): Script {
       }
       fixes += 1;
       if (fixes === 1) dirty.add("src/a.ts");
-      return { ...OK_FIX, changed: neverWritten && fixes === 1 ? ["src/a.ts", neverWritten] : ["src/a.ts"] };
+      return { ...OK_FIX, changed: failing && fixes === 1 ? ["src/a.ts", failing.path] : ["src/a.ts"] };
     },
     pusher: (_t, label, prompt) => {
       if (!label.startsWith("commit:")) return pusher(prompt);
       const listed = listedPaths(prompt);
-      if (neverWritten && listed.includes(neverWritten))
-        return { done: false, unmet: [`commit: pathspec '${neverWritten}' did not match any files`], operations: [] };
+      if (failing && listed.includes(failing.path))
+        return { done: false, unmet: [failing.unmet], operations: [], hookRejection: "", alreadyCommitted: false };
       if (listed.every((p) => !dirty.has(p)))
-        return { done: false, unmet: ["commit: nothing to commit, working tree clean"], operations: [] };
+        return {
+          done: false,
+          unmet: ["nothing to commit: git status --short printed nothing"],
+          operations: [],
+          hookRejection: "",
+          alreadyCommitted: true,
+        };
       for (const p of listed) dirty.delete(p);
       return OK_PUSH;
     },
@@ -1792,9 +1799,19 @@ describe("a spec revision during the build", () => {
   });
 
   test("still blocks on a commit that fails because a listed path was never written", async () => {
-    use(gitLike("src/never.ts"));
+    use(gitLike({ path: "src/never.ts", unmet: "commit: pathspec 'src/never.ts' did not match any files" }));
     const r = await rebuildOutcome(freshRun());
     assert.equal(r.status, "blocked");
     assert.ok(r.needs.includes("src/never.ts"), r.needs);
+  });
+
+  test("still blocks on a failed commit whose unmet entry quotes git's 'nothing to commit' but is not already committed", async () => {
+    // git add refuses a gitignored path, so git commit prints its own 'nothing to commit' line, which pusher quotes.
+    const unmet =
+      "commit: The following paths are ignored by one of your .gitignore files: src/ignored.ts\nnothing to commit, working tree clean";
+    use(gitLike({ path: "src/ignored.ts", unmet }));
+    const r = await rebuildOutcome(freshRun());
+    assert.equal(r.status, "blocked", "a commit failure that quotes git's output counted as already committed");
+    assert.ok(r.needs.includes("src/ignored.ts"), r.needs);
   });
 });
