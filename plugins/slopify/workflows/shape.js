@@ -697,6 +697,7 @@ ${c.current}
 CARD>>>` : ""
   ].filter(Boolean).join("\n\n");
 }
+var markerOf = (slug) => `<!-- shape ${slug.replaceAll("-", " ")} -->`;
 async function read(d, cardArg, idea) {
   phase("Read");
   const [card, related] = await parallel([
@@ -709,7 +710,7 @@ Read card ${cardArg} through the read bindings in docs/BOARD.md. Report its iden
     () => scout(
       "scout-related-cards",
       `${d.WHERE}
-Search the board for cards that duplicate, overlap, conflict with, or depend on this. Change nothing.
+Search the board for cards that duplicate, overlap, conflict with, or depend on this.${idea && !cardArg ? ` Report a card whose body holds the line ${markerOf(slugged(idea, "idea"))} as its own evidence item, with the card's identifier as location and that line, verbatim, in excerpt.` : ""} Change nothing.
 
 ${idea || cardArg}`,
       { phase: "Read" }
@@ -891,7 +892,7 @@ ${list(confirmed)}`,
 }
 async function file(d, c, slug, deliverable) {
   phase("File");
-  const marker = `<!-- shape ${slug} -->`;
+  const marker = markerOf(slug);
   const target = c.cardId ? `Update card ${c.cardId} with it.` : "Create a card with it.";
   const deliverableLabel = c.kind === "story" ? deliverable ? ` Make sure the card has the label ${DELIVERABLE}.` : ` Make sure the card doesn't have the label ${DELIVERABLE}.` : "";
   const label = `Make sure the card has the label ${SHAPED_LABEL}.${deliverableLabel}`;
@@ -937,8 +938,9 @@ async function run() {
   const d = createDeliver({ workflow: WORKFLOW, projectRoot: textOf(input["projectRoot"]), storyArg: idea || cardArg });
   try {
     const { card, related } = await read(d, cardArg, idea);
-    const cardId = (card?.evidence.find((e) => e.source === "card")?.excerpt ?? "").trim();
-    const slug = slugOf(cardId) || slugged(idea, "idea");
+    const named = (card?.evidence.find((e) => e.source === "card")?.excerpt ?? "").trim();
+    const slug = slugOf(named) || slugged(idea, "idea");
+    const cardId = named || (related.evidence.find((e) => e.excerpt.includes(markerOf(slug)))?.location.trim() ?? "");
     const c = {
       kind: kindOf(input["kind"]),
       idea,

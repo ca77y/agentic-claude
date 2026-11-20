@@ -130,6 +130,10 @@ function subject(c: Card): string {
 
 // ---- Read and ground --------------------------------------------------------
 
+// The line shape ends a card with, naming the run's slug. Its words are joined by spaces, which leaves nothing a board
+// links on save, such as Linear turning smr-317 into an issue link, so a rerun finds the card by it.
+const markerOf = (slug: string): string => `<!-- shape ${slug.replaceAll("-", " ")} -->`;
+
 async function read(
   d: Run,
   cardArg: string,
@@ -148,7 +152,7 @@ async function read(
     () =>
       scout(
         "scout-related-cards",
-        `${d.WHERE}\nSearch the board for cards that duplicate, overlap, conflict with, or depend on this. Change nothing.\n\n${idea || cardArg}`,
+        `${d.WHERE}\nSearch the board for cards that duplicate, overlap, conflict with, or depend on this.${idea && !cardArg ? ` Report a card whose body holds the line ${markerOf(slugged(idea, "idea"))} as its own evidence item, with the card's identifier as location and that line, verbatim, in excerpt.` : ""} Change nothing.\n\n${idea || cardArg}`,
         { phase: "Read" },
       ),
   ]);
@@ -325,7 +329,7 @@ async function refine(d: Run, c: Card, firstOpen: readonly string[]): Promise<st
 
 async function file(d: Run, c: Card, slug: string, deliverable: boolean): Promise<string> {
   phase("File");
-  const marker = `<!-- shape ${slug} -->`;
+  const marker = markerOf(slug);
   // advisor-fit already found no card holding this idea, so an idea gets a new card.
   const target = c.cardId ? `Update card ${c.cardId} with it.` : "Create a card with it.";
   const deliverableLabel =
@@ -384,8 +388,10 @@ export default async function run(): Promise<NotStarted | Stopped | Shaped | Dup
   const d = createDeliver({ workflow: WORKFLOW, projectRoot: textOf(input["projectRoot"]), storyArg: idea || cardArg });
   try {
     const { card, related } = await read(d, cardArg, idea);
-    const cardId = (card?.evidence.find((e) => e.source === "card")?.excerpt ?? "").trim();
-    const slug = slugOf(cardId) || slugged(idea, "idea");
+    const named = (card?.evidence.find((e) => e.source === "card")?.excerpt ?? "").trim();
+    const slug = slugOf(named) || slugged(idea, "idea");
+    // A rerun on an idea updates the card an earlier run filed for it, found by the line that run ended it with.
+    const cardId = named || (related.evidence.find((e) => e.excerpt.includes(markerOf(slug)))?.location.trim() ?? "");
     const c: Card = {
       kind: kindOf(input["kind"]),
       idea,
