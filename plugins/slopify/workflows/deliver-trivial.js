@@ -2093,6 +2093,7 @@ function freshLoop(input) {
     halted: null
   };
 }
+var outOfRounds = (l) => l.round - (l.firstRound ?? 0) >= MAX_FIX_ROUNDS;
 function nextStep(l) {
   const g = gate({
     prOpen: !!l.d.state.pr,
@@ -2101,7 +2102,7 @@ function nextStep(l) {
     held: heldRows(l).length
   });
   if (g !== "fix") return g;
-  if (l.round >= MAX_FIX_ROUNDS || noProgress(l.openByRound)) return "end";
+  if (outOfRounds(l) || noProgress(l.openByRound)) return "end";
   return l.open.length > 0 || !l.d.state.pr ? "fix" : "end";
 }
 async function runLoop(input) {
@@ -2117,7 +2118,7 @@ async function runLoop(input) {
   l.openByRound.push(countOpen(l));
   for (let step = nextStep(l); step === "fix"; step = nextStep(l)) {
     l.round += 1;
-    await round(l, l.round >= MAX_FIX_ROUNDS || noProgress([...l.openByRound, countOpen(l)]));
+    await round(l, outOfRounds(l) || noProgress([...l.openByRound, countOpen(l)]));
     if (l.d.state.pr) await reviewRound(l);
     l.openByRound.push(countOpen(l));
   }

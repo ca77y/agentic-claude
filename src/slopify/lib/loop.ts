@@ -1640,6 +1640,9 @@ function freshLoop(input: LoopInput): Loop {
   };
 }
 
+// A run's fix rounds are counted from its own first round, so a rerun that goes on after finished rounds gets a fresh budget.
+const outOfRounds = (l: Loop): boolean => l.round - (l.firstRound ?? 0) >= MAX_FIX_ROUNDS;
+
 function nextStep(l: Loop): "clean" | "held" | "fix" | "end" {
   const g = gate({
     prOpen: !!l.d.state.pr,
@@ -1648,7 +1651,7 @@ function nextStep(l: Loop): "clean" | "held" | "fix" | "end" {
     held: heldRows(l).length,
   });
   if (g !== "fix") return g;
-  if (l.round >= MAX_FIX_ROUNDS || noProgress(l.openByRound)) return "end";
+  if (outOfRounds(l) || noProgress(l.openByRound)) return "end";
   // Only open items can start a round; a failed review with nothing to fix has nothing left to run.
   return l.open.length > 0 || !l.d.state.pr ? "fix" : "end";
 }
@@ -1668,7 +1671,7 @@ export async function runLoop(input: LoopInput): Promise<LoopResult> {
   l.openByRound.push(countOpen(l));
   for (let step = nextStep(l); step === "fix"; step = nextStep(l)) {
     l.round += 1;
-    await round(l, l.round >= MAX_FIX_ROUNDS || noProgress([...l.openByRound, countOpen(l)]));
+    await round(l, outOfRounds(l) || noProgress([...l.openByRound, countOpen(l)]));
     if (l.d.state.pr) await reviewRound(l);
     l.openByRound.push(countOpen(l));
   }
