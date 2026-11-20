@@ -449,13 +449,17 @@ export function pushed(r: PusherResult | null, what: string): PusherResult {
   throw new Halt("push", what, unmet ?? "pusher didn't return");
 }
 
-// The pending progress entries ride on this dispatch's ledger lines, and stay pending until a dispatch succeeds.
+// The pending progress entries ride on this dispatch's ledger lines, and stay pending until a dispatch succeeds. A
+// progress entry is a record, never an operation, so pusher refusing one, or reporting it out of order, is not unmet.
 function pushWithProgress(l: Loop, instruction: string, lines: readonly string[], label: string, phaseTitle: string) {
   return inOrder(l, async () => {
     const sent = l.progress.length;
+    const heads = l.progress.map((p) => /^progress \d+ \w+/.exec(p)?.[0] ?? p);
     const r = await callPusher(l.d.pushBrief(instruction, [...l.progress, ...lines]), label, phaseTitle);
-    if (pushOk(r)) l.progress.splice(0, sent);
-    return r;
+    const unmet = r?.unmet.filter((u) => heads.every((h) => !u.includes(h))) ?? [];
+    const ok = r && r.unmet.length > unmet.length && unmet.length === 0 ? { ...r, done: true, unmet } : r;
+    if (pushOk(ok)) l.progress.splice(0, sent);
+    return ok;
   });
 }
 

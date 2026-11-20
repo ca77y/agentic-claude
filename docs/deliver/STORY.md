@@ -207,6 +207,8 @@ Only the final description decides readiness. A clean run whose final descriptio
 
 Each `pusher` dispatch that writes the ledger also appends the progress entries kept since the last write: a round's findings, each ruling with its reason, what was tried, and what changed. They stay in the ledger. `writer-pr` reads them to see what is still open on a rerun, and no progress entry reaches a PR, a comment, or a card. They are never read as checkpoints.
 
+A progress entry is a record, never an operation. If `pusher` reports one as unmet, or out of order, and nothing else in the dispatch is unmet, the workflow counts the dispatch as done, keeps no entry pending for it, and does not halt at the push (H4). An unmet operation of any other kind still does.
+
 #### How the run exits
 
 - **Clean:** `pusher` marks the PR ready, moves the issue to In Review, and comments with each item that needs a person.
