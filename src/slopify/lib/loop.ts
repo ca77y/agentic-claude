@@ -411,6 +411,8 @@ interface Loop extends LoopInput {
   preExisting: Listed[];
   review: ReviewOutcome;
   changedThisRound: string[];
+  /** The tasks whose change passed, so their test and code are committed, which a spec revision's rerun rebuilds. */
+  delivered: Set<string>;
   /** A trivial run's test paths that pass once their change is in, which its Why trust it rests on; done round lines carry them. */
   passedTests: string[];
   /** Paths whose commit the hook still rejected after repairs; the next commit carries them. */
@@ -775,6 +777,7 @@ async function unneeded(
     `A simplifier verdict on ${c.id}.`,
   );
   const found = defectsOf(v);
+  if (found.length === 0) l.delivered.add(c.id);
   const inTest = (location: string): boolean => cycle.paths.some((p) => location.startsWith(p));
   const text = (fs: typeof found): string => fs.map((f) => `${f.location}: ${f.problem}`).join("\n");
   const test = text(found.filter((f) => inTest(f.location)));
@@ -905,11 +908,9 @@ async function reviseSpec(l: Loop, items: readonly OpenItem[]): Promise<Change[]
     items.map((i) => `${i.problem.location}: ${i.problem.text}`),
     { build: l.build, validate: l.validate },
   );
-  // Only a task the previous spec had was built, so only it may already be committed; a task the revision adds is new.
-  const built = new Set(l.build?.tasks.map((t) => t.id));
   l.build = revised.build;
   l.validate = revised.validate;
-  return revised.rerun.map((t) => ({ ...changeOfTask(l, t), rebuild: built.has(t.id) }));
+  return revised.rerun.map((t) => ({ ...changeOfTask(l, t), rebuild: l.delivered.has(t.id) }));
 }
 
 async function updateDocs(l: Loop, problems: readonly OpenItem[]): Promise<void> {
@@ -1659,6 +1660,7 @@ function freshLoop(input: LoopInput): Loop {
     preExisting: [],
     review: { clean: false, note: "" },
     changedThisRound: [],
+    delivered: new Set(input.built || input.startAtReview > 0 ? input.build?.tasks.map((t) => t.id) : []),
     passedTests: [...(input.small?.passedTests ?? [])],
     uncommitted: [],
     openByRound: [],

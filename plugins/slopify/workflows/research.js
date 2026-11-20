@@ -1229,6 +1229,7 @@ ${list(cycle.paths)}` : ""}${settled2}`,
     `A simplifier verdict on ${c.id}.`
   );
   const found = defectsOf(v);
+  if (found.length === 0) l.delivered.add(c.id);
   const inTest = (location) => cycle.paths.some((p) => location.startsWith(p));
   const text = (fs) => fs.map((f) => `${f.location}: ${f.problem}`).join("\n");
   const test = text(found.filter((f) => inTest(f.location)));
@@ -1342,10 +1343,9 @@ async function reviseSpec(l, items2) {
     items2.map((i) => `${i.problem.location}: ${i.problem.text}`),
     { build: l.build, validate: l.validate }
   );
-  const built = new Set(l.build?.tasks.map((t) => t.id));
   l.build = revised.build;
   l.validate = revised.validate;
-  return revised.rerun.map((t) => ({ ...changeOfTask(l, t), rebuild: built.has(t.id) }));
+  return revised.rerun.map((t) => ({ ...changeOfTask(l, t), rebuild: l.delivered.has(t.id) }));
 }
 async function updateDocs(l, problems) {
   if (l.docs.length === 0 && problems.length === 0) return;
@@ -2021,6 +2021,7 @@ function freshLoop(input) {
     preExisting: [],
     review: { clean: false, note: "" },
     changedThisRound: [],
+    delivered: new Set(input.built || input.startAtReview > 0 ? input.build?.tasks.map((t) => t.id) : []),
     passedTests: [...input.small?.passedTests ?? []],
     uncommitted: [],
     openByRound: [],
