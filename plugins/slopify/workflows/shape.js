@@ -909,13 +909,13 @@ The draft is ${c.draft}. Use its text exactly as written, with one trailing line
   );
   return opRef(r, "card") || c.cardId;
 }
-async function duplicate(d, c, original) {
+async function duplicate(d, c, original, named) {
   phase("File");
-  if (c.cardId) {
+  if (named) {
     pushed(
       await callPusher(
         `${d.WHERE}
-The user's invocation of shape authorizes exactly this: mark card ${c.cardId} a duplicate of card ${original}, as docs/BOARD.md's duplicate binding declares. Nothing else: no other card write, commit, branch, push, or PR. Report ${c.cardId} as the operation card.`,
+The user's invocation of shape authorizes exactly this: mark card ${named} a duplicate of card ${original}, as docs/BOARD.md's duplicate binding declares. Nothing else: no other card write, commit, branch, push, or PR. Report ${named} as the operation card.`,
         "mark the duplicate",
         "File"
       ),
@@ -926,8 +926,8 @@ The user's invocation of shape authorizes exactly this: mark card ${c.cardId} a 
     status: "duplicate",
     workflow: WORKFLOW,
     card: original,
-    marked: c.cardId,
-    report: c.cardId ? `shape marked ${c.cardId} a duplicate of ${original}, which already holds this ${c.kind}.` : `shape filed nothing: ${original} already holds this ${c.kind}. Run /slopify:shape ${original} to work on it.`
+    marked: named,
+    report: named ? `shape marked ${named} a duplicate of ${original}, which already holds this ${c.kind}.` : `shape filed nothing: ${original} already holds this ${c.kind}. Run /slopify:shape ${original} to work on it.`
   };
 }
 async function run() {
@@ -950,7 +950,7 @@ async function run() {
       draft: `.tmp/shape/${slug}.md`
     };
     const drafted = c.shaped ? await reshape(d, c) : await draft(d, c, related);
-    if ("duplicateOf" in drafted) return await duplicate(d, c, drafted.duplicateOf);
+    if ("duplicateOf" in drafted) return await duplicate(d, c, drafted.duplicateOf, named);
     const openQuestions = await refine(d, c, drafted);
     const deliverable = c.kind === "story" && openQuestions.length === 0;
     const filed = await file(d, c, slug, deliverable);
