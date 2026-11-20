@@ -657,10 +657,25 @@ ${gathered}`,
     "add the spec",
     "Spec",
   );
+  return challengeSpec(o, spec);
+}
+
+/** Challenge a spec an earlier run committed but didn't finish challenging. Its claims went with that run, so only the
+ * criteria checks, the lenses, and the advisors test it. */
+export const challengeCommitted = (o: HowInput, build: Build, validate: Validate): Promise<HowResult | HowExhausted> =>
+  challengeSpec(o, { build, validate, claims: [] });
+
+// A finished challenge is checkpointed, so a rerun goes straight to the build. A missing line only costs that rerun
+// the challenge again, so pusher's result stops nothing.
+async function challengeSpec(o: HowInput, spec: SpecResult): Promise<HowResult | HowExhausted> {
   const challenged = await challenge(o, spec);
-  return challenged.blockers.length > 0
-    ? { exhausted: challenged.blockers }
-    : { build: challenged.spec.build, validate: challenged.spec.validate };
+  if (challenged.blockers.length > 0) return { exhausted: challenged.blockers };
+  await callPusher(
+    o.d.pushBrief("Perform no operation other than appending the ledger line below.", [`done challenge ${o.specDir}`]),
+    "record the challenge",
+    "Challenge",
+  );
+  return { build: challenged.spec.build, validate: challenged.spec.validate };
 }
 
 /** A later round found the spec wrong: the advisors weigh in, the writer revises, and the tasks it changed run again. */

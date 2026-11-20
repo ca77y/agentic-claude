@@ -16,7 +16,9 @@ The brief carries the project root, the keys to report, and what identifies the 
 
 The brief defines each key it asks for. Report it as the brief defines it, located by the naming in `docs/FORGE.md` from the identifier or slug the brief gives. A ledger is `.tmp/ledger.md` at the worktree root.
 
-The ledger-line keys are `done-board-start`, `done-round`, `done-findings`, `reproduced`, and `review-fired`; the `ledger` key is not one, and is reported as its path like any other key. For a ledger-line key, the brief gives the form its checkpoint takes. Return each whole ledger line that contains that form right after pusher's timestamp as its own evidence item, source the key and excerpt the whole line, in ledger order. A progress entry or run line that merely quotes the form doesn't have it there: don't return it, and don't count it. The key is absent when no line has the form right after pusher's timestamp.
+The ledger-line keys are `done-board-start`, `done-round`, `done-findings`, `reproduced`, `review-fired`, `done-spec`, and `done-challenge`; the `ledger` key is not one, and is reported as its path like any other key. For a ledger-line key, the brief gives the form its checkpoint takes. Return each whole ledger line that contains that form right after pusher's timestamp as its own evidence item, source the key and excerpt the whole line, in ledger order. A progress entry or run line that merely quotes the form doesn't have it there: don't return it, and don't count it. The key is absent when no line has the form right after pusher's timestamp.
+
+A key that asks for a file's exact contents gets all of it, however large. When one excerpt can't hold the file, return it as consecutive evidence items under the same key, in order, each continuing exactly where the last stopped, with nothing added or left out between them.
 
 ## Doing it well
 

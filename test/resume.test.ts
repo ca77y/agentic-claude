@@ -86,6 +86,8 @@ describe("readResume", () => {
         build: null,
         validate: null,
         specDir: "",
+        challenged: false,
+        round: 3,
         reviewFired: 3,
         built: true,
         boardStartDone: true,

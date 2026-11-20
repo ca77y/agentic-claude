@@ -268,7 +268,9 @@ var CHECKPOINT_FORMS = {
   "done-round": String.raw`done round \d+\b`,
   "done-findings": String.raw`done findings \S`,
   reproduced: String.raw`reproduced \{`,
-  "review-fired": String.raw`review \d+ fired\b`
+  "review-fired": String.raw`review \d+ fired\b`,
+  "done-spec": String.raw`done spec \S`,
+  "done-challenge": String.raw`done challenge \S`
 };
 
 // src/slopify/lib/schemas.ts

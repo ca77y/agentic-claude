@@ -192,11 +192,11 @@ function fact(result, key) {
   const hit = result?.evidence.find((e) => e.source === key);
   return hit ? (hit.excerpt || hit.location || "").trim() : "";
 }
-function absent(v, whole) {
+function absent(v, whole2) {
   const t = (v ?? "").trim();
   if (!t) return true;
   const word = String.raw`(?:none|absent|missing|n\/a|not found)`;
-  const re = new RegExp(whole ? String.raw`^${word}\s*(?:\([^)]*\))?[.:]?$` : String.raw`^${word}(?![\w/-]|\.\w)`, "i");
+  const re = new RegExp(whole2 ? String.raw`^${word}\s*(?:\([^)]*\))?[.:]?$` : String.raw`^${word}(?![\w/-]|\.\w)`, "i");
   return re.test(t);
 }
 var SHAPES = {
@@ -456,7 +456,9 @@ var CHECKPOINT_FORMS = {
   "done-round": String.raw`done round \d+\b`,
   "done-findings": String.raw`done findings \S`,
   reproduced: String.raw`reproduced \{`,
-  "review-fired": String.raw`review \d+ fired\b`
+  "review-fired": String.raw`review \d+ fired\b`,
+  "done-spec": String.raw`done spec \S`,
+  "done-challenge": String.raw`done challenge \S`
 };
 function checkpointLine(key, value) {
   const line = value.trim().replace(/^```[^\n]*\n([\s\S]*?)\n?```$/, "$1").trim().replace(/^[-*]\s+/, "").replace(/^(["`])(.*)\1$/s, "$2").trim();
@@ -1972,7 +1974,7 @@ async function validate(l, afterBuild) {
   }
 }
 async function round(l, last) {
-  if (l.round > 0 || !l.built) {
+  if (l.round > (l.firstRound ?? 0) || !l.built) {
     await buildRound(l);
     note(l, "changed", unique(l.changedThisRound));
   }
@@ -1983,7 +1985,7 @@ function freshLoop(input) {
   return {
     ...input,
     docs: input.build?.docs ?? [],
-    round: 0,
+    round: input.firstRound ?? 0,
     reviewNumber: input.startAtReview > 0 ? input.startAtReview - 1 : 0,
     open: [],
     escalated: [],
@@ -2220,7 +2222,9 @@ async function ledgerLines(d, cardId, cp) {
       reproduced: accepted(cp, "reproduced"),
       "done-round": accepted(cp, "done-round"),
       "review-fired": accepted(cp, "review-fired"),
-      "done-board-start": accepted(cp, "done-board-start")
+      "done-board-start": accepted(cp, "done-board-start"),
+      "done-spec": accepted(cp, "done-spec"),
+      "done-challenge": accepted(cp, "done-challenge")
     };
   } catch (error) {
     if (error instanceof Halt)
@@ -2228,6 +2232,8 @@ async function ledgerLines(d, cardId, cp) {
     throw error;
   }
 }
+var whole = (cp, key) => cp.evidence.filter((e) => e.source === key).map((e) => e.excerpt).join("");
+var specFolderKey = (cardId, specDir) => specDir ? `the story's spec folder: ${specDir} when it exists, else the one folder under docs/specs/ whose name begins with ${slugOf(cardId)}-, whatever title words follow` : `the spec folder on the PR description's "Spec:" line`;
 async function readResume(d, cardId, specDir) {
   const cp = must(
     await scout(
@@ -2243,9 +2249,12 @@ ${d.branchOnly ? "- worktree: the main checkout, only when it has this run's bra
 - done-findings: \`done findings <paths>\`
 - reproduced: \`reproduced {...}\`
 - review-fired: \`review <n> fired\`
-- spec-dir: ${specDir ? `the folder ${specDir}, if it exists in the worktree` : `the spec folder on the PR description's "Spec:" line`}, relative to the worktree root
-- build-json: the exact contents of build.json in that folder
-- validate-json: the exact contents of validate.json in that folder`,
+- done-spec: \`done spec <folder>\`
+- done-challenge: \`done challenge <folder>\`
+- spec-dir: ${specFolderKey(cardId, specDir)}, relative to the worktree root
+- build-json: the exact contents of build.json in that folder, as consecutive evidence items in order when one excerpt can't hold it all
+- validate-json: the exact contents of validate.json in that folder, as consecutive evidence items in order when one excerpt can't hold it all
+- rationale-md: RATIONALE.md, only when that folder holds it`,
       { label: "read checkpoints", phase: "Locate" }
     ),
     "locate",
@@ -2269,10 +2278,15 @@ ${d.branchOnly ? "- worktree: the main checkout, only when it has this run's bra
     )
   ];
   const spec = val(cp, "spec-dir").replace(/^Spec:\s*/i, "").replaceAll("`", "");
+  const committed = lines["done-spec"].length > 0 && !absent(fact(cp, "rationale-md"));
+  const build = committed ? parseBuild(whole(cp, "build-json")) : null;
+  const validate2 = committed ? parseValidate(whole(cp, "validate-json")) : null;
   return {
-    build: parseBuild(fact(cp, "build-json")),
-    validate: parseValidate(fact(cp, "validate-json")),
+    build,
+    validate: validate2,
     specDir: shaped("rel", spec) || specDir,
+    challenged: !!build && !!validate2 && lines["done-challenge"].length > 0,
+    round: Math.max(0, ...rounds.map((l) => Number(/ done round (\d+)/.exec(l)?.[1] ?? -1) + 1)),
     reviewFired: Math.max(0, ...lines["review-fired"].map((l) => Number(/review (\d+) fired/.exec(l)?.[1] ?? 0))),
     built: rounds.length > 0,
     ...passedTests.length > 0 && { passedTests },

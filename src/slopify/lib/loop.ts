@@ -350,6 +350,8 @@ export interface LoopInput {
   startAtReview: number;
   /** The spec's tasks are already built, so the first round starts at validation. */
   built: boolean;
+  /** The number of this run's first round: a rerun goes on after the rounds its ledger shows finished. */
+  firstRound?: number;
   /** The short flow for a trivial story or a bug: no spec, and what the first test has to state. */
   small?: { firstTest: string; reproduced?: readonly Listed[]; passedTests?: readonly string[] };
   /** A spike's or a research run's flow: the PR changes documents, which their own checks validate and their own writer revises. */
@@ -1592,7 +1594,7 @@ async function validate(l: Loop, afterBuild: boolean): Promise<void> {
 }
 
 async function round(l: Loop, last: boolean): Promise<void> {
-  if (l.round > 0 || !l.built) {
+  if (l.round > (l.firstRound ?? 0) || !l.built) {
     await buildRound(l);
     note(l, "changed", unique(l.changedThisRound));
   }
@@ -1604,7 +1606,7 @@ function freshLoop(input: LoopInput): Loop {
   return {
     ...input,
     docs: input.build?.docs ?? [],
-    round: 0,
+    round: input.firstRound ?? 0,
     reviewNumber: input.startAtReview > 0 ? input.startAtReview - 1 : 0,
     open: [],
     escalated: [],

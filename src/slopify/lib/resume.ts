@@ -1,14 +1,19 @@
 // Where a delivery stands, from its durable checkpoints: the worktree, the PR, the ledger, and the committed spec.
 import { absent, fact, scout, shaped, type ScoutResult } from "./family.ts";
-import { val } from "./deliver.ts";
+import { slugOf, val } from "./deliver.ts";
 import { Halt, haltOnCard, must, type Run } from "./loop.ts";
 import { checkpointLine, parseReproduction, type CheckpointKey, type Reproduction } from "./rules.ts";
 import { parseBuild, parseValidate, type Build, type Validate } from "./spec.ts";
 
 export interface Resume {
+  /** The committed spec's build and validate; null unless the ledger shows the spec committed and its folder holds all three files. */
   build: Build | null;
   validate: Validate | null;
   specDir: string;
+  /** The ledger shows the committed spec's challenge finished. */
+  challenged: boolean;
+  /** The round after the last one the ledger shows finished; 0 when none. */
+  round: number;
   /** The highest review number the ledger shows fired; 0 when none. */
   reviewFired: number;
   /** The ledger shows a finished round, so the spec's tasks are built. */
@@ -58,6 +63,8 @@ async function ledgerLines(d: Run, cardId: string, cp: ScoutResult): Promise<Rec
       "done-round": accepted(cp, "done-round"),
       "review-fired": accepted(cp, "review-fired"),
       "done-board-start": accepted(cp, "done-board-start"),
+      "done-spec": accepted(cp, "done-spec"),
+      "done-challenge": accepted(cp, "done-challenge"),
     };
   } catch (error) {
     if (error instanceof Halt)
@@ -65,6 +72,19 @@ async function ledgerLines(d: Run, cardId: string, cp: ScoutResult): Promise<Rec
     throw error;
   }
 }
+
+// A file the scout quoted as consecutive excerpts under its key, because one excerpt can't hold it, joined back whole.
+const whole = (cp: ScoutResult, key: string): string =>
+  cp.evidence
+    .filter((e) => e.source === key)
+    .map((e) => e.excerpt)
+    .join("");
+
+// The story's one spec folder: the one named, else the one an earlier run wrote under another title.
+const specFolderKey = (cardId: string, specDir: string): string =>
+  specDir
+    ? `the story's spec folder: ${specDir} when it exists, else the one folder under docs/specs/ whose name begins with ${slugOf(cardId)}-, whatever title words follow`
+    : 'the spec folder on the PR description\'s "Spec:" line';
 
 // Read the checkpoints into the run's state. specDir is empty when only the PR knows it.
 export async function readResume(d: Run, cardId: string, specDir: string): Promise<Resume> {
@@ -82,9 +102,12 @@ ${d.branchOnly ? "- worktree: the main checkout, only when it has this run's bra
 - done-findings: \`done findings <paths>\`
 - reproduced: \`reproduced {...}\`
 - review-fired: \`review <n> fired\`
-- spec-dir: ${specDir ? `the folder ${specDir}, if it exists in the worktree` : 'the spec folder on the PR description\'s "Spec:" line'}, relative to the worktree root
-- build-json: the exact contents of build.json in that folder
-- validate-json: the exact contents of validate.json in that folder`,
+- done-spec: \`done spec <folder>\`
+- done-challenge: \`done challenge <folder>\`
+- spec-dir: ${specFolderKey(cardId, specDir)}, relative to the worktree root
+- build-json: the exact contents of build.json in that folder, as consecutive evidence items in order when one excerpt can't hold it all
+- validate-json: the exact contents of validate.json in that folder, as consecutive evidence items in order when one excerpt can't hold it all
+- rationale-md: RATIONALE.md, only when that folder holds it`,
       { label: "read checkpoints", phase: "Locate" },
     ),
     "locate",
@@ -114,10 +137,16 @@ ${d.branchOnly ? "- worktree: the main checkout, only when it has this run's bra
   const spec = val(cp, "spec-dir")
     .replace(/^Spec:\s*/i, "")
     .replaceAll("`", "");
+  // A spec counts only once it is committed with all three files; anything less is written again.
+  const committed = lines["done-spec"].length > 0 && !absent(fact(cp, "rationale-md"));
+  const build = committed ? parseBuild(whole(cp, "build-json")) : null;
+  const validate = committed ? parseValidate(whole(cp, "validate-json")) : null;
   return {
-    build: parseBuild(fact(cp, "build-json")),
-    validate: parseValidate(fact(cp, "validate-json")),
+    build,
+    validate,
     specDir: shaped("rel", spec) || specDir,
+    challenged: !!build && !!validate && lines["done-challenge"].length > 0,
+    round: Math.max(0, ...rounds.map((l) => Number(/ done round (\d+)/.exec(l)?.[1] ?? -1) + 1)),
     reviewFired: Math.max(0, ...lines["review-fired"].map((l) => Number(/review (\d+) fired/.exec(l)?.[1] ?? 0))),
     built: rounds.length > 0,
     ...(passedTests.length > 0 && { passedTests }),
