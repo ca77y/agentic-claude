@@ -56,6 +56,9 @@ const idLinksTolerated = (instructions: string): boolean =>
         !/that line|the marker line|marker/i.test(s),
     );
 
+// A card's text as a reader sees it, without its hidden lines.
+const visible = (body: string): string => body.replaceAll(/<!--[\s\S]*?-->/g, "").trim();
+
 const pusher: Script = (_t, _l, prompt) => {
   const marker = /(<!--[\s\S]*?-->)/.exec(prompt)?.[1] ?? "";
   const named = /Update card (\S+) with it\./.exec(prompt)?.[1];
@@ -102,12 +105,23 @@ const AGENTS: Record<string, Script> = {
   "writer-card": () => ({ openQuestions: [] }),
   judge: () => ({ problems: [] }),
   pusher,
-  // Returns every stored card, with its body as stored.
-  "scout-related-cards": () => ({
-    answer: board.length > 0 ? `Cards on the board: ${board.map((c) => c.id).join(", ")}` : "No related card.",
-    evidence: board.map((c) => ({ source: "card", location: c.id, excerpt: c.body })),
-    gaps: [],
-  }),
+  // Reports every stored card by its visible text, as a scout reading the board does. Like the real scout, it reports a
+  // hidden line only when its brief asks for a card holding that line, so a rerun finds its card only if shape asks.
+  "scout-related-cards": (_t, _l, prompt) => {
+    const asked = /holds the line (<!--[\s\S]*?-->)/.exec(prompt)?.[1];
+    return {
+      answer: board.length > 0 ? `Cards on the board: ${board.map((c) => c.id).join(", ")}` : "No related card.",
+      evidence: [
+        ...board.map((c) => ({ source: "card", location: c.id, excerpt: visible(c.body) })),
+        ...(asked ? board.filter((c) => c.body.includes(asked)) : []).map((c) => ({
+          source: "card",
+          location: c.id,
+          excerpt: asked ?? "",
+        })),
+      ],
+      gaps: [],
+    };
+  },
   // advisor-fit's rule: a card that already holds this same outcome is the duplicate.
   "advisor-fit": () => {
     const held = board.find((c) => holdsIdea(c, state.idea));
