@@ -88,6 +88,19 @@ describe("the tasks a spec revision runs again", () => {
   test("include a task the revision adds", async () => {
     assert.deepEqual(await rerunIds("design: wrong", [task("t1")], [task("t1"), task("t9")]), ["t9"]);
   });
+
+  test("are every task when the revision changes only the constraints every task follows", async () => {
+    current.script = reviserAgents({
+      ...specOf([task("t1"), task("t2")]),
+      build: { ...specOf([task("t1"), task("t2")]).build, shared: ["keep the legacy path out of every module"] },
+    });
+    const r = await specReviser(howInput(run()))(["design: wrong"], specOf([task("t1"), task("t2")]));
+    assert.deepEqual(
+      r.rerun.map((t) => t.id),
+      ["t1", "t2"],
+      "every change brief carries the shared constraints, so a revision of them affects every task",
+    );
+  });
 });
 
 // A run whose first review finding is ruled a spec fault; the revision keeps t1 as it was and adds t9.

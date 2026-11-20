@@ -109,3 +109,24 @@ describe("a commit with nothing left to commit (SMR-405)", () => {
     assert.match(commitRule, /never use those words for any other failure/i);
   });
 });
+
+describe("a removal with nothing left to commit (SMR-405)", () => {
+  const commitRule =
+    text("plugins/slopify/references/pusher-forge.md")
+      .split("\n")
+      .find((l) => l.startsWith("- **Commit.**")) ?? "";
+
+  test("pusher-forge.md counts a listed path whose deletion is already committed as nothing to commit", () => {
+    assert.ok(commitRule, "pusher-forge.md has the commit rule");
+    assert.doesNotMatch(
+      commitRule,
+      /every listed path exists/i,
+      "a removal lists paths that no longer exist, so requiring each to exist reports an already-committed deletion as a failure",
+    );
+    assert.match(
+      commitRule,
+      /delet/i,
+      "the rule says how a listed path whose deletion is already committed is reported",
+    );
+  });
+});
