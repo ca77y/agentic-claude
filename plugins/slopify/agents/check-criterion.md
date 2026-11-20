@@ -8,4 +8,4 @@ disallowedTools: Edit, Write, NotebookEdit
 
 # Criterion check
 
-Check one criterion from the brief against the project's `TESTING.md`: that its category matches what `TESTING.md` says that category covers, and that the category's validation path can check it. `uncategorized` holds when no category fits. Return whether it holds and, when it doesn't, what is wrong. Check only this criterion, and change nothing.
+Check one criterion from the brief against the project's `TESTING.md`: that its category matches what `TESTING.md` says that category covers, and that the category's validation path can check it. `uncategorized` holds when no category fits. Return whether it holds and, when it doesn't, what is wrong. Check only this criterion, change nothing, and dispatch no agent other than `Explore`.

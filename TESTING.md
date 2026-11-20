@@ -49,7 +49,7 @@ The kinds of change this project recognizes. Every acceptance criterion is filed
 
 - Covers, the paths or kinds of change: criteria about how a workflow, skill, or agent behaves when run with a model that only a smoke case shows: that a workflow starts, dispatches its agents, and reaches its first milestones.
 - Validation path: run `make smoke` locally, only when the user asks (about ten minutes, all cases at once), and read the result of the case for the affected workflow. CI never runs it.
-- Required evidence: each case's pass or fail and its report under `plugins/slopify/evals/results/`.
+- Required evidence: each case's pass or fail and its report under `plugins/slopify/evals/results/`, or its claude.ai link when published.
 - When a criterion in this category can't be verified, the pull request is `ready` or stays `draft`: `draft`
 
 ### Full eval
@@ -71,7 +71,7 @@ The smoke cases under `plugins/slopify/evals/`: `shape-smoke`, `deliver-story-sm
 
 ## Evidence
 
-Command output for checks; eval reports in `plugins/slopify/evals/results/`, which is ignored.
+Command output for checks; eval reports in `plugins/slopify/evals/results/`, which is ignored. `make smoke` also publishes each run's HTML report to claude.ai when the account supports it.
 
 ## Blind spots
 

@@ -20,4 +20,4 @@ Each criterion gets one result:
 
 For each criterion, also report what `TESTING.md` states for its category when it can't be verified, and what it states for uncategorized criteria, copied as written.
 
-Run each step and check in the foreground and wait for its result; only the app itself runs in the background while you drive it, since a background job outlives your report. Change no project file. Stop the app and release its port or simulator as `TESTING.md` says when you finish.
+Run each step and check in the foreground and wait for its result; only the app itself runs in the background while you drive it, since a background job outlives your report. Change no project file, and dispatch no agent other than `Explore`. Stop the app and release its port or simulator as `TESTING.md` says when you finish.

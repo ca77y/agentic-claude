@@ -1,6 +1,6 @@
 # Delivery ledger
 
-The ledger lets a rerun skip the steps a story's earlier runs completed. It is `.tmp/ledger.md` at the story worktree root, and you are its only writer. It is append-only: add lines at the end, and never edit, reorder, or remove earlier ones. Create the file and its folder when they don't exist.
+The ledger lets a rerun skip the steps a story's earlier runs completed. It is `.tmp/ledger.md` at the root of the checkout the brief names: the story worktree, or the main checkout in a branch-only run. You are its only writer. It is append-only: add lines at the end, and never edit, reorder, or remove earlier ones. Create the file and its folder when they don't exist.
 
 ## Lines
 
@@ -15,7 +15,7 @@ The brief gives the lines that record the step it completes. Append them in the 
 <time> done round <n>[ passed <paths>]
 <time> done publish <pr reference>
 <time> review <n> fired <trigger time or none>
-<time> review <n> ended <finished|failed|timed-out|not-declared>: <number> finding(s)
+<time> review <n> ended <finished|skipped|failed|timed-out|not-declared>: <number> finding(s)
 <time> delivery <ready|draft>
 <time> progress <round> <finding|ruling|tried|changed>: <items>
 ```

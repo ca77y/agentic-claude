@@ -31,7 +31,7 @@ How `research` answers a question from new sources and adds the answer to the pr
  │   │           writer-pr rewrites the description
  │   └────────── pusher pushes and requests the review
  ▼
- clean → PR ready, issue In Review            not clean → PR turns draft, saying why
+ clean, description checked → PR ready, card moved as docs/BOARD.md declares      otherwise → PR turns draft, saying why
 ```
 
 ## Decisions
@@ -40,7 +40,7 @@ How `research` answers a question from new sources and adds the answer to the pr
 - **The plan lives for the run only.** It sits in the worktree's ignored `.tmp/` and is never committed. It isn't a spec: specs are the how of a delivery.
 - **No replanning.** A researcher who finds the plan wrong reports it, and it becomes a limit the answer states. A sub-question nothing could be found for is a limit too, never a guess.
 - **Nothing stops for a judgment call.** What the plan's checks or the final checks leave open is stated in the pages or listed in the PR description: a decision or confirmation under Needs you, and an unverified or open problem under Not done.
-- **The loop is the delivery loop's document mode,** extended to several files: every problem, whatever its kind, goes to `library-scribe`, because the library pages are all the PR changes.
+- **The loop is the delivery loop's document mode,** extended to several files: every problem that needs a fix, whatever its kind, goes to `library-scribe`, because the library pages are all the PR changes.
 
 ## The PR description
 
