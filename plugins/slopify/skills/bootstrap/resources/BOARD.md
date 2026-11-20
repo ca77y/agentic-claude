@@ -10,7 +10,7 @@ Configuration does not authorize execution; the user's request does. An operatio
 ## Operations
 
 - Locate, read, search: {{READ_BINDINGS}}
-- Create, with initial status: {{CREATE_BINDING}}
+- Create, with initial status and relations: {{CREATE_BINDING}}
 - Transition: {{TRANSITION_BINDING}}
 - Update content and relations: {{UPDATE_BINDING}}
 - Attach a PR: {{PR_LINK_BINDING}}
