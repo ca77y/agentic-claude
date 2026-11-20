@@ -19,6 +19,7 @@ import {
   type Reply,
   type Script,
 } from "./harness.ts";
+import { board, clearBoard, linearPusher } from "./linear-board.ts";
 
 installAgents();
 
@@ -1518,6 +1519,24 @@ describe("the PR description", () => {
       assert.ok(JSON.stringify(r).includes("old bug"), "the run result carries the unfiled follow-up");
     });
   }
+
+  // SMR-372: a board that links an identifier or a domain on save has filed the follow-up card in full.
+  test("a follow-up filed on a board that rewrites its text is reported filed, and a rerun reuses its card", async () => {
+    clearBoard();
+    const filing = linearPusher();
+    const script = happy({
+      watcher: () => finding("old bug split out of SMR-317 at Intervals.icu"),
+      judge: (_t, label) => (label === "gateway" ? GATEWAY_OK : ruling({ severity: "pre-existing" })),
+      pusher: (t, l, prompt) => (prompt.includes("File one card") ? filing(t, l, prompt) : pusher(prompt)),
+    });
+    use(script);
+    const r = await runLoop(inputFor(freshRun()));
+    assert.equal(board.length, 1, "the follow-up got one card");
+    assert.ok(!JSON.stringify(r).includes("not confirmed filed"), "the filed follow-up was reported unfiled");
+    calls.length = 0;
+    await runLoop(inputFor(freshRun()));
+    assert.equal(board.length, 1, `the rerun filed another card: ${board.map((c) => c.id).join(", ")}`);
+  });
 
   test("a large run with dozens of coder choices and confirmations fits and ends ready", async () => {
     const ids = Array.from({ length: 26 }, (_, i) => `c${String(i + 1)}`);
