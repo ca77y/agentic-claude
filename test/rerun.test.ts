@@ -5,9 +5,9 @@
 // to append, stamped) is what the rerun's checkpoint scout reads. So the rerun sees whatever checkpoints the code
 // under test writes, whatever their wording.
 //
-// The checkpoint scout answers only what its brief asks, from that worktree. One limit stands in for the runtime: one
-// evidence excerpt holds at most SCOUT_QUOTE_LIMIT characters, so a ~100 KB build.json comes back as consecutive
-// excerpts for its key, and the first of them alone is cut.
+// The checkpoint scout answers only what its brief asks, from that worktree. One limit stands in for the runtime: a key
+// gets one evidence excerpt, which holds at most SCOUT_QUOTE_LIMIT characters, so a scout asked to quote a ~100 KB
+// build.json returns its first SCOUT_QUOTE_LIMIT characters, cut, and nothing more for that key.
 import assert from "node:assert/strict";
 import { beforeEach, describe, test } from "node:test";
 
@@ -68,10 +68,8 @@ interface Evidence {
 
 // ---- The scripted agents ----------------------------------------------------------------------------------------
 
-const quote = (text: string): string[] =>
-  Array.from({ length: Math.ceil(text.length / SCOUT_QUOTE_LIMIT) }, (_, i) =>
-    text.slice(i * SCOUT_QUOTE_LIMIT, (i + 1) * SCOUT_QUOTE_LIMIT),
-  );
+// A file quoted as the one excerpt a key gets: cut at the limit, however it is asked for.
+const quote = (text: string): string => text.slice(0, SCOUT_QUOTE_LIMIT);
 
 const dirsOf = (wt: Worktree): string[] => [...wt.folders].map(([dir]) => dir);
 
@@ -91,9 +89,7 @@ function folderAnswer(key: string, desc: string, dir: string, files: Files): Evi
   const [only] = mentioned;
   if (mentioned.length === 1 && only && /content/i.test(desc)) {
     const text = files[only];
-    return text === undefined
-      ? []
-      : quote(text).map((excerpt) => ({ source: key, location: `${dir}/${only}`, excerpt }));
+    return text === undefined ? [] : [{ source: key, location: `${dir}/${only}`, excerpt: quote(text) }];
   }
   const present = mentioned.filter((f) => files[f] !== undefined);
   return present.length > 0 ? [{ source: key, location: dir, excerpt: present.join(", ") }] : [];
