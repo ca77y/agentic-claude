@@ -1,0 +1,116 @@
+{
+  "shared": [
+    "The new spec field is `testReads` on each build.json task: a required array of worktree-relative files or directories that the task's tests read directly (files a test opens, runs, asserts on, or imports directly, never what those imports import in turn). Paths are literal, with no globs. Code, the writer-spec instruction, and the docs all use this name and this meaning.",
+    "Ownership: a task owns a read when the read equals one of the task's `files` entries or sits under one (a path inside a directory it may write). A read is flagged when the task doesn't own it and at least one other task's `files` overlap it, a task it depends on included. A read no other task writes is never flagged, and `build.docs` files count as written by no task.",
+    "The flag is a `spec` blocker raised by rule during the spec challenge, with no judge, and it names the task and the file. A blocker still open after the last revision ends the how phase through the existing exhausted result and the H3 stop, so the build never starts. No new phase, halt, or result shape is added.",
+    "The check runs only before the build: on every challenge round of a fresh or resumed (committed but unchallenged) spec. A spec revised mid-build and a spec whose ledger already shows the challenge done are not checked."
+  ],
+  "decisions": [
+    {
+      "id": "d1",
+      "question": "Where does the spec state what a task's test reads?",
+      "choice": "A required `testReads` field on each build.json task, next to `files`. No paths are parsed from `firstTest` or `todo` prose.",
+      "rationale": "The issue counts reads and ownership per task, and 'the same spec always gets the same flag result' needs structured paths: prose parsing can't promise that.",
+      "reversible": true,
+      "permission": "",
+      "affectsAcceptance": true
+    },
+    {
+      "id": "d2",
+      "question": "When does a task own a read?",
+      "choice": "By containment: the read equals one of the task's `files` entries or sits under one. Overlap in either direction decides only which other tasks write it.",
+      "rationale": "With symmetric overlap, a task owning src/a.ts that reads src/ would count as owning the read even when another task writes src/b.ts. The issue's Assumptions define owned files as the ones the task may write.",
+      "reversible": true,
+      "permission": "",
+      "affectsAcceptance": true
+    },
+    {
+      "id": "d3",
+      "question": "Is a read of a file a dependency writes flagged?",
+      "choice": "Yes, the same as any other task's file.",
+      "rationale": "The issue's Assumptions: 'A test that reads a file that a task it depends on writes is flagged too.'",
+      "reversible": true,
+      "permission": "",
+      "affectsAcceptance": true
+    },
+    {
+      "id": "d4",
+      "question": "How is a spec stopped from being built?",
+      "choice": "The flag is a judge-free `spec` blocker in the challenge, next to the irreversible-decision rule. The writer revises for it, and one left open after the last revision exhausts the how phase into the existing H3 stop. The challenge also rechecks the spec its two closing rewrites (record open decisions, record open risks) produce, and returns any flag found there as a blocker before the challenge is recorded as done.",
+      "rationale": "Reuses the existing revision loop and stop. Both closing rewrites change the spec after the last check today, so without the recheck a writer could bring in a cross-read that reaches the build, breaking 'A flagged spec is not built as it is.'",
+      "reversible": true,
+      "permission": "",
+      "affectsAcceptance": true
+    },
+    {
+      "id": "d5",
+      "question": "How is a spec committed before `testReads` existed treated when a rerun resumes its challenge?",
+      "choice": "A missing or non-array `testReads` counts as reading nothing, and non-string entries are skipped, inside the rule only. The build parser is unchanged.",
+      "rationale": "The issue says existing specs are not rechecked, and a parser default would apply to every reader of the build.",
+      "reversible": true,
+      "permission": "",
+      "affectsAcceptance": false
+    },
+    {
+      "id": "d6",
+      "question": "Is a spec revised mid-build rechecked?",
+      "choice": "No.",
+      "rationale": "The issue scopes the check to 'before the build starts', and adding it inside the build would add a new stop there.",
+      "reversible": true,
+      "permission": "",
+      "affectsAcceptance": false
+    }
+  ],
+  "manualActions": [],
+  "tasks": [
+    {
+      "id": "t1",
+      "dependsOn": [],
+      "files": [
+        "src/slopify/lib/spec.ts",
+        "src/slopify/lib/rules.ts",
+        "src/slopify/lib/how.ts",
+        "test/rules.test.ts",
+        "test/how.test.ts",
+        "test/rerun.test.ts",
+        "test/loop.test.ts",
+        "test/revision.test.ts",
+        "test/resume.test.ts",
+        "plugins/slopify/workflows"
+      ],
+      "criteria": ["c1", "c2", "c3"],
+      "todo": "Add the required `testReads` property to the task schema, described as in `shared`, so the writer's output schema requires it.\n\nAdd an exported pure rule to rules.ts that takes the spec's tasks (each with `id`, `files`, and an optional `testReads`) and returns one finding per flagged read, `{ task, file, writers }`, with tasks, reads, and writers in spec order, applying the ownership rule in `shared`. It does no I/O, so equal input gives deep-equal output. A missing or non-array `testReads` counts as no reads and non-string entries are skipped, with a one-line comment that a spec committed before the field existed reads nothing.\n\nIn how.ts, turn each finding into a `spec` blocker located at the task, whose problem names the file and the writing tasks and says this task doesn't write it, so its coder can't make that test pass. The wording needs no singular or plural agreement and prescribes no restructuring. Add these blockers to every challenge round's findings next to the irreversible-decision rule, with no judge. After either closing rewrite of the challenge, recheck the rewritten spec with the same rule and return any finding as a blocker, prefixed to say the final spec write introduced it, so the how phase ends exhausted and the challenge is never recorded as done. The irreversible-decision rule's behavior is unchanged.\n\nTests: rules tests for a flagged read naming task, file, and writer; a dependency's file flagged; an own file and a file inside an own directory not flagged; a directory read covering an own file and another task's file flagged on the other task's file; a file no task writes not flagged; a missing `testReads` giving nothing; repeated calls deep-equal; and literal, direct-read granularity (a glob or an unlisted transitive import is not expanded). How tests: a cross-read goes back to writer-spec naming the task and file with no `rule` judge call; one kept through every revision ends exhausted naming them; a decisions-only exit whose recorded spec brings in a cross-read ends exhausted with no `done challenge` pusher call; a spec whose reads are its own or unwritten passes with no revision. One deliverStory end-to-end test in rerun.test.ts: a writer that keeps a cross-read through every revision ends blocked, the issue comment names the task and the file, and no coder is dispatched. Add `testReads` to the typed task fixtures that now need it. Regenerate the bundled workflows.",
+      "reuse": [
+        "The irreversible-decision rule in how.ts and its place in challenge()'s findings, as the pattern for a judge-free spec blocker",
+        "challenge()'s revision loop, MAX_FIX_ROUNDS, and its still-blocking result; challengeSpec's exhausted result; deliver-story's exhausted-to-brokenWorkflow stop before runLoop",
+        "The private path-overlap helper in rules.ts, for finding which other tasks write a read",
+        "test/how.test.ts's scripted-agent tests for the no-judge rule and the halt after three revisions; test/rules.test.ts's task helper; the deliverStory harness in test/harness.ts as test/rerun.test.ts uses it",
+        "make build, which regenerates plugins/slopify/workflows/*.js"
+      ],
+      "create": [
+        "`testReads` on the task schema",
+        "The exported cross-read rule in rules.ts",
+        "The cross-read spec blocker in how.ts, raised every round and on the spec of each closing rewrite",
+        "The rules, how, and end-to-end tests listed in todo"
+      ]
+    },
+    {
+      "id": "t2",
+      "dependsOn": [],
+      "files": ["plugins/slopify/agents/writer-spec.md", "docs/deliver/STORY.md", "docs/ARCHITECTURE.md"],
+      "criteria": [],
+      "todo": "writer-spec.md, under `tasks`: each task lists in `testReads` the files its tests read directly, as defined in `shared`, and a task's test reads only files that task writes or files no task writes. Restructuring is the writer's choice and is not prescribed.\n\ndocs/deliver/STORY.md: add `testReads` to the task field list under The spec, and add a Challenge bullet saying the script raises, with no judge, a `spec` blocker for a task whose test reads a file another task writes and it doesn't, on every round and on the spec of the challenge's closing rewrite. The H3 row already covers a blocker left open, so no halt row is added.\n\ndocs/ARCHITECTURE.md: add the rule to the list of problems that skip the judge.\n\nKeep the existing doc tests (test/doc-claims.test.ts, test/docs-text.test.ts) passing.",
+      "reuse": [
+        "The existing H3 halt row in docs/deliver/STORY.md",
+        "The irreversible-decision rule's wording in both docs, as the pattern for the new entries"
+      ],
+      "create": ["The writer-spec instruction for `testReads`", "The doc entries for the field and the rule"]
+    }
+  ],
+  "docs": [
+    "docs/deliver/STORY.md",
+    "docs/ARCHITECTURE.md",
+    "plugins/slopify/agents/writer-spec.md",
+    "plugins/slopify/agents/coder.md"
+  ]
+}

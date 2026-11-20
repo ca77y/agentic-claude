@@ -1,0 +1,28 @@
+{
+  "criteria": [
+    {
+      "id": "c1",
+      "wording": "A spec with a task whose test reads a file that another task writes, and that this task doesn't write, is flagged before the build starts, naming the task and the file. (Deterministic)",
+      "category": "Deterministic",
+      "path": "Run `make check`, and the new crossReads tests in test/rules.test.ts and the cross-read challenge tests in test/how.test.ts.",
+      "evidence": "make check exits 0; the rules tests that flag another task's file and a dependency's file pass with the task, file, and writers in the finding; the how test passes showing writer-spec's revision prompt names the task and the file with no rule judge call.",
+      "firstTest": "In test/rules.test.ts: t1 writes a.ts, t2 lists a.ts in testReads and doesn't write it; the rule returns exactly one finding with task t2, file a.ts, and writers [t1]."
+    },
+    {
+      "id": "c2",
+      "wording": "A spec whose every task's test reads only files that task writes, or files no task writes, is not flagged. (Deterministic)",
+      "category": "Deterministic",
+      "path": "Run `make check`, and the crossReads not-flagged and determinism tests in test/rules.test.ts and the clean-spec test in test/how.test.ts.",
+      "evidence": "make check exits 0; the rules tests for an own file, a file inside an own directory, a file no task writes, a missing testReads, and repeated calls giving deep-equal output pass; the how test shows a clean spec finishing the challenge with no revision.",
+      "firstTest": "In test/rules.test.ts: t1 writes src/ and lists src/a.ts and README.md in testReads, t2 writes b.ts; the rule returns an empty list, and the same on a second call."
+    },
+    {
+      "id": "c3",
+      "wording": "A flagged spec is not built as it is. (Deterministic)",
+      "category": "Deterministic",
+      "path": "Run `make check`, and the exhausted and closing-rewrite tests in test/how.test.ts and the deliverStory end-to-end test in test/rerun.test.ts.",
+      "evidence": "make check exits 0; the how tests show a cross-read kept through every revision, and one brought in by a decisions-only closing rewrite, each ending exhausted with no done challenge pusher call; the end-to-end test shows the run blocked, the issue comment naming the task and the file, and no coder dispatched.",
+      "firstTest": "In test/how.test.ts: writer-spec returns a spec where t2 reads t1's a.ts on every write; runHow's result has exhausted naming t2 and a.ts, has no build, and writer-spec was called four times."
+    }
+  ]
+}
