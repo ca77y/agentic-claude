@@ -1208,6 +1208,19 @@ async function settledRun(input: LoopInput): Promise<unknown> {
   }
 }
 
+// Sixteen coder choices of the length a real coder writes, a question and the choice made: more than fit listed one by one.
+const LONG_CHOICES = Array.from(
+  { length: 16 },
+  (_, i) =>
+    `Should the hidden-line matcher for case ${String(i + 1)} normalise Linear's rewritten text (escaped brackets, smart quotes, trailing whitespace) before comparing it with the shape marker? Yes: it compares the normalised forms, so a rewritten line still matches.`,
+);
+const needsYouBlock = (prompt: string): string[] =>
+  (/For Needs you:\n([\s\S]*?)(?:\n\n|$)/.exec(prompt)?.[1] ?? "").split("\n").filter(Boolean);
+// A writer that follows its brief: every line of the brief's Needs you block goes under Needs you, as given.
+const copiesNeedsYou: Script = (_t, _l, prompt) => {
+  const [changes = "", trust = ""] = prBody(prompt).split("## Why trust it", 2);
+  return { body: `${changes}## Needs you\n\n${needsYouBlock(prompt).join("\n")}\n\n## Why trust it${trust}` };
+};
 describe("the PR description", () => {
   test("every push that opens or updates the PR runs writer-pr, then lens-pr, then pusher (deliver-story)", async () => {
     use(reviewThenClean("bug"));
@@ -1481,6 +1494,39 @@ describe("the PR description", () => {
     );
     assert.deepEqual(missing, [], "the card comment lists each in full");
   });
+
+  for (const [kind, over] of [
+    ["bugfix", { kind: "bugfix", build: null, specDir: "", small: { firstTest: "fails." } }],
+    ["trivial", { kind: "trivial", build: null, specDir: "", small: { firstTest: "fails." } }],
+    ["story", {}],
+  ] as const) {
+    test(`a ${kind} run with more Needs you items than fit gets a brief whose Needs you block passes the check, counted right and listed in full where it links`, async () => {
+      use(
+        happy({
+          coder: (_t, label) => (label.endsWith(": test") ? OK_TEST : { ...OK_FIX, assumptions: LONG_CHOICES }),
+          "scout-docs": () => ({ answer: "none", evidence: [], gaps: [] }),
+          "writer-pr": copiesNeedsYou,
+        }),
+      );
+      const r = await runLoop(inputFor(freshRun(), over));
+      const brief = lastWriterPrompt();
+      const posted = copiesNeedsYou("writer-pr", "", brief)?.["body"] as string;
+      assert.deepEqual(checkDescription(posted, { kind, specDir: kind === "story" ? "docs/specs/smr-1" : "" }), {
+        leak: [],
+        format: [],
+      });
+      assert.equal(r.status, "ready", JSON.stringify(r.draftReasons));
+      assert.ok(
+        needsYouBlock(brief).some((line) => /\b16\b/.test(line) && /choice/i.test(line)),
+        `the Needs you block counts the 16 coder choices:\n${needsYouBlock(brief).join("\n").slice(0, 400)}`,
+      );
+      const opening = calls.findIndex((c) => c.type === "pusher" && c.prompt.includes("open the branch's PR"));
+      const listed = calls
+        .slice(0, opening)
+        .some((c) => c.type === "pusher" && LONG_CHOICES.every((x) => c.prompt.includes(x)));
+      assert.ok(listed, "each coder choice is put in full where the grouped line links before the PR opens");
+    });
+  }
 
   test("writer-pr never returning a body halts the run as declared", async () => {
     use(happy({ "writer-pr": () => null }));
