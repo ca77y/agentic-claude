@@ -1887,9 +1887,11 @@ ${cards.join("\n\n")}`
 async function finish(l, ready, reasons) {
   const { state } = l.d;
   const items2 = [...needsYou(l), ...l.unfiled.map((x) => entryText(x)), ...reasons.map((x) => x.text)];
-  const card = ready ? `Perform each operation docs/BOARD.md declares for when the PR's review is clean on card ${l.cardId}, such as a status move, and comment on the card with the evidence and what is open:
-${list(items2)}` : `Comment on card ${l.cardId} with what is open:
-${list(items2)}`;
+  const open = items2.length > 0 ? `What is open:
+${list(items2)}` : "Nothing is open; say so in the comment.";
+  const card = ready ? `Perform each operation docs/BOARD.md declares for when the PR's review is clean on card ${l.cardId}, such as a status move. Then comment on the card with the evidence and what is open, whether or not anything is.
+${open}` : `Comment on card ${l.cardId} with what is open.
+${open}`;
   pushed(
     await pushWithProgress(
       l,

@@ -1138,6 +1138,10 @@ describe("parallel inner loops", () => {
     });
     const card = calls.find((c) => c.label === "update the card")?.prompt ?? "";
     assert.ok(card.includes("such as a status move"));
+    assert.ok(
+      card.includes("Nothing is open") && !card.includes("- none"),
+      "an empty open list doesn't read as no operations",
+    );
     assert.ok(!(calls.find((c) => c.label === "mark the PR ready")?.prompt ?? "").includes("comment on the card"));
   });
 

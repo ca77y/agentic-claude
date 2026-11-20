@@ -1521,9 +1521,11 @@ async function fileCards(l: Loop): Promise<void> {
 async function finish(l: Loop, ready: boolean, reasons: readonly Listed[]): Promise<void> {
   const { state } = l.d;
   const items = [...needsYou(l), ...l.unfiled.map((x) => entryText(x)), ...reasons.map((x) => x.text)];
+  // A bare "- none" after the operations reads as "no operations", so an empty list is said outright.
+  const open = items.length > 0 ? `What is open:\n${list(items)}` : "Nothing is open; say so in the comment.";
   const card = ready
-    ? `Perform each operation docs/BOARD.md declares for when the PR's review is clean on card ${l.cardId}, such as a status move, and comment on the card with the evidence and what is open:\n${list(items)}`
-    : `Comment on card ${l.cardId} with what is open:\n${list(items)}`;
+    ? `Perform each operation docs/BOARD.md declares for when the PR's review is clean on card ${l.cardId}, such as a status move. Then comment on the card with the evidence and what is open, whether or not anything is.\n${open}`
+    : `Comment on card ${l.cardId} with what is open.\n${open}`;
   pushed(
     await pushWithProgress(
       l,
