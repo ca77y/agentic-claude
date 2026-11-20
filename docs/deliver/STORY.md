@@ -269,6 +269,7 @@ Invoking `deliver-story` authorizes the following:
 - opening and updating the story's PR, as a draft or ready;
 - the issue's status moves the board declares for delivery start and for review;
 - one comment on the issue when the run ends or halts;
+- a comment on the issue listing in full the Needs you items the PR description groups, each time that set changes;
 - filing one card that lists every `pre-existing` finding, which a person can split, and one card for each finding the judge splits off with `split-to-issue`.
 
 It never merges, approves, or force-pushes.
