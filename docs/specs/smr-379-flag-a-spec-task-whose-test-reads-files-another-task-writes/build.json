@@ -1,8 +1,8 @@
 {
   "shared": [
-    "The new spec field is `testReads` on each build.json task: a required array of worktree-relative files or directories that the task's tests read directly (files a test opens, runs, asserts on, or imports directly, never what those imports import in turn). Paths are literal, with no globs. Code, the writer-spec instruction, and the docs all use this name and this meaning.",
+    "The new spec field is `testReads` on each build.json task: a required array of worktree-relative files or directories that the task's tests actually read directly (files a test opens, runs, asserts on, or imports directly, never what those imports import in turn). Paths are literal, with no globs. Code, the writer-spec instruction, and the docs all use this name and this meaning.",
     "Ownership: a task owns a read when the read equals one of the task's `files` entries or sits under one (a path inside a directory it may write). A read is flagged when the task doesn't own it and at least one other task's `files` overlap it, a task it depends on included. A read no other task writes is never flagged, and `build.docs` files count as written by no task.",
-    "The flag is a `spec` blocker raised by rule during the spec challenge, with no judge, and it names the task and the file. A blocker still open after the last revision ends the how phase through the existing exhausted result and the H3 stop, so the build never starts. No new phase, halt, or result shape is added.",
+    "The flag is a `spec` blocker raised by rule during the spec challenge, with no judge, and it names the task and the file. It is cleared only by a spec that changes which task writes or tests the file; removing a read from `testReads` while the task's tests still make it does not clear it. A blocker still open after the last revision ends the how phase through the existing exhausted result and the H3 stop, so the build never starts. No new phase, halt, or result shape is added.",
     "The check runs only before the build: on every challenge round of a fresh or resumed (committed but unchallenged) spec. A spec revised mid-build and a spec whose ledger already shows the challenge done are not checked."
   ],
   "decisions": [
@@ -59,6 +59,15 @@
       "reversible": true,
       "permission": "",
       "affectsAcceptance": false
+    },
+    {
+      "id": "d7",
+      "question": "What counts as clearing a cross-read flag?",
+      "choice": "Only a spec change to which task writes or tests the file. Both the blocker and the writer-spec instruction say `testReads` lists what the tests actually read and that deleting a read the tests still make does not clear the flag.",
+      "rationale": "`testReads` is the check's only input and the writer who must clear the flag also writes it, so the smallest edit that passes the recheck is deleting the entry while `firstTest`/`todo` still describe the read. Saying what counts as a fix keeps the check from becoming a one-revision formality, without prescribing the restructure the issue leaves to the writer.",
+      "reversible": true,
+      "permission": "",
+      "affectsAcceptance": true
     }
   ],
   "manualActions": [],
@@ -71,6 +80,7 @@
         "src/slopify/lib/rules.ts",
         "src/slopify/lib/how.ts",
         "test/rules.test.ts",
+        "plugins/slopify/agents/writer-spec.md",
         "test/how.test.ts",
         "test/rerun.test.ts",
         "test/loop.test.ts",
@@ -79,32 +89,22 @@
         "plugins/slopify/workflows"
       ],
       "criteria": ["c1", "c2", "c3"],
-      "todo": "Add the required `testReads` property to the task schema, described as in `shared`, so the writer's output schema requires it.\n\nAdd an exported pure rule to rules.ts that takes the spec's tasks (each with `id`, `files`, and an optional `testReads`) and returns one finding per flagged read, `{ task, file, writers }`, with tasks, reads, and writers in spec order, applying the ownership rule in `shared`. It does no I/O, so equal input gives deep-equal output. A missing or non-array `testReads` counts as no reads and non-string entries are skipped, with a one-line comment that a spec committed before the field existed reads nothing.\n\nIn how.ts, turn each finding into a `spec` blocker located at the task, whose problem names the file and the writing tasks and says this task doesn't write it, so its coder can't make that test pass. The wording needs no singular or plural agreement and prescribes no restructuring. Add these blockers to every challenge round's findings next to the irreversible-decision rule, with no judge. After either closing rewrite of the challenge, recheck the rewritten spec with the same rule and return any finding as a blocker, prefixed to say the final spec write introduced it, so the how phase ends exhausted and the challenge is never recorded as done. The irreversible-decision rule's behavior is unchanged.\n\nTests: rules tests for a flagged read naming task, file, and writer; a dependency's file flagged; an own file and a file inside an own directory not flagged; a directory read covering an own file and another task's file flagged on the other task's file; a file no task writes not flagged; a missing `testReads` giving nothing; repeated calls deep-equal; and literal, direct-read granularity (a glob or an unlisted transitive import is not expanded). How tests: a cross-read goes back to writer-spec naming the task and file with no `rule` judge call; one kept through every revision ends exhausted naming them; a decisions-only exit whose recorded spec brings in a cross-read ends exhausted with no `done challenge` pusher call; a spec whose reads are its own or unwritten passes with no revision. One deliverStory end-to-end test in rerun.test.ts: a writer that keeps a cross-read through every revision ends blocked, the issue comment names the task and the file, and no coder is dispatched. Add `testReads` to the typed task fixtures that now need it. Regenerate the bundled workflows.",
+      "todo": "Add the required `testReads` property to the task schema, as defined in `shared`, so the writer's output schema requires it.\n\nrules.ts: an exported pure rule that takes the spec's tasks (`id`, `files`, optional `testReads`) and returns one finding per flagged read, `{ task, file, writers }`, in spec order, applying the ownership rule in `shared` and d5 for a spec without the field. Equal input gives deep-equal output.\n\nhow.ts: turn each finding into a `spec` blocker at the task that names the task, the file, and the tasks that write it, and says what clears it as `shared` and d7 state. It prescribes no restructuring. Raise these blockers every challenge round next to the irreversible-decision rule, with no judge, and recheck the spec of each closing rewrite as d4 states. The irreversible-decision rule is unchanged.\n\nwriter-spec.md, under `tasks`: each task lists in `testReads` what its tests actually read, as defined in `shared`; a task's test reads only files that task writes or files no task writes; and a cross-read flag is cleared only by changing which task writes or tests the file, never by deleting a read the tests still make. How to restructure is the writer's choice.\n\nTests: test/rules.test.ts covers the rule's flagged and not-flagged cases and its determinism; test/how.test.ts covers the revision prompt, a clean pass, exhaustion after every revision, and a cross-read brought in by each closing rewrite (open decisions and open risks); test/rerun.test.ts covers a deliverStory run that ends blocked with no coder dispatched. validate.json c1-c3 give the cases. Add `testReads` to the typed task fixtures that need it, and regenerate the bundled workflows.",
       "reuse": [
         "The irreversible-decision rule in how.ts and its place in challenge()'s findings, as the pattern for a judge-free spec blocker",
         "challenge()'s revision loop, MAX_FIX_ROUNDS, and its still-blocking result; challengeSpec's exhausted result; deliver-story's exhausted-to-brokenWorkflow stop before runLoop",
         "The private path-overlap helper in rules.ts, for finding which other tasks write a read",
         "test/how.test.ts's scripted-agent tests for the no-judge rule and the halt after three revisions; test/rules.test.ts's task helper; the deliverStory harness in test/harness.ts as test/rerun.test.ts uses it",
-        "make build, which regenerates plugins/slopify/workflows/*.js"
+        "make build, which regenerates plugins/slopify/workflows/*.js",
+        "The existing `tasks` section of plugins/slopify/agents/writer-spec.md, where the new instruction goes"
       ],
       "create": [
         "`testReads` on the task schema",
         "The exported cross-read rule in rules.ts",
         "The cross-read spec blocker in how.ts, raised every round and on the spec of each closing rewrite",
+        "The writer-spec instruction for `testReads`",
         "The rules, how, and end-to-end tests listed in todo"
       ]
-    },
-    {
-      "id": "t2",
-      "dependsOn": [],
-      "files": ["plugins/slopify/agents/writer-spec.md", "docs/deliver/STORY.md", "docs/ARCHITECTURE.md"],
-      "criteria": [],
-      "todo": "writer-spec.md, under `tasks`: each task lists in `testReads` the files its tests read directly, as defined in `shared`, and a task's test reads only files that task writes or files no task writes. Restructuring is the writer's choice and is not prescribed.\n\ndocs/deliver/STORY.md: add `testReads` to the task field list under The spec, and add a Challenge bullet saying the script raises, with no judge, a `spec` blocker for a task whose test reads a file another task writes and it doesn't, on every round and on the spec of the challenge's closing rewrite. The H3 row already covers a blocker left open, so no halt row is added.\n\ndocs/ARCHITECTURE.md: add the rule to the list of problems that skip the judge.\n\nKeep the existing doc tests (test/doc-claims.test.ts, test/docs-text.test.ts) passing.",
-      "reuse": [
-        "The existing H3 halt row in docs/deliver/STORY.md",
-        "The irreversible-decision rule's wording in both docs, as the pattern for the new entries"
-      ],
-      "create": ["The writer-spec instruction for `testReads`", "The doc entries for the field and the rule"]
     }
   ],
   "docs": [
