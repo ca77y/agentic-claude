@@ -146,6 +146,10 @@ var FIT_SCHEMA = {
     duplicateOf: {
       type: "string",
       description: "The identifier of an existing card that already holds this same outcome, so this one would add nothing; empty when no card does"
+    },
+    overlaps: {
+      ...STRINGS,
+      description: "The identifiers of existing cards that hold part, not all, of this outcome; empty when none do"
     }
   }
 };
