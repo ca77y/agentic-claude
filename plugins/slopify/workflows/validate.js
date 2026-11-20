@@ -408,7 +408,7 @@ var TEST_SCHEMA = {
     },
     failingOutput: {
       type: "string",
-      description: "The Checks commands' output on the current code, failing only on the new test's assertions"
+      description: "The Checks commands' output on the current code, failing only on the new test's assertions; empty when the test guards behavior the current code already has"
     },
     noTest: { type: "string", description: "Why the behavior can't be expressed as a test; empty when it can" },
     specProblem: {

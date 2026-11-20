@@ -1001,6 +1001,102 @@ describe("the small flow", () => {
   });
 });
 
+// SMR-402: a fix round can ask for a test of behavior the code already has. No code fails such a test, so asking it to
+// fail first only stops the run.
+describe("a guard test in a fix round", () => {
+  const BUGFIX = {
+    kind: "bugfix" as const,
+    build: null,
+    specDir: "",
+    small: { firstTest: "fails now the way the reproduction shows." },
+  };
+  const GUARD_ASK = "no test pins that a marker the board leaves alone stays byte for byte";
+  const NO_CODE_FAILS =
+    "No existing code fails this test: the behavior it states is already there, so it can't fail on the current code.";
+  // A coder that can write the guard test but can't make it fail on the current code. When the dispatch allows a test
+  // that already passes, it writes the guard and says so with no failing output; otherwise it stops.
+  const coder: Script = (_t, label, prompt) => {
+    if (!label.endsWith(": test")) return OK_FIX;
+    if (!prompt.includes(GUARD_ASK)) return OK_TEST;
+    return prompt.includes("may already pass on the current code")
+      ? { ...OK_TEST, failingOutput: "" }
+      : { ...OK_TEST, failingOutput: "", specProblem: NO_CODE_FAILS };
+  };
+  const guardRun = (over: Partial<Record<string, Script>>): Script =>
+    happy({ "scout-docs": () => ({ answer: "none", evidence: [], gaps: [] }), coder, ...over });
+  const once = (first: Reply, then: Reply): Script => {
+    let n = 0;
+    return () => {
+      n += 1;
+      return n === 1 ? first : then;
+    };
+  };
+
+  const reviewAsks = (): Script => once(finding(GUARD_ASK), CLEAN_REVIEW);
+  const qaAsks: Reply = {
+    verdict: "fail",
+    evaluated: "x",
+    findings: [{ location: "a.test.ts", problem: GUARD_ASK, blocking: true }],
+    limits: "none",
+    testAtFault: true,
+  };
+  const CASES: { name: string; id: string; over: () => Partial<Record<string, Script>> }[] = [
+    { name: "qa says the test is at fault", id: "change", over: () => ({ qa: once(qaAsks, QA_PASS) }) },
+    {
+      name: "the judge rules a review finding code-kind",
+      id: "fix-1",
+      over: () => ({ watcher: reviewAsks() }),
+    },
+    {
+      name: "the app run fails",
+      id: "fix-1",
+      over: () => ({
+        validator: once(
+          { results: [{ ...PASS_ROW, result: "fail", detail: GUARD_ASK }], uncategorizedSetting: "draft" },
+          VALIDATOR_PASS,
+        ),
+      }),
+    },
+  ];
+
+  for (const { name, id, over } of CASES) {
+    test(`when ${name}, lets the guard test pass on the current code, commits it, and goes ready`, async () => {
+      use(guardRun(over()));
+      const r = await runLoop(inputFor(freshRun(), BUGFIX));
+      const guardAt = calls.findIndex((c) => c.label === `${id}: test` && c.prompt.includes(GUARD_ASK));
+      assert.ok(guardAt !== -1, "the guard test is asked for");
+      assert.ok(calls[guardAt]?.prompt.includes("may already pass on the current code"));
+      const after = calls.slice(guardAt + 1);
+      assert.ok(
+        after.some((c) => c.type === "pusher" && new RegExp(`^commit: add .*test for ${id}$`).test(c.label)),
+        "the guard test is committed",
+      );
+      assert.ok(
+        after.some((c) => c.label === `${id}: qa` && c.prompt.includes("when the behavior it states is broken")),
+        "qa proves the guard test by breaking the behavior it states",
+      );
+      assert.deepEqual(r.draftReasons, []);
+      assert.equal(r.status, "ready");
+    });
+  }
+
+  test("keeps fail first for the first test", async () => {
+    use(guardRun({}));
+    await runLoop(inputFor(freshRun(), BUGFIX));
+    assert.ok(calls.find((c) => c.label === "change: test")?.prompt.includes("must fail on the current code"));
+  });
+
+  test("still stops as a draft on a coder's question about what to build", async () => {
+    const OPEN = "the report doesn't say which markers the board rewrites";
+    const asked: Script = (t, label, prompt) =>
+      label === "fix-1: test" ? { ...OK_TEST, specProblem: OPEN } : coder(t, label, prompt);
+    use(guardRun({ watcher: reviewAsks(), coder: asked }));
+    const { status, draftReasons } = await runLoop(inputFor(freshRun(), BUGFIX));
+    assert.equal(status, "draft");
+    assert.ok(draftReasons.some((x) => x.text.includes(OPEN)));
+  });
+});
+
 describe("parallel inner loops", () => {
   const two: Build = {
     shared: [],

@@ -219,7 +219,7 @@ A progress entry is a record, never an operation. If `pusher` reports one as unm
 This is the inner loop. Every code change runs through it, from the first build to each later fix, whichever check found the problem. The tests are fixed before the code, and the code is validated against tests it couldn't touch. It gets at most three tries.
 
 1. **Test.** A `coder` dispatch writes a new test or changes an existing one, so that the test states the required behavior: its task's criteria in the first build, or one problem in a later round.
-   - The test must fail on the current code on its merit: an assertion fails, never a compile, type, or import error. When it names code that doesn't exist yet, the dispatch adds the smallest stub that lets it compile, and changes no other production code.
+   - The test must fail on the current code on its merit: an assertion fails, never a compile, type, or import error. When it names code that doesn't exist yet, the dispatch adds the smallest stub that lets it compile, and changes no other production code. In a later round's fix, or a rewrite after a failed check, the test may instead guard behavior the code already has, and then the dispatch returns no failing output.
    - It ends by running the `Checks` commands `TESTING.md` declares, which pass except for the new test's assertions, so the commit hook accepts the test. The dispatch returns the test paths, the stubs, and that output.
    - `pusher` commits the test and its stubs in a commit of their own. Only the test paths are protected, so the fix can replace the stubs. The commit stays local until the push.
    - When the behavior can't be expressed as a test, the dispatch returns `noTest` with a reason instead. An example is a CI setting. `qa` then judges the reason.
@@ -235,7 +235,7 @@ This is the inner loop. Every code change runs through it, from the first build 
 
    Any failed check is a `blocker` and goes back to step 2, or to step 1 when the test itself is at fault.
 
-   A problem the `judge` rules `test`-kind is in the tests, such as missing coverage, so its test may already pass on the current code. For it, `qa` checks instead that the test fails when the behavior it states is broken.
+   A problem the `judge` rules `test`-kind is in the tests, such as missing coverage, so its test may already pass on the current code. For it, `qa` checks instead that the test fails when the behavior it states is broken. A fix round's test, or a test rewritten after a failed check, can also guard behavior the code already has. No code fails such a test, so the `coder` may write it passing and return no failing output, and `qa` proves it the same way.
 
 4. **Simplify.** Once `qa` passes, a fresh `simplifier` (opus) reads the change's diff for code it adds but doesn't need: a helper or file used once, an option nothing exercises, handling for a case that can't happen, or a new mechanism where an existing one does the job. Each finding names what to remove, merge, or narrow. A finding in the change's test goes back to step 1, since its test paths are protected from the `coder`, and any other goes back to step 2. When a `coder` then says the trimmed test needs what was removed, one `judge` rules between them, and later tries keep to that ruling instead of trading the test back and forth. `qa` judges whether the change is right; `simplifier` judges only whether it is bigger than it needs to be.
 
