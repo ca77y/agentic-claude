@@ -2,5 +2,5 @@
 type: regex
 # The scaffold's seed commit, made with fixed dates: main never moved. Regenerate it when the scaffold changes.
 target: { source: file, path: .git/refs/heads/main }
-pattern: "^e36d09a5326a1988a16f03cb4977ff3d16e5b6af"
+pattern: "^29579d3353f68d368d4c4f56cf6741f17064e6db"
 ---
