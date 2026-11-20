@@ -8,7 +8,15 @@ import shape from "../src/slopify/workflows/shape.ts";
 import { createDeliver } from "../src/slopify/lib/deliver.ts";
 import { findCard } from "../src/slopify/lib/small.ts";
 import { calls, current, installAgents, scriptOf, type Script } from "./harness.ts";
-import { board, clearBoard, duplicateMarks, HIDDEN, holds, linearPusher, linearSave } from "./linear-board.ts";
+import {
+  board,
+  clearBoard,
+  duplicateMarks,
+  holds,
+  linearPusher,
+  linearSave,
+  relatedCardsScout,
+} from "./linear-board.ts";
 
 installAgents();
 
@@ -25,23 +33,7 @@ const AGENTS: Record<string, Script> = {
   "writer-card": () => ({ openQuestions: [] }),
   judge: () => ({ problems: [] }),
   pusher: linearPusher(() => draftBody(state.idea)),
-  // Reports every card on the board by its visible text, as a scout reading the board does. Like the real scout, it
-  // reports a card's hidden line only when its brief names that line, so a rerun finds its card only if the brief asks.
-  "scout-related-cards": (_t, _l, prompt) => {
-    const asked = Array.from(prompt.matchAll(HIDDEN), (m) => m[0]);
-    return {
-      answer: board.length > 0 ? `Cards on the board: ${board.map((c) => c.id).join(", ")}` : "No related card.",
-      evidence: [
-        ...board.map((c) => ({ source: "card", location: c.id, excerpt: c.body.replaceAll(HIDDEN, "").trim() })),
-        ...board.flatMap((c) =>
-          asked
-            .filter((line) => c.body.includes(line) || c.body.includes(linearSave(line)))
-            .map((line) => ({ source: "card", location: c.id, excerpt: line })),
-        ),
-      ],
-      gaps: [],
-    };
-  },
+  "scout-related-cards": relatedCardsScout(),
   // advisor-fit's rule: another card that already holds this same outcome is the duplicate.
   "advisor-fit": (_t, _l, prompt) => {
     const shaped = /The card (\S+), with its comments/.exec(prompt)?.[1];
