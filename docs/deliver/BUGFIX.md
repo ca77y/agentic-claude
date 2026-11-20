@@ -29,10 +29,11 @@ Everything else, including the review and its fixes, is as in [`TRIVIAL.md`](TRI
 
 ## The PR description
 
-`writer-pr` writes it and `lens-pr` checks it as in [`STORY.md`](STORY.md#the-pr-description): four parts, **What changes**, **Needs you**, **Why trust it**, and **Not done**, rewritten whole in every round that opens or updates the PR. Here **What changes** opens with the bug, before and after the fix, and **Why trust it** rests on the reproduction: failing before the fix and passing after it. The brief gives `writer-pr` the reproduction's steps and the behavior seen before the fix. There is no `Spec:` line.
+`writer-pr` writes it and `lens-pr` checks it as in [`STORY.md`](STORY.md#the-pr-description): four parts, **What changes**, **Needs you**, **Why trust it**, and **Not done**, rewritten whole in every round that opens or updates the PR. Here **What changes** opens with the bug, before and after the fix, and **Why trust it** rests on the reproduction, before the fix and after it. The brief gives `writer-pr` the reproduction's steps and the behavior seen before the fix. There is no `Spec:` line.
 
 ## Decisions
 
+- **The reproduction checks the expected behavior.** It fails on the bug, so the same steps pass once the fix is in, and the validator reruns them against the worktree's code. `lens-repro` fails one that asserts the buggy behavior.
 - **The reproduction settles what the report leaves open.** `coder` decides from the evidence and never asks, because no human is available.
 - **Why it couldn't reproduce goes on the card.** Either `coder` couldn't make the failure happen, or `lens-repro` saw it come and go. The comment says which, with what was tried.
 - **A check that can't run is not an unreproducible bug.** When `lens-repro` can't run the reproduction at all, for example because a tool is missing, the run halts and labels nothing.

@@ -40,7 +40,7 @@ describe("the PR description in the design docs", () => {
   const kindLines: Record<keyof typeof kindDocs, { opening: RegExp[]; trust: RegExp[] }> = {
     story: { opening: [/outcome/i], trust: [/criterion results/i] },
     trivial: { opening: [/one sentence/i], trust: [/test/i, /app/i] },
-    bugfix: { opening: [/before/i, /after/i], trust: [/reproduction/i, /fail/i, /pass/i] },
+    bugfix: { opening: [/before/i, /after/i], trust: [/reproduction/i, /before the fix/i, /after/i] },
     spike: { opening: [/question/i, /answer/i, /recommendation/i], trust: [/claims/i, /unknowns/i] },
     research: { opening: [/question/i, /short answer/i, /main page/i], trust: [/citations/i, /source/i] },
   };
