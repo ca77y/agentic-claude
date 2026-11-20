@@ -1521,10 +1521,12 @@ describe("the PR description", () => {
         `the Needs you block counts the 16 coder choices:\n${needsYouBlock(brief).join("\n").slice(0, 400)}`,
       );
       const opening = calls.findIndex((c) => c.type === "pusher" && c.prompt.includes("open the branch's PR"));
-      const listed = calls
+      const listing = calls
         .slice(0, opening)
-        .some((c) => c.type === "pusher" && LONG_CHOICES.every((x) => c.prompt.includes(x)));
-      assert.ok(listed, "each coder choice is put in full where the grouped line links before the PR opens");
+        .find((c) => c.type === "pusher" && LONG_CHOICES.every((x) => c.prompt.includes(x)));
+      assert.ok(listing, "each coder choice is put in full where the grouped line links before the PR opens");
+      const grant = /Authorization[\s\S]*?(?=It does not authorize)/.exec(listing.prompt)?.[0] ?? "";
+      assert.match(grant, /comment[^,]*Needs you/i, `the run's authorization grants that card comment:\n${grant}`);
     });
   }
 
