@@ -24,12 +24,12 @@ How `deliver-trivial` takes a trivial story from a card or a prompt to a reviewe
  │               pusher pushes, opens the PR ready, which fires the review          ⛔ H2
  6 REVIEW ────── watcher (haiku) reads the findings
  │   ▲ ≤3 fix    judge × 1 (opus) rules on every finding
- │   │  rounds   each blocker/major: failing test → commit → coder → commit → checks
- │   │           scout-docs, then writer-docs if it found any
+ │   │  rounds   each blocker/major that isn't a docs finding: failing test → commit → coder → commit → checks
+ │   │           scout-docs; writer-docs fixes what it found and each docs finding → commit
  │   │           writer-pr rewrites the description
  │   └────────── pusher pushes and requests the review
  ▼
- clean → PR ready, issue In Review            not clean → PR turns draft, saying why
+ clean → PR ready, card updated as docs/BOARD.md declares      not clean → PR turns draft, saying why
 ```
 
 ## What differs from `deliver-story`
@@ -37,7 +37,7 @@ How `deliver-trivial` takes a trivial story from a card or a prompt to a reviewe
 - **No how phase:** no designs, advisors, spec, or challenge.
 - **No label:** this flow doesn't need `Deliverable`, so it can start from a prompt. A prompt always gets a card first. A card that still lists open questions is refused, because with no spec phase nothing would settle them: the run comments on the card and returns `not-started`.
 - **Checks inside the inner loop:** a fix isn't validated until the project's checks pass.
-- **`qa` and `simplifier` run once**, on the first change. A review fix has only the checks, except one whose test may pass on the current code, a `test`-kind fix or a guard of behavior the code already has: `qa` proves it by breaking the behavior it states.
+- **`qa` and `simplifier` check only the first change**, on each of its tries. A review fix has only the checks, except one whose test may pass on the current code, a `test`-kind fix or a guard of behavior the code already has: `qa` proves it by breaking the behavior it states, and `simplifier` then checks it.
 - **The app runs once**, before the PR opens, and again only if that run failed. With no criteria, the validator treats the whole change as one, under whichever `TESTING.md` category covers it. When none fits, it reports `cannot-verify`, and `TESTING.md`'s **Uncategorized** setting decides whether the PR stays a draft.
 - **`judge` rules only on review findings.** A failing check or validator run goes straight back to `coder`.
 - **No gateway `judge`, and no recurrence rulings.** A finding that comes back stays open and keeps the PR a draft.
@@ -54,7 +54,7 @@ The PR description is written and checked as in [`STORY.md`](STORY.md#the-pr-des
 | --- | --------------------------------------------------------------------------------------------------------- | -------- | ------------------------------------------------------------ |
 | H1  | The issue can't be read, the argument says nothing, or `answers` isn't a map or holds an object or a list | Read     | `not-started`, no board write                                |
 | H2  | The push is denied, or PR creation fails                                                                  | Push     | `blocked`; finished work stays committed on the local branch |
-| H3  | Infrastructure: a stop signal, a required tool denied, or a budget, usage, or agent limit reached         | Any      | `blocked`, with the state reported on the issue              |
+| H3  | Infrastructure: a stop signal, a required tool denied, or a budget, usage, or agent limit reached         | Any      | `blocked`, naming the stage and the checkpoint to rerun from |
 | H4  | `writer-pr` returns no description in any attempt of a stage                                              | Push     | `blocked`; finished work stays committed on the local branch |
 | H5  | On a rerun, a checkpoint item the scout returned for a ledger key isn't a ledger line                     | Read     | `blocked`, naming the key                                    |
 | H6  | The card lists open questions                                                                             | Read     | `not-started`, and an issue comment listing them             |

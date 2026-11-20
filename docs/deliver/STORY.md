@@ -74,7 +74,7 @@ Every delivery runs these stages in this order. Each stage gives its continue-or
 
 ### 1. Intake
 
-- `scout-card` reads the issue and its comments, labels, and relations.
+- `scout-card` reads the issue and its labels.
 - `scout-checkpoint` reads the ledger, the spec folder, and the PR, so that a rerun skips the stages that are complete.
 
 The script reads the `Deliverable` label from what `scout-card` returned. `shape` adds that label, so no agent checks the issue. An issue without it stops the run with a comment that says to run `shape`, which accepts an existing card.
@@ -111,7 +111,8 @@ Each story gets one folder, `docs/specs/<lowercase issue id>-<slug>/`. Nothing i
 
 - **`build.json`** says what to build:
   - `shared`: the constraints and interfaces every task of this story must follow. It never repeats a project rule.
-  - `decisions`: each choice the spec made, with `affectsAcceptance` set when it changes behavior a criterion describes. A coder has no choices left to make.
+  - `decisions`: each choice the spec made, with `affectsAcceptance` set when it changes behavior a criterion describes, and `reversible`, with the issue's words quoted in `permission` for an irreversible one. The challenge raises an irreversible decision with no permission as a `blocker`. A coder has no choices left to make.
+  - `manualActions`: each irreversible step the issue doesn't explicitly permit, left for a person under **Needs you** and never in a task.
   - `tasks`: for each task, its `id`, `dependsOn`, `files`, `criteria`, what to do, what to reuse, and what to create. Anything only one task needs goes in that task.
   - `docs`: the documents making claims about the area the change touches, which `scout-docs` found. The list can be empty.
 - **`validate.json`** says how to prove it. For each criterion:
@@ -122,16 +123,16 @@ Each story gets one folder, `docs/specs/<lowercase issue id>-<slug>/`. Nothing i
 
 No agent opens the whole spec. The script hands each one its slice, and project rules reach agents through `.claude/rules/` and `AGENTS.md`:
 
-| Agent                                           | Gets                                                                 |
-| ----------------------------------------------- | -------------------------------------------------------------------- |
-| `coder`                                         | `shared`, its task, and its criteria, plus the problem if it's a fix |
-| `qa`                                            | The same, plus the git history                                       |
-| `writer-docs`                                   | The `docs` list and the code                                         |
-| `validator`                                     | `validate.json` and `TESTING.md`                                     |
-| `lens-docs`                                     | One listed document and the code                                     |
-| `judge`, on one problem                         | The problem, the diff, and the relevant task and criterion           |
-| Gateway `judge`                                 | `build.json`, `validate.json`, and the round's evidence and diff     |
-| Advisors and `writer-spec`, on a `spec` problem | All three files                                                      |
+| Agent                                           | Gets                                                                           |
+| ----------------------------------------------- | ------------------------------------------------------------------------------ |
+| `coder`                                         | `shared`, its task, and its criteria, plus the problem if it's a fix           |
+| `qa`                                            | The same, plus the git history                                                 |
+| `writer-docs`                                   | The `docs` list and the code                                                   |
+| `validator`                                     | `validate.json` and `TESTING.md`                                               |
+| `lens-docs`                                     | One listed document and the code                                               |
+| `judge`, on a step's problems                   | The issue, every problem with its criterion, the diff, and the earlier rulings |
+| Gateway `judge`                                 | `build.json`, `validate.json`, and the round's evidence and diff               |
+| Advisors and `writer-spec`, on a `spec` problem | All three files                                                                |
 
 ### 4. Build and validate
 
@@ -143,10 +144,9 @@ This stage is two nested loops. The inner loop makes one change correct, and onl
    - `coder` meets what its brief requires, and decides how: structure, names, helpers, and algorithms. `qa` challenges each choice it made with the rest of the change; none reaches the person. A requirement that is unclear or can't be met, or that would change described behavior or an interface another task relies on, comes back as a spec problem, which goes to `writer-spec`.
    - An inner loop that runs out of tries doesn't stop the round. Its problem stays open as a `blocker`.
    - After the inner loops, `writer-docs` updates the documents on the `docs` list, so they describe the code as built. It runs in every round that changed code or has an open `docs` problem, and when the list isn't empty. `pusher` commits its work. Documentation needs no failing test, so it stays out of the inner loop.
-2. **Validate.** `checks` runs the `Checks` commands from `TESTING.md` and returns the exit codes and failing lines. `validator` then follows each criterion's category path, as defined below. In the first round it runs every criterion. In later rounds it runs the criteria whose code paths changed, or every criterion when a fix touched boot or config files. It runs even when `checks` fails. Boot is its first step, so a broken build fails there and is judged like any other problem. One `lens-docs` per listed document checks that its claims are true against the code.
+2. **Validate.** `checks` runs the `Checks` commands from `TESTING.md` and returns the exit codes and failing lines. At the same time, `validator` follows each criterion's category path, as defined below. In the first round it runs every criterion. In later rounds it runs the criteria whose code paths changed, or every criterion when a fix touched boot or config files. It runs even when `checks` fails. Boot is its first step, so a broken build fails there and is judged like any other problem. Once both finish, one `lens-docs` per listed document checks that its claims are true against the code.
 3. **Judge.** One `judge` (opus) rules on all the round's problems together, so it reads the issue, the diff, and the earlier rulings once. Each problem still gets its own verdict, because its severity and kind decide where it goes, and problems that report the same thing get the same fingerprint. Each verdict is `confirmed` with a severity and a [kind](../DESIGN.md#severity-and-problem-kinds), `dismissed` with a reason, or `unverified`. The judge reads the evidence and the diff:
    - It never downgrades a confirmed failure.
-   - It flags changes that no criterion calls for, such as unrelated refactors or disabled tests.
    - A `pass` without evidence becomes `cannot-verify`. It isn't a `fail`, because nothing shows that the code is wrong.
    - A finding that conflicts with the spec's design is kind `spec`, which brings in the advisors. `coder` doesn't improvise around a wrong spec.
 4. **Gateway.** One `judge` (opus) reads every `qa` verdict, the validator's evidence, the `lens-docs` results, and the round's diff, and decides whether anything was missed. Whatever it flags is judged like any other problem and becomes open for the next round. A document the change affects that isn't on the `docs` list is added to it.
@@ -160,7 +160,7 @@ This stage is two nested loops. The inner loop makes one change correct, and onl
    - One `judge` rules on all the review's findings as in step 3. Each brief includes the earlier rulings for the same fingerprint (file, symbol, category), so a dismissed finding stays dismissed.
    - The judge filters out pre-existing issues, issues a linter would catch, and style. It runs a reproduction when it can, rather than only reading the code.
 7. **Gate.** This step is code, not an agent. It waits for every judge.
-   - The delivery is clean when a PR exists, its review has run on the latest push, no `blocker` or `major` is open, no criterion is `fail`, and `TESTING.md` lets every `cannot-verify` and `uncategorized` criterion pass as `ready`.
+   - The delivery is clean when a PR exists, its review of the latest push finished (or `docs/FORGE.md` declares no review), no `blocker` or `major` is open, and `TESTING.md` lets every `cannot-verify` and `uncategorized` criterion pass as `ready`. A `fail` row holds the PR only as the problem the judge confirms it to be: a fail the judge rules unverified, a decision, or minor opens no blocker, so the PR can go ready with that row under **Why trust it**.
    - If only such a criterion stands in the way, the loop ends and the PR stays a draft. No code could change that result, so no further round starts.
    - Otherwise the next round starts, unless a limit below has been reached. Each open `blocker` or `major` goes where its kind says.
    - Nothing else is sent to a producer.
@@ -212,7 +212,7 @@ A progress entry is a record, never an operation. If `pusher` reports one as unm
 #### How the run exits
 
 - **Clean:** `pusher` marks the PR ready, moves the issue to In Review, and comments with each item that needs a person.
-- **Not clean:** `pusher` converts the PR to a draft, and the description's **Needs you** and **Not done** list everything keeping it one. The issue gets a comment with each Needs-you item, each follow-up card not confirmed filed, and the text of each reason the PR is a draft; the comment leaves out the Not-done items. The run returns `draft` with the decision ids. A rerun with `answers` resumes at the next outer round.
+- **Not clean:** `pusher` converts the PR to a draft, and the description's **Needs you** and **Not done** list everything keeping it one. The issue gets a comment with each Needs-you item, each follow-up card not confirmed filed, and the text of each reason the PR is a draft; the comment leaves out the Not-done items. The run returns `draft` with the decision ids. A rerun with `answers` validates the work once more without building, reads the review of the last push again, and goes on from there.
 
 ## Test first
 
@@ -259,7 +259,7 @@ Every other problem is recorded and the run keeps going. Once a PR exists, the w
 
 `TESTING.md` lives at the root of the target project, which owns it. Its template, which defines its sections, is [`plugins/slopify/skills/bootstrap/resources/TESTING.md`](../../plugins/slopify/skills/bootstrap/resources/TESTING.md). `bootstrap` creates and audits it.
 
-A flow the validator explores successfully can be saved as a deterministic flow in the project, so later deliveries inherit it. When several deliveries mark criteria `uncategorized` the same way, the run report suggests a new category.
+A flow the validator explores successfully can be saved as a deterministic flow in the project, so later deliveries inherit it.
 
 ## Authority
 

@@ -8,4 +8,4 @@ Read `docs/BOARD.md` for the tracker, its bindings, the card shape, the statuses
 - **Update content** only when the brief authorizes it. Read the current card first, change only the fields the brief names, and preserve the rest.
 - **Never cross a human gate**: a status or decision the declaration reserves for the user stays with the user. Never change a card's goal, or rewrite an acceptance criterion to match an implementation.
 - **Comment** only when the brief asks for that message.
-- **Read back** each write, and report the card identifier.
+- **Read back** each write, and report the card identifier. Read back compares what the card says, not its markup: a board that turns a card identifier or a domain into a link, saves `-` bullets as `*`, or wraps a bare URL in `<…>` when it saves the card has made no content change, and that difference is not a failed write.

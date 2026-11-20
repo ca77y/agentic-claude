@@ -1,6 +1,6 @@
 # Deliver bugfix
 
-How `deliver-bugfix` fixes a bug on its own, from a card or a prompt to a reviewed PR. Nobody is needed at any point. A bug it can reproduce has a clear way to check the fix, and the PR shows the evidence: the reproduced behavior and the behavior after the fix.
+How `deliver-bugfix` fixes a bug on its own, from a card or a prompt to a reviewed PR. It asks nobody anything while it runs; a halt, or a PR left a draft, says what needs you. A bug it can reproduce has a clear way to check the fix, and the PR shows the evidence: the reproduced behavior and the behavior after the fix.
 
 ## Flow
 
@@ -34,12 +34,12 @@ Everything else, including the review and its fixes, is as in [`TRIVIAL.md`](TRI
 ## Decisions
 
 - **The reproduction checks the expected behavior.** It fails on the bug, so the same steps pass once the fix is in, and the validator reruns them against the worktree's code. The run's one criterion is the card's **Expected** section, or the whole card when it has none. `lens-repro` fails one that asserts the buggy behavior.
-- **The reproduction settles what the report leaves open.** `coder` decides from the evidence and never asks, because no human is available.
-- **Why it couldn't reproduce goes on the card.** Either `coder` couldn't make the failure happen, or `lens-repro` saw it come and go. The comment says which, with what was tried.
+- **The reproduction settles what the report leaves open.** `coder` decides from the evidence and never asks, because the run asks nobody anything while it runs.
+- **Why it couldn't reproduce goes on the card.** Either `coder` couldn't make the failure happen, or `lens-repro` found the reproduction doesn't reliably show the reported symptom. The comment says which, with the reason from the last try.
 - **A check that can't run is not an unreproducible bug.** When `lens-repro` can't run the reproduction at all, for example because a tool is missing, the run halts and labels nothing.
 - **The card isn't started before the bug is reproduced.** An unreproducible bug leaves no branch or worktree behind.
 - **A rerun reads the reproduction back from the ledger** and goes straight to the delivery.
 
 ## Halt conditions
 
-As in [`TRIVIAL.md`](TRIVIAL.md). An unreproducible bug isn't a halt: the run returns `unreproducible`, and the card says why.
+As in [`TRIVIAL.md`](TRIVIAL.md), plus one: `lens-repro` can't run the reproduction at all (Reproduce) → `blocked`, naming the missing prerequisite, with no label or comment on the card. An unreproducible bug isn't a halt: the run returns `unreproducible`, and the card says why.

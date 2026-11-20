@@ -11,8 +11,8 @@ How `deliver-spike` answers a bounded technical question with a findings documen
  │               a prompt gets a new spike card from pusher, so every spike is on the board  ⛔ H1
  │               a card that lists open questions stops the run with a comment  ⛔ H6
  2 WORKSPACE ─── pusher (sonnet) creates and prepares the worktree, starts the issue
- 3 GROUND ────── in parallel: library-reader, scout-code, scout-feasibility,
- │               scout-upstream-docs, scout-known-issues, scout-prior-art (sonnet)
+ 3 GROUND ────── in parallel: library-reader, scout-upstream-docs, scout-known-issues,
+ │               scout-prior-art (sonnet), scout-code, scout-feasibility (haiku)
  4 PLAN ──────── writer-findings (opus) lists the claims the answer rests on: supported, contested,
  │               or unknown, and the measurement that would settle each one that can be measured
  5 PROTOTYPE ─── only when a claim needs a measurement
@@ -51,7 +51,7 @@ One file, `docs/spikes/<id>-<slug>.md`, named like a spec folder. Unlike a spec 
 ## Decisions
 
 - **Nothing stops for a judgment call.** An ambiguous question becomes an assumption the plan states. A measurement that fails three tries stays an unknown with its reason.
-- **The prototype is throwaway.** It lives on the local branch and worktree that docs/FORGE.md's "Spike prototypes" line names, is never pushed, and is deleted once the measurements are confirmed, before the document is written. The document keeps each command and its output, so the evidence outlives it. When that line says `none`, the project wants no prototypes: claims that need a measurement go under Unknowns.
+- **The prototype is throwaway.** It lives on the local branch and worktree that docs/FORGE.md's "Spike prototypes" line names, is never pushed, and is deleted once the measuring tries end, confirmed or not, before the document is written. The document keeps each command and its output, so the evidence outlives it. When that line says `none`, the project wants no prototypes: claims that need a measurement go under Unknowns.
 - **The loop is `deliver-story`'s.** The same judge rulings, routes, limits, and review rounds apply. Every problem that needs a fix, whatever its kind, goes to `writer-findings`, because the document is the only thing the PR changes. There is no app to run, so no `validator`.
 - **The three lenses replace `qa`** for the document: every claim cites a source that says what it claims, every part of the question is answered or named as unknown, and nothing recommends.
 
@@ -61,11 +61,11 @@ One file, `docs/spikes/<id>-<slug>.md`, named like a spec folder. Unlike a spec 
 
 ## Halt conditions
 
-| #   | Condition                                                                                                 | Found at | What the user gets                                          |
-| --- | --------------------------------------------------------------------------------------------------------- | -------- | ----------------------------------------------------------- |
-| H1  | The issue can't be read, the argument says nothing, or `answers` isn't a map or holds an object or a list | Read     | `not-started`, no board write                               |
-| H2  | The push is denied, or PR creation fails                                                                  | Push     | `blocked`; the document stays committed on the local branch |
-| H3  | Infrastructure: a stop signal, a required tool denied, or a budget, usage, or agent limit reached         | Any      | `blocked`, with the state reported on the issue             |
-| H4  | `writer-pr` returns no description in any attempt of a stage                                              | Push     | `blocked`; the document stays committed on the local branch |
-| H5  | On a rerun, a checkpoint item the scout returned for a ledger key isn't a ledger line                     | Read     | `blocked`, naming the key                                   |
-| H6  | The card lists open questions                                                                             | Read     | `not-started`, and an issue comment listing them            |
+| #   | Condition                                                                                                 | Found at | What the user gets                                                                     |
+| --- | --------------------------------------------------------------------------------------------------------- | -------- | -------------------------------------------------------------------------------------- |
+| H1  | The issue can't be read, the argument says nothing, or `answers` isn't a map or holds an object or a list | Read     | `not-started`, no board write                                                          |
+| H2  | The push is denied, or PR creation fails                                                                  | Push     | `blocked`; the document stays committed on the local branch                            |
+| H3  | Infrastructure: a stop signal, a required tool denied, or a budget, usage, or agent limit reached         | Any      | `blocked`, naming the step, with the stages completed and the checkpoint to rerun from |
+| H4  | `writer-pr` returns no description in any attempt of a stage                                              | Push     | `blocked`; the document stays committed on the local branch                            |
+| H5  | On a rerun, a checkpoint item the scout returned for a ledger key isn't a ledger line                     | Read     | `blocked`, naming the key                                                              |
+| H6  | The card lists open questions                                                                             | Read     | `not-started`, and an issue comment listing them                                       |

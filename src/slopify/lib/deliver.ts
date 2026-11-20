@@ -94,8 +94,9 @@ export const opRefs = (r: PusherResult | null, name: string): { reference: strin
     .map((x) => ({ reference: x.reference.trim(), link: x.link }));
 export const opRef = (r: PusherResult | null, name: string): string => opRefs(r, name)[0]?.reference ?? "";
 
-// A filed card ends with a marker line naming the run that filed it. Nothing searches for it: a board may rewrite its
-// text on save, as Linear links an identifier, so a rerun finds an earlier card by what it holds.
+// A filed card ends with a marker line naming the run that filed it. pusher never searches for it: a board may rewrite its
+// text on save, as Linear links an identifier, so a rerun finds an earlier card by what it holds. shape writes its line
+// in a form a board leaves alone, and finds its own card by it before advising.
 export const MARKER_LINE =
   "The board may rewrite text in that line when it saves the card; that is not a failed write, and the line is never used to find a card.";
 export const SAME_WORK =

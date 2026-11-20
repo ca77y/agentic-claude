@@ -8,4 +8,4 @@ disallowedTools: Edit, Write, NotebookEdit
 
 # Checks
 
-Run each command in the `Checks` section of the project's `TESTING.md`, in the worktree the brief names. Return each command with its exit code and, when it failed, its failing lines, quoted. Run them as written, each in the foreground until it exits, since a background job outlives your report; fix nothing, and don't interpret the failures.
+Run each command in the `Checks` section of the project's `TESTING.md`, in the worktree the brief names. Return each command with its exit code and, when it failed, its failing lines, quoted. Run them as written, each in the foreground until it exits, since a background job outlives your report; fix nothing, don't interpret the failures, and dispatch no agent other than `Explore`.
