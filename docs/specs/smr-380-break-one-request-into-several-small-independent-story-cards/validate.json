@@ -21,7 +21,7 @@
       "wording": "Given a request with a part that depends on another part, and stubbed model output, the card filed for the dependent part carries a relation to the card filed for the part it depends on. (Deterministic)",
       "category": "Deterministic",
       "path": "make check, plus node --test test/shape-split.test.ts test/plugin-text.test.ts",
-      "evidence": "make check exit 0; on the fake board the dependent part's card holds exactly the id of the card filed for its dependency in blockedBy, with the dependency filed first; plugin-text tests show docs/BOARD.md and pusher-board.md bind blockedBy/relatedTo on Create and that a named relation with no binding creates nothing",
+      "evidence": "make check exit 0; on the fake board the dependent part's card holds exactly the id of the card filed for its dependency in blockedBy, with the dependency filed first; plugin-text tests show docs/BOARD.md and the bootstrap template bind blockedBy/relatedTo on Create, and pusher-board.md states that a named relation with no binding creates nothing",
       "firstTest": "test/shape-split.test.ts: 'part b depends on part a, so b's card on the board is blocked by a's card'"
     },
     {
