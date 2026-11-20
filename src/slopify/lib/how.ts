@@ -665,7 +665,10 @@ ${gathered}`,
 
 /** A later round found the spec wrong: the advisors weigh in, the writer revises, and the tasks it changed run again. */
 export function specReviser(o: HowInput) {
-  return async (problems: readonly string[]): Promise<HowResult & { rerun: Task[] }> => {
+  return async (
+    problems: readonly string[],
+    previous: { build: Build | null; validate: Validate | null },
+  ): Promise<HowResult & { rerun: Task[] }> => {
     phase("Advise");
     const before = await attackFor(o, problems);
     const spec = await writeAndCommit(
@@ -674,11 +677,26 @@ export function specReviser(o: HowInput) {
       "revise the spec",
       "Spec",
     );
-    // The writer's task list is the whole spec, so every task whose files or criteria a problem names runs again.
+    // The writer's task list is the whole spec, so every task whose files or criteria a problem names runs again. When no
+    // problem names one, the tasks the revision changed run again: a task, or one of its criteria, that differs from before.
     const named = (t: Task): boolean =>
       problems.some((p) => [t.id, ...t.files, ...t.criteria].some((x) => p.includes(x)));
+    const criteriaOf = (v: Validate | null, t: Task) =>
+      JSON.stringify((v?.criteria ?? []).filter((c) => t.criteria.includes(c.id)));
+    const changed = (t: Task): boolean => {
+      const old = previous.build?.tasks.find((x) => x.id === t.id);
+      return (
+        !old ||
+        JSON.stringify(old) !== JSON.stringify(t) ||
+        criteriaOf(previous.validate, t) !== criteriaOf(spec.validate, t)
+      );
+    };
     const rerun = spec.build.tasks.filter((t) => named(t));
-    return { build: spec.build, validate: spec.validate, rerun: rerun.length > 0 ? rerun : spec.build.tasks };
+    return {
+      build: spec.build,
+      validate: spec.validate,
+      rerun: rerun.length > 0 ? rerun : spec.build.tasks.filter((t) => changed(t)),
+    };
   };
 }
 
