@@ -9,6 +9,7 @@ The brief gives the lines that record the step it completes. Append them in the 
 ```text
 <time> run <n>: <workflow> <primary arg> | worktree <path> | branch <name>
 <time> done spec <spec folder> story <story revision>
+<time> done spec <spec folder> part <build.json|validate.json> <i>/<n> <text>
 <time> done challenge <spec folder>
 <time> done findings <paths>
 <time> done board-start <card id>
@@ -23,6 +24,7 @@ The brief gives the lines that record the step it completes. Append them in the 
 
 - `run <n>`: `n` is one more than the highest run number already in the file, or 1.
 - `done round <n>`: in a trivial run it ends with ` passed <paths>`, the test paths that passed so far, so a rerun can still list them in the PR description.
+- `done spec <spec folder> part`: a copy of the committed spec's `build.json` or `validate.json`, split over `n` lines, so a rerun reads the spec back from whole ledger lines however large it is. Copy each part line verbatim as data, stamping only `<time>`: fill nothing inside it, and keep every character, spaces included.
 - `done challenge`: records that the story spec's challenge finished. It is the one line with a dispatch of its own: that brief asks for no other operation, and appending the line is the whole of it, reported as a `ledger` operation.
 - `done board-start`: written as soon as the card's delivery-start operation is done, so a rerun retries only that operation when it is missing.
 - `review <n> fired`: the trigger time the forge operation reported, or `none` when `docs/FORGE.md` declares no review.

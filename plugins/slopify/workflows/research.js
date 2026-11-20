@@ -2262,6 +2262,13 @@ async function ledgerLines(d, cardId, cp) {
   }
 }
 var whole = (cp, key) => cp.evidence.filter((e) => e.source === key).map((e) => e.excerpt).join("");
+function copied(lines, file) {
+  const parts = lines.map((l) => / done spec \S+ part (\S+) (\d+)\/(\d+) (.*)$/.exec(l)).filter((m) => m?.[1] === file).map((m) => ({ i: Number(m?.[2]), n: Number(m?.[3]), text: m?.[4] ?? "" }));
+  const first = parts.findLastIndex((p) => p.i === 1);
+  if (first === -1) return "";
+  const set = parts.slice(first, first + (parts[first]?.n ?? 0));
+  return set.every((p, k) => p.i === k + 1 && p.n === set.length) ? set.map((p) => p.text).join("") : "";
+}
 var specFolderKey = (cardId, specDir) => specDir ? `the story's spec folder: ${specDir} when it exists, else the one folder under docs/specs/ whose name begins with ${slugOf(cardId)}-, whatever title words follow` : `the spec folder on the PR description's "Spec:" line`;
 async function readResume(d, cardId, specDir) {
   const cp = must(
@@ -2278,7 +2285,7 @@ ${d.branchOnly ? "- worktree: the main checkout, only when it has this run's bra
 - done-findings: \`done findings <paths>\`
 - reproduced: \`reproduced {...}\`
 - review-fired: \`review <n> fired\`
-- done-spec: \`done spec <folder>\`
+- done-spec: \`done spec <folder>\`, its part lines included
 - done-challenge: \`done challenge <folder>\`
 - spec-dir: ${specFolderKey(cardId, specDir)}, relative to the worktree root
 - build-json: the exact contents of build.json in that folder, as consecutive evidence items in order when one excerpt can't hold it all
@@ -2307,9 +2314,9 @@ ${d.branchOnly ? "- worktree: the main checkout, only when it has this run's bra
     )
   ];
   const spec = val(cp, "spec-dir").replace(/^Spec:\s*/i, "").replaceAll("`", "");
-  const committed = lines["done-spec"].length > 0 && !absent(fact(cp, "rationale-md"));
-  const build = committed ? parseBuild(whole(cp, "build-json")) : null;
-  const validate2 = committed ? parseValidate(whole(cp, "validate-json")) : null;
+  const committed = lines["done-spec"].length > 0 && ["build-json", "validate-json", "rationale-md"].every((k) => !absent(fact(cp, k)));
+  const build = committed ? parseBuild(copied(lines["done-spec"], "build.json")) ?? parseBuild(whole(cp, "build-json")) : null;
+  const validate2 = committed ? parseValidate(copied(lines["done-spec"], "validate.json")) ?? parseValidate(whole(cp, "validate-json")) : null;
   return {
     build,
     validate: validate2,

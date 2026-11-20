@@ -80,6 +80,41 @@ const whole = (cp: ScoutResult, key: string): string =>
     .map((e) => e.excerpt)
     .join("");
 
+// The most of a spec file one ledger line holds, well under what one scout excerpt can.
+const COPY_PART = 20_000;
+const COPY_FILES = ["build.json", "validate.json"] as const;
+
+/** The ledger lines that copy a committed spec's build.json and validate.json, so a rerun reads them back as whole
+ * ledger lines however large the files are. A part starts and ends on a non-space, so a trimmed line loses nothing, and
+ * holds no angle bracket, so pusher can't take it for a placeholder. */
+export function specCopyLines(specDir: string, spec: { build: Build; validate: Validate }): string[] {
+  return COPY_FILES.flatMap((file) => {
+    const text = JSON.stringify(file === "build.json" ? spec.build : spec.validate)
+      .replaceAll("<", String.raw`\u003c`)
+      .replaceAll(">", String.raw`\u003e`);
+    const parts: string[] = [];
+    for (let start = 0; start < text.length;) {
+      let end = Math.min(start + COPY_PART, text.length);
+      while (end < text.length && end > start + 1 && (text[end - 1] === " " || text[end] === " ")) end -= 1;
+      parts.push(text.slice(start, end));
+      start = end;
+    }
+    return parts.map((p, i) => `done spec ${specDir} part ${file} ${String(i + 1)}/${String(parts.length)} ${p}`);
+  });
+}
+
+// A spec file copied in the ledger, joined from its last complete set of parts; '' when there is none.
+function copied(lines: readonly string[], file: string): string {
+  const parts = lines
+    .map((l) => / done spec \S+ part (\S+) (\d+)\/(\d+) (.*)$/.exec(l))
+    .filter((m) => m?.[1] === file)
+    .map((m) => ({ i: Number(m?.[2]), n: Number(m?.[3]), text: m?.[4] ?? "" }));
+  const first = parts.findLastIndex((p) => p.i === 1);
+  if (first === -1) return "";
+  const set = parts.slice(first, first + (parts[first]?.n ?? 0));
+  return set.every((p, k) => p.i === k + 1 && p.n === set.length) ? set.map((p) => p.text).join("") : "";
+}
+
 // The story's one spec folder: the one named, else the one an earlier run wrote under another title.
 const specFolderKey = (cardId: string, specDir: string): string =>
   specDir
@@ -102,7 +137,7 @@ ${d.branchOnly ? "- worktree: the main checkout, only when it has this run's bra
 - done-findings: \`done findings <paths>\`
 - reproduced: \`reproduced {...}\`
 - review-fired: \`review <n> fired\`
-- done-spec: \`done spec <folder>\`
+- done-spec: \`done spec <folder>\`, its part lines included
 - done-challenge: \`done challenge <folder>\`
 - spec-dir: ${specFolderKey(cardId, specDir)}, relative to the worktree root
 - build-json: the exact contents of build.json in that folder, as consecutive evidence items in order when one excerpt can't hold it all
@@ -137,10 +172,16 @@ ${d.branchOnly ? "- worktree: the main checkout, only when it has this run's bra
   const spec = val(cp, "spec-dir")
     .replace(/^Spec:\s*/i, "")
     .replaceAll("`", "");
-  // A spec counts only once it is committed with all three files; anything less is written again.
-  const committed = lines["done-spec"].length > 0 && !absent(fact(cp, "rationale-md"));
-  const build = committed ? parseBuild(whole(cp, "build-json")) : null;
-  const validate = committed ? parseValidate(whole(cp, "validate-json")) : null;
+  // A spec counts only once it is committed with all three files; anything less is written again. Its build and
+  // validate come from the ledger's copy, else, for a spec committed without one, from the files as the scout quoted them.
+  const committed =
+    lines["done-spec"].length > 0 && ["build-json", "validate-json", "rationale-md"].every((k) => !absent(fact(cp, k)));
+  const build = committed
+    ? (parseBuild(copied(lines["done-spec"], "build.json")) ?? parseBuild(whole(cp, "build-json")))
+    : null;
+  const validate = committed
+    ? (parseValidate(copied(lines["done-spec"], "validate.json")) ?? parseValidate(whole(cp, "validate-json")))
+    : null;
   return {
     build,
     validate,
