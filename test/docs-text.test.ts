@@ -69,7 +69,7 @@ describe("agent listings", () => {
       .split("|")
       .map((c) => c.trim());
 
-  test("README's workflow lists and agent families, DESIGN and plugin.json list writer-pr", (t) => {
+  test("README's workflow lists and agent families, ARCHITECTURE and plugin.json list writer-pr", (t) => {
     // The Area table's 'Agents its workflows dispatch' cell holds one list per workflow, each opening `<name>`: or
     // `<name>` and `<name>`:.
     const lists = [row("Delivery")[3] ?? "", row("Library")[3] ?? ""].flatMap((cell) =>
@@ -87,11 +87,11 @@ describe("agent listings", () => {
     }
     assert.match(row("Producers")[2] ?? "", /`writer-pr`/, "README's Producers row");
 
-    const design = read("docs/DESIGN.md");
+    const design = read("docs/ARCHITECTURE.md");
     assert.match(
       design.split("\n").find((l) => l.startsWith("- **Producers**")) ?? "",
       /`writer-pr`/,
-      "DESIGN's producer list",
+      "ARCHITECTURE's producer list",
     );
 
     const manifest = "plugins/slopify/.claude-plugin/plugin.json";
