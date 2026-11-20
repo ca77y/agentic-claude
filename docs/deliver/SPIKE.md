@@ -1,6 +1,6 @@
 # Deliver spike
 
-How `deliver-spike` answers a bounded technical question with a findings document, delivered as a reviewed PR. It follows the rules in [`DESIGN.md`](../DESIGN.md) and takes the outer loop and the review from [`STORY.md`](STORY.md), with the document in place of code.
+How `deliver-spike` answers a bounded technical question with a findings document, delivered as a reviewed PR. It follows the rules in [`ARCHITECTURE.md`](../ARCHITECTURE.md) and takes the outer loop and the review from [`STORY.md`](STORY.md), with the document in place of code.
 
 ## Flow
 

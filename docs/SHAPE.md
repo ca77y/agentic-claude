@@ -1,6 +1,6 @@
 # Shape
 
-How `shape` turns an idea into a card that a delivery can take as it is. It writes the why and the what, never the how. [`deliver/CARDS.md`](deliver/CARDS.md) says what each kind of card must hold; this document says how `shape` gets there. It follows the rules in [`DESIGN.md`](DESIGN.md).
+How `shape` turns an idea into a card that a delivery can take as it is. It writes the why and the what, never the how. [`deliver/CARDS.md`](deliver/CARDS.md) says what each kind of card must hold; this document says how `shape` gets there. It follows the rules in [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
 People own the issue. They say what kind of card they want, read it on the board, answer its open questions, and decide which delivery runs on it. `shape` never decides any of that.
 

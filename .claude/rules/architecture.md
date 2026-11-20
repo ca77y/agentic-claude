@@ -31,9 +31,9 @@ Rules that hold for every plugin in this repo, whatever its current design.
 
 None beyond the principles above and the root `AGENTS.md`.
 
-## Full design
+## Full architecture
 
-- [`docs/DESIGN.md`](../../docs/DESIGN.md)
+- [`docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md)
 - [`docs/deliver/`](../../docs/deliver/)
 - [`docs/RESEARCH.md`](../../docs/RESEARCH.md)
 - [`docs/SHAPE.md`](../../docs/SHAPE.md)

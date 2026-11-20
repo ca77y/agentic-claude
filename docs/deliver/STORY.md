@@ -1,6 +1,6 @@
 # Deliver story
 
-How `deliver-story` takes a card to a pull request (PR) whose review is clean. It is built for non-simple stories, and it spends the most on the how and on validation. [`TRIVIAL.md`](TRIVIAL.md) and [`BUGFIX.md`](BUGFIX.md) cover the short flow. It follows the shared rules in [`DESIGN.md`](../DESIGN.md): the severity scale, recorded decisions, bounded loops, and run outcomes.
+How `deliver-story` takes a card to a pull request (PR) whose review is clean. It is built for non-simple stories, and it spends the most on the how and on validation. [`TRIVIAL.md`](TRIVIAL.md) and [`BUGFIX.md`](BUGFIX.md) cover the short flow. It follows the shared rules in [`ARCHITECTURE.md`](../ARCHITECTURE.md): the severity scale, recorded decisions, bounded loops, and run outcomes.
 
 ## Invariants
 
@@ -145,7 +145,7 @@ This stage is two nested loops. The inner loop makes one change correct, and onl
    - An inner loop that runs out of tries doesn't stop the round. Its problem stays open as a `blocker`.
    - After the inner loops, `writer-docs` updates the documents on the `docs` list, so they describe the code as built. It runs in every round that changed code or has an open `docs` problem, and when the list isn't empty. `pusher` commits its work. Documentation needs no failing test, so it stays out of the inner loop.
 2. **Validate.** `checks` runs the `Checks` commands from `TESTING.md` and returns the exit codes and failing lines. At the same time, `validator` follows each criterion's category path, as defined below. In the first round it runs every criterion. In later rounds it runs the criteria whose code paths changed, or every criterion when a fix touched boot or config files. It runs even when `checks` fails. Boot is its first step, so a broken build fails there and is judged like any other problem. Once both finish, one `lens-docs` per listed document checks that its claims are true against the code.
-3. **Judge.** One `judge` (opus) rules on all the round's problems together, so it reads the issue, the diff, and the earlier rulings once. Each problem still gets its own verdict, because its severity and kind decide where it goes, and problems that report the same thing get the same fingerprint. Each verdict is `confirmed` with a severity and a [kind](../DESIGN.md#severity-and-problem-kinds), `dismissed` with a reason, or `unverified`. The judge reads the evidence and the diff:
+3. **Judge.** One `judge` (opus) rules on all the round's problems together, so it reads the issue, the diff, and the earlier rulings once. Each problem still gets its own verdict, because its severity and kind decide where it goes, and problems that report the same thing get the same fingerprint. Each verdict is `confirmed` with a severity and a [kind](../ARCHITECTURE.md#severity-and-problem-kinds), `dismissed` with a reason, or `unverified`. The judge reads the evidence and the diff:
    - It never downgrades a confirmed failure.
    - A `pass` without evidence becomes `cannot-verify`. It isn't a `fail`, because nothing shows that the code is wrong.
    - A finding that conflicts with the spec's design is kind `spec`, which brings in the advisors. `coder` doesn't improvise around a wrong spec.
