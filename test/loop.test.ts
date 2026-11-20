@@ -511,12 +511,17 @@ describe("a coder decides how, not what", () => {
     assert.equal(count("qa"), 0);
   });
 
-  test("a trivial question the coder settles goes ready, listed under Assumptions", async () => {
+  test("a choice the coder settles goes to qa to check, and never to the person", async () => {
     const NAMED = "What to call the helper? retryUpload.";
     use(happy({ coder: (_t, label) => (label.endsWith(": test") ? OK_TEST : { ...OK_FIX, assumptions: [NAMED] }) }));
     const r = await runLoop(inputFor(freshRun()));
     assert.equal(r.status, "ready");
-    assert.ok(cardPrompt().includes(NAMED), "the card comment lists the coder's choice");
+    assert.ok(
+      calls.some((c) => c.type === "qa" && c.prompt.includes(NAMED)),
+      "qa checks the coder's choice",
+    );
+    assert.ok(!cardPrompt().includes(NAMED), "the card comment doesn't list it");
+    assert.ok(!lastWriterPrompt().includes(NAMED), "writer-pr doesn't get it");
   });
 
   test("a test dispatch can stop the same way", async () => {
@@ -1476,9 +1481,7 @@ describe("the PR description", () => {
       leak: [],
       format: [],
     });
-    const missing = [...choices, ...questions, ...decisions.map((d) => d.question)].filter(
-      (x) => !cardPrompt().includes(x),
-    );
+    const missing = [...questions, ...decisions.map((d) => d.question)].filter((x) => !cardPrompt().includes(x));
     assert.deepEqual(missing, [], "the card comment lists each in full");
   });
 

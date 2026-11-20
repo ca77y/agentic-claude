@@ -38,7 +38,7 @@ async function gather(d: Run, report: string): Promise<string> {
 
 function reproBrief(d: Run, report: string, dir: string, evidence: string, last: string): string {
   return `${d.WHERE}
-Reproduce this bug. Write and run a script or test in the directory ${dir} under the project root, which git ignores, and change nothing outside it: no production code and no existing test. Settle anything the report leaves open yourself, from the evidence. Return the steps that reproduce the failure and what you observed. If it doesn't reproduce, set reproduced to false and say why.${last ? `\n\nAn earlier attempt failed:\n${last}\nTry another way.` : ""}
+Reproduce this bug. Write and run a script or test in the directory ${dir} under the project root that checks the behavior the report expects, so it fails now and will pass once the bug is fixed, which git ignores, and change nothing outside it: no production code and no existing test. Settle anything the report leaves open yourself, from the evidence. Return the steps that reproduce the failure and what you observed. If it doesn't reproduce, set reproduced to false and say why.${last ? `\n\nAn earlier attempt failed:\n${last}\nTry another way.` : ""}
 
 Report:
 ${report}

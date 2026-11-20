@@ -57,7 +57,7 @@ function fixFrom(r: Reproduction) {
   const steps = r.steps.join("\n");
   return {
     firstTest: `turns this reproduction into a regression test: it fails now the way the reproduction shows, and passes once the bug is fixed.\nSteps:\n${steps}\nObserved: ${r.observed}`,
-    validationPath: `Run the reproduction's steps again in the running app, as TESTING.md says to run it. It passes when the observed failure is gone.\nSteps:\n${steps}\nObserved before the fix: ${r.observed}`,
+    validationPath: `Run the reproduction's steps again in the running app, as TESTING.md says to run it, against the worktree's code: where a step runs or imports project code by path, point it at the worktree, never the main checkout. It passes when the observed failure is gone.\nSteps:\n${steps}\nObserved before the fix: ${r.observed}`,
     reproduced: [{ text: steps, detail: `Before the fix: ${r.observed}` }],
   };
 }

@@ -800,7 +800,7 @@ var TEST_SCHEMA = {
     },
     assumptions: {
       ...STRINGS,
-      description: "Each implementation choice a reviewer would want to know, as the question and your choice"
+      description: "Each choice the brief left to you, as the question and your choice, for qa to check"
     },
     manualActions: {
       ...STRINGS,
@@ -824,7 +824,7 @@ var FIX_SCHEMA = {
     },
     assumptions: {
       ...STRINGS,
-      description: "Each implementation choice a reviewer would want to know, as the question and your choice"
+      description: "Each choice the brief left to you, as the question and your choice, for qa to check"
     },
     manualActions: {
       ...STRINGS,
@@ -1056,7 +1056,7 @@ ${criteria}` : "",
 ${c.item.problem.text}
 ${c.item.reason}` : "",
     answersText(l),
-    "Make no irreversible change, such as a migration on shared data, deleting a public API, or changing production config, unless this explicitly permits it: build its reversible part, and return the rest in manualActions. Meet what this requires. How to implement it in your paths is your decision; return each choice a reviewer would want to know in assumptions. If a requirement is unclear or can't be met, or meeting it would change behavior this describes or an interface another task relies on, return specProblem and stop.",
+    "Make no irreversible change, such as a migration on shared data, deleting a public API, or changing production config, unless this explicitly permits it: build its reversible part, and return the rest in manualActions. Meet what this requires. How to implement it in your paths is your decision; return each choice this leaves to you in assumptions, for qa to check. If a requirement is unclear or can't be met, or meeting it would change behavior this describes or an interface another task relies on, return specProblem and stop.",
     NO_WRITES
   ].filter(Boolean).join("\n\n");
 }
@@ -1078,13 +1078,23 @@ An earlier attempt showed the test has to change: ${reason}` : ""}`,
     "build",
     `A test for ${c.id}.`
   );
-  l.assumptions.push(...t.assumptions);
+  chose(l, c, t.assumptions);
   l.manualActions.push(...t.manualActions);
   if (t.specProblem) return { paths: [], commit: "", noTest: "", specProblem: t.specProblem };
   if (t.noTest || t.tests.length === 0) return { paths: [], commit: "", noTest: t.noTest, specProblem: "" };
   const message = `add a ${testOnly(c) ? "" : "failing "}test for ${c.id}`;
   const sha = await commit(l, [...t.tests, ...t.stubs], message, coderRepair(l, c));
   return { paths: t.tests, commit: sha, noTest: "", specProblem: "" };
+}
+var chose = (l, c, made) => {
+  l.choices.set(c.id, [...l.choices.get(c.id) ?? [], ...made]);
+};
+function choicesCheck(l, c) {
+  const made = unique(l.choices.get(c.id) ?? []);
+  return made.length === 0 ? "" : `
+The coder made these choices itself:
+${list(made)}
+Check each against the card, the spec when there is one, and the code. A choice that changes the behavior asked for, contradicts what they settle, or adds what the change doesn't need is a blocking finding.`;
 }
 function qaBrief(l, c, test) {
   const fails = testOnly(c) ? "Check in a temporary copy that the test fails on one of its assertions when the behavior it states is broken, and that it passes at HEAD." : "Check in a temporary copy that the test fails at that commit on one of its assertions, not on a compile, type, or import error, and that it passes at HEAD.";
@@ -1095,7 +1105,7 @@ ${fails} Check that nothing after that commit touches a protected path, and that
 
 Validate one change and its history.
 ${history}
-Check that the fix delivers the behavior asked for and doesn't merely satisfy the test, for example by special-casing the test's input. Check that the change stays within its criterion or problem. Any failed check is a blocking finding. Set testAtFault when the test is what has to change, including when it leaves out a case the change must handle.`;
+Check that the fix delivers the behavior asked for and doesn't merely satisfy the test, for example by special-casing the test's input. Check that the change stays within its criterion or problem. Any failed check is a blocking finding. Set testAtFault when the test is what has to change, including when it leaves out a case the change must handle.${choicesCheck(l, c)}`;
 }
 function fixPrompt(l, c, cycle, lastFailure) {
   const assignment = cycle.paths.length > 0 ? `Make this test pass. These paths are protected, so change none of them:
@@ -1176,7 +1186,7 @@ async function tryFix(l, c, cycle, lastFailure, attempt, state) {
     "build",
     `A fix for ${c.id}.`
   );
-  l.assumptions.push(...fix.assumptions);
+  chose(l, c, fix.assumptions);
   l.manualActions.push(...fix.manualActions);
   l.changedThisRound.push(...fix.changed);
   const sha = fix.changed.length === 0 ? "" : await commit(l, fix.changed, `implement ${c.id}`, coderRepair(l, c));
@@ -1691,8 +1701,7 @@ function needsYou(l) {
     ...unique(l.manualActions).map((a) => `Manual action: ${a}`),
     ...l.decisions.filter((d) => d.affectsAcceptance).map((d) => `Decision: ${d.question} We chose: ${d.choice}.`),
     ...l.decisions.filter((d) => !d.affectsAcceptance).map((d) => `To confirm: ${d.question} We chose: ${d.choice}.`),
-    ...l.confirmations.map((c) => `To confirm: ${entryText(c)}`),
-    ...unique(l.assumptions).map((a) => `Coder's choice: ${a}`)
+    ...l.confirmations.map((c) => `To confirm: ${entryText(c)}`)
   ];
 }
 function describeContext(l, target) {
@@ -1908,7 +1917,7 @@ ${cards.join("\n\n")}`
 async function finish(l, ready, reasons) {
   const { state } = l.d;
   const items2 = [...needsYou(l), ...l.unfiled.map((x) => entryText(x)), ...reasons.map((x) => x.text)];
-  const card = ready ? `Perform each operation docs/BOARD.md declares for when the PR's review is clean on card ${l.cardId}, such as a status move, and comment on the card with the evidence and assumptions:
+  const card = ready ? `Perform each operation docs/BOARD.md declares for when the PR's review is clean on card ${l.cardId}, such as a status move, and comment on the card with the evidence and what is open:
 ${list(items2)}` : `Comment on card ${l.cardId} with what is open:
 ${list(items2)}`;
   pushed(
@@ -1992,7 +2001,7 @@ function freshLoop(input) {
     differently: /* @__PURE__ */ new Set(),
     rulings: [],
     decisions: input.build?.decisions ?? [],
-    assumptions: [],
+    choices: /* @__PURE__ */ new Map(),
     manualActions: [...input.build?.manualActions ?? []],
     unverified: [],
     confirmations: [],

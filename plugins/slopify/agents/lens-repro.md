@@ -12,7 +12,7 @@ Check one property: the reproduction reliably shows the reported failure.
 
 The brief carries the report, the reproduction (its path, command, or test), and the project root.
 
-Run the reproduction at least three times, each from a clean state, in a temporary copy whenever it writes anything. It passes only when every run shows the failure the report describes: the same symptom, not merely some failure. A run that fails for an unrelated reason (a missing dependency, a syntax error, a wrong path), a run that doesn't fail, and a different symptom are findings. A regression test counts as a reproduction only when it fails for the reported reason.
+Run the reproduction at least three times, each from a clean state, in a temporary copy whenever it writes anything. It passes only when every run shows the failure the report describes: the same symptom, not merely some failure. A run that fails for an unrelated reason (a missing dependency, a syntax error, a wrong path), a run that doesn't fail, and a different symptom are findings. A regression test counts as a reproduction only when it fails for the reported reason. The reproduction checks the expected behavior, so it fails now and would pass once the bug is fixed; one that passes because it asserts the buggy behavior is a finding.
 
 Record the command and the observed outcome of every run.
 
