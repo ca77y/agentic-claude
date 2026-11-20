@@ -272,8 +272,6 @@ const doneRounds = (cs: Calls): number[] =>
     .map((l) => / done round (\d+)$/.exec(l)?.[1])
     .filter((n) => n !== undefined)
     .map(Number);
-const roundDone = (n: number): boolean =>
-  calls.some((c) => ledgerLinesOf(c).some((l) => l.endsWith(` done round ${String(n)}`)));
 
 beforeEach(() => {
   calls.length = 0;
@@ -382,7 +380,7 @@ describe("SMR-374: a rerun over a committed spec", () => {
     const first = await run(FIRST_TITLE, { folders: new Map(), ledger: [] }, SMALL_BUILD, {
       checks: shrinkingChecks(),
       judge: confirming,
-      coder: (...dispatch) => (roundDone(2) ? null : coderOk(...dispatch)),
+      coder: (...dispatch) => (doneRounds(calls).includes(2) ? null : coderOk(...dispatch)),
     });
     assert.deepEqual(doneRounds(first.calls), [0, 1, 2], "the first run finished rounds 0 to 2");
 
