@@ -522,7 +522,7 @@ var TEST_SCHEMA = {
     },
     assumptions: {
       ...STRINGS,
-      description: "Each implementation choice a reviewer would want to know, as the question and your choice"
+      description: "Each choice the brief left to you, as the question and your choice, for qa to check"
     },
     manualActions: {
       ...STRINGS,
@@ -546,7 +546,7 @@ var FIX_SCHEMA = {
     },
     assumptions: {
       ...STRINGS,
-      description: "Each implementation choice a reviewer would want to know, as the question and your choice"
+      description: "Each choice the brief left to you, as the question and your choice, for qa to check"
     },
     manualActions: {
       ...STRINGS,

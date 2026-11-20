@@ -511,12 +511,17 @@ describe("a coder decides how, not what", () => {
     assert.equal(count("qa"), 0);
   });
 
-  test("a trivial question the coder settles goes ready, listed under Assumptions", async () => {
+  test("a choice the coder settles goes to qa to check, and never to the person", async () => {
     const NAMED = "What to call the helper? retryUpload.";
     use(happy({ coder: (_t, label) => (label.endsWith(": test") ? OK_TEST : { ...OK_FIX, assumptions: [NAMED] }) }));
     const r = await runLoop(inputFor(freshRun()));
     assert.equal(r.status, "ready");
-    assert.ok(cardPrompt().includes(NAMED), "the card comment lists the coder's choice");
+    assert.ok(
+      calls.some((c) => c.type === "qa" && c.prompt.includes(NAMED)),
+      "qa checks the coder's choice",
+    );
+    assert.ok(!cardPrompt().includes(NAMED), "the card comment doesn't list it");
+    assert.ok(!lastWriterPrompt().includes(NAMED), "writer-pr doesn't get it");
   });
 
   test("a test dispatch can stop the same way", async () => {
@@ -1572,9 +1577,7 @@ describe("the PR description", () => {
       leak: [],
       format: [],
     });
-    const missing = [...choices, ...questions, ...decisions.map((d) => d.question)].filter(
-      (x) => !cardPrompt().includes(x),
-    );
+    const missing = [...questions, ...decisions.map((d) => d.question)].filter((x) => !cardPrompt().includes(x));
     assert.deepEqual(missing, [], "the card comment lists each in full");
   });
 
@@ -1588,5 +1591,68 @@ describe("the PR description", () => {
     });
     assert.equal(postings().length, 0, "nothing posts a description");
     assert.ok(calls.find((c) => c.label === "report the halt")?.prompt.includes("Comment on card"));
+  });
+});
+
+// SMR-404: the pusher refuses a progress line, or reports one out of order, while every operation it was asked for
+// succeeded, as the live pusher did in wf_ce30743f-626.
+const LONG = Array.from({ length: 120 }, (_, i) => `src/module-${String(i)}/a-fairly-long-file-name-${String(i)}.ts`);
+const progressRefusing =
+  (refuse: (line: string) => string | null): Script =>
+  (_t, label, prompt) => {
+    const base = pusher(prompt) as typeof OK_PUSH;
+    const unmet = ledgerBlock(prompt)
+      .split("\n")
+      .map((l) => (/^- progress \d+ \w+: /.test(l) ? refuse(l.slice(2)) : null))
+      .filter((u): u is string => u !== null);
+    if (unmet.length === 0) return base;
+    const ops =
+      label === "push the round"
+        ? [...base.operations, { op: "push", reference: "5d4d638" }, { op: "review-trigger", reference: "18:59:30Z" }]
+        : base.operations;
+    return { done: false, unmet, operations: ops, hookRejection: "" };
+  };
+
+describe("a progress line the pusher refuses", () => {
+  test("a shortened progress line it won't append doesn't block the push, and the run reaches the review", async () => {
+    use(
+      happy({
+        coder: (_t, label) => (label.endsWith(": test") ? OK_TEST : { ...OK_FIX, changed: LONG }),
+        pusher: progressRefusing((line) =>
+          line.length > 1000
+            ? `Ledger line '${line.slice(0, 20)}...' was not appended. The brief's text for it is cut off with '...', so it cannot be copied whole without altering the data.`
+            : null,
+        ),
+      }),
+    );
+    const r = await settledRun(inputFor(freshRun()));
+    assert.ok(
+      ledgerLines().some((l) => /^- progress \d+ changed: /.test(l) && l.length > 1000),
+      "the run sent a long changed line",
+    );
+    assert.ok(!(r instanceof Halt), `the run halted: ${String(r)}`);
+    assert.ok(count("watcher") > 0, "the run reached the Review phase");
+    assert.ok(["ready", "draft"].includes((r as { status: string }).status));
+  });
+
+  test("a progress line it reports out of order doesn't block the push, and the run reaches the review", async () => {
+    use(
+      happy({
+        pusher: progressRefusing((line) => {
+          const m = /^progress (\d+) (\w+):/.exec(line);
+          return m
+            ? `Ledger line 'progress ${m[1] ?? ""} ${m[2] ?? ""}' was appended out of order, after 'done round ${m[1] ?? ""}'.`
+            : null;
+        }),
+      }),
+    );
+    const r = await settledRun(inputFor(freshRun()));
+    assert.ok(
+      ledgerLines().some((l) => PROGRESS.test(l)),
+      "the run sent progress lines",
+    );
+    assert.ok(!(r instanceof Halt), `the run halted: ${String(r)}`);
+    assert.ok(count("watcher") > 0, "the run reached the Review phase");
+    assert.ok(["ready", "draft"].includes((r as { status: string }).status));
   });
 });

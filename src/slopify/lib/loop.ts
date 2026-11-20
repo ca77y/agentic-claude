@@ -103,7 +103,7 @@ const TEST_SCHEMA = {
     },
     assumptions: {
       ...STRINGS,
-      description: "Each implementation choice a reviewer would want to know, as the question and your choice",
+      description: "Each choice the brief left to you, as the question and your choice, for qa to check",
     },
     manualActions: {
       ...STRINGS,
@@ -128,7 +128,7 @@ const FIX_SCHEMA = {
     },
     assumptions: {
       ...STRINGS,
-      description: "Each implementation choice a reviewer would want to know, as the question and your choice",
+      description: "Each choice the brief left to you, as the question and your choice, for qa to check",
     },
     manualActions: {
       ...STRINGS,
@@ -382,8 +382,8 @@ interface Loop extends LoopInput {
   differently: Set<string>;
   rulings: string[];
   decisions: RecordedDecision[];
-  /** Implementation choices the coder made itself. */
-  assumptions: string[];
+  /** The choices the coder made itself, by change id, for that change's qa to check. */
+  choices: Map<string, string[]>;
   /** Irreversible steps nothing permits, left for a person. */
   manualActions: string[];
   unverified: Listed[];
@@ -450,13 +450,17 @@ export function pushed(r: PusherResult | null, what: string): PusherResult {
   throw new Halt("push", what, unmet ?? "pusher didn't return");
 }
 
-// The pending progress entries ride on this dispatch's ledger lines, and stay pending until a dispatch succeeds.
+// The pending progress entries ride on this dispatch's ledger lines, and stay pending until a dispatch succeeds. A
+// progress entry is a record, never an operation, so pusher refusing one, or reporting it out of order, is not unmet.
 function pushWithProgress(l: Loop, instruction: string, lines: readonly string[], label: string, phaseTitle: string) {
   return inOrder(l, async () => {
     const sent = l.progress.length;
+    const heads = l.progress.map((p) => /^progress \d+ \w+/.exec(p)?.[0] ?? p);
     const r = await callPusher(l.d.pushBrief(instruction, [...l.progress, ...lines]), label, phaseTitle);
-    if (pushOk(r)) l.progress.splice(0, sent);
-    return r;
+    const unmet = r?.unmet.filter((u) => heads.every((h) => !u.includes(h))) ?? [];
+    const ok = r && r.unmet.length > unmet.length && unmet.length === 0 ? { ...r, done: true, unmet } : r;
+    if (pushOk(ok)) l.progress.splice(0, sent);
+    return ok;
   });
 }
 
@@ -514,7 +518,7 @@ function changeBrief(l: Loop, c: Change): string {
     criteria ? `The criteria it delivers:\n${criteria}` : "",
     c.item ? `The problem to fix, at ${c.item.problem.location}:\n${c.item.problem.text}\n${c.item.reason}` : "",
     answersText(l),
-    "Make no irreversible change, such as a migration on shared data, deleting a public API, or changing production config, unless this explicitly permits it: build its reversible part, and return the rest in manualActions. Meet what this requires. How to implement it in your paths is your decision; return each choice a reviewer would want to know in assumptions. If a requirement is unclear or can't be met, or meeting it would change behavior this describes or an interface another task relies on, return specProblem and stop.",
+    "Make no irreversible change, such as a migration on shared data, deleting a public API, or changing production config, unless this explicitly permits it: build its reversible part, and return the rest in manualActions. Meet what this requires. How to implement it in your paths is your decision; return each choice this leaves to you in assumptions, for qa to check. If a requirement is unclear or can't be met, or meeting it would change behavior this describes or an interface another task relies on, return specProblem and stop.",
     NO_WRITES,
   ]
     .filter(Boolean)
@@ -559,7 +563,7 @@ Write a new test or change an existing one, so that it states the required behav
     "build",
     `A test for ${c.id}.`,
   );
-  l.assumptions.push(...t.assumptions);
+  chose(l, c, t.assumptions);
   l.manualActions.push(...t.manualActions);
   if (t.specProblem) return { paths: [], commit: "", noTest: "", specProblem: t.specProblem, guard: false };
   if (t.noTest || t.tests.length === 0)
@@ -568,6 +572,18 @@ Write a new test or change an existing one, so that it states the required behav
   const message = `add a ${guard ? "" : "failing "}test for ${c.id}`;
   const sha = await commit(l, [...t.tests, ...t.stubs], message, coderRepair(l, c));
   return { paths: t.tests, commit: sha, noTest: "", specProblem: "", guard };
+}
+
+const chose = (l: Loop, c: Change, made: readonly string[]): void => {
+  l.choices.set(c.id, [...(l.choices.get(c.id) ?? []), ...made]);
+};
+
+// No person reviews the coder's choices, so qa challenges each one with the rest of the change.
+function choicesCheck(l: Loop, c: Change): string {
+  const made = unique(l.choices.get(c.id) ?? []);
+  return made.length === 0
+    ? ""
+    : `\nThe coder made these choices itself:\n${list(made)}\nCheck each against the card, the spec when there is one, and the code. A choice that changes the behavior asked for, contradicts what they settle, or adds what the change doesn't need is a blocking finding.`;
 }
 
 function qaBrief(l: Loop, c: Change, test: CycleTest): string {
@@ -582,7 +598,7 @@ ${fails} Check that nothing after that commit touches a protected path, and that
 
 Validate one change and its history.
 ${history}
-Check that the fix delivers the behavior asked for and doesn't merely satisfy the test, for example by special-casing the test's input. Check that the change stays within its criterion or problem. Any failed check is a blocking finding. Set testAtFault when the test is what has to change, including when it leaves out a case the change must handle.`;
+Check that the fix delivers the behavior asked for and doesn't merely satisfy the test, for example by special-casing the test's input. Check that the change stays within its criterion or problem. Any failed check is a blocking finding. Set testAtFault when the test is what has to change, including when it leaves out a case the change must handle.${choicesCheck(l, c)}`;
 }
 
 function fixPrompt(l: Loop, c: Change, cycle: CycleTest, lastFailure: string): string {
@@ -691,7 +707,7 @@ async function tryFix(
     "build",
     `A fix for ${c.id}.`,
   );
-  l.assumptions.push(...fix.assumptions);
+  chose(l, c, fix.assumptions);
   l.manualActions.push(...fix.manualActions);
   l.changedThisRound.push(...fix.changed);
   // What the coder changed is committed even when it also reports a problem, so no later change builds on it uncommitted.
@@ -1275,7 +1291,6 @@ function needsYou(l: Loop): string[] {
     ...l.decisions.filter((d) => d.affectsAcceptance).map((d) => `Decision: ${d.question} We chose: ${d.choice}.`),
     ...l.decisions.filter((d) => !d.affectsAcceptance).map((d) => `To confirm: ${d.question} We chose: ${d.choice}.`),
     ...l.confirmations.map((c) => `To confirm: ${entryText(c)}`),
-    ...unique(l.assumptions).map((a) => `Coder's choice: ${a}`),
   ];
 }
 
@@ -1517,7 +1532,7 @@ async function finish(l: Loop, ready: boolean, reasons: readonly Listed[]): Prom
   const { state } = l.d;
   const items = [...needsYou(l), ...l.unfiled.map((x) => entryText(x)), ...reasons.map((x) => x.text)];
   const card = ready
-    ? `Perform each operation docs/BOARD.md declares for when the PR's review is clean on card ${l.cardId}, such as a status move, and comment on the card with the evidence and assumptions:\n${list(items)}`
+    ? `Perform each operation docs/BOARD.md declares for when the PR's review is clean on card ${l.cardId}, such as a status move, and comment on the card with the evidence and what is open:\n${list(items)}`
     : `Comment on card ${l.cardId} with what is open:\n${list(items)}`;
   pushed(
     await pushWithProgress(
@@ -1609,7 +1624,7 @@ function freshLoop(input: LoopInput): Loop {
     differently: new Set(),
     rulings: [],
     decisions: input.build?.decisions ?? [],
-    assumptions: [],
+    choices: new Map(),
     manualActions: [...(input.build?.manualActions ?? [])],
     unverified: [],
     confirmations: [],

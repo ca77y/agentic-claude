@@ -72,3 +72,22 @@ describe("progress entries", () => {
     assert.ok(saysLocal(ledger), "pusher-ledger.md says progress entries stay local");
   });
 });
+
+describe("a shortened or misordered progress entry (SMR-404)", () => {
+  const ledger = text("plugins/slopify/references/pusher-ledger.md");
+  const progressRule = ledger.split("\n").find((l) => l.startsWith("- `progress`")) ?? "";
+
+  test("pusher-ledger.md says an entry ending in '...' was shortened on purpose and is appended as given", () => {
+    assert.ok(progressRule, "pusher-ledger.md has the progress rule");
+    assert.ok(progressRule.includes("..."), "the progress rule names the '...' ending");
+    assert.match(progressRule, /shorten|cut/i, "the progress rule says the workflow shortens an entry on purpose");
+  });
+
+  test("pusher-ledger.md says a progress entry's length or order is never unmet", () => {
+    const rule = sentences(progressRule);
+    assert.ok(
+      rule.some((s) => /order/i.test(s) && /unmet|block/i.test(s)),
+      "the progress rule says an entry's order never makes the dispatch unmet",
+    );
+  });
+});

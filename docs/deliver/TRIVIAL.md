@@ -42,7 +42,7 @@ How `deliver-trivial` takes a trivial story from a card or a prompt to a reviewe
 - **`judge` rules only on review findings.** A failing check or validator run goes straight back to `coder`.
 - **No gateway `judge`, and no recurrence rulings.** A finding that comes back stays open and keeps the PR a draft.
 - **A scout finds the affected docs**, because no spec lists them.
-- **`coder` decides how, not what**, and the choices worth knowing reach you in the PR description as confirmations. With no spec to send it back to, a question about what to build that the issue or prompt leaves open keeps the PR a draft, listed for you to settle.
+- **`coder` decides how, not what**, and `qa` challenges each choice it made; none reaches you. With no spec to send it back to, a question about what to build that the issue or prompt leaves open keeps the PR a draft, listed for you to settle.
 
 The loop limits, test first, and what the run is allowed to do are as in `STORY.md`.
 
