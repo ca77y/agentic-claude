@@ -86,6 +86,8 @@ describe("readResume", () => {
         build: null,
         validate: null,
         specDir: "",
+        challenged: false,
+        round: 3,
         reviewFired: 3,
         built: true,
         boardStartDone: true,
@@ -174,5 +176,43 @@ describe("readResume", () => {
       const { specDir } = await resumeOf([["spec-dir", excerpt]]);
       assert.equal(specDir, "docs/specs/smr-1-pr", excerpt);
     }
+  });
+});
+
+describe("a committed spec's challenge", () => {
+  const BUILD_JSON = {
+    shared: [],
+    tasks: [{ id: "t1", dependsOn: [], files: ["src/a.ts"], criteria: ["c1"], todo: "do it", reuse: [], create: [] }],
+    docs: [],
+    decisions: [],
+    manualActions: [],
+  };
+  const VALIDATE_JSON = {
+    criteria: [{ id: "c1", wording: "it works", category: "UI", path: "flow", evidence: "shot", firstTest: "t" }],
+  };
+  const COMMITTED: Item[] = [
+    ["build-json", JSON.stringify(BUILD_JSON)],
+    ["validate-json", JSON.stringify(VALIDATE_JSON)],
+    ["rationale-md", "RATIONALE.md"],
+    ["done-spec", `${T} done spec docs/specs/smr-1 story abc1234`],
+  ];
+
+  test("counts as finished once a round is done, though the ledger has no challenge line", async () => {
+    const unchallenged = await resumeOf(COMMITTED);
+    assert.equal(unchallenged.challenged, false);
+    const built = await resumeOf([...COMMITTED, ["done-round", `${T} done round 0`]]);
+    assert.equal(built.challenged, true);
+  });
+
+  test("counts as finished once the branch has a PR", async () => {
+    const withPr = await resumeOf([...COMMITTED, ["pr", "https://example.test/pr/1"]]);
+    assert.equal(withPr.challenged, true);
+  });
+
+  test("asks the scout for only the last spec copy, and the files' contents only without one", async () => {
+    await resumeOf([]);
+    const brief = calls.find((c) => c.type === "scout-checkpoint")?.prompt ?? "";
+    assert.match(brief, /only the last spec commit's part lines/);
+    assert.match(brief, /build\.json in that folder: when the ledger has done-spec part lines, only the file name/);
   });
 });

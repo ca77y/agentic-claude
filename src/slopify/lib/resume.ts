@@ -1,14 +1,19 @@
 // Where a delivery stands, from its durable checkpoints: the worktree, the PR, the ledger, and the committed spec.
 import { absent, fact, scout, shaped, type ScoutResult } from "./family.ts";
-import { val } from "./deliver.ts";
+import { slugOf, val } from "./deliver.ts";
 import { Halt, haltOnCard, must, type Run } from "./loop.ts";
 import { checkpointLine, parseReproduction, type CheckpointKey, type Reproduction } from "./rules.ts";
 import { parseBuild, parseValidate, type Build, type Validate } from "./spec.ts";
 
 export interface Resume {
+  /** The committed spec's build and validate; null unless the ledger shows the spec committed and its folder holds all three files. */
   build: Build | null;
   validate: Validate | null;
   specDir: string;
+  /** The ledger shows the committed spec's challenge finished. */
+  challenged: boolean;
+  /** The round after the last one the ledger shows finished; 0 when none. */
+  round: number;
   /** The highest review number the ledger shows fired; 0 when none. */
   reviewFired: number;
   /** The ledger shows a finished round, so the spec's tasks are built. */
@@ -58,6 +63,8 @@ async function ledgerLines(d: Run, cardId: string, cp: ScoutResult): Promise<Rec
       "done-round": accepted(cp, "done-round"),
       "review-fired": accepted(cp, "review-fired"),
       "done-board-start": accepted(cp, "done-board-start"),
+      "done-spec": accepted(cp, "done-spec"),
+      "done-challenge": accepted(cp, "done-challenge"),
     };
   } catch (error) {
     if (error instanceof Halt)
@@ -65,6 +72,54 @@ async function ledgerLines(d: Run, cardId: string, cp: ScoutResult): Promise<Rec
     throw error;
   }
 }
+
+// A file the scout quoted as consecutive excerpts under its key, because one excerpt can't hold it, joined back whole.
+const whole = (cp: ScoutResult, key: string): string =>
+  cp.evidence
+    .filter((e) => e.source === key)
+    .map((e) => e.excerpt)
+    .join("");
+
+// The most of a spec file one ledger line holds, well under what one scout excerpt can.
+const COPY_PART = 20_000;
+const COPY_FILES = ["build.json", "validate.json"] as const;
+
+/** The ledger lines that copy a committed spec's build.json and validate.json, so a rerun reads them back as whole
+ * ledger lines however large the files are. A part starts and ends on a non-space, so a trimmed line loses nothing, and
+ * holds no angle bracket, so pusher can't take it for a placeholder. */
+export function specCopyLines(specDir: string, spec: { build: Build; validate: Validate }): string[] {
+  return COPY_FILES.flatMap((file) => {
+    const text = JSON.stringify(file === "build.json" ? spec.build : spec.validate)
+      .replaceAll("<", String.raw`\u003c`)
+      .replaceAll(">", String.raw`\u003e`);
+    const parts: string[] = [];
+    for (let start = 0; start < text.length;) {
+      let end = Math.min(start + COPY_PART, text.length);
+      while (end < text.length && end > start + 1 && (text[end - 1] === " " || text[end] === " ")) end -= 1;
+      parts.push(text.slice(start, end));
+      start = end;
+    }
+    return parts.map((p, i) => `done spec ${specDir} part ${file} ${String(i + 1)}/${String(parts.length)} ${p}`);
+  });
+}
+
+// A spec file copied in the ledger, joined from its last complete set of parts; '' when there is none.
+function copied(lines: readonly string[], file: string): string {
+  const parts = lines
+    .map((l) => / done spec \S+ part (\S+) (\d+)\/(\d+) (.*)$/.exec(l))
+    .filter((m) => m?.[1] === file)
+    .map((m) => ({ i: Number(m?.[2]), n: Number(m?.[3]), text: m?.[4] ?? "" }));
+  const first = parts.findLastIndex((p) => p.i === 1);
+  if (first === -1) return "";
+  const set = parts.slice(first, first + (parts[first]?.n ?? 0));
+  return set.every((p, k) => p.i === k + 1 && p.n === set.length) ? set.map((p) => p.text).join("") : "";
+}
+
+// The story's one spec folder: the one named, else the one an earlier run wrote under another title.
+const specFolderKey = (cardId: string, specDir: string): string =>
+  specDir
+    ? `the story's spec folder: ${specDir} when it exists, else the one folder under docs/specs/ whose name begins with ${slugOf(cardId)}-, whatever title words follow`
+    : 'the spec folder on the PR description\'s "Spec:" line';
 
 // Read the checkpoints into the run's state. specDir is empty when only the PR knows it.
 export async function readResume(d: Run, cardId: string, specDir: string): Promise<Resume> {
@@ -82,9 +137,12 @@ ${d.branchOnly ? "- worktree: the main checkout, only when it has this run's bra
 - done-findings: \`done findings <paths>\`
 - reproduced: \`reproduced {...}\`
 - review-fired: \`review <n> fired\`
-- spec-dir: ${specDir ? `the folder ${specDir}, if it exists in the worktree` : 'the spec folder on the PR description\'s "Spec:" line'}, relative to the worktree root
-- build-json: the exact contents of build.json in that folder
-- validate-json: the exact contents of validate.json in that folder`,
+- done-spec: \`done spec <folder>\`, and only the last spec commit's part lines: the last \`done spec <folder> part build.json 1/<n>\` line and every part line after it
+- done-challenge: \`done challenge <folder>\`
+- spec-dir: ${specFolderKey(cardId, specDir)}, relative to the worktree root
+- build-json: build.json in that folder: when the ledger has done-spec part lines, only the file name, to show it exists; otherwise its exact contents, as consecutive evidence items in order when one excerpt can't hold it all
+- validate-json: validate.json in that folder, the same way as build-json
+- rationale-md: RATIONALE.md, only when that folder holds it`,
       { label: "read checkpoints", phase: "Locate" },
     ),
     "locate",
@@ -114,10 +172,23 @@ ${d.branchOnly ? "- worktree: the main checkout, only when it has this run's bra
   const spec = val(cp, "spec-dir")
     .replace(/^Spec:\s*/i, "")
     .replaceAll("`", "");
+  // A spec counts only once it is committed with all three files; anything less is written again. Its build and
+  // validate come from the ledger's copy, else, for a spec committed without one, from the files as the scout quoted them.
+  const committed =
+    lines["done-spec"].length > 0 && ["build-json", "validate-json", "rationale-md"].every((k) => !absent(fact(cp, k)));
+  const build = committed
+    ? (parseBuild(copied(lines["done-spec"], "build.json")) ?? parseBuild(whole(cp, "build-json")))
+    : null;
+  const validate = committed
+    ? (parseValidate(copied(lines["done-spec"], "validate.json")) ?? parseValidate(whole(cp, "validate-json")))
+    : null;
   return {
-    build: parseBuild(fact(cp, "build-json")),
-    validate: parseValidate(fact(cp, "validate-json")),
+    build,
+    validate,
     specDir: shaped("rel", spec) || specDir,
+    // A finished round or an open PR proves the challenge finished too, since the build starts only after it.
+    challenged: !!build && !!validate && (lines["done-challenge"].length > 0 || rounds.length > 0 || !!state.pr),
+    round: Math.max(0, ...rounds.map((l) => Number(/ done round (\d+)/.exec(l)?.[1] ?? -1) + 1)),
     reviewFired: Math.max(0, ...lines["review-fired"].map((l) => Number(/review (\d+) fired/.exec(l)?.[1] ?? 0))),
     built: rounds.length > 0,
     ...(passedTests.length > 0 && { passedTests }),

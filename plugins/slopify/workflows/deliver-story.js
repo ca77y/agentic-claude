@@ -204,11 +204,11 @@ function fact(result, key) {
   const hit = result?.evidence.find((e) => e.source === key);
   return hit ? (hit.excerpt || hit.location || "").trim() : "";
 }
-function absent(v, whole) {
+function absent(v, whole2) {
   const t = (v ?? "").trim();
   if (!t) return true;
   const word = String.raw`(?:none|absent|missing|n\/a|not found)`;
-  const re = new RegExp(whole ? String.raw`^${word}\s*(?:\([^)]*\))?[.:]?$` : String.raw`^${word}(?![\w/-]|\.\w)`, "i");
+  const re = new RegExp(whole2 ? String.raw`^${word}\s*(?:\([^)]*\))?[.:]?$` : String.raw`^${word}(?![\w/-]|\.\w)`, "i");
   return re.test(t);
 }
 var SHAPES = {
@@ -474,7 +474,9 @@ var CHECKPOINT_FORMS = {
   "done-round": String.raw`done round \d+\b`,
   "done-findings": String.raw`done findings \S`,
   reproduced: String.raw`reproduced \{`,
-  "review-fired": String.raw`review \d+ fired\b`
+  "review-fired": String.raw`review \d+ fired\b`,
+  "done-spec": String.raw`done spec \S`,
+  "done-challenge": String.raw`done challenge \S`
 };
 function checkpointLine(key, value) {
   const line = value.trim().replace(/^```[^\n]*\n([\s\S]*?)\n?```$/, "$1").trim().replace(/^[-*]\s+/, "").replace(/^(["`])(.*)\1$/s, "$2").trim();
@@ -2075,7 +2077,7 @@ async function validate(l, afterBuild) {
   }
 }
 async function round(l, last) {
-  if (l.round > 0 || !l.built) {
+  if (l.round > (l.firstRound ?? 0) || !l.built) {
     await buildRound(l);
     note(l, "changed", unique(l.changedThisRound));
   }
@@ -2086,7 +2088,7 @@ function freshLoop(input) {
   return {
     ...input,
     docs: input.build?.docs ?? [],
-    round: 0,
+    round: input.firstRound ?? 0,
     reviewNumber: input.startAtReview > 0 ? input.startAtReview - 1 : 0,
     open: [],
     escalated: [],
@@ -2119,6 +2121,7 @@ function freshLoop(input) {
     halted: null
   };
 }
+var outOfRounds = (l) => l.round - (l.firstRound ?? 0) >= MAX_FIX_ROUNDS;
 function nextStep(l) {
   const g = gate({
     prOpen: !!l.d.state.pr,
@@ -2127,7 +2130,7 @@ function nextStep(l) {
     held: heldRows(l).length
   });
   if (g !== "fix") return g;
-  if (l.round >= MAX_FIX_ROUNDS || noProgress(l.openByRound)) return "end";
+  if (outOfRounds(l) || noProgress(l.openByRound)) return "end";
   return l.open.length > 0 || !l.d.state.pr ? "fix" : "end";
 }
 async function runLoop(input) {
@@ -2143,7 +2146,7 @@ async function runLoop(input) {
   l.openByRound.push(countOpen(l));
   for (let step = nextStep(l); step === "fix"; step = nextStep(l)) {
     l.round += 1;
-    await round(l, l.round >= MAX_FIX_ROUNDS || noProgress([...l.openByRound, countOpen(l)]));
+    await round(l, outOfRounds(l) || noProgress([...l.openByRound, countOpen(l)]));
     if (l.d.state.pr) await reviewRound(l);
     l.openByRound.push(countOpen(l));
   }
@@ -2180,6 +2183,130 @@ ${r.draftReasons.map((x) => `- ${x.text}`).join("\n")}` : "",
 ${r.unfiled.map((x) => `- ${x.text}`).join("\n")}` : "",
     r.decisions.length > 0 ? `Decisions to confirm: ${r.decisions.join(", ")}.` : ""
   ].filter(Boolean).join("\n");
+}
+
+// src/slopify/lib/resume.ts
+var LEDGER_LINE = /^(?:```[^\n]*\n)?\s*(?:[-*]\s+)?["`]?\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z /;
+function accepted(cp, key) {
+  const lines = [];
+  for (const e of cp.evidence) {
+    if (e.source !== key) continue;
+    const item = e.excerpt.trim();
+    if (absent(item)) continue;
+    if (!LEDGER_LINE.test(item)) {
+      throw new Halt(
+        "locate",
+        `a ${key} checkpoint read as a whole ledger line`,
+        `The scout returned "${item}" for ${key}, which is not a ledger line.`
+      );
+    }
+    const line = checkpointLine(key, item);
+    if (line) lines.push(line);
+  }
+  return lines;
+}
+async function ledgerLines(d, cardId, cp) {
+  try {
+    return {
+      "done-findings": accepted(cp, "done-findings"),
+      reproduced: accepted(cp, "reproduced"),
+      "done-round": accepted(cp, "done-round"),
+      "review-fired": accepted(cp, "review-fired"),
+      "done-board-start": accepted(cp, "done-board-start"),
+      "done-spec": accepted(cp, "done-spec"),
+      "done-challenge": accepted(cp, "done-challenge")
+    };
+  } catch (error) {
+    if (error instanceof Halt)
+      return haltOnCard(d, cardId, error, "a checkpoint in its local ledger couldn't be read.");
+    throw error;
+  }
+}
+var whole = (cp, key) => cp.evidence.filter((e) => e.source === key).map((e) => e.excerpt).join("");
+var COPY_PART = 2e4;
+var COPY_FILES = ["build.json", "validate.json"];
+function specCopyLines(specDir, spec) {
+  return COPY_FILES.flatMap((file) => {
+    const text = JSON.stringify(file === "build.json" ? spec.build : spec.validate).replaceAll("<", String.raw`\u003c`).replaceAll(">", String.raw`\u003e`);
+    const parts = [];
+    for (let start = 0; start < text.length; ) {
+      let end = Math.min(start + COPY_PART, text.length);
+      while (end < text.length && end > start + 1 && (text[end - 1] === " " || text[end] === " ")) end -= 1;
+      parts.push(text.slice(start, end));
+      start = end;
+    }
+    return parts.map((p, i) => `done spec ${specDir} part ${file} ${String(i + 1)}/${String(parts.length)} ${p}`);
+  });
+}
+function copied(lines, file) {
+  const parts = lines.map((l) => / done spec \S+ part (\S+) (\d+)\/(\d+) (.*)$/.exec(l)).filter((m) => m?.[1] === file).map((m) => ({ i: Number(m?.[2]), n: Number(m?.[3]), text: m?.[4] ?? "" }));
+  const first = parts.findLastIndex((p) => p.i === 1);
+  if (first === -1) return "";
+  const set = parts.slice(first, first + (parts[first]?.n ?? 0));
+  return set.every((p, k) => p.i === k + 1 && p.n === set.length) ? set.map((p) => p.text).join("") : "";
+}
+var specFolderKey = (cardId, specDir) => specDir ? `the story's spec folder: ${specDir} when it exists, else the one folder under docs/specs/ whose name begins with ${slugOf(cardId)}-, whatever title words follow` : `the spec folder on the PR description's "Spec:" line`;
+async function readResume(d, cardId, specDir) {
+  const cp = must(
+    await scout(
+      "scout-checkpoint",
+      `${d.WHERE}
+Report where this run stands. It is the delivery of card ${cardId}.
+Report these keys, each as an evidence item with source set to the key; leave out a key that does not exist.
+For each ledger key below, return one evidence item for each ledger line that contains the key's form right after pusher's timestamp, with source set to the key and the whole line as its excerpt, in ledger order; return none when no line matches:
+${d.branchOnly ? "- worktree: the main checkout, only when it has this run's branch checked out; there is no worktree\n- branch, ledger" : "- worktree, branch, ledger"}
+- pr: the reference of the branch's open PR; leave it out when the branch's only PRs are closed or merged, since a branch name can outlive its PR
+- done-board-start: \`done board-start\`
+- done-round: \`done round <n>\`
+- done-findings: \`done findings <paths>\`
+- reproduced: \`reproduced {...}\`
+- review-fired: \`review <n> fired\`
+- done-spec: \`done spec <folder>\`, and only the last spec commit's part lines: the last \`done spec <folder> part build.json 1/<n>\` line and every part line after it
+- done-challenge: \`done challenge <folder>\`
+- spec-dir: ${specFolderKey(cardId, specDir)}, relative to the worktree root
+- build-json: build.json in that folder: when the ledger has done-spec part lines, only the file name, to show it exists; otherwise its exact contents, as consecutive evidence items in order when one excerpt can't hold it all
+- validate-json: validate.json in that folder, the same way as build-json
+- rationale-md: RATIONALE.md, only when that folder holds it`,
+      { label: "read checkpoints", phase: "Locate" }
+    ),
+    "locate",
+    "The run's checkpoints."
+  );
+  const { state } = d;
+  const worktree2 = shaped("path", val(cp, "worktree"));
+  if (worktree2.startsWith("/")) state.worktree = worktree2.replace(/\/+$/, "");
+  state.branch = shaped("branch", val(cp, "branch"));
+  state.ledger = shaped("path", val(cp, "ledger"));
+  state.pr = shaped("ref", val(cp, "pr"));
+  const lines = await ledgerLines(d, cardId, cp);
+  const lastFindings = lines["done-findings"].at(-1) ?? "";
+  const lastRepro = lines.reproduced.at(-1);
+  const rounds = lines["done-round"];
+  const passedTests = [
+    ...new Set(
+      rounds.flatMap(
+        (l) => (/ done round \d+ passed (.+)$/.exec(l)?.[1] ?? "").split(/\s+/).map((p) => shaped("rel", p)).filter(Boolean)
+      )
+    )
+  ];
+  const spec = val(cp, "spec-dir").replace(/^Spec:\s*/i, "").replaceAll("`", "");
+  const committed = lines["done-spec"].length > 0 && ["build-json", "validate-json", "rationale-md"].every((k) => !absent(fact(cp, k)));
+  const build = committed ? parseBuild(copied(lines["done-spec"], "build.json")) ?? parseBuild(whole(cp, "build-json")) : null;
+  const validate2 = committed ? parseValidate(copied(lines["done-spec"], "validate.json")) ?? parseValidate(whole(cp, "validate-json")) : null;
+  return {
+    build,
+    validate: validate2,
+    specDir: shaped("rel", spec) || specDir,
+    // A finished round or an open PR proves the challenge finished too, since the build starts only after it.
+    challenged: !!build && !!validate2 && (lines["done-challenge"].length > 0 || rounds.length > 0 || !!state.pr),
+    round: Math.max(0, ...rounds.map((l) => Number(/ done round (\d+)/.exec(l)?.[1] ?? -1) + 1)),
+    reviewFired: Math.max(0, ...lines["review-fired"].map((l) => Number(/review (\d+) fired/.exec(l)?.[1] ?? 0))),
+    built: rounds.length > 0,
+    ...passedTests.length > 0 && { passedTests },
+    boardStartDone: lines["done-board-start"].length > 0,
+    findings: lastFindings.replace(/^.*? done findings /, "").split(/\s+/).map((p) => shaped("rel", p)).filter(Boolean),
+    reproduced: lastRepro ? parseReproduction(lastRepro) : null
+  };
 }
 
 // src/slopify/lib/how.ts
@@ -2508,7 +2635,7 @@ async function writeAndCommit(o, instruction, message, phaseTitle) {
   const send = () => callPusher(
     o.d.pushBrief(
       `Commit the folder ${o.specDir} as it stands, staged by explicit path, with a message in the convention docs/FORGE.md declares, saying: ${message}. Name the issue ${o.cardId} in it. Do not push.`,
-      [`done spec ${o.specDir} story ${o.storyRevision}`]
+      [`done spec ${o.specDir} story ${o.storyRevision}`, ...specCopyLines(o.specDir, spec)]
     ),
     "commit the spec",
     phaseTitle
@@ -2722,8 +2849,18 @@ ${gathered}`,
     "add the spec",
     "Spec"
   );
+  return challengeSpec(o, spec);
+}
+var challengeCommitted = (o, build, validate2) => challengeSpec(o, { build, validate: validate2, claims: [] });
+async function challengeSpec(o, spec) {
   const challenged = await challenge(o, spec);
-  return challenged.blockers.length > 0 ? { exhausted: challenged.blockers } : { build: challenged.spec.build, validate: challenged.spec.validate };
+  if (challenged.blockers.length > 0) return { exhausted: challenged.blockers };
+  await callPusher(
+    o.d.pushBrief("Perform no operation other than appending the ledger line below.", [`done challenge ${o.specDir}`]),
+    "record the challenge",
+    "Challenge"
+  );
+  return { build: challenged.spec.build, validate: challenged.spec.validate };
 }
 function specReviser(o) {
   return async (problems, previous) => {
@@ -2813,95 +2950,6 @@ function answersRejected(v) {
   };
 }
 
-// src/slopify/lib/resume.ts
-var LEDGER_LINE = /^(?:```[^\n]*\n)?\s*(?:[-*]\s+)?["`]?\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z /;
-function accepted(cp, key) {
-  const lines = [];
-  for (const e of cp.evidence) {
-    if (e.source !== key) continue;
-    const item = e.excerpt.trim();
-    if (absent(item)) continue;
-    if (!LEDGER_LINE.test(item)) {
-      throw new Halt(
-        "locate",
-        `a ${key} checkpoint read as a whole ledger line`,
-        `The scout returned "${item}" for ${key}, which is not a ledger line.`
-      );
-    }
-    const line = checkpointLine(key, item);
-    if (line) lines.push(line);
-  }
-  return lines;
-}
-async function ledgerLines(d, cardId, cp) {
-  try {
-    return {
-      "done-findings": accepted(cp, "done-findings"),
-      reproduced: accepted(cp, "reproduced"),
-      "done-round": accepted(cp, "done-round"),
-      "review-fired": accepted(cp, "review-fired"),
-      "done-board-start": accepted(cp, "done-board-start")
-    };
-  } catch (error) {
-    if (error instanceof Halt)
-      return haltOnCard(d, cardId, error, "a checkpoint in its local ledger couldn't be read.");
-    throw error;
-  }
-}
-async function readResume(d, cardId, specDir) {
-  const cp = must(
-    await scout(
-      "scout-checkpoint",
-      `${d.WHERE}
-Report where this run stands. It is the delivery of card ${cardId}.
-Report these keys, each as an evidence item with source set to the key; leave out a key that does not exist.
-For each ledger key below, return one evidence item for each ledger line that contains the key's form right after pusher's timestamp, with source set to the key and the whole line as its excerpt, in ledger order; return none when no line matches:
-${d.branchOnly ? "- worktree: the main checkout, only when it has this run's branch checked out; there is no worktree\n- branch, ledger" : "- worktree, branch, ledger"}
-- pr: the reference of the branch's open PR; leave it out when the branch's only PRs are closed or merged, since a branch name can outlive its PR
-- done-board-start: \`done board-start\`
-- done-round: \`done round <n>\`
-- done-findings: \`done findings <paths>\`
-- reproduced: \`reproduced {...}\`
-- review-fired: \`review <n> fired\`
-- spec-dir: ${specDir ? `the folder ${specDir}, if it exists in the worktree` : `the spec folder on the PR description's "Spec:" line`}, relative to the worktree root
-- build-json: the exact contents of build.json in that folder
-- validate-json: the exact contents of validate.json in that folder`,
-      { label: "read checkpoints", phase: "Locate" }
-    ),
-    "locate",
-    "The run's checkpoints."
-  );
-  const { state } = d;
-  const worktree2 = shaped("path", val(cp, "worktree"));
-  if (worktree2.startsWith("/")) state.worktree = worktree2.replace(/\/+$/, "");
-  state.branch = shaped("branch", val(cp, "branch"));
-  state.ledger = shaped("path", val(cp, "ledger"));
-  state.pr = shaped("ref", val(cp, "pr"));
-  const lines = await ledgerLines(d, cardId, cp);
-  const lastFindings = lines["done-findings"].at(-1) ?? "";
-  const lastRepro = lines.reproduced.at(-1);
-  const rounds = lines["done-round"];
-  const passedTests = [
-    ...new Set(
-      rounds.flatMap(
-        (l) => (/ done round \d+ passed (.+)$/.exec(l)?.[1] ?? "").split(/\s+/).map((p) => shaped("rel", p)).filter(Boolean)
-      )
-    )
-  ];
-  const spec = val(cp, "spec-dir").replace(/^Spec:\s*/i, "").replaceAll("`", "");
-  return {
-    build: parseBuild(fact(cp, "build-json")),
-    validate: parseValidate(fact(cp, "validate-json")),
-    specDir: shaped("rel", spec) || specDir,
-    reviewFired: Math.max(0, ...lines["review-fired"].map((l) => Number(/review (\d+) fired/.exec(l)?.[1] ?? 0))),
-    built: rounds.length > 0,
-    ...passedTests.length > 0 && { passedTests },
-    boardStartDone: lines["done-board-start"].length > 0,
-    findings: lastFindings.replace(/^.*? done findings /, "").split(/\s+/).map((p) => shaped("rel", p)).filter(Boolean),
-    reproduced: lastRepro ? parseReproduction(lastRepro) : null
-  };
-}
-
 // src/slopify/workflows/deliver-story.ts
 var refuse = (d, cardId) => refuseCard(d, cardId, `Issue ${cardId} has no Deliverable label. Run /slopify:shape on it first, then invoke again.`);
 async function brokenWorkflow(d, cardId, tried) {
@@ -2951,8 +2999,8 @@ ARG>>>`,
       next: "Ask the user for the card to deliver; a story reaches delivery only as a card shape filed."
     };
   if (!isDeliverable(fact(cardRes, "labels"))) return refuse(d, cardId);
-  const specDir = specRel.replace(/\.md$/, "");
-  const resume = await readResume(d, cardId, specDir);
+  const resume = await readResume(d, cardId, specRel.replace(/\.md$/, ""));
+  const { specDir } = resume;
   const stopped = await workspace(d, {
     cardId,
     boardBranch,
@@ -2963,10 +3011,10 @@ ARG>>>`,
   if (stopped) return stopped;
   const howInput = { d, where: how.where, story, storyRevision, cardId, specDir, answers: how.answers };
   let { build, validate: validate2 } = resume;
-  if (build && validate2) {
+  if (build && validate2 && resume.challenged) {
     d.skip("how");
   } else {
-    const decided = await runHow(howInput);
+    const decided = build && validate2 ? await challengeCommitted(howInput, build, validate2) : await runHow(howInput);
     if ("exhausted" in decided) return brokenWorkflow(d, cardId, decided.exhausted);
     ({ build, validate: validate2 } = decided);
     d.done("how");
@@ -2984,6 +3032,7 @@ ARG>>>`,
     // Once the PR exists, a rerun resumes at its review.
     startAtReview: d.state.pr ? Math.max(resume.reviewFired, 1) : 0,
     built: resume.built,
+    firstRound: resume.round,
     reviseSpec: specReviser(howInput)
   });
   return { ...result, workflow: "deliver-story", specDir, report: reportOf("deliver-story", result, specDir) };

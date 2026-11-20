@@ -550,6 +550,13 @@ const storyRun: Script = (type, label, prompt) => {
         { source: "worktree", location: "x", excerpt: "/p/wt" },
         { source: "build-json", location: "x", excerpt: JSON.stringify(SPEC.build) },
         { source: "validate-json", location: "x", excerpt: JSON.stringify(SPEC.validate) },
+        { source: "rationale-md", location: "x", excerpt: "RATIONALE.md" },
+        {
+          source: "done-spec",
+          location: "x",
+          excerpt: "2026-11-09T10:00:00Z done spec docs/specs/smr-1 story abc1234",
+        },
+        { source: "done-challenge", location: "x", excerpt: "2026-11-09T10:00:00Z done challenge docs/specs/smr-1" },
       ],
     };
   }

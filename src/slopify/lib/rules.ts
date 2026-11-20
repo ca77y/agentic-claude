@@ -346,7 +346,8 @@ export function progressLine(
   return line.length > MAX_PROGRESS ? `${line.slice(0, MAX_PROGRESS - 3)}...` : line;
 }
 
-export type CheckpointKey = "done-board-start" | "done-round" | "done-findings" | "reproduced" | "review-fired";
+export type CheckpointKey =
+  "done-board-start" | "done-round" | "done-findings" | "reproduced" | "review-fired" | "done-spec" | "done-challenge";
 
 const CHECKPOINT_FORMS: Record<CheckpointKey, string> = {
   "done-board-start": String.raw`done board-start\b`,
@@ -354,6 +355,8 @@ const CHECKPOINT_FORMS: Record<CheckpointKey, string> = {
   "done-findings": String.raw`done findings \S`,
   reproduced: String.raw`reproduced \{`,
   "review-fired": String.raw`review \d+ fired\b`,
+  "done-spec": String.raw`done spec \S`,
+  "done-challenge": String.raw`done challenge \S`,
 };
 
 // The ledger line a scout returned for a checkpoint key, with the wrappers a scout may add removed, or '' when it isn't

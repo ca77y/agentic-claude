@@ -1,7 +1,7 @@
 import { scout, fact, slugged } from "../lib/family.ts";
 import { callPusher, createDeliver, type Stopped } from "../lib/deliver.ts";
 import { locate, refuseCard, workspace } from "../lib/deliver-steps.ts";
-import { runHow, specReviser, type HowInput } from "../lib/how.ts";
+import { challengeCommitted, runHow, specReviser, type HowInput } from "../lib/how.ts";
 import { answersOf, answersRejected, flagOf, inputOf, textOf, type NotStarted } from "../lib/input.ts";
 import { must, reportOf, runLoop, stopOf, type LoopResult, type Run } from "../lib/loop.ts";
 import { readResume } from "../lib/resume.ts";
@@ -91,8 +91,9 @@ ARG>>>`,
     };
   if (!isDeliverable(fact(cardRes, "labels"))) return refuse(d, cardId);
 
-  const specDir = specRel.replace(/\.md$/, "");
-  const resume = await readResume(d, cardId, specDir);
+  // A rerun reads the spec folder its first run wrote, whatever the title says now.
+  const resume = await readResume(d, cardId, specRel.replace(/\.md$/, ""));
+  const { specDir } = resume;
   const stopped = await workspace(d, {
     cardId,
     boardBranch,
@@ -104,10 +105,10 @@ ARG>>>`,
 
   const howInput: HowInput = { d, where: how.where, story, storyRevision, cardId, specDir, answers: how.answers };
   let { build, validate } = resume;
-  if (build && validate) {
+  if (build && validate && resume.challenged) {
     d.skip("how");
   } else {
-    const decided = await runHow(howInput);
+    const decided = build && validate ? await challengeCommitted(howInput, build, validate) : await runHow(howInput);
     if ("exhausted" in decided) return brokenWorkflow(d, cardId, decided.exhausted);
     ({ build, validate } = decided);
     d.done("how");
@@ -126,6 +127,7 @@ ARG>>>`,
     // Once the PR exists, a rerun resumes at its review.
     startAtReview: d.state.pr ? Math.max(resume.reviewFired, 1) : 0,
     built: resume.built,
+    firstRound: resume.round,
     reviseSpec: specReviser(howInput),
   });
   return { ...result, workflow: "deliver-story", specDir, report: reportOf("deliver-story", result, specDir) };

@@ -501,6 +501,8 @@ describe("checkpointLine", () => {
     "done-findings": "done findings docs/a.md docs/b.md",
     reproduced: reproductionLine({ steps: ["run add(1, 1)"], observed: "got 0" }),
     "review-fired": `review 1 fired ${T}`,
+    "done-spec": "done spec docs/specs/smr-1-x story abc1234",
+    "done-challenge": "done challenge docs/specs/smr-1-x",
   };
   const keys = Object.keys(forms) as CheckpointKey[];
   const line = (key: CheckpointKey) => `${T} ${forms[key]}`;

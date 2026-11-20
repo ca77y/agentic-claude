@@ -350,6 +350,8 @@ export interface LoopInput {
   startAtReview: number;
   /** The spec's tasks are already built, so the first round starts at validation. */
   built: boolean;
+  /** The number of this run's first round: a rerun goes on after the rounds its ledger shows finished. */
+  firstRound?: number;
   /** The short flow for a trivial story or a bug: no spec, and what the first test has to state. */
   small?: { firstTest: string; reproduced?: readonly Listed[]; passedTests?: readonly string[] };
   /** A spike's or a research run's flow: the PR changes documents, which their own checks validate and their own writer revises. */
@@ -1594,7 +1596,7 @@ async function validate(l: Loop, afterBuild: boolean): Promise<void> {
 }
 
 async function round(l: Loop, last: boolean): Promise<void> {
-  if (l.round > 0 || !l.built) {
+  if (l.round > (l.firstRound ?? 0) || !l.built) {
     await buildRound(l);
     note(l, "changed", unique(l.changedThisRound));
   }
@@ -1606,7 +1608,7 @@ function freshLoop(input: LoopInput): Loop {
   return {
     ...input,
     docs: input.build?.docs ?? [],
-    round: 0,
+    round: input.firstRound ?? 0,
     reviewNumber: input.startAtReview > 0 ? input.startAtReview - 1 : 0,
     open: [],
     escalated: [],
@@ -1640,6 +1642,9 @@ function freshLoop(input: LoopInput): Loop {
   };
 }
 
+// A run's fix rounds are counted from its own first round, so a rerun that goes on after finished rounds gets a fresh budget.
+const outOfRounds = (l: Loop): boolean => l.round - (l.firstRound ?? 0) >= MAX_FIX_ROUNDS;
+
 function nextStep(l: Loop): "clean" | "held" | "fix" | "end" {
   const g = gate({
     prOpen: !!l.d.state.pr,
@@ -1648,7 +1653,7 @@ function nextStep(l: Loop): "clean" | "held" | "fix" | "end" {
     held: heldRows(l).length,
   });
   if (g !== "fix") return g;
-  if (l.round >= MAX_FIX_ROUNDS || noProgress(l.openByRound)) return "end";
+  if (outOfRounds(l) || noProgress(l.openByRound)) return "end";
   // Only open items can start a round; a failed review with nothing to fix has nothing left to run.
   return l.open.length > 0 || !l.d.state.pr ? "fix" : "end";
 }
@@ -1668,7 +1673,7 @@ export async function runLoop(input: LoopInput): Promise<LoopResult> {
   l.openByRound.push(countOpen(l));
   for (let step = nextStep(l); step === "fix"; step = nextStep(l)) {
     l.round += 1;
-    await round(l, l.round >= MAX_FIX_ROUNDS || noProgress([...l.openByRound, countOpen(l)]));
+    await round(l, outOfRounds(l) || noProgress([...l.openByRound, countOpen(l)]));
     if (l.d.state.pr) await reviewRound(l);
     l.openByRound.push(countOpen(l));
   }
