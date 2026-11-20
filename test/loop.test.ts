@@ -1008,15 +1008,14 @@ describe("a guard test in a fix round", () => {
   const GUARD_ASK = "no test pins that a marker the board leaves alone stays byte for byte";
   const NO_CODE_FAILS =
     "No existing code fails this test: the behavior it states is already there, so it can't fail on the current code.";
-  // A coder that can write the guard test but can't make it fail on the current code, so it stops whenever the
-  // dispatch asks for fail first and doesn't allow a test that already passes.
+  // A coder that can write the guard test but can't make it fail on the current code. When the dispatch allows a test
+  // that already passes, it writes the guard and says so with no failing output; otherwise it stops.
   const coder: Script = (_t, label, prompt) => {
     if (!label.endsWith(": test")) return OK_FIX;
-    const stuck =
-      prompt.includes(GUARD_ASK) &&
-      prompt.includes("must fail on the current code") &&
-      !prompt.includes("may already pass on the current code");
-    return stuck ? { ...OK_TEST, failingOutput: "", specProblem: NO_CODE_FAILS } : OK_TEST;
+    if (!prompt.includes(GUARD_ASK)) return OK_TEST;
+    return prompt.includes("may already pass on the current code")
+      ? { ...OK_TEST, failingOutput: "" }
+      : { ...OK_TEST, failingOutput: "", specProblem: NO_CODE_FAILS };
   };
   const guardRun = (over: Partial<Record<string, Script>>): Script =>
     happy({ "scout-docs": () => ({ answer: "none", evidence: [], gaps: [] }), coder, ...over });
