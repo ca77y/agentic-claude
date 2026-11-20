@@ -8,7 +8,7 @@ import shape from "../src/slopify/workflows/shape.ts";
 import { createDeliver } from "../src/slopify/lib/deliver.ts";
 import { findCard } from "../src/slopify/lib/small.ts";
 import { calls, current, installAgents, scriptOf, type Script } from "./harness.ts";
-import { board, clearBoard, duplicateMarks, holds, linearPusher, linearSave } from "./linear-board.ts";
+import { board, clearBoard, duplicateMarks, HIDDEN, holds, linearPusher, linearSave } from "./linear-board.ts";
 
 installAgents();
 
@@ -16,7 +16,6 @@ const IDEA = "Split out of SMR-317: which of the owner's sessions reach Garmin, 
 // What shape's draft holds for an idea: the idea itself, as the card's text.
 const draftBody = (idea: string): string => `## Question\n\n${idea}\n\n## References\n\n- The owner's comment.`;
 const state = { idea: "" };
-const HIDDEN = /<!--[\s\S]*?-->/g;
 
 const item = (source: string, excerpt: string) => ({ source, location: "x", excerpt });
 const VIEW = { judgement: "proceed", reasons: [], risks: [], conditions: [] };
@@ -29,7 +28,7 @@ const AGENTS: Record<string, Script> = {
   // Reports every card on the board by its visible text, as a scout reading the board does. Like the real scout, it
   // reports a card's hidden line only when its brief names that line, so a rerun finds its card only if the brief asks.
   "scout-related-cards": (_t, _l, prompt) => {
-    const asked = prompt.match(HIDDEN) ?? [];
+    const asked = Array.from(prompt.matchAll(HIDDEN), (m) => m[0]);
     return {
       answer: board.length > 0 ? `Cards on the board: ${board.map((c) => c.id).join(", ")}` : "No related card.",
       evidence: [

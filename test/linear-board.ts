@@ -56,7 +56,7 @@ export const holds = (body: string, text: string): boolean =>
 
 const read = (p: string): string => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
 const FENCED = /<<<(\w+)\n([\s\S]*?)\n\1>>>/g;
-const HIDDEN = /<!--[\s\S]*?-->/g;
+export const HIDDEN = /<!--[\s\S]*?-->/g;
 const HARMLESS = /\b(?:not|no|isn't) (?:a )?(?:content change|failed write)\b/i;
 const sentencesOf = (t: string): string[] => t.split(/(?<=\.)\s+|\n+/);
 
