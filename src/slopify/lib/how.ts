@@ -679,6 +679,8 @@ export function specReviser(o: HowInput) {
     );
     // The writer's task list is the whole spec, so the tasks the revision affects run again: each task whose id, files, or
     // criteria a problem names, and each task that is new or differs from before, in itself or in one of its criteria.
+    // Every change brief carries the shared constraints, so a revision of them affects every task.
+    const sharedChanged = JSON.stringify(previous.build?.shared ?? []) !== JSON.stringify(spec.build.shared);
     const named = (t: Task): boolean =>
       problems.some((p) => [t.id, ...t.files, ...t.criteria].some((x) => p.includes(x)));
     const criteriaOf = (v: Validate | null, t: Task) =>
@@ -694,7 +696,7 @@ export function specReviser(o: HowInput) {
     return {
       build: spec.build,
       validate: spec.validate,
-      rerun: spec.build.tasks.filter((t) => named(t) || changed(t)),
+      rerun: spec.build.tasks.filter((t) => sharedChanged || named(t) || changed(t)),
     };
   };
 }

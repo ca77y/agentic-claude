@@ -2757,6 +2757,7 @@ ${list(before)}`,
       "revise the spec",
       "Spec"
     );
+    const sharedChanged = JSON.stringify(previous.build?.shared ?? []) !== JSON.stringify(spec.build.shared);
     const named = (t) => problems.some((p) => [t.id, ...t.files, ...t.criteria].some((x) => p.includes(x)));
     const criteriaOf2 = (v, t) => JSON.stringify((v?.criteria ?? []).filter((c) => t.criteria.includes(c.id)));
     const changed = (t) => {
@@ -2766,7 +2767,7 @@ ${list(before)}`,
     return {
       build: spec.build,
       validate: spec.validate,
-      rerun: spec.build.tasks.filter((t) => named(t) || changed(t))
+      rerun: spec.build.tasks.filter((t) => sharedChanged || named(t) || changed(t))
     };
   };
 }
