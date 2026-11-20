@@ -5,6 +5,7 @@ import { beforeEach, describe, test } from "node:test";
 import { createDeliver } from "../src/slopify/lib/deliver.ts";
 import { runHow } from "../src/slopify/lib/how.ts";
 import type { Run } from "../src/slopify/lib/loop.ts";
+import { MAX_FIX_ROUNDS } from "../src/slopify/lib/rules.ts";
 import deliverBugfix from "../src/slopify/workflows/deliver-bugfix.ts";
 import deliverSpike from "../src/slopify/workflows/deliver-spike.ts";
 import deliverStory from "../src/slopify/workflows/deliver-story.ts";
@@ -36,6 +37,31 @@ const SPEC = {
   },
   claims: ["a.ts exists"],
 };
+const SHARED_FILE = "src/shared.ts";
+const readingSpec = (t2Reads: string[]) => ({
+  ...SPEC,
+  build: {
+    ...SPEC.build,
+    tasks: [
+      { ...SPEC.build.tasks[0], files: [SHARED_FILE], testReads: [SHARED_FILE] },
+      {
+        id: "t2",
+        dependsOn: [],
+        files: ["b.ts"],
+        testReads: t2Reads,
+        criteria: ["c1"],
+        todo: "y",
+        reuse: [],
+        create: [],
+      },
+    ],
+  },
+});
+// t2's test reads the file t1 writes.
+const CROSS_READ = readingSpec([SHARED_FILE]);
+const CLEAN_READS = readingSpec(["b.ts", "README.md"]);
+const namesCrossRead = (lines: readonly string[]): boolean =>
+  lines.some((l) => l.includes("t2") && l.includes(SHARED_FILE));
 const DESIGN = { approach: "a", reuse: [], create: [], interfaces: [], data: [], dependencies: [], risks: [] };
 const SCOUT = { answer: "a", evidence: [], gaps: [] };
 const LENS_PASS = { verdict: "pass", evaluated: "x", findings: [], limits: "none" };
@@ -254,6 +280,68 @@ describe("the how phase", () => {
     );
     assert.ok("build" in r);
     assert.equal(count("writer-spec"), 1);
+  });
+
+  test("sends a task's test reading a file another task writes back to the writer, naming both, with no judge", async () => {
+    let specs = 0;
+    const prompts: string[] = [];
+    const r = await how(
+      happy({
+        "writer-spec": (_t, _l, prompt) => {
+          specs += 1;
+          prompts.push(prompt);
+          return specs === 1 ? CROSS_READ : CLEAN_READS;
+        },
+      }),
+    );
+    assert.ok("build" in r);
+    assert.equal(specs, 2);
+    const line = (prompts[1] ?? "").split("\n").find((l) => l.includes(SHARED_FILE)) ?? "";
+    assert.ok(
+      line.includes("t2") && line.includes("t1"),
+      `the revision names the task, the file, and its writer: ${prompts[1] ?? ""}`,
+    );
+    assert.equal(calls.filter((c) => c.type === "judge" && c.label.startsWith("rule")).length, 0);
+  });
+
+  test("passes a spec whose tests read only their own files or files no task writes, with no revision", async () => {
+    const r = await how(happy({ "writer-spec": () => CLEAN_READS }));
+    assert.ok("build" in r);
+    assert.equal(count("writer-spec"), 1);
+  });
+
+  test("ends exhausted on a cross-read kept through every revision, and never builds the spec", async () => {
+    const r = await how(happy({ "writer-spec": () => CROSS_READ }));
+    assert.ok("exhausted" in r && !("build" in r));
+    assert.ok(namesCrossRead(r.exhausted), r.exhausted.join("\n"));
+    assert.equal(count("writer-spec"), 4, "the spec and three revisions");
+    assert.equal(calls.filter((c) => c.label === "record the challenge").length, 0);
+  });
+
+  test("ends exhausted on a cross-read the open-decisions rewrite brings in", async () => {
+    const r = await how(
+      happy({
+        "advisor-risk": (_t, label) => (isAttack(label) ? { findings: [problem("major", "decision")] } : { views: [] }),
+        "writer-spec": (_t, _l, prompt) => (prompt.includes("affectsAcceptance true") ? CROSS_READ : CLEAN_READS),
+      }),
+    );
+    assert.ok(calls.some((c) => c.type === "writer-spec" && c.prompt.includes("affectsAcceptance true")));
+    assert.ok("exhausted" in r, "a cross-read in the recorded decisions' spec is not built");
+    assert.ok(namesCrossRead(r.exhausted), r.exhausted.join("\n"));
+    assert.equal(calls.filter((c) => c.label === "record the challenge").length, 0);
+  });
+
+  test("ends exhausted on a cross-read the open-risks rewrite brings in", async () => {
+    const r = await how(
+      happy({
+        "advisor-risk": (_t, label) => (isAttack(label) ? { findings: [problem("major")] } : { views: [] }),
+        "writer-spec": (_t, _l, prompt) => (prompt.includes("Record these open problems") ? CROSS_READ : CLEAN_READS),
+      }),
+    );
+    assert.equal(count("writer-spec"), MAX_FIX_ROUNDS + 2, "the spec, every revision, and the open risks");
+    assert.ok("exhausted" in r, "a cross-read in the recorded risks' spec is not built");
+    assert.ok(namesCrossRead(r.exhausted), r.exhausted.join("\n"));
+    assert.equal(calls.filter((c) => c.label === "record the challenge").length, 0);
   });
 
   test("halts on a blocker still open after three revisions", async () => {

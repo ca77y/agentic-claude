@@ -108,6 +108,22 @@ const samePath = (a: string, b: string): boolean => a === b || a.startsWith(`${b
 const filesOverlap = (x: Parallelizable, y: Parallelizable): boolean =>
   x.files.some((a) => y.files.some((b) => samePath(a, b)));
 
+export interface ReadingTask {
+  id: string;
+  files: readonly string[];
+  testReads?: unknown;
+}
+export interface CrossRead {
+  task: string;
+  file: string;
+  writers: string[];
+}
+
+// Each file a task's test reads that the task doesn't write and another task does, in spec order.
+export function crossReads(tasks: readonly ReadingTask[]): CrossRead[] {
+  return tasks.flatMap(() => []);
+}
+
 // Groups that run one after another; the tasks inside a group run in parallel. A task waits for its dependencies, and
 // for any earlier task in its wave whose files overlap with its own.
 export function waves<T extends Parallelizable>(tasks: readonly T[]): T[][] {
