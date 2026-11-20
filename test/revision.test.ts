@@ -151,24 +151,28 @@ const loopAgents = (): Script =>
 const briefOf = (label: string): string[] =>
   calls.filter((c) => c.type === "coder" && c.label === label).map((c) => c.prompt);
 
+// Builds `before`, and each spec revision returns `after` and reruns every task in it.
+const buildThenRevise = (before: ReturnType<typeof specOf>, after: ReturnType<typeof specOf>) =>
+  runLoop({
+    d: run(),
+    kind: "story",
+    where: "project",
+    story: "the issue",
+    cardId: "SMR-1",
+    ...before,
+    specDir: "docs/specs/smr-1",
+    answers: {},
+    startAtReview: 0,
+    built: false,
+    reviseSpec: () => Promise.resolve({ ...after, rerun: after.build.tasks }),
+  });
+
 describe("a task a spec revision adds", () => {
   test("is briefed as a first build that fails first, while a rebuilt task may keep its passing test", async () => {
     current.script = loopAgents();
     const before = specOf([task("t1")]);
     const after = specOf([task("t1", "build t1, revised"), task("t9")]);
-    await runLoop({
-      d: run(),
-      kind: "story",
-      where: "project",
-      story: "the issue",
-      cardId: "SMR-1",
-      ...before,
-      specDir: "docs/specs/smr-1",
-      answers: {},
-      startAtReview: 0,
-      built: false,
-      reviseSpec: () => Promise.resolve({ ...after, rerun: after.build.tasks }),
-    });
+    await buildThenRevise(before, after);
     const rebuilt = briefOf("t1: test").at(-1) ?? "";
     const added = briefOf("t9: test").at(-1) ?? "";
     assert.equal(briefOf("t1: test").length, 2, "t1 is built, then rebuilt after the revision");
@@ -177,5 +181,25 @@ describe("a task a spec revision adds", () => {
     assert.ok(added, "the added task is built");
     assert.ok(!added.includes("may already pass"), "the added task's test must fail first");
     assert.ok(!added.includes("already committed"), "the added task is not told it was built before");
+  });
+});
+
+describe("a task a spec revision reruns that was never built", () => {
+  test("is briefed as a first build that fails first, when its coder stopped on a spec problem before committing", async () => {
+    const agents = loopAgents();
+    let tests = 0;
+    // t1's first test stops on a spec problem, so t1 commits nothing before the revision.
+    const stopped = { tests: [], stubs: [], failingOutput: "", noTest: "", ...noChoices, specProblem: "which path?" };
+    current.script = (type, label, prompt) =>
+      type === "coder" && label === "t1: test" && ++tests === 1 ? stopped : agents(type, label, prompt);
+    const before = specOf([task("t1")]);
+    const after = specOf([task("t1", "build t1, revised")]);
+    await buildThenRevise(before, after);
+    const briefs = briefOf("t1: test");
+    // The review's spec finding revises the spec again later, and that rerun of t1 is a real rebuild.
+    assert.ok(briefs.length >= 2, "t1 stops on a spec problem, then is built after the revision");
+    const rerun = briefs[1] ?? "";
+    assert.ok(!rerun.includes("may already pass"), "t1 was never built, so its test must fail first");
+    assert.ok(!rerun.includes("already committed"), "t1 committed nothing, so it is not told its work is committed");
   });
 });
