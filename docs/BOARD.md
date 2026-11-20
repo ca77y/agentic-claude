@@ -41,12 +41,12 @@ Configuration does not authorize execution; the user's request does. An operatio
 - When delivery starts: from `Backlog` or `Todo`, move the card to `In Progress`; asking for delivery is the user's readiness decision. In any other status, leave it, and report a card in `Done`, `Canceled`, or `Duplicate`. An archived card (`archivedAt` set) gets no card write during the delivery; report it. A full story delivery refuses a card without the `Deliverable` label; every other delivery needs no label, and refuses a card that still lists open questions.
 - When the PR opens: attach the PR.
 - When the PR's review is clean: move the card to `In Review` only if it is `In Progress`.
-- On a later round: no card operation.
+- When the PR description groups Needs you items: comment on the card listing each grouped item in full, before the description is written, and again on a later round only when the set of grouped items changes. Otherwise a later round has no card operation.
 
 ## Other conditions
 
 - Filing a card: only when the user asks for it.
 - Editing card content: only when the user asks for it, and never changing the goal. A wrong criterion is corrected in the spec, not on the card.
-- Comments: only a message the user asks for.
+- Comments: only a message the user asks for, apart from the delivery's own: the comment listing grouped Needs you items above, and the one comment when the run ends or halts, which a delivery request authorizes.
 
 Never rewrite an acceptance criterion to match an implementation.
