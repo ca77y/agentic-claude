@@ -20,6 +20,7 @@ Configuration does not authorize execution; the user's request does. An operatio
 
 - Commit convention: Conventional Commits — `docs`, `feat`, `fix`, `refactor`, `test`, or `chore`, with an optional `(<area>)`; a commit that adds only tests is `test`; every commit on a story branch names the issue. Stage explicit paths, never with `-f`.
 - When to push: `git -C <path> push -u origin <branch>` at the end of the first delivery round; `git -C <path> push` at the end of each later round, even when something is still flagged, so every attempt stays in history.
+- Merging the target into a story branch, before each push: `git -C <path> fetch origin master`, then `git -C <path> merge --no-edit origin/master`; it brought in a commit when `HEAD` moved. Conclude a resolved conflict with `git -C <path> add -- <paths>` and `git -C <path> commit --no-edit`, and abort one with `git -C <path> merge --abort`.
 
 ## Pull request
 

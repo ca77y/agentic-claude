@@ -20,6 +20,7 @@ Configuration does not authorize execution; the user's request does. An operatio
 
 - Commit convention: {{COMMIT_CONVENTION}}
 - When to push: {{PUSH_CONDITIONS}}
+- Merging the target into a story branch, before each push, and concluding or aborting a conflicted merge: {{MERGE_TARGET}}
 
 ## Pull request
 

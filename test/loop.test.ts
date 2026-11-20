@@ -1825,3 +1825,51 @@ describe("a spec revision during the build", () => {
     assert.ok(r.needs.includes("src/ignored.ts"), r.needs);
   });
 });
+
+const indexOf = (label: string): number => calls.findIndex((c) => c.label === label);
+
+describe("merging the target branch", () => {
+  const MERGE = "merge the target branch";
+  const merging = (reply: Record<string, unknown>) => (_t: string, label: string, prompt: string) =>
+    label === MERGE ? { done: true, unmet: [], operations: [], ...reply } : pusher(prompt);
+  test("merges the target branch before each push", async () => {
+    use(happy());
+    await runLoop(inputFor(freshRun()));
+    const labels = calls.filter((c) => c.type === "pusher").map((c) => c.label);
+    assert.ok(labels.includes("push the round"));
+    for (const [i, x] of labels.entries()) {
+      if (x === "push the round") assert.equal(labels[i - 1], MERGE, "a push right after a merge");
+    }
+  });
+
+  test("has the coder resolve a conflicted merge, then has pusher conclude it", async () => {
+    use(happy({ pusher: merging({ merged: true, conflicts: ["README.md"] }) }));
+    await runLoop(inputFor(freshRun()));
+    assert.ok(calls.find((c) => c.label === "resolve the merge conflicts")?.prompt.includes("README.md"));
+    assert.ok(calls.find((c) => c.label === "conclude the merge")?.prompt.includes("README.md"));
+    assert.ok(indexOf("resolve the merge conflicts") < indexOf("conclude the merge"));
+    assert.ok(indexOf("conclude the merge") < indexOf("push the round"));
+  });
+
+  test("keeps a check that fails once the target is merged open for the coder", async () => {
+    let brought = true;
+    let failNext = false;
+    use(
+      happy({
+        pusher: (_t, label, prompt) => {
+          if (label !== MERGE) return pusher(prompt);
+          failNext = brought;
+          brought = false;
+          return { done: true, unmet: [], operations: [], merged: failNext };
+        },
+        checks: () => {
+          if (!failNext) return CHECKS_OK;
+          failNext = false;
+          return { commands: [{ command: "lint", exitCode: 1, failingLines: "broken by the merge" }] };
+        },
+      }),
+    );
+    await runLoop(inputFor(freshRun()));
+    assert.ok(calls.some((c) => c.type === "coder" && c.prompt.includes("broken by the merge")));
+  });
+});
