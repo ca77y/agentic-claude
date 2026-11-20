@@ -697,6 +697,7 @@ ${c.current}
 CARD>>>` : ""
   ].filter(Boolean).join("\n\n");
 }
+var markerOf = (slug) => `<!-- shape ${slug.replaceAll("-", " ")} -->`;
 async function read(d, cardArg, idea) {
   phase("Read");
   const [card, related] = await parallel([
@@ -709,7 +710,7 @@ Read card ${cardArg} through the read bindings in docs/BOARD.md. Report its iden
     () => scout(
       "scout-related-cards",
       `${d.WHERE}
-Search the board for cards that duplicate, overlap, conflict with, or depend on this. Change nothing.
+Search the board for cards that duplicate, overlap, conflict with, or depend on this.${idea && !cardArg ? ` Report a card whose body holds the line ${markerOf(slugged(idea, "idea"))} as its own evidence item, with the card's identifier as location and that line, verbatim, in excerpt.` : ""} Change nothing.
 
 ${idea || cardArg}`,
       { phase: "Read" }
@@ -891,7 +892,7 @@ ${list(confirmed)}`,
 }
 async function file(d, c, slug, deliverable) {
   phase("File");
-  const marker = `<!-- shape ${slug} -->`;
+  const marker = markerOf(slug);
   const target = c.cardId ? `Update card ${c.cardId} with it.` : "Create a card with it.";
   const deliverableLabel = c.kind === "story" ? deliverable ? ` Make sure the card has the label ${DELIVERABLE}.` : ` Make sure the card doesn't have the label ${DELIVERABLE}.` : "";
   const label = `Make sure the card has the label ${SHAPED_LABEL}.${deliverableLabel}`;
@@ -908,13 +909,13 @@ The draft is ${c.draft}. Use its text exactly as written, with one trailing line
   );
   return opRef(r, "card") || c.cardId;
 }
-async function duplicate(d, c, original) {
+async function duplicate(d, c, original, named) {
   phase("File");
-  if (c.cardId) {
+  if (named) {
     pushed(
       await callPusher(
         `${d.WHERE}
-The user's invocation of shape authorizes exactly this: mark card ${c.cardId} a duplicate of card ${original}, as docs/BOARD.md's duplicate binding declares. Nothing else: no other card write, commit, branch, push, or PR. Report ${c.cardId} as the operation card.`,
+The user's invocation of shape authorizes exactly this: mark card ${named} a duplicate of card ${original}, as docs/BOARD.md's duplicate binding declares. Nothing else: no other card write, commit, branch, push, or PR. Report ${named} as the operation card.`,
         "mark the duplicate",
         "File"
       ),
@@ -925,8 +926,8 @@ The user's invocation of shape authorizes exactly this: mark card ${c.cardId} a 
     status: "duplicate",
     workflow: WORKFLOW,
     card: original,
-    marked: c.cardId,
-    report: c.cardId ? `shape marked ${c.cardId} a duplicate of ${original}, which already holds this ${c.kind}.` : `shape filed nothing: ${original} already holds this ${c.kind}. Run /slopify:shape ${original} to work on it.`
+    marked: named,
+    report: named ? `shape marked ${named} a duplicate of ${original}, which already holds this ${c.kind}.` : `shape filed nothing: ${original} already holds this ${c.kind}. Run /slopify:shape ${original} to work on it.`
   };
 }
 async function run() {
@@ -937,8 +938,9 @@ async function run() {
   const d = createDeliver({ workflow: WORKFLOW, projectRoot: textOf(input["projectRoot"]), storyArg: idea || cardArg });
   try {
     const { card, related } = await read(d, cardArg, idea);
-    const cardId = (card?.evidence.find((e) => e.source === "card")?.excerpt ?? "").trim();
-    const slug = slugOf(cardId) || slugged(idea, "idea");
+    const named = (card?.evidence.find((e) => e.source === "card")?.excerpt ?? "").trim();
+    const slug = slugOf(named) || slugged(idea, "idea");
+    const cardId = named || (related.evidence.find((e) => e.excerpt.includes(markerOf(slug)))?.location.trim() ?? "");
     const c = {
       kind: kindOf(input["kind"]),
       idea,
@@ -948,7 +950,7 @@ async function run() {
       draft: `.tmp/shape/${slug}.md`
     };
     const drafted = c.shaped ? await reshape(d, c) : await draft(d, c, related);
-    if ("duplicateOf" in drafted) return await duplicate(d, c, drafted.duplicateOf);
+    if ("duplicateOf" in drafted) return await duplicate(d, c, drafted.duplicateOf, named);
     const openQuestions = await refine(d, c, drafted);
     const deliverable = c.kind === "story" && openQuestions.length === 0;
     const filed = await file(d, c, slug, deliverable);
