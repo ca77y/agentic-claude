@@ -93,7 +93,8 @@ const TEST_SCHEMA = {
     },
     failingOutput: {
       type: "string",
-      description: "The Checks commands' output on the current code, failing only on the new test's assertions",
+      description:
+        "The Checks commands' output on the current code, failing only on the new test's assertions; empty when the test guards behavior the current code already has",
     },
     noTest: { type: "string", description: "Why the behavior can't be expressed as a test; empty when it can" },
     specProblem: {
@@ -526,6 +527,8 @@ interface CycleTest {
   commit: string | null;
   noTest: string;
   specProblem: string;
+  /** The test guards behavior the code already has, so it passes on the current code and only breaking that behavior proves it. */
+  guard: boolean;
 }
 
 // A test-kind problem is in the tests, so its test may pass on the current code, and fail-first can't be asked of it.
@@ -536,12 +539,19 @@ const FAIL_FIRST =
 const GUARD =
   "The problem is in the tests, so the test may already pass on the current code; that is expected, not a problem. It must fail on its merit if the behavior it states broke: check this by breaking the behavior in a temporary copy. Change no production code; when the current code doesn't do what the test states, the test fails and the fix makes it pass. End by running the Checks commands TESTING.md declares, and return their output.";
 
+// A fix round's test, or a rewrite of a test, can be asked for behavior the code already has. No code fails such a guard
+// test, so the coder may write it passing and say so, and qa proves it by breaking the behavior it states.
+const FAIL_OR_GUARD =
+  "When the current code lacks the behavior the test states, the test fails on it on its merit: an assertion about the behavior fails, never a compile, type, or import error. When the test names code that doesn't exist yet, add the smallest stub that lets it compile and run, such as a declaration with the right signature that doesn't do the work, and list it in stubs; change no other production code. When the current code already has the behavior, so the test guards it, the test may already pass on the current code; that is expected, not a problem: check in a temporary copy that it fails on its merit when the behavior it states is broken, change no production code, and return failingOutput empty. End by running the Checks commands TESTING.md declares: each must pass except for a failing test's assertions.";
+
 async function writeTest(l: Loop, c: Change, reason: string): Promise<CycleTest> {
+  const mayGuard = c.item !== undefined || reason !== "";
+  const rule = testOnly(c) ? GUARD : mayGuard ? FAIL_OR_GUARD : FAIL_FIRST;
   const t = must(
     await callCoder(
       `${changeBrief(l, c)}
 
-Write a new test or change an existing one, so that it states the required behavior. ${testOnly(c) ? GUARD : FAIL_FIRST} Return that output. When the behavior can't be expressed as a test, return noTest with the reason instead.${reason ? `\n\nAn earlier attempt showed the test has to change: ${reason}` : ""}`,
+Write a new test or change an existing one, so that it states the required behavior. ${rule} Return that output. When the behavior can't be expressed as a test, return noTest with the reason instead.${reason ? `\n\nAn earlier attempt showed the test has to change: ${reason}` : ""}`,
       `${c.id}: test`,
       "Build",
       TEST_SCHEMA,
@@ -551,15 +561,17 @@ Write a new test or change an existing one, so that it states the required behav
   );
   l.assumptions.push(...t.assumptions);
   l.manualActions.push(...t.manualActions);
-  if (t.specProblem) return { paths: [], commit: "", noTest: "", specProblem: t.specProblem };
-  if (t.noTest || t.tests.length === 0) return { paths: [], commit: "", noTest: t.noTest, specProblem: "" };
-  const message = `add a ${testOnly(c) ? "" : "failing "}test for ${c.id}`;
+  if (t.specProblem) return { paths: [], commit: "", noTest: "", specProblem: t.specProblem, guard: false };
+  if (t.noTest || t.tests.length === 0)
+    return { paths: [], commit: "", noTest: t.noTest, specProblem: "", guard: false };
+  const guard = testOnly(c) || (mayGuard && !t.failingOutput);
+  const message = `add a ${guard ? "" : "failing "}test for ${c.id}`;
   const sha = await commit(l, [...t.tests, ...t.stubs], message, coderRepair(l, c));
-  return { paths: t.tests, commit: sha, noTest: "", specProblem: "" };
+  return { paths: t.tests, commit: sha, noTest: "", specProblem: "", guard };
 }
 
 function qaBrief(l: Loop, c: Change, test: CycleTest): string {
-  const fails = testOnly(c)
+  const fails = test.guard
     ? "Check in a temporary copy that the test fails on one of its assertions when the behavior it states is broken, and that it passes at HEAD."
     : "Check in a temporary copy that the test fails at that commit on one of its assertions, not on a compile, type, or import error, and that it passes at HEAD.";
   const history = test.commit
@@ -691,9 +703,9 @@ async function tryFix(
   if (sha === null) return DONE;
   const failing = await failingChecks(l);
   if (failing) return { reason: failing, rewriteTest: false };
-  // A small flow's qa runs once, on its first change; a review fix there has only the checks, unless it is a test whose
-  // only proof is qa breaking the behavior it states.
-  if (l.small && l.round > 0 && !testOnly(c)) {
+  // A small flow's qa runs once, on its first change; a review fix there has only the checks, unless its test is a guard
+  // whose only proof is qa breaking the behavior it states.
+  if (l.small && l.round > 0 && !cycle.guard) {
     if (l.kind === "trivial") l.passedTests = unique([...l.passedTests, ...cycle.paths]);
     return DONE;
   }
