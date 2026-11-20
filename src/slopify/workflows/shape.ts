@@ -75,11 +75,16 @@ const LIBRARY_SCHEMA = libraryReaderSchema("the idea");
 
 const WRITER_SCHEMA = {
   type: "object",
-  required: ["openQuestions"],
+  required: ["openQuestions", "criteria"],
   properties: {
     openQuestions: { ...STRINGS, description: "Each question left under Open questions on the card; empty when none" },
+    criteria: { type: "integer", description: "How many acceptance criteria the card lists; 0 when it has none" },
   },
 } as const;
+type Written = Infer<typeof WRITER_SCHEMA>;
+
+// A story with more criteria than this is more than one PR's work, and its spec grows past what an agent reads whole.
+const MAX_CRITERIA = 20;
 
 interface Problem {
   source: string;
@@ -212,7 +217,7 @@ async function adviseAll(d: Run, c: Card, evidence: string): Promise<{ views: st
 
 // ---- Draft and check --------------------------------------------------------
 
-async function draft(d: Run, c: Card, related: ScoutResult): Promise<string[] | { duplicateOf: string }> {
+async function draft(d: Run, c: Card, related: ScoutResult): Promise<Written | { duplicateOf: string }> {
   const evidence = await ground(d, c, related);
   const { views, duplicateOf } = await adviseAll(d, c, evidence);
   if (duplicateOf) return { duplicateOf };
@@ -227,7 +232,7 @@ async function draft(d: Run, c: Card, related: ScoutResult): Promise<string[] | 
 }
 
 // A card shape filed already carries its grounding and advice, so a rerun only applies what changed on it.
-async function reshape(d: Run, c: Card): Promise<string[]> {
+async function reshape(d: Run, c: Card): Promise<Written> {
   log(`${c.cardId} is labelled ${SHAPED_LABEL}, so Ground and Advise are skipped.`);
   phase("Draft");
   return write(
@@ -239,8 +244,8 @@ async function reshape(d: Run, c: Card): Promise<string[]> {
   );
 }
 
-async function write(d: Run, c: Card, task: string, label: string, phaseTitle: string): Promise<string[]> {
-  const w = must(
+async function write(d: Run, c: Card, task: string, label: string, phaseTitle: string): Promise<Written> {
+  return must(
     await dispatch(
       `${d.WHERE}\nThe card is a ${c.kind}. Write it at ${c.draft}, and only there. ${task}\n\n${subject(c)}\n\nDo not file it, commit, or change the board; pusher does that.`,
       { agentType: "slopify:writer-card", label, phase: phaseTitle, schema: WRITER_SCHEMA },
@@ -248,7 +253,6 @@ async function write(d: Run, c: Card, task: string, label: string, phaseTitle: s
     "draft",
     "A card draft.",
   );
-  return w.openQuestions;
 }
 
 // Every lens asks what a draft is missing, so one advisor asks what it could lose, and its findings go to the judge too.
@@ -298,14 +302,22 @@ const rule = (d: Run, c: Card, problems: readonly Problem[]): Promise<string[]> 
     "Check",
   );
 
+// Counted, not judged: a story over the cap goes back to the writer like any confirmed problem.
+const tooBig = (c: Card, w: Written): string[] =>
+  c.kind === "story" && w.criteria > MAX_CRITERIA
+    ? [
+        `The story lists ${String(w.criteria)} acceptance criteria, more than the ${String(MAX_CRITERIA)} one story may have, so it is more than one story. Keep the criteria for the outcome's core, and move the rest to Out of scope as follow-up stories; when they can't be separated, ask under Open questions how to split it.`,
+      ]
+    : [];
+
 // Up to three revisions, each checked. What is still wrong after them becomes an open question.
-async function refine(d: Run, c: Card, firstOpen: readonly string[]): Promise<string[]> {
-  let open = [...firstOpen];
+async function refine(d: Run, c: Card, first: Written): Promise<string[]> {
+  let last = first;
   for (let revisions = 0; revisions <= MAX_FIX_ROUNDS; revisions += 1) {
     phase("Check");
-    const confirmed = await rule(d, c, await checkDraft(d, c));
-    if (confirmed.length === 0) return open;
-    open =
+    const confirmed = [...tooBig(c, last), ...(await rule(d, c, await checkDraft(d, c)))];
+    if (confirmed.length === 0) return last.openQuestions;
+    last =
       revisions === MAX_FIX_ROUNDS
         ? await write(
             d,
@@ -322,7 +334,7 @@ async function refine(d: Run, c: Card, firstOpen: readonly string[]): Promise<st
             "Check",
           );
   }
-  return open;
+  return last.openQuestions;
 }
 
 // ---- File -------------------------------------------------------------------

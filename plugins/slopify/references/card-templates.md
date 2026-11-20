@@ -11,7 +11,7 @@ A card holds intent, never the state of the code: no code locations, and no desc
 - **Why**: who benefits, and what it costs not to do it.
 - **Scope**: what the change covers.
 - **Out of scope**: what it must not touch.
-- **Acceptance criteria**: one behavior each, stated so that it passes or fails with nothing in between. Each is checkable the way `TESTING.md` says to check its category, within what that category permits: a category with a relaxed process, such as one for a physical device, allows a criterion that only that process can check.
+- **Acceptance criteria**: one behavior each, stated so that it passes or fails with nothing in between. Each is checkable the way `TESTING.md` says to check its category, within what that category permits: a category with a relaxed process, such as one for a physical device, allows a criterion that only that process can check. A story has at most 20; more means it is more than one story.
 - **Assumptions**, when any: what was settled without asking.
 - **Open questions**, when any: what only a person can settle, because it changes what the card delivers or whom it serves. A person answers them on the card.
 - **References**, when any: links and prior cards.
