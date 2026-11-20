@@ -107,7 +107,7 @@ One advice was not adopted as a change. The security advisor found the spec's se
 
 - c10 is proved only up to the scout returning every line containing the key's form. A scout that returns only a progress entry and omits the real line makes the run resume as if the checkpoint were absent.
 - The halt on an unreadable checkpoint item can stop a run when haiku wraps an answer in prose the wrapper tolerance doesn't cover; the rerun is the recovery, since the item comes from the scout's answer, not from a ledger line.
-- A grouped Needs you line sends the reviewer to the card comment for the full list; if finish fails to post that comment, the link points at a card without it until a rerun posts it.
+- A grouped Needs you line sends the reviewer to the card comment for the full list. SMR-403 moved that comment from finish to the start of the describe stage, so it exists before any description links it; if that push fails, the link points at a card without the comment until a rerun posts it.
 - Each PR update adds two to eight dispatches. Measuring that is left to a full eval (SMR-364).
 - pusher is a model copying the body and progress lines. A body it alters can't be detected without reading the PR back. A mangled progress line can't become a checkpoint.
 - A flaky lens can turn a clean delivery into a draft. Three revisions and the single unverified retry bound this, and the card accepts it.
