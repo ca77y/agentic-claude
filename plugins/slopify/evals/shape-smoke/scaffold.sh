@@ -39,6 +39,7 @@ Configuration does not authorize execution; the user's request does.
 - Update content and labels: rewrite the card file; labels are one `Labels:` line under the status line, comma-separated.
 - Transition: rewrite the card's `Status:` line.
 - Attach a PR: add a `PR: <path>` line under the status line.
+- Mark a duplicate: set the card's `Status:` line to `Duplicate`, and add a `Duplicate of: <identifier>` line under it.
 
 ## Cards
 

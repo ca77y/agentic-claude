@@ -104,6 +104,20 @@ const ADVISOR_SCHEMA = {
   },
 } as const;
 
+// advisor-fit also names a card that already holds the outcome, so a workflow can act on a duplicate instead of filing it.
+const FIT_SCHEMA = {
+  ...ADVISOR_SCHEMA,
+  required: [...ADVISOR_SCHEMA.required, "duplicateOf"],
+  properties: {
+    ...ADVISOR_SCHEMA.properties,
+    duplicateOf: {
+      type: "string",
+      description:
+        "The identifier of an existing card that already holds this same outcome, so this one would add nothing; empty when no card does",
+    },
+  },
+} as const;
+
 export type ScoutResult = Infer<typeof SCOUT_SCHEMA>;
 export type LensResult = Infer<typeof LENS_SCHEMA>;
 
@@ -143,6 +157,9 @@ export const lens = (name: string, prompt: string, opts?: FamilyOptions): Promis
   familyAgent("lens-", LENS_SCHEMA, name, prompt, opts);
 export const advise = (name: string, prompt: string, opts?: FamilyOptions): Promise<AdvisorResult | null> =>
   familyAgent("advisor-", ADVISOR_SCHEMA, name, prompt, opts);
+export type FitResult = Infer<typeof FIT_SCHEMA>;
+export const adviseFit = (prompt: string, opts?: FamilyOptions): Promise<FitResult | null> =>
+  familyAgent("advisor-", FIT_SCHEMA, "advisor-fit", prompt, opts);
 
 // A checkpoint value from scout-checkpoint's evidence, by key; '' when absent.
 export function fact(result: ScoutResult | null | undefined, key: string): string {

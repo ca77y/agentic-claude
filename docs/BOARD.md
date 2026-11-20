@@ -15,6 +15,7 @@ Configuration does not authorize execution; the user's request does. An operatio
 - Update content and relations: `save_issue` with the issue `id` and only the changed fields; `addLabels`/`removeLabels` change labels, and `removeBlockedBy`/`removeBlocks` remove relations.
 - Attach a PR: `save_issue` with the issue `id` and `links: [{url, title}]`, using the URL the PR creation returned and the PR title.
 - Comment: `save_comment` with `issueId` and a Markdown `body`.
+- Mark a duplicate: `save_issue` with the duplicate card's `id` and `duplicateOf: <original identifier>`; Linear moves the card to its reserved `Duplicate` status and links it to the original.
 
 ## Cards
 
@@ -33,7 +34,7 @@ Configuration does not authorize execution; the user's request does. An operatio
 ## Statuses
 
 - Statuses: `Backlog`, `Todo`, `In Progress`, `In Review`, `Done`, `Canceled`, `Duplicate`.
-- User-owned decisions: readiness outside delivery (`Backlog` → `Todo`), `Done`, `Canceled`, `Duplicate`, and changes to a card's goal.
+- User-owned decisions: readiness outside delivery (`Backlog` → `Todo`), `Done`, `Canceled`, `Duplicate`, and changes to a card's goal. Asking for a card to be shaped lets the shaping process mark that card a duplicate when an existing card already holds its outcome.
 
 ## Delivery
 

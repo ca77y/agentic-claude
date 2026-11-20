@@ -2,6 +2,8 @@
 
 Fill [the board template](../resources/BOARD.md) with established facts and the user's answers, one line per fact, stating the rule and the binding rather than a tool transcript. Verify every binding against the tracker, mark unsupported operations explicitly, and never publish a guessed binding. If the policy already exists elsewhere in the project, point to it.
 
+The duplicate binding says how a card is marked a duplicate of an existing one. Ask the user for it, offering the tracker's own mechanism when it has one, such as Linear's duplicate relation (`save_issue` with `duplicateOf`, which moves the card to Linear's reserved `Duplicate` status), and otherwise a label or status the user names. A label it needs is created like the labels below. When the user-owned decisions include that status or label, they say that asking for a card to be shaped lets the shaping process mark that card a duplicate.
+
 The Cards section maps every part of each template in `${CLAUDE_PLUGIN_ROOT}/references/card-templates.md` (story, bug, and spike) to where the issue store holds it: a heading, a field, or a label. Check every part of every template against the mapping; a part with no place is a gap to fix with the user.
 
 The Delivery section says which card operations happen at each point of a delivery, whatever status the card is in. Write conditions per operation and name no agent, skill, slash command, or model, so the declaration works for any orchestrator.

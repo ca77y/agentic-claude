@@ -122,6 +122,17 @@ var ADVISOR_SCHEMA = {
     }
   }
 };
+var FIT_SCHEMA = {
+  ...ADVISOR_SCHEMA,
+  required: [...ADVISOR_SCHEMA.required, "duplicateOf"],
+  properties: {
+    ...ADVISOR_SCHEMA.properties,
+    duplicateOf: {
+      type: "string",
+      description: "The identifier of an existing card that already holds this same outcome, so this one would add nothing; empty when no card does"
+    }
+  }
+};
 function familyAgent(prefix, schema, name, prompt, opts) {
   if (!name.startsWith(prefix)) throw new Error(`${name} is not a ${prefix}* agent`);
   return dispatch(prompt, { ...opts, agentType: `slopify:${name}`, schema });

@@ -94,9 +94,12 @@ export const opRefs = (r: PusherResult | null, name: string): { reference: strin
     .map((x) => ({ reference: x.reference.trim(), link: x.link }));
 export const opRef = (r: PusherResult | null, name: string): string => opRefs(r, name)[0]?.reference ?? "";
 
-// A card filed with a marker line in its body: a rerun finds that card instead of filing another.
-export const MARKED =
-  "First search the board for a card whose body holds that line, and use that card instead of creating another.";
+// A filed card ends with a marker line naming the run that filed it. Nothing searches for it: a board may rewrite its
+// text on save, as Linear links an identifier, so a rerun finds an earlier card by what it holds.
+export const MARKER_LINE =
+  "The board may rewrite text in that line when it saves the card; that is not a failed write, and the line is never used to find a card.";
+export const SAME_WORK =
+  "First search the board for an open card that already holds this same work or problem, and use that card instead of creating another.";
 
 // Text fenced in a brief closes with a delimiter it doesn't hold, so it embeds byte-identical and can't end its fence early.
 export function fenced(tag: string, text: string): string {

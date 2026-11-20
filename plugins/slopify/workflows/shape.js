@@ -138,6 +138,17 @@ var ADVISOR_SCHEMA = {
     }
   }
 };
+var FIT_SCHEMA = {
+  ...ADVISOR_SCHEMA,
+  required: [...ADVISOR_SCHEMA.required, "duplicateOf"],
+  properties: {
+    ...ADVISOR_SCHEMA.properties,
+    duplicateOf: {
+      type: "string",
+      description: "The identifier of an existing card that already holds this same outcome, so this one would add nothing; empty when no card does"
+    }
+  }
+};
 var defectsOf = (v) => v.verdict === "pass" ? [] : v.findings;
 function familyAgent(prefix, schema, name, prompt, opts) {
   if (!name.startsWith(prefix)) throw new Error(`${name} is not a ${prefix}* agent`);
@@ -158,9 +169,17 @@ ${SCOUT_RETRY}`, {
 }
 var lens = (name, prompt, opts) => familyAgent("lens-", LENS_SCHEMA, name, prompt, opts);
 var advise = (name, prompt, opts) => familyAgent("advisor-", ADVISOR_SCHEMA, name, prompt, opts);
+var adviseFit = (prompt, opts) => familyAgent("advisor-", FIT_SCHEMA, "advisor-fit", prompt, opts);
 function fact(result, key) {
   const hit = result?.evidence.find((e) => e.source === key);
   return hit ? (hit.excerpt || hit.location || "").trim() : "";
+}
+function absent(v, whole) {
+  const t = (v ?? "").trim();
+  if (!t) return true;
+  const word = String.raw`(?:none|absent|missing|n\/a|not found)`;
+  const re = new RegExp(whole ? String.raw`^${word}\s*(?:\([^)]*\))?[.:]?$` : String.raw`^${word}(?![\w/-]|\.\w)`, "i");
+  return re.test(t);
 }
 function hashOf(text) {
   let h = 5381;
@@ -318,6 +337,7 @@ var REPAIR_SCHEMA = {
 };
 var opRefs = (r, name) => (r?.operations ?? []).filter((x) => x.op.toLowerCase() === name).map((x) => ({ reference: x.reference.trim(), link: x.link }));
 var opRef = (r, name) => opRefs(r, name)[0]?.reference ?? "";
+var MARKER_LINE = "The board may rewrite text in that line when it saves the card; that is not a failed write, and the line is never used to find a card.";
 function callPusher(prompt, label, phaseTitle) {
   return dispatch(prompt, { agentType: "slopify:pusher", label, phase: phaseTitle, schema: PUSHER_SCHEMA });
 }
@@ -648,7 +668,7 @@ var KINDS = {
   },
   spike: {
     scouts: [["scout-code", "Find where the product touches what this question is about."]],
-    advisors: ["advisor-scope"],
+    advisors: ["advisor-scope", "advisor-fit"],
     lenses: ["lens-template"]
   }
 };
@@ -729,29 +749,32 @@ ${list(lib.supported)}
 async function adviseAll(d, c, evidence) {
   phase("Advise");
   const { advisors } = KINDS[c.kind];
-  const views = await parallel(
-    advisors.map(
-      (name) => () => advise(
-        name,
-        `${d.WHERE}
+  const brief = `${d.WHERE}
 Judge this ${c.kind} from your one angle.
 
 ${subject(c)}
 
 Evidence:
-${evidence}`,
-        {
-          label: name,
-          phase: "Advise"
-        }
-      )
-    )
+${evidence}`;
+  const results = await parallel(
+    advisors.map((name) => () => {
+      const opts = { label: name, phase: "Advise" };
+      return name === "advisor-fit" ? adviseFit(brief, opts) : advise(name, brief, opts);
+    })
   );
-  return advisors.map((name, i) => `${name}: ${JSON.stringify(must(views[i], "advise", `A view from ${name}.`))}`).join("\n\n");
+  const views = advisors.map((name, i) => must(results[i], "advise", `A view from ${name}.`));
+  const fit = views.find((v) => "duplicateOf" in v);
+  const original = fit && !absent(fit.duplicateOf) ? fit.duplicateOf.trim() : "";
+  return {
+    views: advisors.map((name, i) => `${name}: ${JSON.stringify(views[i])}`).join("\n\n"),
+    // A card is never a duplicate of itself.
+    duplicateOf: original === c.cardId ? "" : original
+  };
 }
 async function draft(d, c, related) {
   const evidence = await ground(d, c, related);
-  const views = await adviseAll(d, c, evidence);
+  const { views, duplicateOf } = await adviseAll(d, c, evidence);
+  if (duplicateOf) return { duplicateOf };
   phase("Draft");
   return write(
     d,
@@ -865,7 +888,7 @@ ${list(confirmed)}`,
 async function file(d, c, slug, deliverable) {
   phase("File");
   const marker = `<!-- shape ${slug} -->`;
-  const target = c.cardId ? `Update card ${c.cardId} with it.` : `Search the board for a card whose body holds the line ${marker}, and update that card with it; create a card only when there is none.`;
+  const target = c.cardId ? `Update card ${c.cardId} with it.` : "Create a card with it.";
   const deliverableLabel = c.kind === "story" ? deliverable ? ` Make sure the card has the label ${DELIVERABLE}.` : ` Make sure the card doesn't have the label ${DELIVERABLE}.` : "";
   const label = `Make sure the card has the label ${SHAPED_LABEL}.${deliverableLabel}`;
   const r = pushed(
@@ -873,13 +896,34 @@ async function file(d, c, slug, deliverable) {
       `${d.WHERE}
 The user's invocation of shape authorizes exactly this: write the card draft below to one card on the board, as docs/BOARD.md declares, and set its ${SHAPED_LABEL} and ${DELIVERABLE} labels as asked. Nothing else: no commit, branch, push, PR, or other card. Work exactly as docs/BOARD.md binds it.
 
-The draft is ${c.draft}. Use its text exactly as written, with one trailing line, ${marker}, which lets a rerun find this card. ${target} ${label} Keep every label the card already has otherwise. Report the card's identifier as the operation card.`,
+The draft is ${c.draft}. Use its text exactly as written, with one trailing line, ${marker}. ${MARKER_LINE} ${target} ${label} Keep every label the card already has otherwise. Report the card's identifier as the operation card.`,
       c.cardId ? "update the card" : "file the card",
       "File"
     ),
     "The card on the board."
   );
   return opRef(r, "card") || c.cardId;
+}
+async function duplicate(d, c, original) {
+  phase("File");
+  if (c.cardId) {
+    pushed(
+      await callPusher(
+        `${d.WHERE}
+The user's invocation of shape authorizes exactly this: mark card ${c.cardId} a duplicate of card ${original}, as docs/BOARD.md's duplicate binding declares. Nothing else: no other card write, commit, branch, push, or PR. Report ${c.cardId} as the operation card.`,
+        "mark the duplicate",
+        "File"
+      ),
+      "The duplicate mark on the card."
+    );
+  }
+  return {
+    status: "duplicate",
+    workflow: WORKFLOW,
+    card: original,
+    marked: c.cardId,
+    report: c.cardId ? `shape marked ${c.cardId} a duplicate of ${original}, which already holds this ${c.kind}.` : `shape filed nothing: ${original} already holds this ${c.kind}. Run /slopify:shape ${original} to work on it.`
+  };
 }
 async function run() {
   const input = inputOf(args, "idea");
@@ -900,6 +944,7 @@ async function run() {
       draft: `.tmp/shape/${slug}.md`
     };
     const drafted = c.shaped ? await reshape(d, c) : await draft(d, c, related);
+    if ("duplicateOf" in drafted) return await duplicate(d, c, drafted.duplicateOf);
     const openQuestions = await refine(d, c, drafted);
     const deliverable = c.kind === "story" && openQuestions.length === 0;
     const filed = await file(d, c, slug, deliverable);

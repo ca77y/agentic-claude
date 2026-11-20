@@ -15,6 +15,7 @@ Configuration does not authorize execution; the user's request does. An operatio
 - Update content and relations: {{UPDATE_BINDING}}
 - Attach a PR: {{PR_LINK_BINDING}}
 - Comment: {{COMMENT_BINDING}}
+- Mark a duplicate: {{DUPLICATE_BINDING}}
 
 ## Cards
 

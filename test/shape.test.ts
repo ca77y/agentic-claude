@@ -66,7 +66,7 @@ describe("shape", () => {
     assert.equal(count("advisor-simplify", "simplify the draft"), 1);
     assert.ok(filing().includes("has the label Deliverable"));
     assert.ok(filing().includes("has the label Shaped"));
-    assert.ok(filing().includes("create a card only when there is none"));
+    assert.ok(filing().includes("Create a card with it."));
   });
 
   test("files a story with open questions without Deliverable, and lists them", async () => {
@@ -89,11 +89,40 @@ describe("shape", () => {
     assert.ok(filing().includes("has the label Shaped"));
   });
 
-  test("shapes a spike with the scope advisor", async () => {
+  test("shapes a spike with the scope and fit advisors", async () => {
     await run({ idea: "Is the parser fast enough?", kind: "spike" }, happy());
-    assert.equal(count("advisor-scope"), 1);
-    assert.equal(calls.filter((c) => c.type.startsWith("advisor-") && c.label !== "simplify the draft").length, 1);
+    assert.equal(count("advisor-scope") + count("advisor-fit"), 2);
+    assert.equal(calls.filter((c) => c.type.startsWith("advisor-") && c.label !== "simplify the draft").length, 2);
     assert.ok(calls.find((c) => c.type === "writer-card")?.prompt.includes("a spike"));
+  });
+
+  test("files nothing for an idea an existing card already holds, and returns that card", async () => {
+    const r = await run("Let users multiply", happy({ "advisor-fit": () => ({ ...VIEW, duplicateOf: "SMR-40" }) }));
+    assert.equal(r.status, "duplicate");
+    assert.ok("card" in r && r.card === "SMR-40");
+    assert.ok("report" in r && r.report.includes("/slopify:shape SMR-40"));
+    assert.equal(count("writer-card") + count("pusher"), 0);
+  });
+
+  test("marks a named card a duplicate of the card that already holds it, and drafts nothing", async () => {
+    const card: Reply = { ...SCOUT, evidence: [{ source: "card", location: "x", excerpt: "SMR-7" }] };
+    const r = await run(
+      { card: "SMR-7" },
+      happy({ "scout-card": () => card, "advisor-fit": () => ({ ...VIEW, duplicateOf: "SMR-40" }) }),
+    );
+    assert.equal(r.status, "duplicate");
+    assert.ok("marked" in r && r.marked === "SMR-7");
+    assert.ok(calls.find((c) => c.label === "mark the duplicate")?.prompt.includes("duplicate of card SMR-40"));
+    assert.equal(count("writer-card"), 0);
+  });
+
+  test("never treats a card as a duplicate of itself", async () => {
+    const card: Reply = { ...SCOUT, evidence: [{ source: "card", location: "x", excerpt: "SMR-7" }] };
+    const r = await run(
+      { card: "SMR-7" },
+      happy({ "scout-card": () => card, "advisor-fit": () => ({ ...VIEW, duplicateOf: "SMR-7" }) }),
+    );
+    assert.equal(r.status, "done");
   });
 
   test("revises the draft for a confirmed problem, then files it", async () => {
