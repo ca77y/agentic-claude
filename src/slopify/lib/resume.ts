@@ -137,11 +137,11 @@ ${d.branchOnly ? "- worktree: the main checkout, only when it has this run's bra
 - done-findings: \`done findings <paths>\`
 - reproduced: \`reproduced {...}\`
 - review-fired: \`review <n> fired\`
-- done-spec: \`done spec <folder>\`, its part lines included
+- done-spec: \`done spec <folder>\`, and only the last spec commit's part lines: the last \`done spec <folder> part build.json 1/<n>\` line and every part line after it
 - done-challenge: \`done challenge <folder>\`
 - spec-dir: ${specFolderKey(cardId, specDir)}, relative to the worktree root
-- build-json: the exact contents of build.json in that folder, as consecutive evidence items in order when one excerpt can't hold it all
-- validate-json: the exact contents of validate.json in that folder, as consecutive evidence items in order when one excerpt can't hold it all
+- build-json: build.json in that folder: when the ledger has done-spec part lines, only the file name, to show it exists; otherwise its exact contents, as consecutive evidence items in order when one excerpt can't hold it all
+- validate-json: validate.json in that folder, the same way as build-json
 - rationale-md: RATIONALE.md, only when that folder holds it`,
       { label: "read checkpoints", phase: "Locate" },
     ),
@@ -186,7 +186,8 @@ ${d.branchOnly ? "- worktree: the main checkout, only when it has this run's bra
     build,
     validate,
     specDir: shaped("rel", spec) || specDir,
-    challenged: !!build && !!validate && lines["done-challenge"].length > 0,
+    // A finished round or an open PR proves the challenge finished too, since the build starts only after it.
+    challenged: !!build && !!validate && (lines["done-challenge"].length > 0 || rounds.length > 0 || !!state.pr),
     round: Math.max(0, ...rounds.map((l) => Number(/ done round (\d+)/.exec(l)?.[1] ?? -1) + 1)),
     reviewFired: Math.max(0, ...lines["review-fired"].map((l) => Number(/review (\d+) fired/.exec(l)?.[1] ?? 0))),
     built: rounds.length > 0,
