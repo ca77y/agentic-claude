@@ -13,7 +13,7 @@ A delivery's pull-request description is for the person who reviews it. It says 
 ## What goes where
 
 - **What changes:** what the change does and why, opening as its kind's line below says.
-- **Needs you:** each decision the reviewer must make or confirm, each confirmation (the coder's trivial choices and decisions that change no acceptance criterion), each manual action, and each reason the brief gives for the PR being a draft.
+- **Needs you:** each decision the reviewer must make or confirm, each confirmation (decisions that change no acceptance criterion), each manual action, and each reason the brief gives for the PR being a draft.
 - **Why trust it:** the evidence, as its kind's line below says. Each line matches a result the brief gives, and claims nothing it doesn't.
 - **Not done:** every open item the brief gives, each once, including every unfixed finding, and each follow-up card the brief says was filed, named by its identifier with its link.
 
