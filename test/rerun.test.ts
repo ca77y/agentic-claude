@@ -12,6 +12,7 @@ import assert from "node:assert/strict";
 import { beforeEach, describe, test } from "node:test";
 
 import deliverStory from "../src/slopify/workflows/deliver-story.ts";
+import { MAX_FIX_ROUNDS } from "../src/slopify/lib/rules.ts";
 import { PR_AGENTS, calls, current, installAgents, type Reply, type Script } from "./harness.ts";
 
 installAgents();
@@ -143,6 +144,11 @@ const validatorOk: Script = () => ({
   uncategorizedSetting: "draft",
 });
 
+const judgeOk = (_t: string, label: string): Reply => {
+  if (label === "decide") return { viable: true, chosen: "smallest", grafts: [], rejected: [], reasons: ["fits"] };
+  return label === "gateway" ? { missed: [], docsToAdd: [] } : { problems: [] };
+};
+
 const agents = (build: Build): Record<string, Script> => ({
   designer: () => ({ approach: "a", reuse: [], create: [], interfaces: [], data: [], dependencies: [], risks: [] }),
   "writer-spec": () => ({ build: { ...build, manualActions: [] }, validate: VALIDATE, claims: ["a.ts exists"] }),
@@ -152,10 +158,7 @@ const agents = (build: Build): Record<string, Script> => ({
   "lens-altitude": () => LENS_PASS,
   "lens-consistency": () => LENS_PASS,
   "library-reader": () => ({ summary: "s", supported: [], gaps: [] }),
-  judge: (_t, label) => {
-    if (label === "decide") return { viable: true, chosen: "smallest", grafts: [], rejected: [], reasons: ["fits"] };
-    return label === "gateway" ? { missed: [], docsToAdd: [] } : { problems: [] };
-  },
+  judge: judgeOk,
   coder: coderOk,
   checks: () => ({ commands: [{ command: "unit", exitCode: 0, failingLines: "" }] }),
   qa: () => ({ ...LENS_PASS, testAtFault: false }),
@@ -237,6 +240,40 @@ const onlyFolder = (wt: Worktree): string => dirsOf(wt)[0] ?? "";
 // A first run that finishes its challenge and is blocked in the build: the first coder dispatch fails.
 const blockedInBuild = (build: Build) =>
   run(FIRST_TITLE, { folders: new Map(), ledger: [] }, build, { coder: () => null });
+
+// Each checks dispatch fails with new problems, one fewer than the dispatch before.
+const shrinkingChecks = (): Script => {
+  let dispatches = 0;
+  return () => {
+    dispatches += 1;
+    return {
+      commands: Array.from({ length: Math.max(1, 12 - dispatches) }, (_, i) => ({
+        command: `unit ${String(i)}`,
+        exitCode: 1,
+        failingLines: `FAIL d${String(dispatches)}-${String(i)}`,
+      })),
+    };
+  };
+};
+// A judge that confirms each problem as a major for the coder, under its own fingerprint.
+const confirming: Script = (type, label, prompt) =>
+  label === "rule"
+    ? {
+        verdict: "confirmed",
+        severity: "major",
+        kind: "code",
+        ruling: "none",
+        reason: "seen",
+        fingerprint: /FAIL (\S+)/.exec(prompt)?.[1] ?? "?",
+      }
+    : judgeOk(type, label);
+const doneRounds = (cs: Calls): number[] =>
+  ledgerOf(cs)
+    .map((l) => / done round (\d+)$/.exec(l)?.[1])
+    .filter((n) => n !== undefined)
+    .map(Number);
+const roundDone = (n: number): boolean =>
+  calls.some((c) => ledgerLinesOf(c).some((l) => l.endsWith(` done round ${String(n)}`)));
 
 beforeEach(() => {
   calls.length = 0;
@@ -337,6 +374,26 @@ describe("SMR-374: a rerun over a committed spec", () => {
       { rebuilt, roundZeroAgain: rounds.filter((l) => l.endsWith(" done round 0")) },
       { rebuilt: [], roundZeroAgain: [] },
       `round 0 is neither rebuilt nor finished again; the rerun's round lines:\n${rounds.join("\n")}`,
+    );
+  });
+
+  test("a ledger with a finished round 2: the rerun goes on at round 3 with a fresh budget of fix rounds", async () => {
+    // Every round has fewer new problems than the one before, so only the round budget ends a run. The first run finishes rounds 0 to 2 and is blocked when round 3's fix fails.
+    const first = await run(FIRST_TITLE, { folders: new Map(), ledger: [] }, SMALL_BUILD, {
+      checks: shrinkingChecks(),
+      judge: confirming,
+      coder: (...dispatch) => (roundDone(2) ? null : coderOk(...dispatch)),
+    });
+    assert.deepEqual(doneRounds(first.calls), [0, 1, 2], "the first run finished rounds 0 to 2");
+
+    const rerun = await run(FIRST_TITLE, leftBy(first.calls, SMALL_BUILD), SMALL_BUILD, {
+      checks: shrinkingChecks(),
+      judge: confirming,
+    });
+    assert.deepEqual(
+      doneRounds(rerun.calls),
+      Array.from({ length: MAX_FIX_ROUNDS + 1 }, (_, i) => 3 + i),
+      "the rerun numbers its rounds on from 3, and runs its first round plus a fresh budget of fix rounds",
     );
   });
 
