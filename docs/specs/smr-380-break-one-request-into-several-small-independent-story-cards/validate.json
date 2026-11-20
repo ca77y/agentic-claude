@@ -1,0 +1,60 @@
+{
+  "criteria": [
+    {
+      "id": "c1",
+      "wording": "A request with a cap of N files at most N cards. (Deterministic)",
+      "category": "Deterministic",
+      "path": "make check, plus node --test test/split.test.ts test/shape-split.test.ts",
+      "evidence": "make check exit 0; the split cap tests pass: cap N with N+2 parts gives exactly N pusher create dispatches, a pusher reporting done:false still uses a slot, and a stated cap of 50 with no arg files at most 20",
+      "firstTest": "test/shape-split.test.ts: 'a split with a cap of 2 and a plan of 4 parts dispatches exactly 2 card creates and names the other 2 as over the cap'"
+    },
+    {
+      "id": "c2",
+      "wording": "Every filed card has each part the story template requires, and none of them is empty. (Deterministic)",
+      "category": "Deterministic",
+      "path": "make check, plus node --test test/split.test.ts test/shape-split.test.ts",
+      "evidence": "make check exit 0; REQUIRED_PARTS matches card-templates.md's required story bullets; missingParts flags an absent or 0-word part; a part whose writer never reports Out of scope gets no create and is named in the report, while every filed card's last writer reply reports all required parts with words > 0",
+      "firstTest": "test/shape-split.test.ts: 'a part whose draft still lacks Out of scope after the revisions is not filed, and the report names the missing part'"
+    },
+    {
+      "id": "c3",
+      "wording": "Given a request with a part that depends on another part, and stubbed model output, the card filed for the dependent part carries a relation to the card filed for the part it depends on. (Deterministic)",
+      "category": "Deterministic",
+      "path": "make check, plus node --test test/shape-split.test.ts test/plugin-text.test.ts",
+      "evidence": "make check exit 0; on the fake board the dependent part's card holds exactly the id of the card filed for its dependency in blockedBy; plugin-text tests show docs/BOARD.md and pusher-board.md bind adding relations",
+      "firstTest": "test/shape-split.test.ts: 'part b depends on part a, so b's card on the board is blocked by a's card'"
+    },
+    {
+      "id": "c4",
+      "wording": "Given the example request under References, run against a board that holds none of SMR-381 to SMR-401, in every run each filed card carries all three of its whole-set constraints: the single Clerk auth shared with Coachtopus, the single deployment, and the separate path. (Full eval)",
+      "category": "Full eval",
+      "path": "make eval when it exists (SMR-364); until then the user's run by hand of the example request against a board without SMR-381 to SMR-401, repeated. The deterministic stand-in node --test test/shape-split.test.ts runs in make check.",
+      "evidence": "The user's run report showing every filed card in every run states all three constraints. Until it exists, report cannot-verify; the stand-in test shows every per-part writer-card brief contains every planner constraint.",
+      "firstTest": "test/shape-split.test.ts: 'every part's writer-card brief carries every whole-set constraint the planner returned'"
+    },
+    {
+      "id": "c5",
+      "wording": "Given a request with a part that gets no card, and stubbed model output, the report names that part. (Deterministic)",
+      "category": "Deterministic",
+      "path": "make check, plus node --test test/split.test.ts test/shape-split.test.ts",
+      "evidence": "make check exit 0; the report names a planner-omitted part with its reason, an over-cap part with 'over the cap of N', and a part not filed for missing template parts",
+      "firstTest": "test/shape-split.test.ts: 'a part the planner leaves out is named in the report with its reason'"
+    },
+    {
+      "id": "c6",
+      "wording": "Given a board card that covers a part of the request, including one an earlier run filed, and stubbed model output, the run files no card for that part. (Deterministic)",
+      "category": "Deterministic",
+      "path": "make check, plus node --test test/shape-split.test.ts",
+      "evidence": "make check exit 0; with a fake-board card covering a part (by advisor-fit duplicateOf found in that part's related evidence, and by an earlier run's hidden line) no writer-card or pusher dispatch runs for that part, and a rerun on the same request leaves the board size unchanged",
+      "firstTest": "test/shape-split.test.ts: 'a rerun on the same request files no card, finding each part's card by its hidden line'"
+    },
+    {
+      "id": "c7",
+      "wording": "Given the same board card and stubbed model output, the report names the card that covers that part. (Deterministic)",
+      "category": "Deterministic",
+      "path": "make check, plus node --test test/shape-split.test.ts",
+      "evidence": "make check exit 0; the Split result's covered list and its report name the covering card's id against that part",
+      "firstTest": "test/shape-split.test.ts: 'a part an existing card covers is reported as already covered by that card'"
+    }
+  ]
+}
