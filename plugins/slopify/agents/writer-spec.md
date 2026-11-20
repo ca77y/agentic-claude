@@ -16,7 +16,7 @@ The issue holds the why and the what. Never change what it asks for. The code is
 What to build, in the shape the brief's schema gives.
 
 - `shared`: the constraints and interfaces every task of this story must follow. An interface two tasks share is stated exactly, because their coders work apart. Never repeat a project rule; those reach agents through the project's rules and `AGENTS.md`.
-- `tasks`: split so tasks can run in parallel where their files don't overlap. Each states the requirements it meets, as behavior and interfaces rather than code, and marks what is reused apart from what is created, so nobody rebuilds what exists. Anything only one task needs goes in that task.
+- `tasks`: split so tasks can run in parallel where their files don't overlap. Each states the requirements it meets, as behavior and interfaces rather than code, and marks what is reused apart from what is created, so nobody rebuilds what exists. Anything only one task needs goes in that task. Each task lists in `testReads` the files or directories its tests actually read directly: each one a test opens, runs, asserts on, or imports directly, never what those imports import in turn, as literal worktree-relative paths with no globs. A task's test reads only files that task writes or files no task writes, because its coder may write only the task's own `files`. The challenge flags a read another task writes. Only a change to which task writes or tests that file clears the flag, never deleting a read the tests still make. How to restructure is your choice.
 - `docs`: the documents making claims about the area the change touches, which the scouts found. It can be empty.
 
 ## `validate.json`

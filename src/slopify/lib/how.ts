@@ -24,7 +24,7 @@ import {
 } from "./deliver.ts";
 import { Halt, must, type Run } from "./loop.ts";
 import { specCopyLines } from "./resume.ts";
-import { MAX_DESIGN_TRIES, MAX_FIX_ROUNDS } from "./rules.ts";
+import { MAX_DESIGN_TRIES, MAX_FIX_ROUNDS, crossReads } from "./rules.ts";
 import { BUILD, VALIDATE, type Build, type Task, type Validate } from "./spec.ts";
 
 const STANCES = [
@@ -564,6 +564,20 @@ function unpermitted(build: Build): RuledSpecProblem[] {
     }));
 }
 
+// A task's test that reads a file another task writes depends on files its coder can't write. The paths decide it, so
+// the rule needs no judge. Only a spec that changes which task writes or tests the file clears it.
+function crossReadBlockers(build: Build): RuledSpecProblem[] {
+  return crossReads(build.tasks).map((r) => ({
+    location: `task ${r.task}`,
+    problem: `${r.task}'s tests read ${r.file}, which ${r.writers.join(", ")} write${r.writers.length > 1 ? "" : "s"} and ${r.task} doesn't. A task's test reads only files that task writes or files no task writes. Only a change to which task writes or tests ${r.file} clears this; removing it from testReads while the tests still read it doesn't.`,
+    severity: "blocker",
+    reason: "A coder may write only its own task's files, so its test can't pass on a file another task writes.",
+    kind: "spec",
+  }));
+}
+// The closing rewrites change the spec after its last check, so their spec is checked again before it is built.
+const crossReadLines = (build: Build): string[] => problemLines(crossReadBlockers(build));
+
 // A problem that only a person can settle is escalated, never revised around: the writer picks the most reasonable
 // reading, and the decision reaches the person through the PR's Needs confirmation section.
 const escalation = (decide: readonly RuledSpecProblem[]): string =>
@@ -584,6 +598,7 @@ async function challenge(o: HowInput, first: SpecResult): Promise<{ spec: SpecRe
     const advised = must(attacked, "how", "The advisors' attack on the spec.");
     const found: OpenProblem[] = [
       ...unpermitted(spec.build),
+      ...crossReadBlockers(spec.build),
       ...advised,
       ...(await ruleOn(o, must(checked, "how", "The spec's checks."), advised)),
     ];
@@ -592,7 +607,7 @@ async function challenge(o: HowInput, first: SpecResult): Promise<{ spec: SpecRe
     if (open.length === 0 && decide.length === 0) return { spec, blockers: [] };
     if (open.length === 0) {
       spec = await writeAndCommit(o, escalation(decide).trimStart(), "record the spec's open decisions", "Challenge");
-      return { spec, blockers: [] };
+      return { spec, blockers: crossReadLines(spec.build) };
     }
     if (revisions === MAX_FIX_ROUNDS) break;
     spec = await writeAndCommit(
@@ -610,6 +625,7 @@ async function challenge(o: HowInput, first: SpecResult): Promise<{ spec: SpecRe
       "record the spec's open risks",
       "Challenge",
     );
+    return { spec, blockers: crossReadLines(spec.build) };
   }
   return { spec, blockers: stillBlocking };
 }

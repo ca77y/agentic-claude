@@ -119,9 +119,24 @@ export interface CrossRead {
   writers: string[];
 }
 
+const isList = (v: unknown): v is readonly unknown[] => Array.isArray(v);
+
 // Each file a task's test reads that the task doesn't write and another task does, in spec order.
+// A task owns a read only by containment: the read is one of its files or sits under one. A spec written before
+// testReads existed reads nothing.
 export function crossReads(tasks: readonly ReadingTask[]): CrossRead[] {
-  return tasks.flatMap(() => []);
+  return tasks.flatMap((t) => {
+    const listed = isList(t.testReads) ? t.testReads : [];
+    const reads = listed.filter((r): r is string => typeof r === "string");
+    return reads
+      .filter((file) => t.files.every((f) => file !== f && !file.startsWith(`${f}/`)))
+      .map((file) => ({
+        task: t.id,
+        file,
+        writers: tasks.filter((o) => o.id !== t.id && o.files.some((f) => samePath(file, f))).map((o) => o.id),
+      }))
+      .filter((r) => r.writers.length > 0);
+  });
 }
 
 // Groups that run one after another; the tasks inside a group run in parallel. A task waits for its dependencies, and

@@ -14,6 +14,7 @@ const task = (id: string, todo = `build ${id}`): Task => ({
   id,
   dependsOn: [],
   files: [`src/${id}.ts`],
+  testReads: [],
   criteria: [`c-${id}`],
   todo,
   reuse: [],
