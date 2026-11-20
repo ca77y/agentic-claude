@@ -303,6 +303,8 @@ interface Change {
   task?: Task;
   criteria: readonly Criterion[];
   item?: OpenItem;
+  /** A task built before a spec revision, whose test and code may already do what it asks. */
+  rebuild?: boolean;
   /** What to deliver when no task or problem says it: a small flow's first change. */
   assignment?: string;
 }
@@ -353,7 +355,10 @@ export interface LoopInput {
   /** A spike's or a research run's flow: the PR changes documents, which their own checks validate and their own writer revises. */
   document?: LoopDocument;
   /** Advisors and the writer revise the spec for these problems, and return the tasks to run again. */
-  reviseSpec?: (problems: readonly string[]) => Promise<{ build: Build; validate: Validate; rerun: Task[] }>;
+  reviseSpec?: (
+    problems: readonly string[],
+    before: { build: Build | null; validate: Validate | null },
+  ) => Promise<{ build: Build; validate: Validate; rerun: Task[] }>;
 }
 
 export interface LoopResult {
@@ -406,6 +411,8 @@ interface Loop extends LoopInput {
   preExisting: Listed[];
   review: ReviewOutcome;
   changedThisRound: string[];
+  /** The tasks whose change passed, so their test and code are committed, which a spec revision's rerun rebuilds. */
+  delivered: Set<string>;
   /** A trivial run's test paths that pass once their change is in, which its Why trust it rests on; done round lines carry them. */
   passedTests: string[];
   /** Paths whose commit the hook still rejected after repairs; the next commit carries them. */
@@ -490,7 +497,10 @@ async function commit(l: Loop, paths: readonly string[], message: string, repair
     });
     return null;
   }
-  const sha = opRef(pushed(r, `A commit of ${all.join(", ")}.`), "commit");
+  // A commit whose listed content is already committed, as a rebuilt change's often is, is done; pusher-forge.md has
+  // pusher report it, and only it, in the typed alreadyCommitted field.
+  const already = r?.alreadyCommitted === true;
+  const sha = already ? "" : opRef(pushed(r, `A commit of ${all.join(", ")}.`), "commit");
   l.uncommitted = l.uncommitted.filter((x) => !all.includes(x));
   return sha;
 }
@@ -517,6 +527,9 @@ function changeBrief(l: Loop, c: Change): string {
       : "",
     criteria ? `The criteria it delivers:\n${criteria}` : "",
     c.item ? `The problem to fix, at ${c.item.problem.location}:\n${c.item.problem.text}\n${c.item.reason}` : "",
+    c.rebuild
+      ? "This task was built before the spec was revised, so its test and code are already committed: start from them as they stand, and change only what the revised task needs."
+      : "",
     answersText(l),
     "Make no irreversible change, such as a migration on shared data, deleting a public API, or changing production config, unless this explicitly permits it: build its reversible part, and return the rest in manualActions. Meet what this requires. How to implement it in your paths is your decision; return each choice this leaves to you in assumptions, for qa to check. If a requirement is unclear or can't be met, or meeting it would change behavior this describes or an interface another task relies on, return specProblem and stop.",
     NO_WRITES,
@@ -549,7 +562,7 @@ const FAIL_OR_GUARD =
   "When the current code lacks the behavior the test states, the test fails on it on its merit: an assertion about the behavior fails, never a compile, type, or import error. When the test names code that doesn't exist yet, add the smallest stub that lets it compile and run, such as a declaration with the right signature that doesn't do the work, and list it in stubs; change no other production code. When the current code already has the behavior, so the test guards it, the test may already pass on the current code; that is expected, not a problem: check in a temporary copy that it fails on its merit when the behavior it states is broken, change no production code, and return failingOutput empty. End by running the Checks commands TESTING.md declares: each must pass except for a failing test's assertions.";
 
 async function writeTest(l: Loop, c: Change, reason: string): Promise<CycleTest> {
-  const mayGuard = c.item !== undefined || reason !== "";
+  const mayGuard = c.item !== undefined || c.rebuild === true || reason !== "";
   const rule = testOnly(c) ? GUARD : mayGuard ? FAIL_OR_GUARD : FAIL_FIRST;
   const t = must(
     await callCoder(
@@ -590,10 +603,12 @@ function qaBrief(l: Loop, c: Change, test: CycleTest): string {
   const fails = test.guard
     ? "Check in a temporary copy that the test fails on one of its assertions when the behavior it states is broken, and that it passes at HEAD."
     : "Check in a temporary copy that the test fails at that commit on one of its assertions, not on a compile, type, or import error, and that it passes at HEAD.";
-  const history = test.commit
-    ? `The test commit is ${test.commit}, and its protected paths are:\n${list(test.paths)}
+  const at = test.commit ? `The test commit is ${test.commit}` : "The test was already committed before this change";
+  const history =
+    test.paths.length > 0
+      ? `${at}, and its protected paths are:\n${list(test.paths)}
 ${fails} Check that nothing after that commit touches a protected path, and that nothing skips, weakens, or excludes the test, for example by loosening a tolerance, regenerating a snapshot, or changing the test config.`
-    : `This change has no test, because: ${test.noTest}. Judge that reason.`;
+      : `This change has no test, because: ${test.noTest}. Judge that reason.`;
   return `${changeBrief(l, c)}
 
 Validate one change and its history.
@@ -760,6 +775,7 @@ async function unneeded(
     `A simplifier verdict on ${c.id}.`,
   );
   const found = defectsOf(v);
+  if (found.length === 0) l.delivered.add(c.id);
   const inTest = (location: string): boolean => cycle.paths.some((p) => location.startsWith(p));
   const text = (fs: typeof found): string => fs.map((f) => `${f.location}: ${f.problem}`).join("\n");
   const test = text(found.filter((f) => inTest(f.location)));
@@ -886,10 +902,13 @@ function countFix(l: Loop, item: OpenItem): void {
 
 async function reviseSpec(l: Loop, items: readonly OpenItem[]): Promise<Change[]> {
   if (items.length === 0 || !l.reviseSpec) return [];
-  const revised = await l.reviseSpec(items.map((i) => `${i.problem.location}: ${i.problem.text}`));
+  const revised = await l.reviseSpec(
+    items.map((i) => `${i.problem.location}: ${i.problem.text}`),
+    { build: l.build, validate: l.validate },
+  );
   l.build = revised.build;
   l.validate = revised.validate;
-  return revised.rerun.map((t) => changeOfTask(l, t));
+  return revised.rerun.map((t) => ({ ...changeOfTask(l, t), rebuild: l.delivered.has(t.id) }));
 }
 
 async function updateDocs(l: Loop, problems: readonly OpenItem[]): Promise<void> {
@@ -1610,6 +1629,7 @@ function freshLoop(input: LoopInput): Loop {
     preExisting: [],
     review: { clean: false, note: "" },
     changedThisRound: [],
+    delivered: new Set(input.built || input.startAtReview > 0 ? input.build?.tasks.map((t) => t.id) : []),
     passedTests: [...(input.small?.passedTests ?? [])],
     uncommitted: [],
     openByRound: [],

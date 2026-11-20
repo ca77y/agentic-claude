@@ -50,6 +50,10 @@ export function pusherSchema(notes: { reference?: string; unmet?: string } = {})
         type: "string",
         description: "The failing output of a commit hook that rejected a commit; empty when no hook rejected one",
       },
+      alreadyCommitted: {
+        type: "boolean",
+        description: "True only when a commit had nothing to commit because its listed content is already committed",
+      },
     },
   } as const;
 }

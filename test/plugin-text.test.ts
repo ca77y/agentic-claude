@@ -79,3 +79,42 @@ describe("a shortened or misordered progress entry (SMR-404)", () => {
     );
   });
 });
+
+describe("a commit with nothing left to commit (SMR-405)", () => {
+  const commitRule =
+    text("plugins/slopify/references/pusher-forge.md")
+      .split("\n")
+      .find((l) => l.startsWith("- **Commit.**")) ?? "";
+
+  test("pusher-forge.md has pusher report an already-committed commit in the typed field the delivery loop reads", () => {
+    assert.ok(commitRule, "pusher-forge.md has the commit rule");
+    assert.match(commitRule, /already committed/i);
+    assert.ok(commitRule.includes("`alreadyCommitted`"), "the commit rule has pusher set the typed field");
+    assert.ok(text("src/slopify/lib/schemas.ts").includes("alreadyCommitted"), "the pusher schema has the field");
+    assert.ok(
+      !text("src/slopify/lib/loop.ts").includes("NOTHING_TO_COMMIT"),
+      "the delivery loop decides the commit outcome from the pusher's prose",
+    );
+  });
+});
+
+describe("a removal with nothing left to commit (SMR-405)", () => {
+  const commitRule =
+    text("plugins/slopify/references/pusher-forge.md")
+      .split("\n")
+      .find((l) => l.startsWith("- **Commit.**")) ?? "";
+
+  test("pusher-forge.md counts a listed path whose deletion is already committed as nothing to commit", () => {
+    assert.ok(commitRule, "pusher-forge.md has the commit rule");
+    assert.doesNotMatch(
+      commitRule,
+      /every listed path exists/i,
+      "a removal lists paths that no longer exist, so requiring each to exist reports an already-committed deletion as a failure",
+    );
+    assert.match(
+      commitRule,
+      /delet/i,
+      "the rule says how a listed path whose deletion is already committed is reported",
+    );
+  });
+});

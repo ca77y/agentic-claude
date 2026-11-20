@@ -52,12 +52,12 @@ Minor problems and nits go under the PR description's **Not done** part, and the
 
 Each confirmed `blocker` or `major` has one kind:
 
-| Kind   | The problem                                          | Next step                                                                         |
-| ------ | ---------------------------------------------------- | --------------------------------------------------------------------------------- |
-| `code` | The behavior is wrong                                | `coder` and `qa`, from a failing test that shows the problem                      |
-| `test` | The behavior is right, but the test or flow is wrong | `coder` and `qa`, starting by correcting the test                                 |
-| `docs` | Documentation is untrue or missing                   | `writer-docs`, with no test                                                       |
-| `spec` | The spec is wrong, so building it can't work         | The advisors and `writer-spec` revise the spec, then the affected tasks run again |
+| Kind   | The problem                                          | Next step                                                                                                                                                                                       |
+| ------ | ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `code` | The behavior is wrong                                | `coder` and `qa`, from a failing test that shows the problem                                                                                                                                    |
+| `test` | The behavior is right, but the test or flow is wrong | `coder` and `qa`, starting by correcting the test                                                                                                                                               |
+| `docs` | Documentation is untrue or missing                   | `writer-docs`, with no test                                                                                                                                                                     |
+| `spec` | The spec is wrong, so building it can't work         | The advisors and `writer-spec` revise the spec, then the tasks the revision affects run again: those a problem names, those new or changed, and all of them when the shared constraints changed |
 
 Two kinds of problem aren't defects in the change. They have no severity, and no producer sees them:
 

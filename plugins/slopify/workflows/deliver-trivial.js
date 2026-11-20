@@ -471,6 +471,10 @@ function pusherSchema(notes = {}) {
       hookRejection: {
         type: "string",
         description: "The failing output of a commit hook that rejected a commit; empty when no hook rejected one"
+      },
+      alreadyCommitted: {
+        type: "boolean",
+        description: "True only when a commit had nothing to commit because its listed content is already committed"
       }
     }
   };
@@ -1100,7 +1104,8 @@ ${list(all)}`
     });
     return null;
   }
-  const sha = opRef(pushed(r, `A commit of ${all.join(", ")}.`), "commit");
+  const already = r?.alreadyCommitted === true;
+  const sha = already ? "" : opRef(pushed(r, `A commit of ${all.join(", ")}.`), "commit");
   l.uncommitted = l.uncommitted.filter((x) => !all.includes(x));
   return sha;
 }
@@ -1130,6 +1135,7 @@ ${criteria}` : "",
     c.item ? `The problem to fix, at ${c.item.problem.location}:
 ${c.item.problem.text}
 ${c.item.reason}` : "",
+    c.rebuild ? "This task was built before the spec was revised, so its test and code are already committed: start from them as they stand, and change only what the revised task needs." : "",
     answersText(l),
     "Make no irreversible change, such as a migration on shared data, deleting a public API, or changing production config, unless this explicitly permits it: build its reversible part, and return the rest in manualActions. Meet what this requires. How to implement it in your paths is your decision; return each choice this leaves to you in assumptions, for qa to check. If a requirement is unclear or can't be met, or meeting it would change behavior this describes or an interface another task relies on, return specProblem and stop.",
     NO_WRITES
@@ -1140,7 +1146,7 @@ var FAIL_FIRST = "It must fail on the current code on its merit: an assertion ab
 var GUARD = "The problem is in the tests, so the test may already pass on the current code; that is expected, not a problem. It must fail on its merit if the behavior it states broke: check this by breaking the behavior in a temporary copy. Change no production code; when the current code doesn't do what the test states, the test fails and the fix makes it pass. End by running the Checks commands TESTING.md declares, and return their output.";
 var FAIL_OR_GUARD = "When the current code lacks the behavior the test states, the test fails on it on its merit: an assertion about the behavior fails, never a compile, type, or import error. When the test names code that doesn't exist yet, add the smallest stub that lets it compile and run, such as a declaration with the right signature that doesn't do the work, and list it in stubs; change no other production code. When the current code already has the behavior, so the test guards it, the test may already pass on the current code; that is expected, not a problem: check in a temporary copy that it fails on its merit when the behavior it states is broken, change no production code, and return failingOutput empty. End by running the Checks commands TESTING.md declares: each must pass except for a failing test's assertions.";
 async function writeTest(l, c, reason) {
-  const mayGuard = c.item !== void 0 || reason !== "";
+  const mayGuard = c.item !== void 0 || c.rebuild === true || reason !== "";
   const rule = testOnly(c) ? GUARD : mayGuard ? FAIL_OR_GUARD : FAIL_FIRST;
   const t = must(
     await callCoder(
@@ -1178,7 +1184,8 @@ Check each against the card, the spec when there is one, and the code. A choice 
 }
 function qaBrief(l, c, test) {
   const fails = test.guard ? "Check in a temporary copy that the test fails on one of its assertions when the behavior it states is broken, and that it passes at HEAD." : "Check in a temporary copy that the test fails at that commit on one of its assertions, not on a compile, type, or import error, and that it passes at HEAD.";
-  const history = test.commit ? `The test commit is ${test.commit}, and its protected paths are:
+  const at = test.commit ? `The test commit is ${test.commit}` : "The test was already committed before this change";
+  const history = test.paths.length > 0 ? `${at}, and its protected paths are:
 ${list(test.paths)}
 ${fails} Check that nothing after that commit touches a protected path, and that nothing skips, weakens, or excludes the test, for example by loosening a tolerance, regenerating a snapshot, or changing the test config.` : `This change has no test, because: ${test.noTest}. Judge that reason.`;
   return `${changeBrief(l, c)}
@@ -1308,6 +1315,7 @@ ${list(cycle.paths)}` : ""}${settled2}`,
     `A simplifier verdict on ${c.id}.`
   );
   const found = defectsOf(v);
+  if (found.length === 0) l.delivered.add(c.id);
   const inTest = (location) => cycle.paths.some((p) => location.startsWith(p));
   const text = (fs) => fs.map((f) => `${f.location}: ${f.problem}`).join("\n");
   const test = text(found.filter((f) => inTest(f.location)));
@@ -1417,10 +1425,13 @@ function countFix(l, item) {
 }
 async function reviseSpec(l, items2) {
   if (items2.length === 0 || !l.reviseSpec) return [];
-  const revised = await l.reviseSpec(items2.map((i) => `${i.problem.location}: ${i.problem.text}`));
+  const revised = await l.reviseSpec(
+    items2.map((i) => `${i.problem.location}: ${i.problem.text}`),
+    { build: l.build, validate: l.validate }
+  );
   l.build = revised.build;
   l.validate = revised.validate;
-  return revised.rerun.map((t) => changeOfTask(l, t));
+  return revised.rerun.map((t) => ({ ...changeOfTask(l, t), rebuild: l.delivered.has(t.id) }));
 }
 async function updateDocs(l, problems) {
   if (l.docs.length === 0 && problems.length === 0) return;
@@ -2072,6 +2083,7 @@ function freshLoop(input) {
     preExisting: [],
     review: { clean: false, note: "" },
     changedThisRound: [],
+    delivered: new Set(input.built || input.startAtReview > 0 ? input.build?.tasks.map((t) => t.id) : []),
     passedTests: [...input.small?.passedTests ?? []],
     uncommitted: [],
     openByRound: [],
