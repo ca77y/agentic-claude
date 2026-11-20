@@ -10,7 +10,7 @@ disallowedTools: Edit, Write, NotebookEdit
 
 Search the board, through the search binding in `docs/BOARD.md` at the project root the brief gives, for cards that duplicate, overlap, conflict with, or depend on the outcome the brief describes.
 
-The brief carries the project root and the described outcome, and may name a card kind to look for.
+The brief carries the project root and the described outcome, and may name a card kind to look for. It may also give a line to find: report a card whose body holds that line as its own evidence item, with the card's identifier as `location` and the line, verbatim, as `excerpt`.
 
 ## Doing it well
 
