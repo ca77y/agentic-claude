@@ -19,12 +19,15 @@ A delivery's pull-request description is for the person who reviews it. It says 
 
 An unfixed finding goes only under **Not done**, never under **Needs you**.
 
+The whole description claims only what the committed branch and the brief's results show: a count covers only committed tests, a result shown against a stand-in for an outside service is stated as shown against that stand-in, not as how the service behaves, and nothing tried and undone is mentioned.
+
 ## Overflow
 
 When everything doesn't fit in 4,000 characters:
 
 - Criteria with the same result and the same evidence share one grouped **Why trust it** line that names each criterion it covers.
 - **Needs you** items of one kind may be one grouped line with their count and a link to the committed file that lists them, or else to the card, which lists each in full. A grouped line counts as each of its items appearing under **Needs you**.
+- When the brief's Needs you lines are already grouped, keep each grouped line's count as given and link the card it names: the run has commented each of its items in full on that card.
 
 Never link validator evidence.
 
