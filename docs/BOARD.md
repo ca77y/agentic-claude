@@ -10,7 +10,7 @@ Configuration does not authorize execution; the user's request does. An operatio
 ## Operations
 
 - Locate, read, search: `get_issue` by identifier (taken from the URL when only a URL is given), archived cards included, with `includeRelations: true` when dependencies matter; `list_issues` with `project: "Agentic Claude"` and `query`, `state`, `label`, or `priority`; for duplicates, `list_issues` with `project: "Agentic Claude"`, `includeArchived: true`, no `query` (it misses archived cards), and `limit: 250`, passing the returned `cursor` until `hasNextPage` is false, then comparing titles.
-- Create, with initial status: `save_issue` with `team: "Smerfy"`, `project: "Agentic Claude"`, `state: "Backlog"`.
+- Create, with initial status and relations: `save_issue` with `team: "Smerfy"`, `project: "Agentic Claude"`, `state: "Backlog"`; when the brief names relations, also `blockedBy` and `relatedTo` with the named card identifiers, which add to the card's relations and remove none.
 - Transition: `save_issue` with the issue `id` and target `state`.
 - Update content and relations: `save_issue` with the issue `id` and only the changed fields; `addLabels`/`removeLabels` change labels, and `removeBlockedBy`/`removeBlocks` remove relations.
 - Attach a PR: `save_issue` with the issue `id` and `links: [{url, title}]`, using the URL the PR creation returned and the PR title.

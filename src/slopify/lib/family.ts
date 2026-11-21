@@ -104,7 +104,8 @@ const ADVISOR_SCHEMA = {
   },
 } as const;
 
-// advisor-fit also names a card that already holds the outcome, so a workflow can act on a duplicate instead of filing it.
+// advisor-fit also names a card that already holds the outcome, so a workflow can act on a duplicate instead of filing it,
+// and the cards that hold part of it, which a split relates its card to.
 const FIT_SCHEMA = {
   ...ADVISOR_SCHEMA,
   required: [...ADVISOR_SCHEMA.required, "duplicateOf"],
@@ -114,6 +115,10 @@ const FIT_SCHEMA = {
       type: "string",
       description:
         "The identifier of an existing card that already holds this same outcome, so this one would add nothing; empty when no card does",
+    },
+    overlaps: {
+      ...STRINGS,
+      description: "The identifiers of existing cards that hold part, not all, of this outcome; empty when none do",
     },
   },
 } as const;

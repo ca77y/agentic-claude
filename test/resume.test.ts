@@ -209,10 +209,10 @@ describe("a committed spec's challenge", () => {
     assert.equal(withPr.challenged, true);
   });
 
-  test("asks the scout for only the last spec copy, and the files' contents only without one", async () => {
+  test("asks the scout for the spec files' contents, since the ledger holds no copy of them", async () => {
     await resumeOf([]);
     const brief = calls.find((c) => c.type === "scout-checkpoint")?.prompt ?? "";
-    assert.match(brief, /only the last spec commit's part lines/);
-    assert.match(brief, /build\.json in that folder: when the ledger has done-spec part lines, only the file name/);
+    assert.doesNotMatch(brief, /part lines/);
+    assert.match(brief, /build\.json in that folder: its exact contents/);
   });
 });

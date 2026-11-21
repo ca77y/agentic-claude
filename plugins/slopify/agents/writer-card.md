@@ -13,6 +13,8 @@ Write the content to the draft path the brief names, and only there. Follow the 
 
 For a story, read `TESTING.md` before writing acceptance criteria: it says how each category is checked and what each permits, and every criterion must pass or fail by one of those checks. Keep assumptions and decisions apart. State what is wanted and why, never how to build it: no approach, design, or implementation. When the brief supplies advisor views, synthesize them and state which you adopted and why.
 
+When the brief asks for `parts`, report each template part the draft holds, by its name in the template, with its word count.
+
 Settle everything that doesn't change what the card delivers or whom it serves, and state it as an assumption. Put only what does under Open questions, and return each one you leave there. When the card has answers, on it or in its comments, apply each and remove its question.
 
 ## Working rules

@@ -1,0 +1,243 @@
+{
+  "shared": [
+    "Base: the code as the coders find it: shape.ts has no MAX_CRITERIA or tooBig(), and refine() takes the first open questions as a list. Single mode (no `split`) keeps its behavior, result types, writer schema, and tests.",
+    "Split mode is a mode of `shape`: args `{idea: string (the request), split: true, cap?: number | numeric string, projectRoot?}`. Before any dispatch, run() returns `{status: 'not-started', next}`, saying what to fix, when split comes with `card`, a kind other than story, no `idea`, or a present `cap` that is not a whole number of 1 or more.",
+    "The cap is the `cap` arg when given, else min(statedCap when above 0, else MAX_CARDS; MAX_CARDS), with MAX_CARDS = 20. selectParts alone enforces it: writer-split plans every part, with no cap in its brief, and reports the stated cap as `statedCap`. Covered parts take no slot. A run never dispatches more creates than its cap.",
+    "src/slopify/lib/split.ts (new) exports: `MAX_CARDS`; `PLAN_SCHEMA` = {constraints: string[], statedCap: integer (0 when none), parts: [{key, outcome, dependsOn: string[] (keys)}], omitted: [{part, reason}]}, all required, `parts` described as every part the request needs, uncapped; `type Plan`; `interface Part { id; key; outcome; dependsOn: string[] (ids) }`; `capArgOf(arg: unknown): number | null | 'invalid'`; `capOf(argCap: number | null, statedCap: number): number`; `partsOf(plan): Part[]` (unique ids safe in a path and a hidden line; a dependsOn key naming no part is dropped); `orderParts(parts): Part[]` (dependencies first; a cycle falls back to plan order); `selectParts(ordered, covered: ReadonlySet<string>, cap): { selected: Part[]; overCap: Part[] }`; `REQUIRED_PARTS`; `missingParts(reported: { name; words }[]): string[]`; `checkedId(id, locations: string[]): string`; `SplitCard { part; card; deliverable; openQuestions }`, `Covered { part; card }`, `LeftOut { part; reason }`, each `part` a Part id; `splitReport({ cards, covered, leftOut }): string`. shape.ts adds `Split { status: 'done'; workflow: 'shape'; cards; covered; leftOut; report }` to run()'s result union.",
+    "The report names every planned part once: filed (card, whether Deliverable, open questions), covered by its card, or left out with a reason: the planner's `omitted` reason; over the cap, naming it; or still missing named required parts after the revisions.",
+    "A split card's hidden line is markerOf over the request's slug and the part's key, so two requests never share one; a rerun finds an earlier run's card by it.",
+    "Each per-part related-cards scout brief requires every match's `location` to be the bare card identifier. A model-chosen id (advisor-fit duplicateOf or overlaps) counts only when checkedId returns it: the trimmed one-token id when it equals a location of that part's scout evidence or is a whole token inside one, such as a URL; else ''. Relation targets are only checked, covering, or this run's filed ids.",
+    "A split pusher brief states that the request authorizes at most the cap of new cards and this is one, names one create from the draft (labels and hidden line as single mode's file()) and its blocked-by and related-to ids, and forbids anything else, including changing an existing card. When a named relation has no Create binding, pusher creates nothing and reports it unmet, so the halt comes before any card exists.",
+    "Relation binding: docs/BOARD.md's Create line may carry append-only `blockedBy` and `relatedTo` when the brief names relations; bootstrap's create binding says how with the tracker's relation, or marks it unsupported.",
+    "Planner `slopify:writer-split`: a producer writing no file and touching no board; it returns PLAN_SCHEMA from the fenced request and shared grounding.",
+    "In split mode writer-card also returns `parts: [{name, words: integer}]`, each template part in the draft with its word count."
+  ],
+  "tasks": [
+    {
+      "id": "t1",
+      "dependsOn": [],
+      "files": [
+        "docs/BOARD.md",
+        "plugins/slopify/skills/bootstrap/references/board.md",
+        "plugins/slopify/skills/bootstrap/resources/BOARD.md",
+        "plugins/slopify/references/pusher-board.md",
+        "plugins/slopify/agents/writer-split.md",
+        "plugins/slopify/agents/writer-card.md",
+        "plugins/slopify/agents/advisor-fit.md",
+        "plugins/slopify/agents/scout-related-cards.md",
+        "test/plugin-text.test.ts"
+      ],
+      "criteria": ["c3"],
+      "todo": "Bind relations on create and add the agent text split mode relies on. docs/BOARD.md: the Create line may carry `blockedBy`/`relatedTo` when the brief names relations, and states no create-nothing rule (that lives only in pusher-board.md, as docs state each rule once); Update and Dependencies lines unchanged. Bootstrap: board.md requires the create binding to say how a blocking and a related relation are added, verified against the tracker, or marks it unsupported when the tracker records none; the template's Create line carries it. pusher-board.md: one bullet saying relations are added only as the brief names them, through the Create binding, and that when a named relation has no binding pusher creates nothing and reports it unmet. New agent writer-split.md, a producer in writer-card's frontmatter shape and model tier: it breaks one request into the fewest small stories that together cover all of it, each with its own outcome, deliverable and checkable without another's code merged first unless the request makes an order unavoidable; lists each part's dependencies by key; returns each whole-set constraint, the cap the request states (0 when none), and each part it deliberately makes no card for with a reason; plans every part the request needs, never trimming to a cap; writes no file and changes no board. writer-card.md: when the brief asks for `parts`, report each template part the draft holds with its word count. advisor-fit.md: when its schema asks for `overlaps`, list the cards that hold part, not all, of the outcome. scout-related-cards.md: every match's `location` is the bare card identifier. Plugin-text tests: docs/BOARD.md and the bootstrap template's Create line carry the relation binding; pusher-board.md states the create-nothing rule; writer-split.md forbids files, board changes, and trimming to a cap; scout-related-cards.md pins `location` to the identifier.",
+      "reuse": [
+        "docs/BOARD.md Operations section",
+        "plugins/slopify/skills/bootstrap/resources/BOARD.md {{CREATE_BINDING}} slot",
+        "plugins/slopify/agents/writer-card.md and writer-pr.md as the producer pattern (writer-pr returns its work instead of writing a file)",
+        "test/plugin-text.test.ts text() helper"
+      ],
+      "create": [
+        "plugins/slopify/agents/writer-split.md",
+        "the Create relation binding in docs/BOARD.md, bootstrap reference and template, and the pusher-board.md bullet",
+        "the parts line in writer-card.md, the overlaps sentence in advisor-fit.md, the identifier-location rule in scout-related-cards.md"
+      ]
+    },
+    {
+      "id": "t2",
+      "dependsOn": [],
+      "files": ["src/slopify/lib/split.ts", "test/split.test.ts"],
+      "criteria": ["c1", "c2", "c5"],
+      "todo": "Create src/slopify/lib/split.ts with the pure helpers exactly as the shared interface states, with no agent dispatch and no runtime globals. capArgOf accepts a positive whole number or a numeric string of one, null when absent, 'invalid' otherwise. capOf applies the shared cap rule. partsOf sanitizes and dedupes ids, maps dependsOn keys to ids, and silently drops keys naming no part. orderParts keeps every forward edge and falls back to plan order only on a cycle. selectParts returns at most `cap` uncovered parts in order and the rest as overCap; covered parts are in neither. REQUIRED_PARTS is the story template's required parts. missingParts reports a required part absent or with 0 words. checkedId follows the shared rule. splitReport follows the shared report rule. Unit tests in test/split.test.ts: cap parsing (absent, whole, numeric string, zero, negative, fractional, non-numeric); capOf with a stated cap above 20, below 20, and an arg cap above 20; ordering puts a dependency first and a cycle falls back to plan order; partsOf drops an unknown dependsOn key and gives two same-key parts distinct ids; selectParts with cap N and N+2 uncovered parts, where covered parts take no slot; missingParts flags an absent and an empty part; REQUIRED_PARTS equals the required story bullets in plugins/slopify/references/card-templates.md; checkedId accepts a bare location and a whole token inside a URL, and rejects an id absent from the locations or only part of a longer token; splitReport names an omitted, an over-cap, a covered (with its card), and a missing-parts part.",
+      "reuse": [
+        "src/slopify/lib/rules.ts waves() for ordering",
+        "src/slopify/lib/deliver.ts slugOf and list",
+        "src/slopify/lib/family.ts STRINGS for schema fields",
+        "Infer from the Workflow runtime types for Plan"
+      ],
+      "create": ["src/slopify/lib/split.ts with the exports the shared interface lists", "test/split.test.ts"]
+    },
+    {
+      "id": "t3",
+      "dependsOn": ["t2"],
+      "files": [
+        "src/slopify/workflows/shape.ts",
+        "src/slopify/lib/family.ts",
+        "src/slopify/lib/loop.ts",
+        "plugins/slopify/workflows/shape.js",
+        "test/shape-split.test.ts",
+        "test/linear-board.ts",
+        "test/shape.test.ts",
+        "test/shape-board.test.ts"
+      ],
+      "criteria": ["c1", "c2", "c3", "c4", "c5", "c6", "c7"],
+      "todo": "Add split mode to shape.ts, after the shared arg checks. Ground once for the request; every part shares that evidence. The plan comes before any selection or drafting, and its parts follow the shared split.ts interface. Coverage per part: a card holding the part's hidden line covers it; otherwise a checked advisor-fit duplicateOf covers it, and checked overlaps become related targets. FIT_SCHEMA gains an optional `overlaps`, leaving single mode unaffected. The cap is applied by selection: only selected parts are drafted and filed, and over-cap parts are reported as left out. Selected parts are drafted and filed in bounded waves in dependency order, so a dependency's card exists before its dependent's create names it as blockedBy. Each part's card is a story whose idea is the part's outcome, every planner constraint as applying to every card in the set, and the request. Drafting reuses the existing write and refine path with the part's advisor views; in split mode missing required parts is a problem that keeps the revisions going, and a part still missing them after the revisions is left out. A halt while drafting ends the run as Stopped, keeping every card already filed. Each filed part is recorded so a halted run lists it as completed and a rerun resumes past it. A failed create stops the run as Stopped naming the cards filed before it, and a rerun finds any card that create made by its hidden line. meta documents `split` and `cap` and adds the Plan phase. The fake board records each card's blockedBy and relatedTo from the pusher brief. Tests in test/shape-split.test.ts cover validate.json's evidence and: a split with card or an invalid cap is not-started with no dispatch; two requests sharing a part key each file their card; a pusher unmet on the second card returns Stopped naming the first, and a rerun files only the second.",
+      "reuse": [
+        "src/slopify/workflows/shape.ts read(), ground(), adviseAll(), write(), simplify(), checkDraft(), rule(), refine(), file(), markerOf, KINDS.story, the Deliverable rule",
+        "src/slopify/lib/split.ts helpers from t2",
+        "src/slopify/lib/family.ts FIT_SCHEMA, adviseFit, scout, slugged, absent, STRINGS",
+        "src/slopify/lib/deliver.ts callPusher, MARKER_LINE, opRef, list, show, createDeliver (done, stop)",
+        "src/slopify/lib/loop.ts must, pushed, stopOf, Halt, and the halt-holding wave pattern",
+        "src/slopify/lib/input.ts inputOf, flagOf, textOf",
+        "test/harness.ts installAgents, calls, scripts; test/linear-board.ts board, linearPusher, clearBoard, holds; test/shape.test.ts happy()/count() patterns"
+      ],
+      "create": [
+        "split mode in shape.ts: arg checks, Plan phase, per-part coverage, selection, waves that draft then file, the Split result, meta updates",
+        "optional `overlaps` property on FIT_SCHEMA",
+        "relation recording in test/linear-board.ts",
+        "test/shape-split.test.ts",
+        "rebuilt plugins/slopify/workflows/shape.js"
+      ]
+    },
+    {
+      "id": "t4",
+      "dependsOn": ["t3"],
+      "files": [
+        "docs/SHAPE.md",
+        "docs/DESIGN.md",
+        "README.md",
+        "plugins/slopify/.claude-plugin/plugin.json",
+        ".claude-plugin/marketplace.json"
+      ],
+      "criteria": [],
+      "todo": "Update the docs to describe split mode as built. docs/SHAPE.md: a section on splitting a request (Ground once, Plan with writer-split, coverage per part, the cap applied by selection, waves that draft then file in order with relations) and decisions: a split never files more than its cap, and a cap read from the request never raises it; a part another card covers files nothing and the report names that card; whole-set constraints go to every card; a part still missing a required part is not filed; covered cards are never changed; a relation without a binding stops the run before that card is created. The H2 row notes that cards filed before a failed filing stay filed and a rerun finds them by their hidden line. README.md: the Shape row and its agent list (writer-split), the producers row, and the authority paragraph (invoking shape with split authorizes filing up to its cap of new story cards with their relations, and nothing more). docs/DESIGN.md: writer-split in the producers paragraph, as a producer that returns its work instead of a file. plugin.json description, and marketplace.json only if its description would otherwise be untrue. No sentence may reintroduce a phrase test/doc-claims.test.ts forbids.",
+      "reuse": [
+        "docs/SHAPE.md Flow, Decisions, and Halt conditions sections",
+        "README.md Shape row, producers row, authority paragraph",
+        "docs/DESIGN.md producers paragraph"
+      ],
+      "create": [
+        "the split-mode section and decisions in docs/SHAPE.md, and the matching README, DESIGN, and plugin description lines"
+      ]
+    }
+  ],
+  "docs": [
+    "docs/SHAPE.md",
+    "docs/BOARD.md",
+    "docs/DESIGN.md",
+    "docs/deliver/CARDS.md",
+    "README.md",
+    "plugins/slopify/.claude-plugin/plugin.json",
+    ".claude-plugin/marketplace.json",
+    "plugins/slopify/references/card-templates.md",
+    "plugins/slopify/references/pusher-board.md",
+    "plugins/slopify/skills/bootstrap/references/board.md",
+    "plugins/slopify/skills/bootstrap/resources/BOARD.md",
+    "plugins/slopify/agents/writer-card.md",
+    "plugins/slopify/agents/advisor-fit.md",
+    "plugins/slopify/agents/scout-related-cards.md"
+  ],
+  "decisions": [
+    {
+      "id": "d1",
+      "question": "New workflow or a mode of shape?",
+      "choice": "A mode of shape, selected by `split: true` with the request as `idea`.",
+      "rationale": "SMR-358 fixed the set of workflows and the issue allows a mode; every per-card step already exists in shape.ts.",
+      "reversible": true,
+      "permission": "",
+      "affectsAcceptance": false
+    },
+    {
+      "id": "d2",
+      "question": "Where does the cap come from, and can the model raise it?",
+      "choice": "The `cap` arg when given, else min(stated cap or 20, 20); an invalid present cap returns not-started before any dispatch.",
+      "rationale": "The issue makes the request the authorization up to the cap; a model-read cap may lower it but never raise it.",
+      "reversible": true,
+      "permission": "",
+      "affectsAcceptance": true
+    },
+    {
+      "id": "d3",
+      "question": "Who enforces the cap, and what does it count?",
+      "choice": "selectParts alone, over the uncovered parts in dependency order; writer-split plans every part with no cap in its brief.",
+      "rationale": "If the planner truncated first, covered parts would use slots on a rerun and truncated parts would reach the report only if the model listed them; code selection makes both exact.",
+      "reversible": true,
+      "permission": "",
+      "affectsAcceptance": true
+    },
+    {
+      "id": "d4",
+      "question": "How is a part already covered by a board card found?",
+      "choice": "First the request-plus-part hidden line; else advisor-fit duplicateOf, accepted only through checkedId against that part's scout evidence, whose locations the brief pins to bare identifiers.",
+      "rationale": "The line makes reruns exact; advisor-fit covers hand-filed cards such as SMR-381 to SMR-401, which carry no line; the location check stops an invented id without discarding a real one written as a URL.",
+      "reversible": true,
+      "permission": "",
+      "affectsAcceptance": true
+    },
+    {
+      "id": "d5",
+      "question": "How is a dependency recorded?",
+      "choice": "blockedBy on the dependent card's create, naming the filed or covering card of each dependency; relatedTo for partial overlaps; bound on Create only.",
+      "rationale": "Split mode only ever creates, so no Update or `blocks` binding is used; the issue asks the delivery to confirm the board write, left as a manual action.",
+      "reversible": true,
+      "permission": "",
+      "affectsAcceptance": true
+    },
+    {
+      "id": "d6",
+      "question": "How is 'every required template part, none empty' guaranteed?",
+      "choice": "In split mode writer-card reports parts with word counts; missingParts is a problem that keeps the revisions going; a part still missing after the last revision is not filed and is reported.",
+      "rationale": "A code gate rather than a model's word alone; single mode stays as it is.",
+      "reversible": true,
+      "permission": "",
+      "affectsAcceptance": true
+    },
+    {
+      "id": "d7",
+      "question": "How do whole-set constraints reach every card?",
+      "choice": "Code puts every planner constraint into every part's idea.",
+      "rationale": "The Full eval criterion depends on all three constraints on every card; leaving it to each writer would lose some.",
+      "reversible": true,
+      "permission": "",
+      "affectsAcceptance": true
+    },
+    {
+      "id": "d8",
+      "question": "When are cards filed, and what happens to a halt?",
+      "choice": "Bounded waves over the selected parts in order: draft a wave in parallel holding its first Halt, then file its parts one at a time before the next wave.",
+      "rationale": "Each finished wave persists through d.done and hidden lines, so a budget or agent halt keeps the cards already filed and a rerun progresses; dependencies still file before dependents.",
+      "reversible": true,
+      "permission": "",
+      "affectsAcceptance": false
+    },
+    {
+      "id": "d9",
+      "question": "Who plans the split?",
+      "choice": "A new producer agent writer-split that returns PLAN_SCHEMA and writes no file.",
+      "rationale": "Keeps writer-card's single role and avoids a plan file nothing reads; plugin-code wants consumed output in typed fields.",
+      "reversible": true,
+      "permission": "",
+      "affectsAcceptance": false
+    },
+    {
+      "id": "d10",
+      "question": "What does checkedId accept?",
+      "choice": "A one-token id equal to a location of the part's scout evidence or a whole token inside one.",
+      "rationale": "The plugin names no tracker, so no identifier format is hard-coded; matching the scout's own locations is the guard.",
+      "reversible": true,
+      "permission": "",
+      "affectsAcceptance": true
+    },
+    {
+      "id": "d11",
+      "question": "Does a rerun repair relations on cards it did not file?",
+      "choice": "No. A split run never updates an existing card, including covered ones.",
+      "rationale": "The issue authorizes filing up to the cap and nothing more.",
+      "reversible": true,
+      "permission": "",
+      "affectsAcceptance": false
+    },
+    {
+      "id": "d12",
+      "question": "What happens when a relation the brief names has no binding?",
+      "choice": "Pusher creates nothing and reports it unmet, so the run halts before the card exists. Bootstrap binds the tracker's relation on Create or marks it unsupported; there is no fallback.",
+      "rationale": "A halt after create would leave a card a rerun counts as covered and d11 forbids repairing; halting before create lets a rerun after bootstrap file it with its relation.",
+      "reversible": true,
+      "permission": "",
+      "affectsAcceptance": true
+    }
+  ],
+  "manualActions": [
+    "Before building on the relation criterion, confirm on the live board that one create carrying blockedBy is recorded, by reading it back with its relations. This writes a real card, so a person does it and removes the test card afterwards.",
+    "Run the Full eval criterion by hand (the make eval target does not exist yet, SMR-364): the example request against a board without SMR-381 to SMR-401, repeated, checking every filed card carries the shared Clerk auth, the single deployment, and the separate path. Never run it against the live board.",
+    "In each project bootstrapped before this change, rerun bootstrap so docs/BOARD.md's Create line gains the relation binding. Until then a split run stops before creating its first dependent card, and a rerun after bootstrap files it."
+  ]
+}

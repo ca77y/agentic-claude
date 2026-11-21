@@ -6,8 +6,8 @@
 // under test writes, whatever their wording.
 //
 // The checkpoint scout answers only what its brief asks, from that worktree. One limit stands in for the runtime: a key
-// gets one evidence excerpt, which holds at most SCOUT_QUOTE_LIMIT characters, so a scout asked to quote a ~100 KB
-// build.json returns its first SCOUT_QUOTE_LIMIT characters, cut, and nothing more for that key.
+// gets one evidence excerpt, which holds at most SCOUT_QUOTE_LIMIT characters, so a file longer than that comes back
+// cut. A spec at its size budget stays under it.
 import assert from "node:assert/strict";
 import { beforeEach, describe, test } from "node:test";
 
@@ -47,9 +47,9 @@ const buildOf = (tasks: ReturnType<typeof task>[]): Build => ({
   decisions: [],
 });
 const SMALL_BUILD = buildOf([task(1)]);
-// About 100 KB: twelve tasks, each with a long todo in plain words.
-const BIG_BUILD = buildOf(
-  Array.from({ length: 12 }, (_, i) => task(i + 1, "Change the module so the rerun reads its spec. ".repeat(170))),
+// A spec at its size budget: twelve tasks, each todo just under the 300 words lens-altitude allows.
+const LARGE_BUILD = buildOf(
+  Array.from({ length: 12 }, (_, i) => task(i + 1, "Change the module so the rerun reads its spec. ".repeat(33))),
 );
 const VALIDATE = { criteria: [{ id: "c1", wording: "w", category: "UI", path: "p", evidence: "e", firstTest: "t" }] };
 const LENS_PASS = { verdict: "pass", evaluated: "x", findings: [], limits: "none" };
@@ -277,7 +277,7 @@ beforeEach(() => {
 describe("SMR-374: a rerun over a committed spec", () => {
   for (const [size, build] of [
     ["small", SMALL_BUILD],
-    ["~100 KB", BIG_BUILD],
+    ["budget-sized", LARGE_BUILD],
   ] as const) {
     test(`a ${size} build.json, challenge finished, first run blocked in the build: the rerun goes to the build`, async () => {
       const first = await blockedInBuild(build);
@@ -289,7 +289,8 @@ describe("SMR-374: a rerun over a committed spec", () => {
       assert.ok(built(first.calls) > 0, "and reached the build");
       const wt = leftBy(first.calls, build);
       const bytes = (wt.folders.get(onlyFolder(wt))?.["build.json"] ?? "").length;
-      if (build === BIG_BUILD) assert.ok(bytes > 95_000 && bytes < 120_000, `build.json is ${String(bytes)} bytes`);
+      if (build === LARGE_BUILD)
+        assert.ok(bytes > 15_000 && bytes < SCOUT_QUOTE_LIMIT, `build.json is ${String(bytes)} bytes`);
 
       const rerun = await run(FIRST_TITLE, wt, build);
       assert.deepEqual(howSteps(rerun.calls), NO_HOW, "no design, advice, decision, spec, or challenge");
@@ -297,15 +298,15 @@ describe("SMR-374: a rerun over a committed spec", () => {
     });
   }
 
-  test("the resume point is the same for a small and a ~100 KB build.json", async () => {
+  test("the resume point is the same for a small and a budget-sized build.json", async () => {
     const points: { how: ReturnType<typeof howSteps>; allTasksBuilt: boolean }[] = [];
-    for (const build of [SMALL_BUILD, BIG_BUILD]) {
+    for (const build of [SMALL_BUILD, LARGE_BUILD]) {
       const first = await blockedInBuild(build);
       const rerun = await run(FIRST_TITLE, leftBy(first.calls, build), build);
       const ids = tasksBuilt(rerun.calls);
       points.push({ how: howSteps(rerun.calls), allTasksBuilt: taskIds(build).every((id) => ids.includes(id)) });
     }
-    assert.deepEqual(points[1], points[0], "~100 KB (second) resumes where small (first) does");
+    assert.deepEqual(points[1], points[0], "budget-sized (second) resumes where small (first) does");
   });
 
   for (const title of ["Resume a rerun at the build", "Line 1: Resume a rerun at the build"]) {

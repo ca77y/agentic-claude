@@ -13,6 +13,9 @@ export interface Card {
   id: string;
   body: string;
   writes: number;
+  /** The cards this one is blocked by, and related to, as the pusher briefs that wrote it named them. */
+  blockedBy?: string[];
+  relatedTo?: string[];
 }
 export const board: Card[] = [];
 /** Each pusher brief sentence that asked for a duplicate mark. */
@@ -59,6 +62,19 @@ const FENCED = /<<<(\w+)\n([\s\S]*?)\n\1>>>/g;
 export const HIDDEN = /<!--[\s\S]*?-->/g;
 const HARMLESS = /\b(?:not|no|isn't) (?:a )?(?:content change|failed write)\b/i;
 const sentencesOf = (t: string): string[] => t.split(/(?<=\.)\s+|\n+/);
+const CARD_ID = /\b[A-Z]{2,5}-\d+\b/g;
+// The card identifiers a brief names after one relation, up to where it names the other.
+const relationIds = (sentences: readonly string[], kind: RegExp, other: RegExp): string[] => [
+  ...new Set(
+    sentences.flatMap((s) => {
+      const m = kind.exec(s);
+      if (!m) return [];
+      const after = s.slice(m.index + m[0].length);
+      const end = after.search(other);
+      return Array.from((end === -1 ? after : after.slice(0, end)).matchAll(CARD_ID), (x) => x[0]);
+    }),
+  ),
+];
 
 /** A pusher on the fake board. draft gives the card text when the brief points at a draft file rather than fencing it. */
 export function linearPusher(draft: (prompt: string) => string = () => ""): Script {
@@ -66,6 +82,8 @@ export function linearPusher(draft: (prompt: string) => string = () => ""): Scri
     const own = sentencesOf(prompt.replaceAll(FENCED, "").replaceAll(HIDDEN, ""));
     duplicateMarks.push(...own.filter((s) => /duplicate/i.test(s)));
     const named = /\b(?:update|write (?:it )?to|use) (?:the )?card ([A-Z]+-\d+)/i.exec(own.join(" "))?.[1];
+    const blockedBy = relationIds(own, /blocked[ -]?by/i, /related[ -]?to/i);
+    const relatedTo = relationIds(own, /related[ -]?to/i, /blocked[ -]?by/i);
     const searches = own.some(
       (s) => /\b(?:search|find|look (?:up|for))\b/i.test(s) && /card/i.test(s) && !/\b(?:never|not|don't)\b/i.test(s),
     );
@@ -93,6 +111,8 @@ export function linearPusher(draft: (prompt: string) => string = () => ""): Scri
       const sent = `${text}\n\n${marker}`.trimEnd();
       card.body = linearSave(sent);
       card.writes += 1;
+      if (blockedBy.length > 0) card.blockedBy = [...new Set([...(card.blockedBy ?? []), ...blockedBy])];
+      if (relatedTo.length > 0) card.relatedTo = [...new Set([...(card.relatedTo ?? []), ...relatedTo])];
       const stored = card.body.split("\n");
       const failed = sent.split("\n").filter((line, i) => {
         if (line === marker && declared(/./, true)) return false;
@@ -110,5 +130,28 @@ export function linearPusher(draft: (prompt: string) => string = () => ""): Scri
       return { op: "card", result: "written", reference: card.id, link: `https://linear.app/ca77y/issue/${card.id}` };
     });
     return { done: unmet.length === 0, unmet, operations, hookRejection: "" };
+  };
+}
+
+/**
+ * scout-related-cards on the fake board. It reports every card by its visible text, as a scout reading the board does.
+ * Like the real scout, it reports a card's hidden line only when its brief names that line, so a rerun finds its card
+ * only if the brief asks. where gives the location it reports for a card.
+ */
+export function relatedCardsScout(where: (id: string) => string = (id) => id): Script {
+  return (_t, _l, prompt) => {
+    const asked = Array.from(prompt.matchAll(HIDDEN), (m) => m[0]);
+    return {
+      answer: board.length > 0 ? `Cards on the board: ${board.map((c) => c.id).join(", ")}` : "No related card.",
+      evidence: [
+        ...board.map((c) => ({ source: "card", location: where(c.id), excerpt: c.body.replaceAll(HIDDEN, "").trim() })),
+        ...board.flatMap((c) =>
+          asked
+            .filter((line) => c.body.includes(line) || c.body.includes(linearSave(line)))
+            .map((line) => ({ source: "card", location: c.id, excerpt: line })),
+        ),
+      ],
+      gaps: [],
+    };
   };
 }

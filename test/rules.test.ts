@@ -528,36 +528,19 @@ describe("checkDescription's overflow rule", () => {
 });
 
 describe("progressLine", () => {
-  test("is one ledger line with progress first, then the round and kind", () => {
-    const line = progressLine(2, "finding", ["login\nfails", "the header\r\nis wrong"]);
-    assert.match(line, /^progress 2 finding\b/);
-    assert.doesNotMatch(line, /[\n\r]/);
-    assert.ok(line.includes("login") && line.includes("is wrong"));
+  test("is one ledger line with progress first, then the round and the ruling", () => {
+    const line = progressLine(2, "src/a.ts|f|bug: confirmed,\nmajor, code, coder");
+    assert.equal(line, "progress 2 ruling: src/a.ts|f|bug: confirmed, major, code, coder");
   });
 
   test("carries no angle bracket, so pusher can't take it for a placeholder", () => {
-    const line = progressLine(1, "tried", ["fill every <placeholder>", "a -> b"]);
-    assert.ok(line.startsWith("progress 1 tried"));
-    assert.doesNotMatch(line, /[<>]/);
+    assert.doesNotMatch(progressLine(1, "fill every <placeholder>: a -> b"), /[<>]/);
   });
 
-  test("stays bounded for long input", () => {
-    const line = progressLine(
-      3,
-      "changed",
-      Array.from({ length: 200 }, (_, i) => `src/${String(i)}.ts ${"x".repeat(1000)}`),
-    );
-    assert.ok(line.startsWith("progress 3 changed"));
-    assert.ok(line.length <= 2000, String(line.length));
-  });
-
-  test("keeps a ruling's reason", () => {
-    const reason =
-      "because the flake comes from the vendored client's retry timer, which this story does not touch and the card says to leave alone";
-    const line = progressLine(2, "ruling", [`fp-3 accept-as-debt ${reason}`]);
-    assert.ok(line.startsWith("progress 2 ruling"));
-    assert.ok(line.includes("accept-as-debt"));
-    assert.ok(line.includes(reason));
+  test("stays short, so pusher never copies a long verbatim block", () => {
+    const line = progressLine(3, `${"x".repeat(1000)}: confirmed, major, code, coder`);
+    assert.ok(line.startsWith("progress 3 ruling: "));
+    assert.ok(line.length <= 300, String(line.length));
   });
 });
 

@@ -23,7 +23,6 @@ import {
   unique,
 } from "./deliver.ts";
 import { Halt, must, type Run } from "./loop.ts";
-import { specCopyLines } from "./resume.ts";
 import { MAX_DESIGN_TRIES, MAX_FIX_ROUNDS, crossReads } from "./rules.ts";
 import { BUILD, VALIDATE, type Build, type Task, type Validate } from "./spec.ts";
 
@@ -398,7 +397,7 @@ async function writeAndCommit(
     callPusher(
       o.d.pushBrief(
         `Commit the folder ${o.specDir} as it stands, staged by explicit path, with a message in the convention docs/FORGE.md declares, saying: ${message}. Name the issue ${o.cardId} in it. Do not push.`,
-        [`done spec ${o.specDir} story ${o.storyRevision}`, ...specCopyLines(o.specDir, spec)],
+        [`done spec ${o.specDir} story ${o.storyRevision}`],
       ),
       "commit the spec",
       phaseTitle,
