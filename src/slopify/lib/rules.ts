@@ -333,16 +333,14 @@ export function checkDescription(
   return { leak, format };
 }
 
-const MAX_PROGRESS = 2000;
+const MAX_PROGRESS = 300;
 
-// One progress entry for the ledger, on one line and with no angle bracket, so pusher can't take it for a placeholder.
-export function progressLine(
-  round: number,
-  kind: "finding" | "ruling" | "tried" | "changed",
-  entries: readonly string[],
-): string {
-  const text = entries.map((e) => e.replaceAll(/[<>]/g, "").replaceAll(/\s+/g, " ").trim()).join("; ");
-  const line = `progress ${String(round)} ${kind}: ${text}`;
+// One progress entry for the ledger: a ruling's decision without its reasoning, which a rerun would not rule again. It
+// stays short because pusher copies it verbatim, on one line and with no angle bracket, so pusher can't take it for a
+// placeholder.
+export function progressLine(round: number, ruling: string): string {
+  const text = ruling.replaceAll(/[<>]/g, "").replaceAll(/\s+/g, " ").trim();
+  const line = `progress ${String(round)} ruling: ${text}`;
   return line.length > MAX_PROGRESS ? `${line.slice(0, MAX_PROGRESS - 3)}...` : line;
 }
 
