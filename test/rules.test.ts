@@ -5,6 +5,7 @@ import {
   allowsReady,
   checkDescription,
   checkpointLine,
+  crossReads,
   gate,
   isDeliverable,
   noProgress,
@@ -34,6 +35,10 @@ const ids = (groups: readonly { id: string }[][]) => groups.map((g) => idsIn(g))
 const task = (id: string, dependsOn: string[] = [], files: string[] = [`${id}.ts`]) => ({ id, dependsOn, files });
 
 const idsOf = (tasks: readonly ReturnType<typeof task>[]) => ids(waves(tasks));
+const reading = (id: string, files: string[], testReads: unknown, dependsOn: string[] = []) => ({
+  ...task(id, dependsOn, files),
+  testReads,
+});
 
 describe("routeOf", () => {
   test("sends each kind where the table says", () => {
@@ -130,6 +135,69 @@ describe("isDeliverable", () => {
     assert.equal(isDeliverable("Feature"), false);
     assert.equal(isDeliverable("Undeliverable"), false);
     assert.equal(isDeliverable(""), false);
+  });
+});
+
+const crossReadSpec = () => [task("t1", [], ["a.ts"]), reading("t2", ["b.ts"], ["a.ts", "README.md"])];
+
+describe("crossReads", () => {
+  test("flags a read another task writes and this task doesn't, naming the task, the file, and its writers", () => {
+    const tasks = [task("t1", [], ["a.ts"]), reading("t2", ["b.ts"], ["a.ts"])];
+    assert.deepEqual(crossReads(tasks), [{ task: "t2", file: "a.ts", writers: ["t1"] }]);
+  });
+
+  test("flags a read of a file a task it depends on writes", () => {
+    const tasks = [task("t1", [], ["a.ts"]), reading("t2", ["b.ts"], ["a.ts"], ["t1"])];
+    assert.deepEqual(crossReads(tasks), [{ task: "t2", file: "a.ts", writers: ["t1"] }]);
+  });
+
+  test("finds writers by overlap in either direction, every writer in spec order", () => {
+    const tasks = [
+      task("t1", [], ["src"]),
+      reading("t2", ["b.ts"], ["src/a.ts", "lib"]),
+      task("t3", [], ["lib/x.ts"]),
+      task("t4", [], ["src/a.ts"]),
+    ];
+    assert.deepEqual(crossReads(tasks), [
+      { task: "t2", file: "src/a.ts", writers: ["t1", "t4"] },
+      { task: "t2", file: "lib", writers: ["t3"] },
+    ]);
+  });
+
+  test("owns a read only by containment, so a directory holding another task's file is flagged", () => {
+    const tasks = [reading("t1", ["src/a.ts"], ["src"]), task("t2", [], ["src/b.ts"])];
+    assert.deepEqual(crossReads(tasks), [{ task: "t1", file: "src", writers: ["t2"] }]);
+  });
+
+  test("returns findings in spec order across tasks", () => {
+    const tasks = [reading("t1", ["a.ts"], ["b.ts"]), reading("t2", ["b.ts"], ["a.ts"])];
+    assert.deepEqual(crossReads(tasks), [
+      { task: "t1", file: "b.ts", writers: ["t2"] },
+      { task: "t2", file: "a.ts", writers: ["t1"] },
+    ]);
+  });
+
+  test("flags nothing a task writes itself or no task writes, the same on every call", () => {
+    const tasks = [reading("t1", ["src"], ["src/a.ts", "README.md"]), task("t2", [], ["b.ts"])];
+    assert.deepEqual(crossReads(tasks), []);
+    assert.deepEqual(crossReads(tasks), []);
+  });
+
+  test("a shared prefix that isn't a path segment is no overlap", () => {
+    assert.deepEqual(crossReads([task("t1", [], ["src"]), reading("t2", ["b.ts"], ["srcs/x.ts"])]), []);
+  });
+
+  test("a task without testReads, or with a non-array one, reads nothing, and a non-string read is skipped", () => {
+    assert.deepEqual(crossReads([task("t1", [], ["a.ts"]), task("t2", [], ["b.ts"])]), []);
+    assert.deepEqual(crossReads([task("t1", [], ["a.ts"]), reading("t2", ["b.ts"], "a.ts")]), []);
+    assert.deepEqual(crossReads([task("t1", [], ["a.ts"]), reading("t2", ["b.ts"], [3, null, "a.ts"])]), [
+      { task: "t2", file: "a.ts", writers: ["t1"] },
+    ]);
+  });
+
+  test("equal input gives deep-equal output", () => {
+    assert.deepEqual(crossReads(crossReadSpec()), crossReads(crossReadSpec()));
+    assert.deepEqual(crossReads(crossReadSpec()), [{ task: "t2", file: "a.ts", writers: ["t1"] }]);
   });
 });
 

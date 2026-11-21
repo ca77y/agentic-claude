@@ -781,11 +781,15 @@ function answersRejected(v) {
 // src/slopify/lib/spec.ts
 var TASK = {
   type: "object",
-  required: ["id", "dependsOn", "files", "criteria", "todo", "reuse", "create"],
+  required: ["id", "dependsOn", "files", "testReads", "criteria", "todo", "reuse", "create"],
   properties: {
     id: { type: "string" },
     dependsOn: { ...STRINGS, description: "Ids of the tasks this one needs finished first" },
     files: { ...STRINGS, description: "Files or directories this task may write, relative to the worktree root" },
+    testReads: {
+      ...STRINGS,
+      description: "Files or directories this task's tests actually read directly (open, run, assert on, or import directly, never what those imports import in turn), relative to the worktree root, literal with no globs"
+    },
     criteria: { ...STRINGS, description: "Ids of the criteria this task delivers" },
     todo: {
       type: "string",

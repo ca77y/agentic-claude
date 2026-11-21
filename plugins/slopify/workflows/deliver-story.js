@@ -311,6 +311,18 @@ function hasLabel(labels, label) {
 var isDeliverable = (labels) => hasLabel(labels, DELIVERABLE_LABEL);
 var samePath = (a, b) => a === b || a.startsWith(`${b}/`) || b.startsWith(`${a}/`);
 var filesOverlap = (x, y) => x.files.some((a) => y.files.some((b) => samePath(a, b)));
+var isList = (v) => Array.isArray(v);
+function crossReads(tasks) {
+  return tasks.flatMap((t) => {
+    const listed = isList(t.testReads) ? t.testReads : [];
+    const reads = listed.filter((r) => typeof r === "string");
+    return reads.filter((file) => t.files.every((f) => file !== f && !file.startsWith(`${f}/`))).map((file) => ({
+      task: t.id,
+      file,
+      writers: tasks.filter((o) => o.id !== t.id && o.files.some((f) => samePath(file, f))).map((o) => o.id)
+    })).filter((r) => r.writers.length > 0);
+  });
+}
 function waves(tasks) {
   const out = [];
   const finished = /* @__PURE__ */ new Set();
@@ -790,11 +802,15 @@ async function workspace(d, o) {
 // src/slopify/lib/spec.ts
 var TASK = {
   type: "object",
-  required: ["id", "dependsOn", "files", "criteria", "todo", "reuse", "create"],
+  required: ["id", "dependsOn", "files", "testReads", "criteria", "todo", "reuse", "create"],
   properties: {
     id: { type: "string" },
     dependsOn: { ...STRINGS, description: "Ids of the tasks this one needs finished first" },
     files: { ...STRINGS, description: "Files or directories this task may write, relative to the worktree root" },
+    testReads: {
+      ...STRINGS,
+      description: "Files or directories this task's tests actually read directly (open, run, assert on, or import directly, never what those imports import in turn), relative to the worktree root, literal with no globs"
+    },
     criteria: { ...STRINGS, description: "Ids of the criteria this task delivers" },
     todo: {
       type: "string",
@@ -2684,6 +2700,16 @@ function unpermitted(build) {
     kind: "spec"
   }));
 }
+function crossReadBlockers(build) {
+  return crossReads(build.tasks).map((r) => ({
+    location: `task ${r.task}`,
+    problem: `${r.task}'s tests read ${r.file}, which ${r.writers.join(", ")} write${r.writers.length > 1 ? "" : "s"} and ${r.task} doesn't. A task's test reads only files that task writes or files no task writes. Answer this by changing which task writes or tests ${r.file}, never by removing it from testReads while the tests still read it.`,
+    severity: "blocker",
+    reason: "A coder may write only its own task's files, so its test can't pass on a file another task writes.",
+    kind: "spec"
+  }));
+}
+var crossReadLines = (build) => problemLines(crossReadBlockers(build));
 var escalation = (decide2) => decide2.length > 0 ? `
 
 No revision can settle these, because the issue's own criteria conflict or can be read more than one way. Record each as a decision with affectsAcceptance true: pick the most reasonable reading, cite what grounds it, and build the spec on it:
@@ -2700,6 +2726,7 @@ async function challenge(o, first) {
     const advised = must(attacked, "how", "The advisors' attack on the spec.");
     const found = [
       ...unpermitted(spec.build),
+      ...crossReadBlockers(spec.build),
       ...advised,
       ...await ruleOn(o, must(checked, "how", "The spec's checks."), advised)
     ];
@@ -2708,7 +2735,7 @@ async function challenge(o, first) {
     if (open.length === 0 && decide2.length === 0) return { spec, blockers: [] };
     if (open.length === 0) {
       spec = await writeAndCommit(o, escalation(decide2).trimStart(), "record the spec's open decisions", "Challenge");
-      return { spec, blockers: [] };
+      return { spec, blockers: crossReadLines(spec.build) };
     }
     if (revisions === MAX_FIX_ROUNDS) break;
     spec = await writeAndCommit(
@@ -2728,6 +2755,7 @@ ${list(problemLines(open))}${escalation(decide2)}`,
       "record the spec's open risks",
       "Challenge"
     );
+    return { spec, blockers: crossReadLines(spec.build) };
   }
   return { spec, blockers: stillBlocking };
 }
@@ -2796,7 +2824,7 @@ ${list(before)}`,
     const criteriaOf2 = (v, t) => JSON.stringify((v?.criteria ?? []).filter((c) => t.criteria.includes(c.id)));
     const changed = (t) => {
       const old = previous.build?.tasks.find((x) => x.id === t.id);
-      return !old || JSON.stringify(old) !== JSON.stringify(t) || criteriaOf2(previous.validate, t) !== criteriaOf2(spec.validate, t);
+      return !old || JSON.stringify(old) !== JSON.stringify("testReads" in old ? t : { ...t, testReads: void 0 }) || criteriaOf2(previous.validate, t) !== criteriaOf2(spec.validate, t);
     };
     return {
       build: spec.build,

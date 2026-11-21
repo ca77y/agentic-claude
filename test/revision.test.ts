@@ -14,11 +14,18 @@ const task = (id: string, todo = `build ${id}`): Task => ({
   id,
   dependsOn: [],
   files: [`src/${id}.ts`],
+  testReads: [],
   criteria: [`c-${id}`],
   todo,
   reuse: [],
   create: [],
 });
+// A task of a spec committed before testReads existed.
+const legacyTask = (id: string): Task => {
+  const t: Partial<Task> = task(id);
+  delete t.testReads;
+  return t as Task;
+};
 const specOf = (tasks: Task[]): { build: Build; validate: Validate } => ({
   build: { shared: [], tasks, docs: [], decisions: [], manualActions: [] },
   validate: {
@@ -83,6 +90,12 @@ describe("the tasks a spec revision runs again", () => {
       [task("t1"), task("t2", "build t2 another way"), task("t3")],
     );
     assert.deepEqual(ids, ["t1", "t2"]);
+  });
+
+  test("leave out an unchanged task of a spec written before testReads existed", async () => {
+    const before = [legacyTask("t1"), legacyTask("t2")];
+    const ids = await rerunIds("design: wrong", before, [task("t1"), task("t2")]);
+    assert.deepEqual(ids, [], "the revised spec's testReads alone is not a change to the task");
   });
 
   test("include a task the revision adds", async () => {

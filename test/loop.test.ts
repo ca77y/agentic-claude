@@ -29,7 +29,18 @@ const use = (s: Script): void => {
 
 const BUILD: Build = {
   shared: [],
-  tasks: [{ id: "t1", dependsOn: [], files: ["src/a.ts"], criteria: ["c1"], todo: "do it", reuse: [], create: [] }],
+  tasks: [
+    {
+      id: "t1",
+      dependsOn: [],
+      files: ["src/a.ts"],
+      testReads: [],
+      criteria: ["c1"],
+      todo: "do it",
+      reuse: [],
+      create: [],
+    },
+  ],
   docs: [],
   decisions: [],
   manualActions: [],
@@ -1102,8 +1113,8 @@ describe("parallel inner loops", () => {
   const two: Build = {
     shared: [],
     tasks: [
-      { id: "a", dependsOn: [], files: ["a.ts"], criteria: [], todo: "", reuse: [], create: [] },
-      { id: "b", dependsOn: ["a"], files: ["b.ts"], criteria: [], todo: "", reuse: [], create: [] },
+      { id: "a", dependsOn: [], files: ["a.ts"], testReads: [], criteria: [], todo: "", reuse: [], create: [] },
+      { id: "b", dependsOn: ["a"], files: ["b.ts"], testReads: [], criteria: [], todo: "", reuse: [], create: [] },
     ],
     docs: [],
     decisions: [],
@@ -1647,6 +1658,7 @@ const revisionTask = (id: string, file: string, criterion: string, todo: string)
   id,
   dependsOn: [],
   files: [file],
+  testReads: [],
   criteria: [criterion],
   todo,
   reuse: [],

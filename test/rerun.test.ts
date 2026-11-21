@@ -24,10 +24,11 @@ const SPEC_FILE_NAMES = ["build.json", "validate.json", "RATIONALE.md"] as const
 type SpecFile = (typeof SPEC_FILE_NAMES)[number];
 type Files = Partial<Record<SpecFile, string>>;
 
-const task = (n: number, todo = "x") => ({
+const task = (n: number, todo = "x", testReads: string[] = []) => ({
   id: `t${String(n)}`,
   dependsOn: [],
   files: [`a${String(n)}.ts`],
+  testReads,
   criteria: ["c1"],
   todo,
   reuse: [],
@@ -407,4 +408,15 @@ describe("SMR-374: a rerun over a committed spec", () => {
       );
     });
   }
+});
+
+describe("SMR-379: a spec with a cross-read", () => {
+  test("a spec whose t2 test reads t1's file on every write is never built: the run ends blocked, and says why", async () => {
+    const crossRead = buildOf([task(1), task(2, "x", ["a1.ts"])]);
+    const { result, calls: cs } = await run(FIRST_TITLE, { folders: new Map(), ledger: [] }, crossRead);
+    assert.equal(built(cs), 0, "no coder dispatched");
+    assert.equal(result.status, "blocked");
+    const halt = cs.find((c) => c.type === "pusher" && c.label === "report the halt")?.prompt ?? "";
+    assert.ok(halt.includes("t2") && halt.includes("a1.ts"), `the issue comment names the task and the file: ${halt}`);
+  });
 });
