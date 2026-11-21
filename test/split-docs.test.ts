@@ -94,7 +94,6 @@ describe("README, DESIGN, and the plugin description name split mode (SMR-380)",
         .split("\n")
         .find((l) => l.startsWith("- **Producers**")) ?? "";
     assert.ok(says(producers, /`writer-split`/, /return/i), "writer-split returns its plan");
-    assert.ok(says(producers, /`writer-split`/), "writer-split is listed");
   });
 
   test("plugin.json's description names split mode and writer-split", () => {
