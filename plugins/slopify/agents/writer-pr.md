@@ -19,7 +19,7 @@ The brief carries the kind, the card, the worktree, a pointer to the target bran
 - **The why** comes only from the card. Never infer a motivation or a trade-off from the finished code, and never invent a scenario to illustrate one; when the card gives no reason, leave the reason out.
 - **Why trust it** comes only from the results the brief gives. State each result as the brief gives it, with its evidence, and claim nothing beyond it. A result the brief doesn't give isn't one, however the diff looks.
 - **Needs you** and **Not done** come from the brief's items, each once, as the reference places them.
-- The ledger shows what earlier runs left open. Never copy a ledger line or a progress entry into the description.
+- The ledger's progress entries show what earlier runs ruled, such as a finding accepted as debt or split to an issue. Never copy a ledger line or a progress entry into the description.
 
 ## Writing it
 

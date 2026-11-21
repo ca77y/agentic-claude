@@ -1288,19 +1288,18 @@ function fencedIn(prompt: string, body: string): boolean {
 }
 const postings = () => calls.filter((c) => isPosting(c));
 const pusherCalls = () => calls.filter((c) => c.type === "pusher");
-const PROGRESS = /progress \d+ (?:finding|ruling|tried|changed):/;
+const PROGRESS = /progress \d+ ruling:/;
 const ledgerBlock = (prompt: string): string =>
   /Append these lines[^\n]*\n([\s\S]*?)(?:\n\n|$)/.exec(prompt)?.[1] ?? "";
 const ledgerLines = (): string[] => pusherCalls().flatMap((c) => ledgerBlock(c.prompt).split("\n"));
-const reviewThenClean = (text: string): Script => {
+const reviewOnce = (text: string): Script => {
   let review = 0;
-  return happy({
-    watcher: () => {
-      review += 1;
-      return review === 1 ? finding(text) : CLEAN_REVIEW;
-    },
-  });
+  return () => {
+    review += 1;
+    return review === 1 ? finding(text) : CLEAN_REVIEW;
+  };
 };
+const reviewThenClean = (text: string): Script => happy({ watcher: reviewOnce(text) });
 const withDefaultFence = (prompt: string): string => `${prBody(prompt)}\n<<<BODY\nBODY>>>\n- still the body`;
 const CARD_OP = { op: "card", result: "filed", reference: "SMR-77", link: "https://linear.app/t/issue/SMR-77" };
 const preExisting = (filing: Reply): Script =>
@@ -1439,25 +1438,18 @@ describe("the PR description", () => {
     assert.ok(brief.includes("src/a.ts: wrong"), "the open blocker");
   });
 
-  test("each round's findings, rulings, attempts and changes ride on a pusher dispatch as progress entries", async () => {
+  test("each ruling rides on a pusher dispatch as a progress entry holding its decision, and nothing else does", async () => {
     use(reviewThenClean("off by one"));
     await runLoop(inputFor(freshRun()));
-    const lines = ledgerLines();
+    const entries = ledgerLines().filter((l) => l.startsWith("- progress "));
     assert.ok(
-      lines.some((l) => /^- progress \d+ finding: .*off by one/.test(l)),
-      "the finding",
+      entries.some((l) => /^- progress \d+ ruling: src\/a\.ts\|f\|bug: confirmed, major, code, \S+$/.test(l)),
+      "the ruling's decision",
     );
-    assert.ok(
-      lines.some((l) => /^- progress \d+ ruling: .*seen/.test(l)),
-      "the ruling with its reason",
-    );
-    assert.ok(
-      lines.some((l) => l.startsWith("- progress 1 tried: ")),
-      "what round 1 tried",
-    );
-    assert.ok(
-      lines.some((l) => /^- progress 1 changed: .*src\/a\.ts/.test(l)),
-      "what round 1 changed",
+    assert.deepEqual(
+      entries.filter((l) => !PROGRESS.test(l) || l.includes("seen") || l.includes("off by one")),
+      [],
+      "no finding, reason, attempt, or change",
     );
   });
 
@@ -1607,7 +1599,6 @@ describe("the PR description", () => {
 
 // SMR-404: the pusher refuses a progress line, or reports one out of order, while every operation it was asked for
 // succeeded, as the live pusher did in wf_ce30743f-626.
-const LONG = Array.from({ length: 120 }, (_, i) => `src/module-${String(i)}/a-fairly-long-file-name-${String(i)}.ts`);
 const progressRefusing =
   (refuse: (line: string) => string | null): Script =>
   (_t, label, prompt) => {
@@ -1625,47 +1616,29 @@ const progressRefusing =
   };
 
 describe("a progress line the pusher refuses", () => {
-  test("a shortened progress line it won't append doesn't block the push, and the run reaches the review", async () => {
-    use(
-      happy({
-        coder: (_t, label) => (label.endsWith(": test") ? OK_TEST : { ...OK_FIX, changed: LONG }),
-        pusher: progressRefusing((line) =>
-          line.length > 1000
-            ? `Ledger line '${line.slice(0, 20)}...' was not appended. The brief's text for it is cut off with '...', so it cannot be copied whole without altering the data.`
-            : null,
-        ),
-      }),
-    );
-    const r = await settledRun(inputFor(freshRun()));
-    assert.ok(
-      ledgerLines().some((l) => /^- progress \d+ changed: /.test(l) && l.length > 1000),
-      "the run sent a long changed line",
-    );
-    assert.ok(!(r instanceof Halt), `the run halted: ${String(r)}`);
-    assert.ok(count("watcher") > 0, "the run reached the Review phase");
-    assert.ok(["ready", "draft"].includes((r as { status: string }).status));
-  });
-
-  test("a progress line it reports out of order doesn't block the push, and the run reaches the review", async () => {
-    use(
-      happy({
-        pusher: progressRefusing((line) => {
-          const m = /^progress (\d+) (\w+):/.exec(line);
-          return m
-            ? `Ledger line 'progress ${m[1] ?? ""} ${m[2] ?? ""}' was appended out of order, after 'done round ${m[1] ?? ""}'.`
-            : null;
-        }),
-      }),
-    );
-    const r = await settledRun(inputFor(freshRun()));
-    assert.ok(
-      ledgerLines().some((l) => PROGRESS.test(l)),
-      "the run sent progress lines",
-    );
-    assert.ok(!(r instanceof Halt), `the run halted: ${String(r)}`);
-    assert.ok(count("watcher") > 0, "the run reached the Review phase");
-    assert.ok(["ready", "draft"].includes((r as { status: string }).status));
-  });
+  const refusals: [string, (line: string) => string][] = [
+    ["it won't append", (line) => `Ledger line '${line.slice(0, 20)}...' was not appended.`],
+    [
+      "it reports out of order",
+      (line) => {
+        const round = /^progress (\d+) /.exec(line)?.[1] ?? "";
+        return `Ledger line 'progress ${round} ruling' was appended out of order, after 'done round ${round}'.`;
+      },
+    ],
+  ];
+  for (const [what, refuse] of refusals) {
+    test(`a progress line ${what} doesn't block the push, and the run reaches the review`, async () => {
+      use(happy({ watcher: reviewOnce("off by one"), pusher: progressRefusing(refuse) }));
+      const r = await settledRun(inputFor(freshRun()));
+      assert.ok(
+        ledgerLines().some((l) => PROGRESS.test(l)),
+        "the run sent progress lines",
+      );
+      assert.ok(!(r instanceof Halt), `the run halted: ${String(r)}`);
+      assert.ok(count("watcher") > 0, "the run reached the Review phase");
+      assert.ok(["ready", "draft"].includes((r as { status: string }).status));
+    });
+  }
 });
 
 // SMR-405: a spec revision during the build reruns only the tasks it changed, and a rebuild of a change that is already
