@@ -11,6 +11,7 @@ import { spawn, spawnSync, type SpawnSyncOptions } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import {
   chmodSync,
+  copyFileSync,
   createWriteStream,
   existsSync,
   mkdirSync,
@@ -337,7 +338,8 @@ function sessionFiles(sessionId: string): { transcripts: { agent: boolean; lines
 /** The arm's final code as a patch on the seed: the checkout's working tree, or the story branch if it holds more. */
 function capturePatch(ws: string, dir: string, seed: string): string {
   const index = path.join(dir, "capture.index");
-  rmSync(index, { force: true });
+  // Start from the checkout's own index, so a submodule vendored as a plain directory stays one entry, as in git status.
+  copyFileSync(path.join(ws, ".git", "index"), index);
   const env = { ...process.env, GIT_INDEX_FILE: index };
   sh("git", ["add", "-A"], { cwd: ws, env });
   let patch = sh("git", ["diff", "--cached", "--binary", seed, "--", ".", ...DIFF_EXCLUDES], { cwd: ws, env });
