@@ -251,6 +251,8 @@ async function pool<T, R>(items: readonly T[], n: number, job: (item: T) => Prom
 }
 
 const containers = new Set<string>();
+/** The copied repositories of the run in progress, removed if the run is stopped. */
+const stopped: { work?: string } = {};
 function removeContainer(name: string): void {
   spawnSync("docker", ["rm", "-f", name], { stdio: "ignore" });
   containers.delete(name);
@@ -579,10 +581,14 @@ async function main(): Promise<void> {
   const command = process.argv[2];
   const tasks = selectTasks(LIST.tasks, list(option("--tasks") ?? process.env["TASKS"]));
   const jobs = Number(option("--jobs") ?? process.env["JOBS"] ?? 4);
-  process.on("SIGINT", () => {
-    for (const c of containers) removeContainer(c);
-    process.exit(130);
-  });
+  // A stopped run removes its containers and the repositories it copied; a resumed run copies them afresh.
+  for (const signal of ["SIGINT", "SIGTERM"] as const) {
+    process.on(signal, () => {
+      for (const c of containers) removeContainer(c);
+      if (stopped.work) rmSync(stopped.work, { recursive: true, force: true });
+      process.exit(signal === "SIGINT" ? 130 : 143);
+    });
+  }
   preflight();
   if (command === "install") {
     log(`installing ${String(tasks.length)} tasks into ${path.relative(ROOT, EVAL)}/`);
@@ -621,6 +627,7 @@ async function main(): Promise<void> {
   );
   const keep = process.argv.includes("--keep") || Boolean(process.env["KEEP"]);
   const work = path.join(WORK, path.basename(runDir));
+  if (!keep) stopped.work = work;
   const pluginCopy = path.join(work, "plugins", "slopify");
   rmSync(pluginCopy, { recursive: true, force: true });
   cpSync(PLUGIN, pluginCopy, { recursive: true });
