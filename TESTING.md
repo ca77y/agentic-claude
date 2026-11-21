@@ -55,7 +55,7 @@ The kinds of change this project recognizes. Every acceptance criterion is filed
 ### Full eval
 
 - Covers, the paths or kinds of change: claims about cost, accuracy, or quality across many runs.
-- Validation path: run `make eval` locally, only when the user asks; CI never runs it. The target is in development under SMR-364 and doesn't exist yet, so until it lands a full eval run is the user's by hand.
+- Validation path: run `make eval` locally, only when the user asks (after `make install-eval` once); CI never runs it. It runs the SWE-bench Pro comparison of the slopify workflows with plain Opus described in `scripts/swepro/README.md`, and `make eval-grader` checks its grader on every task's reference and empty patch. Both need Docker and call models through the user's login.
 - Required evidence: the user's run report.
 - When a criterion in this category can't be verified, the pull request is `ready` or stays `draft`: `draft`
 
@@ -71,7 +71,7 @@ The smoke cases under `plugins/slopify/evals/`: `shape-smoke`, `deliver-story-sm
 
 ## Evidence
 
-Command output for checks; eval reports in `plugins/slopify/evals/results/`, which is ignored. `make smoke` also publishes each run's HTML report to claude.ai when the account supports it.
+Command output for checks; eval reports in `plugins/slopify/evals/results/` and `.eval/runs/`, both ignored. `make smoke` also publishes each run's HTML report to claude.ai when the account supports it.
 
 ## Blind spots
 

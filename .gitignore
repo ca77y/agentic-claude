@@ -32,3 +32,6 @@ terraform/.terraform/
 terraform/*.tfstate
 terraform/*.tfstate.*
 terraform/*.tfplan
+
+# SWE-bench Pro comparison: pinned task folders, images' repositories, runs, and reports
+/.eval/

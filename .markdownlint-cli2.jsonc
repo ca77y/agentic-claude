@@ -10,6 +10,7 @@
   "ignores": [
     "node_modules/**",
     ".tmp/**",
+    ".eval/**",
     ".worktrees/**",
     ".claude/worktrees/**",
     "plugins/*/skills/*/resources/**",

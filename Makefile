@@ -1,6 +1,6 @@
 PLUGINS ?= $(wildcard plugins/*/)
 
-.PHONY: install build lint check format test smoke
+.PHONY: install build lint check format test smoke install-eval eval eval-grader
 
 # Once per clone: dev tools and the pre-commit hook.
 install:
@@ -45,3 +45,18 @@ smoke:
 	for p in $(PLUGINS); do \
 	  CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0 claude plugin eval "$$p" --tag smoke -j 6 --allow-tools Bash Write Edit Agent Workflow --scaffold --ablation none --trust-plugin || exit 1; \
 	done
+
+# The SWE-bench Pro comparison of the slopify workflows with plain Opus (scripts/swepro/README.md). It calls models
+# and runs Docker, so it runs only when asked: no other target and no CI job calls it. install-eval fetches the pinned
+# task folders, the dataset rows, and the task images into the ignored .eval/; run it once, or again after changing the
+# task list. TASKS limits a run to some tasks (a workflow, `shape`, or part of an instance id), ARMS to one arm, and
+# JOBS sets how many arms run at once; RUN=<run dir> resumes a stopped run.
+install-eval:
+	node scripts/swepro/main.ts install
+
+eval:
+	node scripts/swepro/main.ts run
+
+# Grades every task's reference patch and an empty patch, to show the grader resolves the one and not the other.
+eval-grader:
+	node scripts/swepro/main.ts grader

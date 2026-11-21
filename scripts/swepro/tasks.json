@@ -1,0 +1,121 @@
+{
+  "harness": {
+    "repository": "https://github.com/scaleapi/SWE-bench_Pro-os",
+    "commit": "66f92766bba642462d4bbe5479e83f91f9211862"
+  },
+  "dataset": { "name": "ScaleAI/SWE-bench_Pro", "config": "default", "split": "test" },
+  "tasks": [
+    {
+      "id": "instance_ansible__ansible-c1f2df47538b884a43320f53e787197793b105e8-v906c969b551b346ef54a2c0b41e04f632b7b73c2",
+      "workflow": "deliver-story",
+      "shape": true,
+      "size": "hard",
+      "note": "BIG-IP message routing routes"
+    },
+    {
+      "id": "instance_flipt-io__flipt-e50808c03e4b9d25a6a78af9c61a3b1616ea356b",
+      "workflow": "deliver-story",
+      "shape": true,
+      "size": "large",
+      "note": "extensible audit log sinks"
+    },
+    {
+      "id": "instance_protonmail__webclients-6dcf0d0b0f7965ad94be3f84971afeb437f25b02",
+      "workflow": "deliver-story",
+      "shape": true,
+      "size": "large",
+      "note": "Security Center doesn't create a Pass vault unasked"
+    },
+    {
+      "id": "instance_internetarchive__openlibrary-7cbfb812ef0e1f9716e2d6e85d538a96fcb79d13-vfa6ff903cb27f336e17654595dd900fa943dcd91",
+      "workflow": "deliver-story",
+      "shape": false,
+      "size": "hard",
+      "note": "observation helpers and persistence"
+    },
+    {
+      "id": "instance_future-architect__vuls-1832b4ee3a20177ad313d806983127cb6e53f5cf",
+      "workflow": "deliver-story",
+      "shape": false,
+      "size": "large",
+      "note": "macOS host scanning"
+    },
+    {
+      "id": "instance_element-hq__element-web-33e8edb3d508d6eefb354819ca693b7accc695e7",
+      "workflow": "deliver-story",
+      "shape": false,
+      "size": "large",
+      "note": "keyboard shortcut handling rework"
+    },
+    {
+      "id": "instance_internetarchive__openlibrary-b67138b316b1e9c11df8a4a8391fe5cc8e75ff9f-ve8c8d62a2b60610a3c4631f5f23ed866bada9818",
+      "workflow": "deliver-bugfix",
+      "shape": false,
+      "size": "hard",
+      "note": "MARC 880 alternate-script extraction"
+    },
+    {
+      "id": "instance_flipt-io__flipt-ea9a2663b176da329b3f574da2ce2a664fc5b4a1",
+      "workflow": "deliver-bugfix",
+      "shape": false,
+      "size": "medium",
+      "note": "namespace list with restricted access"
+    },
+    {
+      "id": "instance_future-architect__vuls-6682232b5c8a9d08c0e9f15bd90d41bff3875adc",
+      "workflow": "deliver-bugfix",
+      "shape": false,
+      "size": "medium",
+      "note": "Amazon Linux 2023 version detection"
+    },
+    {
+      "id": "instance_ansible__ansible-a02e22e902a69aeb465f16bf03f7f5a91b2cb828-vba6da65a0f3baefda7a058ebbd0a8dcafb8512f5",
+      "workflow": "deliver-bugfix",
+      "shape": false,
+      "size": "easy",
+      "note": "offline collection install hits the network"
+    },
+    {
+      "id": "instance_qutebrowser__qutebrowser-f631cd4422744160d9dcf7a0455da532ce973315-v35616345bb8052ea303186706cec663146f0f184",
+      "workflow": "deliver-trivial",
+      "shape": false,
+      "size": "bigger",
+      "note": "changelog only for some upgrade types"
+    },
+    {
+      "id": "instance_element-hq__element-web-cf3c899dd1f221aa1a1f4c5a80dffc05b9c21c85-vnan",
+      "workflow": "deliver-trivial",
+      "shape": false,
+      "size": "bigger",
+      "note": "voice broadcast liveness badge"
+    },
+    {
+      "id": "instance_gravitational__teleport-a95b3ae0667f9e4b2404bf61f51113e6d83f01cd",
+      "workflow": "deliver-trivial",
+      "shape": false,
+      "size": "medium",
+      "note": "tsh Kubernetes cluster from an environment variable"
+    },
+    {
+      "id": "instance_internetarchive__openlibrary-f343c08f89c772f7ba6c0246f384b9e6c3dc0add-v08d8e8889ec945ab821fb156c04c7d2e2810debb",
+      "workflow": "deliver-trivial",
+      "shape": false,
+      "size": "medium",
+      "note": "author matching across date formats"
+    },
+    {
+      "id": "instance_qutebrowser__qutebrowser-96b997802e942937e81d2b8a32d08f00d3f4bc4e-v5fc38aaf22415ab0b70567368332beee7955b367",
+      "workflow": "deliver-trivial",
+      "shape": false,
+      "size": "small",
+      "note": "parse_duration validation"
+    },
+    {
+      "id": "instance_protonmail__webclients-944adbfe06644be0789f59b78395bdd8567d8547",
+      "workflow": "deliver-trivial",
+      "shape": false,
+      "size": "small",
+      "note": "API error metrics"
+    }
+  ]
+}
