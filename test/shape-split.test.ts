@@ -5,6 +5,7 @@ import { beforeEach, describe, test } from "node:test";
 
 import shape, { meta } from "../src/slopify/workflows/shape.ts";
 import { MAX_CARDS, REQUIRED_PARTS, type Plan } from "../src/slopify/lib/split.ts";
+import { slugged } from "../src/slopify/lib/family.ts";
 import { calls, current, installAgents, type Reply, type Script } from "./harness.ts";
 import { board, clearBoard, linearPusher, relatedCardsScout } from "./linear-board.ts";
 
@@ -287,6 +288,41 @@ describe("relations between the cards (c3)", () => {
     assert.deepEqual(a.blockedBy ?? [], []);
   });
 
+  test("a dependent in a later wave than its dependency is blocked by the dependency's card", async () => {
+    world.plan = planOf([part("a"), part("catalog"), part("cart"), part("checkout"), part("b", ["a"])]);
+    const r = await split();
+    assert.equal(r.status, "done", r.report);
+    const b = board.find((c) => c.id === cardOf(r, "b"));
+    assert.ok(b, `b's card is filed: ${JSON.stringify(r.cards)}`);
+    assert.deepEqual(b.blockedBy, [cardOf(r, "a")]);
+  });
+
+  test("a dependency inside the cap is filed and its dependent over the cap is left out", async () => {
+    world.plan = planOf([part("b", ["a"]), part("a")]);
+    const r = await split({ cap: 1 });
+    assert.equal(count("pusher"), 1);
+    assert.deepEqual(
+      r.cards?.map((c) => c.part),
+      ["a"],
+    );
+    assert.match(r.leftOut?.find((l) => l.part === "b")?.reason ?? "", /cap\D*1\b/);
+  });
+
+  test("a dependency still missing a required part is left out, and its dependent is filed blocked by no card", async () => {
+    world.plan = planOf([part("a"), part("b", ["a"])]);
+    world.writer = (_label, prompt) => ({
+      openQuestions: [],
+      parts: isPart("a", prompt) ? FULL.filter((p) => p.name !== "Out of scope") : FULL,
+    });
+    const r = await split();
+    assert.equal(r.status, "done", r.report);
+    assert.match(r.leftOut?.find((l) => l.part === "a")?.reason ?? "", /Out of scope/);
+    const b = board.find((c) => c.id === cardOf(r, "b"));
+    assert.ok(b, `b's card is filed: ${JSON.stringify(r.cards)}`);
+    assert.deepEqual(b.blockedBy ?? [], []);
+    assert.equal(board.length, 1);
+  });
+
   test("a checked overlap becomes a related card, and one the scout never reported is dropped", async () => {
     board.push({ id: "SMR-50", body: "Hand-filed card.", writes: 1 });
     world.plan = planOf([part("catalog")]);
@@ -454,6 +490,48 @@ describe("a create that fails", () => {
       rerun.covered?.map((c) => c.card),
       board.map((c) => c.id),
     );
+  });
+});
+
+describe("a halt while drafting", () => {
+  test("a writer-card halt on a part in the second wave returns Stopped naming each card the first wave filed, and a rerun files only the rest", async () => {
+    const keys = ["catalog", "cart", "checkout", "reviews", "a", "b"];
+    world.plan = planOf(keys.map((k) => part(k)));
+    world.writer = (_label, prompt) => (isPart("b", prompt) ? null : { openQuestions: [], parts: FULL });
+    const r = await split();
+    assert.equal(r.status, "blocked", JSON.stringify(r));
+    const filed = board.map((c) => c.id);
+    assert.equal(filed.length, 4, `the first wave's cards stay on the board: ${filed.join(", ")}`);
+    for (const id of filed) assert.ok(JSON.stringify(r.completed).includes(id), `Stopped does not name ${id}`);
+
+    world.writer = () => ({ openQuestions: [], parts: FULL });
+    const rerun = await split();
+    assert.equal(rerun.status, "done", rerun.report);
+    assert.equal(board.length, 6);
+    assert.deepEqual(
+      rerun.covered?.map((c) => c.card),
+      filed,
+    );
+    assert.deepEqual(
+      rerun.cards?.map((c) => c.part),
+      ["a", "b"],
+    );
+  });
+});
+
+describe("the hidden line", () => {
+  test("a request whose slug starts with a shorter request's slug never shares a hidden line with it when the part ids hold the rest", async () => {
+    // "Build the <h>" slugs to build-the-<h>-<h2>, and "Build the" to build-the-<h>, so joining slug and part id with
+    // a dash would give both build-the-<h>-<h2>-cart.
+    const short = "Build the";
+    const long = `${short} ${slugged(short).split("-").at(-1) ?? ""}`;
+    world.plan = planOf([part("cart")]);
+    await run({ idea: long, split: true });
+    world.plan = planOf([part(`${slugged(long).split("-").at(-1) ?? ""}-cart`)]);
+    const r = await run({ idea: short, split: true });
+    assert.equal(r.cards?.length, 1, r.report);
+    assert.deepEqual(r.covered ?? [], []);
+    assert.equal(board.length, 2);
   });
 });
 
