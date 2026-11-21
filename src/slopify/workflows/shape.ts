@@ -193,7 +193,9 @@ function subject(c: Card): string {
 
 // The line shape ends a card with, naming the run's slug. Its words are joined by spaces, which leaves nothing a board
 // links on save, such as Linear turning smr-317 into an issue link, so a rerun finds the card by it.
-const markerOf = (slug: string): string => `<!-- shape ${slug.replaceAll("-", " ")} -->`;
+// A split card's line also names its part, after a slash no slug holds, so two requests never share one.
+const markerOf = (slug: string, part = ""): string =>
+  `<!-- shape ${slug.replaceAll("-", " ")}${part ? ` / ${part.replaceAll("-", " ")}` : ""} -->`;
 
 async function read(
   d: Run,
@@ -415,9 +417,8 @@ function splitTarget(r: Relations): string {
   return `Create a card with it. ${named.length > 0 ? named.join(" ") : "Add no relation."}`;
 }
 
-async function file(d: Run, c: Card, slug: string, deliverable: boolean, split?: Relations): Promise<string> {
+async function file(d: Run, c: Card, marker: string, deliverable: boolean, split?: Relations): Promise<string> {
   phase("File");
-  const marker = markerOf(slug);
   // advisor-fit already found no card holding this idea, so an idea gets a new card.
   const target = split ? splitTarget(split) : c.cardId ? `Update card ${c.cardId} with it.` : "Create a card with it.";
   const authorizes = split
@@ -479,8 +480,8 @@ const WAVE = 4;
 interface OpenPart {
   part: Part;
   shaping: Card;
-  /** The slug its hidden line and draft are named for. */
-  slug: string;
+  /** The hidden line its card ends with. */
+  marker: string;
   evidence: string;
   views: string;
   /** Checked ids of the cards that hold part of its outcome. */
@@ -519,7 +520,7 @@ async function plan(d: Run, request: string, evidence: string): Promise<Plan> {
   phase("Plan");
   return must(
     await dispatch(
-      `${d.WHERE}\nBreak the request below into the parts it needs, each small enough for one story card. Plan every part the request needs: a cap on the cards filed is applied after you, so never trim the plan to one. Write no file and change no board.\n\n${fenced("REQUEST", request)}\n\nEvidence:\n${evidence}`,
+      `${d.WHERE}\nBreak the request below into the parts it needs, each small enough for one story card. Plan every part the request needs, however many there are. Write no file and change no board.\n\n${fenced("REQUEST", request)}\n\nEvidence:\n${evidence}`,
       { agentType: "slopify:writer-split", label: "plan the cards", phase: "Plan", schema: PLAN_SCHEMA },
     ),
     "plan",
@@ -549,8 +550,7 @@ async function cover(
   evidence: string,
   p: Part,
 ): Promise<Covered | OpenPart> {
-  const partSlug = `${slug}-${p.id}`;
-  const marker = markerOf(partSlug);
+  const marker = markerOf(slug, p.id);
   const found = must(
     await scout(
       "scout-related-cards",
@@ -577,7 +577,7 @@ async function cover(
   const original = checkedId(duplicateOf, locations);
   if (original) return { part: p.id, card: original };
   const related = unique(overlaps.map((id) => checkedId(id, locations)));
-  return { part: p, shaping, slug: partSlug, evidence: all, views, related };
+  return { part: p, shaping, marker, evidence: all, views, related };
 }
 
 // Ground once, plan once, then shape and file each part no card covers, up to the cap, a wave at a time in dependency
@@ -615,7 +615,7 @@ async function runSplit(d: Run, request: string, argCap: number | null): Promise
       }
       const deliverable = openQuestions.length === 0;
       const blockedBy = unique(o.part.dependsOn.map((id) => cardOfPart.get(id) ?? ""));
-      const card = await file(d, o.shaping, o.slug, deliverable, { cap, blockedBy, relatedTo: o.related });
+      const card = await file(d, o.shaping, o.marker, deliverable, { cap, blockedBy, relatedTo: o.related });
       cardOfPart.set(o.part.id, card);
       cards.push({ part: o.part.id, card, deliverable, openQuestions });
       d.done(`file ${o.part.id}: ${card}`);
@@ -669,7 +669,7 @@ export default async function run(): Promise<NotStarted | Stopped | Shaped | Dup
     if ("duplicateOf" in drafted) return await duplicate(d, c, drafted.duplicateOf, named);
     const { openQuestions } = await refine(d, c, drafted);
     const deliverable = c.kind === "story" && openQuestions.length === 0;
-    const filed = await file(d, c, slug, deliverable);
+    const filed = await file(d, c, markerOf(slug), deliverable);
     return {
       status: "done",
       workflow: WORKFLOW,

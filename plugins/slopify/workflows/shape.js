@@ -851,7 +851,7 @@ ${c.current}
 CARD>>>` : ""
   ].filter(Boolean).join("\n\n");
 }
-var markerOf = (slug) => `<!-- shape ${slug.replaceAll("-", " ")} -->`;
+var markerOf = (slug, part = "") => `<!-- shape ${slug.replaceAll("-", " ")}${part ? ` / ${part.replaceAll("-", " ")}` : ""} -->`;
 async function read(d, cardArg, idea) {
   phase("Read");
   const [card, related] = await parallel([
@@ -1055,9 +1055,8 @@ function splitTarget(r) {
   ].filter(Boolean);
   return `Create a card with it. ${named.length > 0 ? named.join(" ") : "Add no relation."}`;
 }
-async function file(d, c, slug, deliverable, split) {
+async function file(d, c, marker, deliverable, split) {
   phase("File");
-  const marker = markerOf(slug);
   const target = split ? splitTarget(split) : c.cardId ? `Update card ${c.cardId} with it.` : "Create a card with it.";
   const authorizes = split ? `The user's invocation of shape on one request authorizes at most ${String(split.cap)} new cards, and this is one of them: create one card on the board from the card draft below, as docs/BOARD.md declares, with the relations this brief names, and set its ${SHAPED_LABEL} and ${DELIVERABLE} labels as asked. Nothing else: no change to an existing card, and no other card, commit, branch, push, or PR. When a relation this brief names has no Create binding in docs/BOARD.md, create nothing and report that relation unmet.` : `The user's invocation of shape authorizes exactly this: write the card draft below to one card on the board, as docs/BOARD.md declares, and set its ${SHAPED_LABEL} and ${DELIVERABLE} labels as asked. Nothing else: no commit, branch, push, PR, or other card.`;
   const deliverableLabel = c.kind === "story" ? deliverable ? ` Make sure the card has the label ${DELIVERABLE}.` : ` Make sure the card doesn't have the label ${DELIVERABLE}.` : "";
@@ -1125,7 +1124,7 @@ async function plan(d, request, evidence) {
   return must(
     await dispatch(
       `${d.WHERE}
-Break the request below into the parts it needs, each small enough for one story card. Plan every part the request needs: a cap on the cards filed is applied after you, so never trim the plan to one. Write no file and change no board.
+Break the request below into the parts it needs, each small enough for one story card. Plan every part the request needs, however many there are. Write no file and change no board.
 
 ${fenced("REQUEST", request)}
 
@@ -1145,8 +1144,7 @@ ${list(constraints)}` : "",
 ${request}`
 ].filter(Boolean).join("\n\n");
 async function cover(d, request, slug, constraints, evidence, p) {
-  const partSlug = `${slug}-${p.id}`;
-  const marker = markerOf(partSlug);
+  const marker = markerOf(slug, p.id);
   const found = must(
     await scout(
       "scout-related-cards",
@@ -1178,7 +1176,7 @@ ${show(`scout-related-cards for ${p.id}`, found)}`;
   const original = checkedId(duplicateOf, locations);
   if (original) return { part: p.id, card: original };
   const related = unique(overlaps.map((id) => checkedId(id, locations)));
-  return { part: p, shaping, slug: partSlug, evidence: all, views, related };
+  return { part: p, shaping, marker, evidence: all, views, related };
 }
 async function runSplit(d, request, argCap) {
   const { related } = await read(d, "", request);
@@ -1214,7 +1212,7 @@ async function runSplit(d, request, argCap) {
       }
       const deliverable = openQuestions.length === 0;
       const blockedBy = unique(o.part.dependsOn.map((id) => cardOfPart.get(id) ?? ""));
-      const card = await file(d, o.shaping, o.slug, deliverable, { cap, blockedBy, relatedTo: o.related });
+      const card = await file(d, o.shaping, o.marker, deliverable, { cap, blockedBy, relatedTo: o.related });
       cardOfPart.set(o.part.id, card);
       cards.push({ part: o.part.id, card, deliverable, openQuestions });
       d.done(`file ${o.part.id}: ${card}`);
@@ -1266,7 +1264,7 @@ async function run() {
     if ("duplicateOf" in drafted) return await duplicate(d, c, drafted.duplicateOf, named);
     const { openQuestions } = await refine(d, c, drafted);
     const deliverable = c.kind === "story" && openQuestions.length === 0;
-    const filed = await file(d, c, slug, deliverable);
+    const filed = await file(d, c, markerOf(slug), deliverable);
     return {
       status: "done",
       workflow: WORKFLOW,
