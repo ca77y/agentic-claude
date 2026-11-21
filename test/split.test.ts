@@ -125,6 +125,10 @@ describe("missingParts", () => {
     }));
     assert.deepEqual(new Set(missingParts(reported)), new Set(["Out of scope", "Why"]));
   });
+  test("matches a part's name whatever its case or surrounding spaces", () => {
+    const reported = REQUIRED_PARTS.map((name) => ({ name: ` ${name.toUpperCase()} `, words: 12 }));
+    assert.deepEqual(missingParts(reported), []);
+  });
 });
 
 describe("checkedId", () => {
