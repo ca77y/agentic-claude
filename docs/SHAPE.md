@@ -1,6 +1,6 @@
 # Shape
 
-How `shape` turns an idea into a card that a delivery can take as it is. It writes the why and the what, never the how. [`deliver/CARDS.md`](deliver/CARDS.md) says what each kind of card must hold; this document says how `shape` gets there. It follows the rules in [`DESIGN.md`](DESIGN.md).
+How `shape` turns an idea into a card that a delivery can take as it is. It writes the why and the what, never the how. [`deliver/CARDS.md`](deliver/CARDS.md) says what each kind of card must hold; this document says how `shape` gets there. It follows the rules in [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
 People own the issue. They say what kind of card they want, read it on the board, answer its open questions, and decide which delivery runs on it. `shape` never decides any of that.
 
@@ -78,6 +78,7 @@ The run returns `done` with the cards it filed and a report that names every pla
 - **A duplicate stops the run before drafting.** `advisor-fit` judges whether an existing card already holds the same outcome, from what `scout-related-cards` found. An idea it repeats files nothing, and the run returns `duplicate` with that card, to shape instead. The exception is the card an earlier run filed for the same idea: `shape` ends each card with a hidden line naming the run's slug, its words joined by spaces so a board leaves it as written, and `scout-related-cards` reports the card that holds it. A rerun on that idea updates that card instead. A named card it repeats is marked a duplicate of that card through the binding `docs/BOARD.md` declares, which on Linear moves it to `Duplicate`. A rerun on a `Shaped` card skips Advise, so it never checks again.
 - **Assumptions don't stop the run.** `shape` settles everything that doesn't change what the card delivers or whom it serves, and states it so a reader can object. Only what changes the outcome becomes an open question.
 - **Criteria follow `TESTING.md`.** The writer reads its categories and guidance, so every criterion is one that a category can check.
+- **A story has at most 20 acceptance criteria.** More means more than one PR's work, and a spec too big for an agent to read whole. `shape` counts the criteria the writer reports, and a story over the cap goes back to the writer like a confirmed problem: keep the core, and move the rest to Out of scope as follow-up stories. A story still over it after the revisions keeps the question of how to split it under Open questions, so it isn't `Deliverable`.
 - **`shape` sets no type label.** Feature, Improvement, Bug, or any other label `docs/BOARD.md` declares is the person's choice. A card that already has one keeps it.
 - **A split never files more than its cap.** The cap is the user's `cap` when given. A cap read from the request can lower the limit of 20, and never raises it.
 - **A part another card already covers files nothing.** The report names that card instead. Covered cards are never changed: a split only creates cards, and changes no existing card, not even to add a relation.

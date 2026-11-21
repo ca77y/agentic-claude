@@ -170,6 +170,31 @@ describe("shape", () => {
     assert.equal(count("writer-card", "record what is open"), 1);
   });
 
+  test("sends a story with more than 20 criteria back to the writer, without the judge", async () => {
+    const r = await run(
+      "Let users multiply",
+      happy({ "writer-card": (_t, label) => ({ openQuestions: [], criteria: label === "draft" ? 23 : 12 }) }),
+    );
+    assert.ok("deliverable" in r && r.deliverable);
+    const revise = calls.find((c) => c.type === "writer-card" && c.label === "revise 1")?.prompt ?? "";
+    assert.match(revise, /lists 23 acceptance criteria, more than the 20/);
+    assert.equal(count("judge"), 0);
+  });
+
+  test("keeps a story still over the cap after three revisions from being Deliverable", async () => {
+    const r = await run(
+      "Let users multiply",
+      happy({
+        "writer-card": (_t, label) => ({
+          openQuestions: label === "record what is open" ? ["how to split it?"] : [],
+          criteria: 23,
+        }),
+      }),
+    );
+    assert.ok("deliverable" in r && !r.deliverable);
+    assert.equal(count("writer-card", "revise"), 3);
+  });
+
   test("starts from a card with its comments, and updates that card", async () => {
     const card: Reply = {
       ...SCOUT,

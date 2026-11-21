@@ -1,6 +1,6 @@
 # Research
 
-How `research` answers a question from new sources and adds the answer to the project's library, delivered as a reviewed PR. It follows the rules in [`DESIGN.md`](DESIGN.md) and takes the outer loop and the review from [`deliver/STORY.md`](deliver/STORY.md), with the library pages in place of code. The library's own conventions are in `library/_meta/librarian.md` in the target project.
+How `research` answers a question from new sources and adds the answer to the project's library, delivered as a reviewed PR. It follows the rules in [`ARCHITECTURE.md`](ARCHITECTURE.md) and takes the outer loop and the review from [`deliver/STORY.md`](deliver/STORY.md), with the library pages in place of code. The library's own conventions are in `library/_meta/librarian.md` in the target project.
 
 ## Flow
 

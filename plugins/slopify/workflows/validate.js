@@ -292,6 +292,14 @@ function pusherSchema(notes = {}) {
       alreadyCommitted: {
         type: "boolean",
         description: "True only when a commit had nothing to commit because its listed content is already committed"
+      },
+      merged: {
+        type: "boolean",
+        description: "True only when merging the target branch brought in at least one commit"
+      },
+      conflicts: {
+        ...STRINGS,
+        description: "Each path a merge of the target branch left conflicted, relative to the worktree root"
       }
     }
   };

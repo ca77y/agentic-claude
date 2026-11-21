@@ -18,7 +18,7 @@ exporters:
     flush_interval: 5s
     rotation:
       max_megabytes: 50
-      max_backups: 1000
+      max_days: 30
       localtime: true
   file/metrics:
     path: ${env:HOME}/.claude/otel/metrics.jsonl
@@ -26,7 +26,7 @@ exporters:
     flush_interval: 5s
     rotation:
       max_megabytes: 50
-      max_backups: 1000
+      max_days: 30
       localtime: true
 
 service:

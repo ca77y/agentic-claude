@@ -63,7 +63,7 @@ describe("docs/SHAPE.md on splitting a request (SMR-380)", () => {
   });
 });
 
-describe("README, DESIGN, and the plugin description name split mode (SMR-380)", () => {
+describe("README, ARCHITECTURE, and the plugin description name split mode (SMR-380)", () => {
   const readme = read("README.md");
   const row = (name: string): string[] =>
     (readme.split("\n").find((l) => new RegExp(String.raw`^\|\s*${name}\s*\|`).test(l)) ?? "")
@@ -88,9 +88,9 @@ describe("README, DESIGN, and the plugin description name split mode (SMR-380)",
     );
   });
 
-  test("DESIGN's producers paragraph names writer-split as returning its work instead of a file", () => {
+  test("ARCHITECTURE's producers paragraph names writer-split as returning its work instead of a file", () => {
     const producers =
-      read("docs/DESIGN.md")
+      read("docs/ARCHITECTURE.md")
         .split("\n")
         .find((l) => l.startsWith("- **Producers**")) ?? "";
     assert.ok(says(producers, /`writer-split`/, /return/i), "writer-split returns its plan");

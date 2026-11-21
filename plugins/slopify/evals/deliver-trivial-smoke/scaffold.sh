@@ -124,6 +124,7 @@ Configuration does not authorize execution; the user's request does.
 ## Commits and push
 
 - Commit convention: Conventional Commits. Push with `git -C <worktree> push -u origin fix/smoke`, then `git -C <worktree> push` each later round.
+- Merge the target into the story branch before each push with `git -C <worktree> merge --no-edit main`; conclude a resolved conflict with `git -C <worktree> add -- <paths>` and `git -C <worktree> commit --no-edit`, or abort it with `git -C <worktree> merge --abort`.
 
 ## Pull request
 
@@ -132,7 +133,7 @@ Configuration does not authorize execution; the user's request does.
 
 ## Restrictions
 
-- Never merge, force-push, or rewrite history.
+- Never merge into `main`, force-push, or rewrite history.
 MD
 printf '.worktrees/\n/.tmp/\n/.forge/\n/.board/\n__pycache__/\n' > .gitignore
 git add -A

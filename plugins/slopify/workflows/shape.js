@@ -342,6 +342,14 @@ function pusherSchema(notes = {}) {
       alreadyCommitted: {
         type: "boolean",
         description: "True only when a commit had nothing to commit because its listed content is already committed"
+      },
+      merged: {
+        type: "boolean",
+        description: "True only when merging the target branch brought in at least one commit"
+      },
+      conflicts: {
+        ...STRINGS,
+        description: "Each path a merge of the target branch left conflicted, relative to the worktree root"
       }
     }
   };
@@ -817,9 +825,10 @@ var KINDS = {
 var LIBRARY_SCHEMA = libraryReaderSchema("the idea");
 var WRITER_SCHEMA = {
   type: "object",
-  required: ["openQuestions"],
+  required: ["openQuestions", "criteria"],
   properties: {
-    openQuestions: { ...STRINGS, description: "Each question left under Open questions on the card; empty when none" }
+    openQuestions: { ...STRINGS, description: "Each question left under Open questions on the card; empty when none" },
+    criteria: { type: "integer", description: "How many acceptance criteria the card lists; 0 when it has none" }
   }
 };
 var SPLIT_WRITER_SCHEMA = {
@@ -838,6 +847,7 @@ var SPLIT_WRITER_SCHEMA = {
     }
   }
 };
+var MAX_CRITERIA = 20;
 var kindOf = (v) => v === "bug" || v === "spike" ? v : "story";
 function subject(c) {
   return [
@@ -974,7 +984,7 @@ Do not file it, commit, or change the board; pusher does that.`;
   const opts = { agentType: "slopify:writer-card", label, phase: phaseTitle };
   if (c.split) return must(await dispatch(brief, { ...opts, schema: SPLIT_WRITER_SCHEMA }), "draft", "A card draft.");
   const w = must(await dispatch(brief, { ...opts, schema: WRITER_SCHEMA }), "draft", "A card draft.");
-  return { openQuestions: w.openQuestions, parts: [] };
+  return { ...w, parts: [] };
 }
 var SIMPLIFY = "advisor-simplify";
 async function simplify(d, c) {
@@ -1020,12 +1030,16 @@ var rule = (d, c, problems) => confirmedProblems(
 The checks reported problems in the card draft ${c.draft}, a ${c.kind}; check them against the draft and the card template. A finding from ${SIMPLIFY} holds when the card still delivers its outcome without what it names. blocker: a delivery can't take the card as it is. major: a real flaw that should be fixed before filing. minor: real but low impact.`,
   "Check"
 );
+var tooBig = (c, w) => c.kind === "story" && w.criteria > MAX_CRITERIA ? [
+  `The story lists ${String(w.criteria)} acceptance criteria, more than the ${String(MAX_CRITERIA)} one story may have, so it is more than one story. Keep the criteria for the outcome's core, and move the rest to Out of scope as follow-up stories; when they can't be separated, ask under Open questions how to split it.`
+] : [];
 async function refine(d, c, first) {
   let written = first;
   for (let revisions = 0; revisions <= MAX_FIX_ROUNDS; revisions += 1) {
     phase("Check");
     const missing = c.split ? missingParts(written.parts) : [];
     const confirmed = [
+      ...tooBig(c, written),
       ...missing.map((name) => `The draft lacks the template's required part ${name}, or leaves it empty.`),
       ...await rule(d, c, await checkDraft(d, c))
     ];

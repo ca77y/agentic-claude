@@ -1,6 +1,6 @@
 # Deliver trivial
 
-How `deliver-trivial` takes a trivial story from a card or a prompt to a reviewed PR. There is no spec, and the issue or prompt says everything. It follows the rules in [`DESIGN.md`](../DESIGN.md) and takes the review from [`STORY.md`](STORY.md). `deliver-bugfix` is the same flow; see [`BUGFIX.md`](BUGFIX.md).
+How `deliver-trivial` takes a trivial story from a card or a prompt to a reviewed PR. There is no spec, and the issue or prompt says everything. It follows the rules in [`ARCHITECTURE.md`](../ARCHITECTURE.md) and takes the review from [`STORY.md`](STORY.md). `deliver-bugfix` is the same flow; see [`BUGFIX.md`](BUGFIX.md).
 
 ## Flow
 

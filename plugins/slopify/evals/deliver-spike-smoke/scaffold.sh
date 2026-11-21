@@ -112,6 +112,7 @@ Configuration does not authorize execution; the user's request does.
 ## Commits and push
 
 - Commit convention: Conventional Commits. Push with `git -C <worktree> push -u origin story/smoke` once the gates pass, and `git -C <worktree> push` after each verified repair.
+- Merge the target into the story branch before each push with `git -C <worktree> merge --no-edit main`; conclude a resolved conflict with `git -C <worktree> add -- <paths>` and `git -C <worktree> commit --no-edit`, or abort it with `git -C <worktree> merge --abort`.
 
 ## Pull request
 
@@ -120,7 +121,7 @@ Configuration does not authorize execution; the user's request does.
 
 ## Restrictions
 
-- Never merge, force-push, or rewrite history.
+- Never merge into `main`, force-push, or rewrite history.
 - Deleting the spike's own unpushed prototype branch and worktree is allowed.
 MD
 cp -R "$resources/library" library

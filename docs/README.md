@@ -3,7 +3,8 @@
 Engineering notes for people working on `agentic-slop`. How to use the toolkit is in the root [`README.md`](../README.md). Rules for agents are in the root [`AGENTS.md`](../AGENTS.md) and in [`.claude/rules/`](../.claude/rules/), which loads the rules for whichever files an agent edits.
 
 - [`.claude/rules/architecture.md`](../.claude/rules/architecture.md): the rules every plugin part follows
-- [`DESIGN.md`](DESIGN.md): how the plugins are built now
+- [`DESIGN.md`](DESIGN.md): the design principles every design, card, and change is weighed against
+- [`ARCHITECTURE.md`](ARCHITECTURE.md): how the plugins are built now
 - [`RESEARCH.md`](RESEARCH.md): how `research` answers a question in the project library, delivered as a reviewed PR
 - [`SHAPE.md`](SHAPE.md): how `shape` turns an idea into a card of the kind the user asks for
 - [`deliver/CARDS.md`](deliver/CARDS.md): what each delivery reads from a card, which `shape` writes to

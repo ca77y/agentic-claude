@@ -8,3 +8,5 @@ package-lock.json
 # The library and Obsidian settings stay identical to the bootstrap scaffold
 library/
 .obsidian/
+# Claude Code session worktrees are other checkouts of this repository
+.claude/worktrees/

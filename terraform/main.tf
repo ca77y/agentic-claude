@@ -20,5 +20,15 @@ resource "google_storage_bucket" "telemetry" {
   uniform_bucket_level_access = true
   public_access_prevention    = "enforced"
 
+  # The bucket and the laptop each keep 30 days, so the sync never re-uploads what the bucket deleted.
+  lifecycle_rule {
+    condition {
+      age = 30
+    }
+    action {
+      type = "Delete"
+    }
+  }
+
   depends_on = [google_project_service.storage]
 }

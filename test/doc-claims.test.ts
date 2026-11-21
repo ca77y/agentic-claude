@@ -25,7 +25,7 @@ const removed: Record<string, string[]> = {
     "is named from its idea text plus a short hash",
     "marks the PR ready and moves the issue to In Review.",
   ],
-  "docs/DESIGN.md": [
+  "docs/ARCHITECTURE.md": [
     "runs on sonnet, because it reads the whole spec",
     "the same set of failures",
     "or `draft` result names what it needs",

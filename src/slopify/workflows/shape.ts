@@ -107,9 +107,10 @@ const LIBRARY_SCHEMA = libraryReaderSchema("the idea");
 
 const WRITER_SCHEMA = {
   type: "object",
-  required: ["openQuestions"],
+  required: ["openQuestions", "criteria"],
   properties: {
     openQuestions: { ...STRINGS, description: "Each question left under Open questions on the card; empty when none" },
+    criteria: { type: "integer", description: "How many acceptance criteria the card lists; 0 when it has none" },
   },
 } as const;
 // A split files a card only when it has every part its template requires, so its writer also reports them.
@@ -130,6 +131,9 @@ const SPLIT_WRITER_SCHEMA = {
   },
 } as const;
 type Written = Infer<typeof SPLIT_WRITER_SCHEMA>;
+
+// A story with more criteria than this is more than one PR's work, and its spec grows past what an agent reads whole.
+const MAX_CRITERIA = 20;
 
 interface Problem {
   source: string;
@@ -318,7 +322,7 @@ async function write(d: Run, c: Card, task: string, label: string, phaseTitle: s
   const opts = { agentType: "slopify:writer-card", label, phase: phaseTitle };
   if (c.split) return must(await dispatch(brief, { ...opts, schema: SPLIT_WRITER_SCHEMA }), "draft", "A card draft.");
   const w = must(await dispatch(brief, { ...opts, schema: WRITER_SCHEMA }), "draft", "A card draft.");
-  return { openQuestions: w.openQuestions, parts: [] };
+  return { ...w, parts: [] };
 }
 
 // Every lens asks what a draft is missing, so one advisor asks what it could lose, and its findings go to the judge too.
@@ -368,6 +372,14 @@ const rule = (d: Run, c: Card, problems: readonly Problem[]): Promise<string[]> 
     "Check",
   );
 
+// Counted, not judged: a story over the cap goes back to the writer like any confirmed problem.
+const tooBig = (c: Card, w: Written): string[] =>
+  c.kind === "story" && w.criteria > MAX_CRITERIA
+    ? [
+        `The story lists ${String(w.criteria)} acceptance criteria, more than the ${String(MAX_CRITERIA)} one story may have, so it is more than one story. Keep the criteria for the outcome's core, and move the rest to Out of scope as follow-up stories; when they can't be separated, ask under Open questions how to split it.`,
+      ]
+    : [];
+
 // Up to three revisions, each checked. What is still wrong after them becomes an open question. In a split, a required
 // template part the draft lacks is a problem too, and a draft still lacking one after the revisions is not filed.
 async function refine(d: Run, c: Card, first: Written): Promise<Written> {
@@ -376,6 +388,7 @@ async function refine(d: Run, c: Card, first: Written): Promise<Written> {
     phase("Check");
     const missing = c.split ? missingParts(written.parts) : [];
     const confirmed = [
+      ...tooBig(c, written),
       ...missing.map((name) => `The draft lacks the template's required part ${name}, or leaves it empty.`),
       ...(await rule(d, c, await checkDraft(d, c))),
     ];

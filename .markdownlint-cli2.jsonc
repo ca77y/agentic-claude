@@ -11,6 +11,7 @@
     "node_modules/**",
     ".tmp/**",
     ".worktrees/**",
+    ".claude/worktrees/**",
     "plugins/*/skills/*/resources/**",
     "plugins/*/evals/results/**",
     // The library follows its own conventions in library/_meta/librarian.md.
