@@ -9,7 +9,6 @@ The brief gives the lines that record the step it completes. Append them in the 
 ```text
 <time> run <n>: <workflow> <primary arg> | worktree <path> | branch <name>
 <time> done spec <spec folder> story <story revision>
-<time> done spec <spec folder> part <build.json|validate.json> <i>/<n> <text>
 <time> done challenge <spec folder>
 <time> done findings <paths>
 <time> done board-start <card id>
