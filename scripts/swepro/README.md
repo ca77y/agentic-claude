@@ -46,7 +46,8 @@ For each task and arm:
    so `TESTING.md` tells both arms to run commands through `.swepro/run '<command>'`.
 3. Runs Claude Code headless in the repository, with `--setting-sources project,local` and no MCP servers, so your
    own plugins, hooks, and settings stay out of both arms, and without WebFetch or WebSearch, so neither arm can look
-   up the upstream fix:
+   up the upstream fix. Its Bash tool runs in bash on every machine (`SHELL=/bin/bash`), since agents' shell commands
+   can behave differently in zsh:
    - slopify: the plugin from `plugins/slopify`, with `/slopify:deliver-trivial` or `/slopify:deliver-bugfix` and the
      task text, or `/slopify:deliver-story STORY-1`, each on a branch without a worktree. A shape → story task first
      runs `/slopify:shape` on the problem statement and interface, then deliver-story on the card shape filed.

@@ -430,8 +430,9 @@ async function runPhases(
       out: `${stem}.jsonl`,
       err: `${stem}.stderr`,
       hours: HOURS[phase.name] ?? 2,
-      // A headless session otherwise stops waiting for a workflow it started in the background.
-      env: { ...process.env, CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS: "0" },
+      // A headless session otherwise stops waiting for a workflow it started in the background. Claude Code's Bash
+      // tool runs in $SHELL, so pinning bash makes a run behave the same on every machine.
+      env: { ...process.env, CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS: "0", SHELL: "/bin/bash" },
     });
     const final = readLines(`${stem}.jsonl`).findLast((e) => isRecord(e) && e["type"] === "result");
     const files = sessionFiles(sessionId);
