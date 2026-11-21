@@ -778,8 +778,9 @@ var REQUIRED_PARTS = [
   "Out of scope",
   "Acceptance criteria"
 ];
+var partKey = (name) => name.trim().toLowerCase();
 function missingParts(reported) {
-  return REQUIRED_PARTS.filter((name) => reported.every((r) => r.name !== name || r.words <= 0));
+  return REQUIRED_PARTS.filter((name) => reported.every((r) => partKey(r.name) !== partKey(name) || r.words <= 0));
 }
 function checkedId(id, locations) {
   const t = id.trim();

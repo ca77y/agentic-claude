@@ -102,8 +102,11 @@ export const REQUIRED_PARTS: readonly string[] = [
   "Acceptance criteria",
 ];
 
+// The writer names parts from the template in prose, so a name matches whatever its case or surrounding spaces.
+const partKey = (name: string): string => name.trim().toLowerCase();
+
 export function missingParts(reported: readonly { name: string; words: number }[]): string[] {
-  return REQUIRED_PARTS.filter((name) => reported.every((r) => r.name !== name || r.words <= 0));
+  return REQUIRED_PARTS.filter((name) => reported.every((r) => partKey(r.name) !== partKey(name) || r.words <= 0));
 }
 
 // A model-chosen card id counts only when it is a location, or a whole token inside one, of the scout's evidence.
