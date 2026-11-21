@@ -2,6 +2,7 @@
 // card, the checks on a filed card, and the report.
 import { list, slugOf, unique } from "./deliver.ts";
 import { STRINGS } from "./family.ts";
+import { waves } from "./rules.ts";
 
 export const MAX_CARDS = 20;
 
@@ -74,26 +75,12 @@ export function partsOf(plan: Plan): Part[] {
   }));
 }
 
-// Plan order, each part after the parts it depends on; a cycle falls back to plan order.
+// Each part after the parts it depends on, otherwise in plan order; a cycle falls back to plan order.
 export function orderParts(parts: readonly Part[]): Part[] {
   const byId = new Map(parts.map((p) => [p.id, p]));
-  const done = new Set<string>();
-  const visiting = new Set<string>();
-  const out: Part[] = [];
-  const visit = (p: Part): boolean => {
-    if (done.has(p.id)) return true;
-    if (visiting.has(p.id)) return false;
-    visiting.add(p.id);
-    for (const d of p.dependsOn) {
-      const dep = byId.get(d);
-      if (dep && !visit(dep)) return false;
-    }
-    visiting.delete(p.id);
-    done.add(p.id);
-    out.push(p);
-    return true;
-  };
-  return parts.every((p) => visit(p)) ? out : [...parts];
+  return waves(parts.map((p) => ({ id: p.id, dependsOn: p.dependsOn, files: [] })))
+    .flat()
+    .flatMap((t) => byId.get(t.id) ?? []);
 }
 
 export function selectParts(

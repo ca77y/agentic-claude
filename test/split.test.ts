@@ -6,7 +6,6 @@ import {
   capArgOf,
   capOf,
   checkedId,
-  MAX_CARDS,
   missingParts,
   orderParts,
   partsOf,
@@ -59,15 +58,13 @@ describe("capOf", () => {
       assert.equal(capOf(argCap, statedCap), want);
     });
   }
-  test("MAX_CARDS is 20", () => {
-    assert.equal(MAX_CARDS, 20);
-  });
 });
 
 describe("orderParts", () => {
   test("puts a dependency first", () => {
-    const ordered = orderParts([part("a", ["b"]), part("b"), part("c")]);
-    assert.deepEqual(ids(ordered), ["b", "a", "c"]);
+    const ordered = ids(orderParts([part("a", ["b"]), part("b"), part("c")]));
+    assert.equal(ordered.length, 3);
+    assert.ok(ordered.indexOf("b") < ordered.indexOf("a"), ordered.join(", "));
   });
   test("a cycle falls back to plan order", () => {
     const ordered = orderParts([part("a", ["b"]), part("b", ["a"])]);

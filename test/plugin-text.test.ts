@@ -119,19 +119,31 @@ describe("a removal with nothing left to commit (SMR-405)", () => {
   });
 });
 
-// The Create bullet of a board file's Operations list.
-const createLine = (md: string): string => md.split("\n").find((l) => l.startsWith("- Create")) ?? "";
+// The bullet of a Markdown list that starts with the given text.
+const line = (md: string, start: string): string => md.split("\n").find((l) => l.startsWith(start)) ?? "";
+// A front matter field's value in an agent file, read from the first line that sets it.
+const front = (md: string, key: string): string => new RegExp(`^${key}: (.+)$`, "m").exec(md)?.[1] ?? "";
 
 describe("relations on create and the split planner (SMR-380)", () => {
   const board = text("docs/BOARD.md");
   const nothingCreated = /creates? nothing|unmet/i;
 
   test("docs/BOARD.md's Create line binds blockedBy and relatedTo, and leaves the create-nothing rule to pusher-board.md", () => {
-    const create = createLine(board);
+    const create = line(board, "- Create");
     assert.ok(create, "docs/BOARD.md has the Create line");
     assert.ok(create.includes("`blockedBy`"), "the Create line binds a blocking relation");
     assert.ok(create.includes("`relatedTo`"), "the Create line binds a related relation");
     assert.doesNotMatch(create, nothingCreated, "the create-nothing rule is stated once, in pusher-board.md");
+    assert.equal(
+      line(board, "- Update content and relations:"),
+      "- Update content and relations: `save_issue` with the issue `id` and only the changed fields; `addLabels`/`removeLabels` change labels, and `removeBlockedBy`/`removeBlocks` remove relations.",
+      "the Update line is unchanged",
+    );
+    assert.equal(
+      line(board, "- Dependencies:"),
+      "- Dependencies: Linear blocking relations (`blockedBy`, `blocks`). No sub-issues: one story is one issue and one PR.",
+      "the Dependencies line is unchanged",
+    );
   });
 
   test("bootstrap asks the create binding to say how relations are added or mark them unsupported, and the template's Create line carries it", () => {
@@ -144,7 +156,7 @@ describe("relations on create and the split planner (SMR-380)", () => {
       reference.some((s) => /relation/i.test(s) && /unsupported/i.test(s)),
       "board.md marks relations unsupported when the tracker records none",
     );
-    const create = createLine(text("plugins/slopify/skills/bootstrap/resources/BOARD.md"));
+    const create = line(text("plugins/slopify/skills/bootstrap/resources/BOARD.md"), "- Create");
     assert.ok(create.includes("{{CREATE_BINDING}}"), "the template keeps its create slot");
     assert.match(create, /relation/i, "the template's Create line carries the relation binding");
   });
@@ -160,8 +172,15 @@ describe("relations on create and the split planner (SMR-380)", () => {
     assert.match(rule, /unmet/i, "a relation with no binding is reported unmet");
   });
 
-  test("writer-split writes no file, changes no board, and never trims its plan to a cap", () => {
+  test("writer-split is a producer on writer-card's model tier that writes no file, changes no board, and never trims its plan to a cap", () => {
     const split = text("plugins/slopify/agents/writer-split.md");
+    assert.equal(front(split, "name"), "writer-split");
+    assert.equal(
+      front(split, "model"),
+      front(text("plugins/slopify/agents/writer-card.md"), "model"),
+      "writer-split runs on writer-card's model tier",
+    );
+    assert.match(front(split, "description"), /produc(?:er|tion leaf)/i, "writer-split is a producer");
     const said = sentences(split);
     assert.ok(
       said.some((s) => /\bno file\b|\bnever writes? (?:a|any) file/i.test(s)),
@@ -174,6 +193,22 @@ describe("relations on create and the split planner (SMR-380)", () => {
     assert.ok(
       said.some((s) => /\bcap\b/i.test(s) && /\btrim/i.test(s) && /\bnever\b|\bnot\b/i.test(s)),
       "writer-split never trims its plan to a cap",
+    );
+  });
+
+  test("writer-card reports each template part with its word count when the brief asks for parts", () => {
+    const writer = sentences(text("plugins/slopify/agents/writer-card.md"));
+    assert.ok(
+      writer.some((s) => s.includes("`parts`") && /template part/i.test(s) && /word count/i.test(s)),
+      "writer-card reports each template part the draft holds with its word count",
+    );
+  });
+
+  test("advisor-fit lists as overlaps the cards that hold part, not all, of the outcome", () => {
+    const fit = sentences(text("plugins/slopify/agents/advisor-fit.md"));
+    assert.ok(
+      fit.some((s) => s.includes("`overlaps`") && /\bpart, not all\b/i.test(s)),
+      "advisor-fit's overlaps are the cards that hold part, not all, of the outcome",
     );
   });
 
