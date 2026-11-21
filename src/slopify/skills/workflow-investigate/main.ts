@@ -6,7 +6,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { render, type AgentRun, type RunData, type Turn } from "./stats.ts";
+import { render, turnOf, type AgentRun, type RunData, type Turn } from "./stats.ts";
 
 type Json = Record<string, unknown>;
 const isRecord = (v: unknown): v is Json => typeof v === "object" && v !== null;
@@ -37,26 +37,10 @@ function turnsOf(file: string): Turn[] {
   const seen = new Set<string>();
   const turns: Turn[] = [];
   for (const e of readLines(file)) {
-    if (!isRecord(e) || e["type"] !== "assistant" || !isRecord(e["message"])) continue;
-    const m = e["message"];
-    const id = str(m["id"]);
-    if (seen.has(id)) continue;
-    seen.add(id);
-    const u = isRecord(m["usage"]) ? m["usage"] : {};
-    const split = isRecord(u["cache_creation"]) ? u["cache_creation"] : undefined;
-    const content: unknown[] = Array.isArray(m["content"]) ? (m["content"] as unknown[]) : [];
-    turns.push({
-      model: str(m["model"]),
-      timestamp: str(e["timestamp"]),
-      usage: {
-        input: num(u["input_tokens"]),
-        cacheWrite5m: num(split ? split["ephemeral_5m_input_tokens"] : u["cache_creation_input_tokens"]),
-        cacheWrite1h: split ? num(split["ephemeral_1h_input_tokens"]) : 0,
-        cacheRead: num(u["cache_read_input_tokens"]),
-        output: num(u["output_tokens"]),
-      },
-      toolCalls: content.filter((b) => isRecord(b) && b["type"] === "tool_use").length,
-    });
+    const t = turnOf(e);
+    if (!t || seen.has(t.id)) continue;
+    seen.add(t.id);
+    turns.push(t.turn);
   }
   return turns;
 }

@@ -47,6 +47,30 @@ var sumUsage = (turns) => ({
 var tokensOf = (u) => u.input + u.cacheWrite5m + u.cacheWrite1h + u.cacheRead + u.output;
 var time = (iso) => new Date(iso).getTime();
 var isRecord = (v) => typeof v === "object" && v !== null;
+var num = (v) => typeof v === "number" ? v : 0;
+var str = (v) => typeof v === "string" ? v : "";
+function turnOf(e) {
+  if (!isRecord(e) || e["type"] !== "assistant" || !isRecord(e["message"])) return void 0;
+  const m = e["message"];
+  const u = isRecord(m["usage"]) ? m["usage"] : {};
+  const split = isRecord(u["cache_creation"]) ? u["cache_creation"] : void 0;
+  const content = Array.isArray(m["content"]) ? m["content"] : [];
+  return {
+    id: str(m["id"]),
+    turn: {
+      model: str(m["model"]),
+      timestamp: str(e["timestamp"]),
+      usage: {
+        input: num(u["input_tokens"]),
+        cacheWrite5m: num(split ? split["ephemeral_5m_input_tokens"] : u["cache_creation_input_tokens"]),
+        cacheWrite1h: split ? num(split["ephemeral_1h_input_tokens"]) : 0,
+        cacheRead: num(u["cache_read_input_tokens"]),
+        output: num(u["output_tokens"])
+      },
+      toolCalls: content.filter((b) => isRecord(b) && b["type"] === "tool_use").length
+    }
+  };
+}
 function outcomeOf(a) {
   if (a.result === void 0) return "unfinished";
   if (a.result === null) return "returned nothing";
@@ -248,8 +272,8 @@ function render(run) {
 
 // src/slopify/skills/workflow-investigate/main.ts
 var isRecord2 = (v) => typeof v === "object" && v !== null;
-var num = (v) => typeof v === "number" ? v : 0;
-var str = (v) => typeof v === "string" ? v : "";
+var num2 = (v) => typeof v === "number" ? v : 0;
+var str2 = (v) => typeof v === "string" ? v : "";
 var readJson = (file) => JSON.parse(readFileSync(file, "utf8"));
 var readLines = (file) => existsSync(file) ? readFileSync(file, "utf8").split("\n").filter((l) => l.trim()).map((l) => JSON.parse(l)) : [];
 var dirs = (dir) => existsSync(dir) ? readdirSync(dir, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name) : [];
@@ -261,31 +285,15 @@ function turnsOf(file) {
   const seen = /* @__PURE__ */ new Set();
   const turns = [];
   for (const e of readLines(file)) {
-    if (!isRecord2(e) || e["type"] !== "assistant" || !isRecord2(e["message"])) continue;
-    const m = e["message"];
-    const id = str(m["id"]);
-    if (seen.has(id)) continue;
-    seen.add(id);
-    const u = isRecord2(m["usage"]) ? m["usage"] : {};
-    const split = isRecord2(u["cache_creation"]) ? u["cache_creation"] : void 0;
-    const content = Array.isArray(m["content"]) ? m["content"] : [];
-    turns.push({
-      model: str(m["model"]),
-      timestamp: str(e["timestamp"]),
-      usage: {
-        input: num(u["input_tokens"]),
-        cacheWrite5m: num(split ? split["ephemeral_5m_input_tokens"] : u["cache_creation_input_tokens"]),
-        cacheWrite1h: split ? num(split["ephemeral_1h_input_tokens"]) : 0,
-        cacheRead: num(u["cache_read_input_tokens"]),
-        output: num(u["output_tokens"])
-      },
-      toolCalls: content.filter((b) => isRecord2(b) && b["type"] === "tool_use").length
-    });
+    const t = turnOf(e);
+    if (!t || seen.has(t.id)) continue;
+    seen.add(t.id);
+    turns.push(t.turn);
   }
   return turns;
 }
 function spanOf(file) {
-  const times = readLines(file).map((e) => isRecord2(e) ? str(e["timestamp"]) : "").filter(Boolean);
+  const times = readLines(file).map((e) => isRecord2(e) ? str2(e["timestamp"]) : "").filter(Boolean);
   return { start: times[0] ?? "", end: times.at(-1) ?? "" };
 }
 function agentsOf(runDir) {
@@ -294,17 +302,17 @@ function agentsOf(runDir) {
   const rows = readLines(path.join(runDir, "journal.jsonl")).filter((r) => isRecord2(r));
   for (const row of rows) {
     if (row["type"] === "started") started.push(row);
-    else if (row["type"] === "result") results.set(str(row["agentId"]), row["result"] ?? null);
+    else if (row["type"] === "result") results.set(str2(row["agentId"]), row["result"] ?? null);
   }
   return started.map((row) => {
-    const agentId = str(row["agentId"]);
+    const agentId = str2(row["agentId"]);
     const metaFile = path.join(runDir, `agent-${agentId}.meta.json`);
     const meta = existsSync(metaFile) ? readJson(metaFile) : {};
     return {
       agentId,
-      type: str(isRecord2(meta) ? meta["agentType"] : "").replace(/^slopify:/, ""),
-      label: str(row["label"]),
-      phase: str(row["phase"]),
+      type: str2(isRecord2(meta) ? meta["agentType"] : "").replace(/^slopify:/, ""),
+      label: str2(row["label"]),
+      phase: str2(row["phase"]),
       ...spanOf(path.join(runDir, `agent-${agentId}.jsonl`)),
       turns: turnsOf(path.join(runDir, `agent-${agentId}.jsonl`)),
       result: results.has(agentId) ? results.get(agentId) : void 0
@@ -323,12 +331,12 @@ function runsOf(projectDir2) {
       if (isRecord2(d)) {
         return {
           runId,
-          workflow: str(d["workflowName"]),
+          workflow: str2(d["workflowName"]),
           args: d["args"],
-          status: str(d["status"]),
+          status: str2(d["status"]),
           result: d["result"],
-          startTime: num(d["startTime"]),
-          durationMs: num(d["durationMs"]),
+          startTime: num2(d["startTime"]),
+          durationMs: num2(d["durationMs"]),
           agents
         };
       }

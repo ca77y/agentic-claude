@@ -118,6 +118,32 @@ export interface AgentStats {
 
 const time = (iso: string): number => new Date(iso).getTime();
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null;
+const num = (v: unknown): number => (typeof v === "number" ? v : 0);
+const str = (v: unknown): string => (typeof v === "string" ? v : "");
+
+/** One transcript entry's model response and its message id, or undefined when the entry is no response. */
+export function turnOf(e: unknown): { id: string; turn: Turn } | undefined {
+  if (!isRecord(e) || e["type"] !== "assistant" || !isRecord(e["message"])) return undefined;
+  const m = e["message"];
+  const u = isRecord(m["usage"]) ? m["usage"] : {};
+  const split = isRecord(u["cache_creation"]) ? u["cache_creation"] : undefined;
+  const content: unknown[] = Array.isArray(m["content"]) ? (m["content"] as unknown[]) : [];
+  return {
+    id: str(m["id"]),
+    turn: {
+      model: str(m["model"]),
+      timestamp: str(e["timestamp"]),
+      usage: {
+        input: num(u["input_tokens"]),
+        cacheWrite5m: num(split ? split["ephemeral_5m_input_tokens"] : u["cache_creation_input_tokens"]),
+        cacheWrite1h: split ? num(split["ephemeral_1h_input_tokens"]) : 0,
+        cacheRead: num(u["cache_read_input_tokens"]),
+        output: num(u["output_tokens"]),
+      },
+      toolCalls: content.filter((b) => isRecord(b) && b["type"] === "tool_use").length,
+    },
+  };
+}
 
 // What the agent came back with, in a few words: enough to spot one that died, refused, or found something.
 function outcomeOf(a: AgentRun): string {
