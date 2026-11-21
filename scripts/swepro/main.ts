@@ -12,6 +12,7 @@ import { randomUUID } from "node:crypto";
 import {
   chmodSync,
   copyFileSync,
+  cpSync,
   createWriteStream,
   existsSync,
   mkdirSync,
@@ -25,6 +26,7 @@ import path from "node:path";
 
 import {
   BRANCH,
+  childEnv,
   claudeArgs,
   DIFF_EXCLUDES,
   endingOf,
@@ -56,6 +58,9 @@ const EVAL = path.join(ROOT, ".eval");
 const HARNESS = path.join(EVAL, "cache", "SWE-bench_Pro-os");
 const ROWS = path.join(EVAL, "cache", "rows");
 const PLUGIN = path.join(ROOT, "plugins", "slopify");
+// Each arm's repository and the plugin it loads live outside any checkout, so no agent mistakes this repository's own
+// docs/BOARD.md or docs/FORGE.md for the task's, much as an installed plugin lives in Claude Code's cache.
+const WORK = process.env["SWEPRO_WORK"] ?? path.join(os.tmpdir(), "swepro");
 const CONFIG = process.env["CLAUDE_CONFIG_DIR"] ?? path.join(os.homedir(), ".claude");
 const LIST = JSON.parse(readFileSync(path.join(import.meta.dirname, "tasks.json"), "utf8")) as TaskList;
 
@@ -416,7 +421,7 @@ async function runPhases(
   task: Task,
   row: Row,
   arm: Arm,
-  at: { dir: string; ws: string; name: string; result: ArmResult },
+  at: { dir: string; ws: string; name: string; result: ArmResult; plugin: string },
 ): Promise<void> {
   let storyId = "STORY-1";
   const count = phases(task, row, arm).length;
@@ -427,14 +432,12 @@ async function runPhases(
     const sessionId = randomUUID();
     const stem = path.join(at.dir, `${String(i + 1)}-${phase.name}`);
     log(`${at.name}: ${phase.name} started (session ${sessionId})`);
-    const run = await runLogged("claude", claudeArgs(arm, { prompt: phase.prompt, sessionId, pluginDir: PLUGIN }), {
+    const run = await runLogged("claude", claudeArgs(arm, { prompt: phase.prompt, sessionId, pluginDir: at.plugin }), {
       cwd: at.ws,
       out: `${stem}.jsonl`,
       err: `${stem}.stderr`,
       hours: HOURS[phase.name] ?? 2,
-      // A headless session otherwise stops waiting for a workflow it started in the background. Claude Code's Bash
-      // tool runs in $SHELL, so pinning bash makes a run behave the same on every machine.
-      env: { ...process.env, CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS: "0", SHELL: "/bin/bash" },
+      env: childEnv(process.env),
     });
     const final = readLines(`${stem}.jsonl`).findLast((e) => isRecord(e) && e["type"] === "result");
     const files = sessionFiles(sessionId);
@@ -468,13 +471,22 @@ async function runPhases(
   }
 }
 
-async function runArm(task: Task, arm: Arm, runDir: string, keep: boolean): Promise<ArmResult> {
+interface RunContext {
+  runDir: string;
+  work: string;
+  plugin: string;
+  keep: boolean;
+}
+
+async function runArm(task: Task, arm: Arm, ctx: RunContext): Promise<ArmResult> {
+  const { runDir, keep } = ctx;
   const dir = path.join(runDir, taskKey(task.id), arm);
   const resultFile = path.join(dir, "result.json");
   if (existsSync(resultFile)) return readJson(resultFile) as ArmResult;
   mkdirSync(dir, { recursive: true });
   const row = readJson(rowFile(task.id)) as Row;
-  const ws = path.join(dir, "repo");
+  const ws = path.join(ctx.work, taskKey(task.id), arm);
+  mkdirSync(path.dirname(ws), { recursive: true });
   const container = `swepro-${path.basename(runDir)}-${taskKey(task.id)}-${arm}`.replaceAll(/[^\w.-]/g, "-");
   const result: ArmResult = {
     task: task.id,
@@ -509,7 +521,7 @@ async function runArm(task: Task, arm: Arm, runDir: string, keep: boolean): Prom
       "infinity",
     ]);
     sh("docker", ["exec", container, "git", "config", "--global", "--add", "safe.directory", "*"]);
-    await runPhases(task, row, arm, { dir, ws, name, result });
+    await runPhases(task, row, arm, { dir, ws, name, result, plugin: ctx.plugin });
     const patch = capturePatch(ws, dir, seed);
     writeFileSync(path.join(dir, "patch.diff"), patch);
     removeContainer(container);
@@ -576,11 +588,18 @@ async function main(): Promise<void> {
     `running ${String(tasks.length)} tasks × ${arms.join(" and ")} with ${String(jobs)} at once into ${path.relative(ROOT, runDir)}/`,
   );
   const keep = process.argv.includes("--keep") || Boolean(process.env["KEEP"]);
+  const work = path.join(WORK, path.basename(runDir));
+  const pluginCopy = path.join(work, "plugins", "slopify");
+  rmSync(pluginCopy, { recursive: true, force: true });
+  cpSync(PLUGIN, pluginCopy, { recursive: true });
+  if (keep) log(`kept repositories go under ${work}/`);
+  const ctx: RunContext = { runDir, work, plugin: pluginCopy, keep };
   const results = await pool(
     tasks.flatMap((t) => arms.map((a) => ({ t, a }))),
     jobs,
-    ({ t, a }) => runArm(t, a, runDir, keep),
+    ({ t, a }) => runArm(t, a, ctx),
   );
+  if (!keep) rmSync(work, { recursive: true, force: true });
   const report = renderReport(results, { started, plugin: `slopify ${String(plugin)}` });
   writeFileSync(path.join(runDir, "report.md"), report);
   writeFileSync(path.join(runDir, "results.json"), JSON.stringify(results, null, 2));

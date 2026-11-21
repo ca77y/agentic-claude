@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { describe, test } from "node:test";
 
 import {
+  childEnv,
   claudeArgs,
   DIFF_EXCLUDES,
   endingOf,
@@ -165,6 +166,30 @@ describe("what each arm is given", () => {
       assert.ok(!args.includes("--effort"));
       assert.ok(args.includes("--strict-mcp-config"));
     }
+  });
+
+  test("an invocation keeps the caller's login but none of its own Claude Code session settings", () => {
+    const env = childEnv({
+      PATH: "/usr/bin",
+      ANTHROPIC_API_KEY: "k",
+      CLAUDE_CONFIG_DIR: "/c",
+      CLAUDE_CODE_OAUTH_TOKEN: "t",
+      CLAUDE_CODE_USE_BEDROCK: "1",
+      CLAUDE_EFFORT: "medium",
+      CLAUDECODE: "1",
+      CLAUDE_CODE_SESSION_ID: "s",
+      CLAUDE_CODE_CHILD_SESSION: "1",
+      SHELL: "/bin/zsh",
+    });
+    assert.deepEqual(env, {
+      PATH: "/usr/bin",
+      ANTHROPIC_API_KEY: "k",
+      CLAUDE_CONFIG_DIR: "/c",
+      CLAUDE_CODE_OAUTH_TOKEN: "t",
+      CLAUDE_CODE_USE_BEDROCK: "1",
+      CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS: "0",
+      SHELL: "/bin/bash",
+    });
   });
 
   test("the story card is in the local board's format", () => {

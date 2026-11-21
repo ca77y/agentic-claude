@@ -31,6 +31,8 @@ make eval                          # all 16 tasks, both arms
 - `JOBS` sets how many arms run at once (default 4). Each arm keeps one task container running.
 - `RUN=.eval/runs/<stamp>` resumes a stopped run: finished arms are kept and the rest run again.
 - `KEEP=1` keeps each arm's repository after grading, for a look at what it did.
+- `SWEPRO_WORK=<dir>` moves the arms' repositories out of the system temp folder; on Docker Desktop, it must be a
+  folder Docker can share.
 
 A deliver-story run can take hours and cost about $100; a plain run of the same task takes minutes. Start with one
 task per workflow, for example `make eval TASKS=96b997802e,a02e22e902,7cbfb812ef`.
@@ -39,7 +41,7 @@ task per workflow, for example `make eval TASKS=96b997802e,a02e22e902,7cbfb812ef
 
 For each task and arm:
 
-1. Copies the task's repository out of its image at the base commit, adds a `TESTING.md`, `docs/BOARD.md`, and
+1. Copies the task's repository out of its image at the base commit, into the system temp folder, adds a `TESTING.md`, `docs/BOARD.md`, and
    `docs/FORGE.md` for a local Markdown board under `.board/` and a local stub forge under `.forge/`, and commits them
    as the seed. A story's card is written to `.board/STORY-1.md`.
 2. Starts the task's container with the repository mounted in it. The code's toolchain lives only in the container,
@@ -48,7 +50,7 @@ For each task and arm:
    own plugins, hooks, and settings stay out of both arms, and without WebFetch or WebSearch, so neither arm can look
    up the upstream fix. Its Bash tool runs in bash on every machine (`SHELL=/bin/bash`), since agents' shell commands
    can behave differently in zsh:
-   - slopify: the plugin from `plugins/slopify`, with `/slopify:deliver-trivial` or `/slopify:deliver-bugfix` and the
+   - slopify: a copy of `plugins/slopify` in the temp folder, with `/slopify:deliver-trivial` or `/slopify:deliver-bugfix` and the
      task text, or `/slopify:deliver-story STORY-1`, each on a branch without a worktree. A shape → story task first
      runs `/slopify:shape` on the problem statement and interface, then deliver-story on the card shape filed.
    - plain: the task text and a pointer to `TESTING.md`, on Opus 5.5 at its default effort.
@@ -67,7 +69,9 @@ so it includes every agent a workflow starts. Agent count is the number of agent
 
 ## Output
 
-Everything goes under `.eval/`, which git ignores:
+The arms' repositories and the plugin copy live outside any checkout, so no agent mistakes this repository's own
+`docs/BOARD.md` or `docs/FORGE.md` for the task's; they are deleted after grading unless `KEEP=1`. Everything else
+goes under `.eval/`, which git ignores:
 
 - `.eval/cache/`: the pinned SWE-bench Pro task folders and the dataset rows.
 - `.eval/runs/<stamp>/report.md` and `results.json`: the report.

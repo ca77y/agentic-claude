@@ -136,6 +136,19 @@ export function phases(task: Task, row: Row, arm: Arm, storyId = "STORY-1"): Pha
   return task.shape ? [{ name: "shape", prompt: `/slopify:shape ${text}` }, story] : [story];
 }
 
+/** Claude Code variables a run keeps from the caller: its login, provider, and config folder. */
+const KEPT_CLAUDE_VARS = /^(?:CLAUDE_CONFIG_DIR|CLAUDE_CODE_OAUTH_TOKEN|CLAUDE_CODE_USE_\w+)$/;
+
+/**
+ * The environment of one invocation. A caller that is itself a Claude Code session would otherwise hand down its
+ * session, effort, and agent settings, so every other CLAUDE variable is dropped. A headless session waits for the
+ * workflow it started in the background, and its Bash tool runs in bash, so a run behaves the same on every machine.
+ */
+export function childEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const kept = Object.entries(env).filter(([k]) => !k.startsWith("CLAUDE") || KEPT_CLAUDE_VARS.test(k));
+  return { ...Object.fromEntries(kept), CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS: "0", SHELL: "/bin/bash" };
+}
+
 /** The command line flags of one invocation; the slopify arm adds the plugin, the plain arm pins its model. */
 export function claudeArgs(arm: Arm, opts: { prompt: string; sessionId: string; pluginDir: string }): string[] {
   return [
