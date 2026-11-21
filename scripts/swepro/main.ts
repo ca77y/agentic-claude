@@ -355,29 +355,45 @@ function capturePatch(ws: string, dir: string, seed: string): string {
 }
 
 /** Grades a patch on a fresh container of the task's image with the task's own verifier. */
+/** Whether a grading left the verifier's verdict, which it writes whenever its script ends. */
+const graded = (dir: string): boolean => existsSync(path.join(dir, "logs", "verifier", "reward.txt"));
+
+/**
+ * Grades a patch on a fresh container of the task's image with the task's own verifier. Go's toolchain now and then
+ * hangs under amd64 emulation, so a grading that leaves no verdict within 45 minutes is removed and tried again.
+ */
 async function grade(
   id: string,
   patch: string,
   dir: string,
-): Promise<{ resolved: boolean; passed: number; total: number }> {
-  rmSync(dir, { recursive: true, force: true });
-  mkdirSync(path.join(dir, "logs", "verifier"), { recursive: true });
-  const patchFile = path.join(dir, "model.patch");
-  writeFileSync(patchFile, patch);
-  const args = gradeArgs({
-    image: imageOf(id),
-    testsDir: path.join(taskDir(id), "tests"),
-    patchFile,
-    logsDir: path.join(dir, "logs"),
-  });
-  await runLogged("docker", args, {
-    cwd: dir,
-    out: path.join(dir, "verifier.log"),
-    err: path.join(dir, "verifier.log.err"),
-    hours: 1,
-  });
+): Promise<{ finished: boolean; resolved: boolean; passed: number; total: number }> {
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    rmSync(dir, { recursive: true, force: true });
+    mkdirSync(path.join(dir, "logs", "verifier"), { recursive: true });
+    const patchFile = path.join(dir, "model.patch");
+    writeFileSync(patchFile, patch);
+    const name = `swepro-grade-${randomUUID().slice(0, 8)}`;
+    containers.add(name);
+    const args = gradeArgs({
+      name,
+      image: imageOf(id),
+      testsDir: path.join(taskDir(id), "tests"),
+      patchFile,
+      logsDir: path.join(dir, "logs"),
+    });
+    await runLogged("docker", args, {
+      cwd: dir,
+      out: path.join(dir, "verifier.log"),
+      err: path.join(dir, "verifier.log.err"),
+      hours: 0.75,
+    });
+    removeContainer(name);
+    if (graded(dir)) break;
+    log(`${taskKey(id)}: the grader left no verdict (attempt ${String(attempt)} of 3)`);
+  }
+  const finished = graded(dir);
   const reward = path.join(dir, "logs", "verifier", "reward.txt");
-  const resolved = existsSync(reward) && readFileSync(reward, "utf8").trim() === "1";
+  const resolved = finished && readFileSync(reward, "utf8").trim() === "1";
   const output = path.join(dir, "logs", "verifier", "output.json");
   const passedTests = new Set(
     existsSync(output)
@@ -387,7 +403,7 @@ async function grade(
       : [],
   );
   const f2p = failToPass(id);
-  return { resolved, passed: f2p.filter((t) => passedTests.has(t)).length, total: f2p.length };
+  return { finished, resolved, passed: f2p.filter((t) => passedTests.has(t)).length, total: f2p.length };
 }
 
 /** The task's fail-to-pass test names from its verifier config, which stores them as JSON or a Python-literal list. */
@@ -478,11 +494,28 @@ interface RunContext {
   keep: boolean;
 }
 
+function recordGrade(result: ArmResult, g: Awaited<ReturnType<typeof grade>>): void {
+  result.resolved = g.finished ? g.resolved : null;
+  result.failToPass = g.finished ? { passed: g.passed, total: g.total } : null;
+  if (g.finished) delete result.error;
+  else result.error = "the grader left no verdict after 3 attempts";
+}
+
+/** A resumed run grades again, from its saved patch, an arm whose grading never left a verdict. */
+async function regradeIfUnfinished(task: Task, dir: string, result: ArmResult): Promise<ArmResult> {
+  const patchFile = path.join(dir, "patch.diff");
+  if (graded(path.join(dir, "grade")) || !existsSync(patchFile)) return result;
+  log(`${taskKey(task.id)} ${result.arm}: grading again from the saved patch`);
+  recordGrade(result, await grade(task.id, readFileSync(patchFile, "utf8"), path.join(dir, "grade")));
+  writeFileSync(path.join(dir, "result.json"), JSON.stringify(result, null, 2));
+  return result;
+}
+
 async function runArm(task: Task, arm: Arm, ctx: RunContext): Promise<ArmResult> {
   const { runDir, keep } = ctx;
   const dir = path.join(runDir, taskKey(task.id), arm);
   const resultFile = path.join(dir, "result.json");
-  if (existsSync(resultFile)) return readJson(resultFile) as ArmResult;
+  if (existsSync(resultFile)) return regradeIfUnfinished(task, dir, readJson(resultFile) as ArmResult);
   mkdirSync(dir, { recursive: true });
   const row = readJson(rowFile(task.id)) as Row;
   const ws = path.join(ctx.work, taskKey(task.id), arm);
@@ -527,8 +560,7 @@ async function runArm(task: Task, arm: Arm, ctx: RunContext): Promise<ArmResult>
     removeContainer(container);
     log(`${name}: grading a ${String(patch.split("\n").length)}-line patch`);
     const g = await grade(task.id, patch, path.join(dir, "grade"));
-    result.resolved = g.resolved;
-    result.failToPass = { passed: g.passed, total: g.total };
+    recordGrade(result, g);
     log(`${name}: ${g.resolved ? "RESOLVED" : "unresolved"} (${String(g.passed)}/${String(g.total)} fail-to-pass)`);
   } catch (error) {
     result.error = error instanceof Error ? error.message : String(error);

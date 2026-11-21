@@ -217,6 +217,7 @@ describe("what each arm is given", () => {
 
 describe("grading an arm", () => {
   const args = gradeArgs({
+    name: "swepro-grade-1",
     image: "ghcr.io/scaleapi/swe-bench_pro-v2:instance_x",
     testsDir: "/cache/tasks/instance_x/tests",
     patchFile: "/runs/r/x/plain/grade/model.patch",
@@ -226,7 +227,6 @@ describe("grading an arm", () => {
   test("runs in a fresh container of the task's published image that is removed afterwards", () => {
     assert.deepEqual(args.slice(0, 2), ["run", "--rm"]);
     assert.ok(args.includes("ghcr.io/scaleapi/swe-bench_pro-v2:instance_x"));
-    assert.ok(!args.includes("--name"));
   });
 
   test("sees exactly that task's verifier and that arm's patch, and none of the arm's workspace", () => {

@@ -372,10 +372,18 @@ bash /tests/test.sh`;
  * The docker command that grades one arm: a fresh container of the task's published image, removed when it exits,
  * that sees only that task's verifier, the arm's patch, and a log folder. No container a run used is reused.
  */
-export function gradeArgs(opts: { image: string; testsDir: string; patchFile: string; logsDir: string }): string[] {
+export function gradeArgs(opts: {
+  name: string;
+  image: string;
+  testsDir: string;
+  patchFile: string;
+  logsDir: string;
+}): string[] {
   return [
     "run",
     "--rm",
+    "--name",
+    opts.name,
     "--platform",
     "linux/amd64",
     "-v",
