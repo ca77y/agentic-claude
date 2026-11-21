@@ -2839,7 +2839,7 @@ function unpermitted(build) {
 function crossReadBlockers(build) {
   return crossReads(build.tasks).map((r) => ({
     location: `task ${r.task}`,
-    problem: `${r.task}'s tests read ${r.file}, which ${r.writers.join(", ")} write${r.writers.length > 1 ? "" : "s"} and ${r.task} doesn't. A task's test reads only files that task writes or files no task writes. Only a change to which task writes or tests ${r.file} clears this; removing it from testReads while the tests still read it doesn't.`,
+    problem: `${r.task}'s tests read ${r.file}, which ${r.writers.join(", ")} write${r.writers.length > 1 ? "" : "s"} and ${r.task} doesn't. A task's test reads only files that task writes or files no task writes. Answer this by changing which task writes or tests ${r.file}, never by removing it from testReads while the tests still read it.`,
     severity: "blocker",
     reason: "A coder may write only its own task's files, so its test can't pass on a file another task writes.",
     kind: "spec"
@@ -2960,7 +2960,7 @@ ${list(before)}`,
     const criteriaOf2 = (v, t) => JSON.stringify((v?.criteria ?? []).filter((c) => t.criteria.includes(c.id)));
     const changed = (t) => {
       const old = previous.build?.tasks.find((x) => x.id === t.id);
-      return !old || JSON.stringify(old) !== JSON.stringify(t) || criteriaOf2(previous.validate, t) !== criteriaOf2(spec.validate, t);
+      return !old || JSON.stringify(old) !== JSON.stringify("testReads" in old ? t : { ...t, testReads: void 0 }) || criteriaOf2(previous.validate, t) !== criteriaOf2(spec.validate, t);
     };
     return {
       build: spec.build,
